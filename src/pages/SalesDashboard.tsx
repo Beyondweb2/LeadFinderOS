@@ -158,7 +158,7 @@ export default function SalesDashboard() {
 
       {/* Under the month (2026-10-02): what Paul sent and any handoff owed. The Team board (2026-10-01): what Paul sent THIS salesperson — their own, never another's. */}
       {role === 'sales' && <TeamBoard />}
-      {/* Their own paid sales that still owe the handoff (2026-10-02). */}
+      {/* Their own paid sales that Paul has asked about. */}
       {role === 'sales' && <MyHandoffs />}
 
       {/* ── 2. What to do next (the ranked list, and the lists Focus Mode used to hold) — here for the admin ── */}

@@ -21,7 +21,6 @@ export interface NewClientFacts {
   /** "No agency evidence · 78% (automatic check)" / "Sales: an agency controls it" / null. */
   siteManagement: string | null;
   services: { list: string[]; source: 'client' | 'sales' | 'crawl' } | null;
-  handoff: { applies: HandoffApplies; complete: boolean };
   readiness: HandoffReadiness;
   stage: StageResult;
   clientLink: string;
@@ -44,7 +43,6 @@ export function newClientSetupLines(f: NewClientFacts): string[] {
     if (f.services.list.length > 8) out.push(`  + ${f.services.list.length - 8} more`);
   }
   out.push('');
-  out.push(`Sales handoff: ${f.handoff.applies !== 'required' ? 'not needed' : f.handoff.complete ? 'complete' : 'NOT COMPLETE — the salesperson still owes it'}`);
   out.push(`Setup: ${f.readiness.done}/${f.readiness.total} complete — ${f.stage.stateLabel}`);
   const waiting = f.readiness.items.filter((i) => i.required && !i.ok);
   if (waiting.length) {

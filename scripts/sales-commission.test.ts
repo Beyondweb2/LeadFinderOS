@@ -124,7 +124,7 @@ console.log("\n── source: the ledger and its writers ──");
   const w = read("supabase/functions/_shared/payment-ledger.ts");
   ok(/export async function recordLedger[\s\S]*catch \(err\)[\s\S]*return "failed";/.test(w) && !/throw /.test(w), "the writer never throws — a ledger failure is reported, the payment path carries on");
   ok(/String\(error\.code\) === "23505"\) return "exists"/.test(w), "a concurrent duplicate insert is the idempotency working, not a failure");
-  ok(/if \(w\.kind === "refund" && row\.amount_gbp > Number\(e\.amount_gbp\)\)/.test(w), "a refund row only grows (cumulative, out-of-order safe)");
+  ok(/w\.source === "reconcile" \? [^:]+ : row\.amount_gbp > Number\(e\.amount_gbp\);/.test(w) && /if \(w\.kind === "refund" && refundMoved\)/.test(w), "from the webhook a refund row only grows (cumulative, out-of-order safe); only the daily Stripe check may set it down");
   const hook = read("supabase/functions/stripe-webhook/index.ts");
   const i = hook.indexOf('"findable lead -> payment_received",'), j = hook.indexOf('kind: "initial"');
   ok(i > 0 && j > i, "the initial payment is recorded AFTER the payment write (so the seller is already stamped)");

@@ -8,7 +8,7 @@
 //   deliveryStage (stage + ONE next step). Nothing is decided here.
 import { handoffReadiness, type HandoffLead, type HandoffOnboarding, type HandoffReadiness } from "../../../src/lib/handoffReadiness.ts";
 import { deliveryStage, discoverySummary, type StageResult } from "../../../src/lib/deliveryStage.ts";
-import { handoffComplete, handoffMissing, salesHandoffApplies, type HandoffApplies, type SalesHandoffRecord } from "../../../src/lib/salesHandoff.ts";
+import { salesHandoffApplies, type HandoffApplies } from "../../../src/lib/salesHandoff.ts";
 import { serviceRouteForTotal, serviceRouteFromRow } from "../../../src/lib/findableOffer.ts";
 import { isFirstContactChannel, type FirstContactChannel } from "../../../src/lib/firstContact.ts";
 import { londonDay } from "../../../src/lib/reportingPeriod.ts";
@@ -100,10 +100,8 @@ export async function loadClientSetups(service: Service, leads: Row[], nowMs = D
     const crawlAgeDays = at && !Number.isNaN(Date.parse(at)) ? (nowMs - Date.parse(at)) / 86_400_000 : null;
     const sellerId = ((l.sold_by_user_id ?? l.assigned_to_user_id) as string | null) ?? null;
     const applies = salesHandoffApplies({ sellerId, sellerIsBookOwner: sellerId ? bookOwner.get(sellerId) ?? null : null, paidOn: (l.payment_date as string | null) ?? (l.sold_at as string | null) ?? null });
-    const handoff = (l.sales_handoff ?? null) as SalesHandoffRecord | null;
     const readiness = handoffReadiness(l as HandoffLead, o as HandoffOnboarding | null, {
       crawl: !!at, crawlAgeDays, hookAudit: prospectLeads.has(id),
-      salesHandoff: { applies, complete: handoffComplete(handoff), missing: handoffMissing(handoff).length },
     });
     const dAudit = discoveryAudit.get(id);
     const stage = deliveryStage({

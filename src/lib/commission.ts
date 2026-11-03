@@ -232,7 +232,8 @@ export function nextPayoutDate(todayIso: string): string {
 /** Stripe dispute statuses. RELEASED: the money stayed or came back. LOST: it is gone. Anything else
  *  (warning_needs_response, warning_under_review, needs_response, under_review, or a status we do not
  *  know) is still OPEN — held, never released on a guess. */
-export const DISPUTE_RELEASED: ReadonlySet<string> = new Set(['won', 'warning_closed']);
+/* charge_refunded: Stripe closed the dispute because the charge was refunded. The refund row takes the commission back, once. */
+export const DISPUTE_RELEASED: ReadonlySet<string> = new Set(['won', 'warning_closed', 'charge_refunded']);
 export const DISPUTE_LOST: ReadonlySet<string> = new Set(['lost']);
 
 export interface CommissionInput {
@@ -535,6 +536,7 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
     for (const r of rows) {
       if (r.kind !== 'refund' && r.kind !== 'chargeback') continue;
       if (r.kind === 'chargeback' && DISPUTE_RELEASED.has(r.status)) continue; // won / inquiry closed: released, nothing taken
+      if (r.kind === 'refund' && r.amount_gbp <= 0) continue; // the daily check found the refund failed: nothing left to take back
       const held = r.kind === 'chargeback' && !DISPUTE_LOST.has(r.status); // still open: held, not reversed
       const p = paymentFor(r);
       if (!p) continue; // a refund we cannot tie to a payment reverses nothing we counted

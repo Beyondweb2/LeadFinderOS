@@ -51,10 +51,10 @@ export function HandoffsPanel({ clients, routeOf, onOpen, nowMs = Date.now() }: 
   const [all, setAll] = useState(false);
   const shown = all ? rows : rows.slice(0, SHOWN);
   return (
-    <Panel id="new-sales" collapseKey="admin.cc.handoffs" title="New sales & handoffs" icon={Handshake} tone="amber"
-      hint="Every paid client still being handed over or set up, and anything sold in the last two weeks. Tap a client to open their Paid Client record."
-      summary={rows.length ? `${rows.length} client${rows.length === 1 ? '' : 's'} · ${rows.filter((c) => handoffNext(c, nowMs).mine).length} waiting on you` : 'Nothing being handed over'}>
-      {rows.length === 0 ? <Empty icon={Handshake}>No new sales or handoffs right now. A new payment shows here the moment it lands.</Empty> : (
+    <Panel id="new-sales" collapseKey="admin.cc.handoffs" title="New sales" icon={Handshake} tone="amber"
+      hint="Every paid client still being set up, and anything sold in the last two weeks. Tap a client to open their Paid Client record."
+      summary={rows.length ? `${rows.length} client${rows.length === 1 ? '' : 's'} · ${rows.filter((c) => handoffNext(c, nowMs).mine).length} waiting on you` : 'Nothing being set up'}>
+      {rows.length === 0 ? <Empty icon={Handshake}>No new sales right now. A new payment shows here the moment it lands.</Empty> : (
         <>
           <ul className="grid grid-cols-1 gap-2.5 xl:grid-cols-2" data-testid="handoff-rows">
             {shown.map((c) => {

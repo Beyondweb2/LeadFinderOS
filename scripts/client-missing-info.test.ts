@@ -59,10 +59,10 @@ console.log("── WHAT IS MISSING ──");
 {
   const items = missingInformation(thin);
   const keys = items.map((i) => i.key);
-  ok(JSON.stringify(keys) === JSON.stringify(["sales_handoff", "services", "service_areas", "website", "website_access", "gbp_access", "domain", "onboarding"]),
+  ok(JSON.stringify(keys) === JSON.stringify(["services", "service_areas", "website", "website_access", "gbp_access", "domain", "onboarding"]),
     `1. the missing information, in checklist order (${keys.join(", ")})`);
   ok(!keys.includes("paid") && !keys.includes("crawl") && !keys.includes("hook_audit"), "1. Findable's own work (payment, crawl, Hook Audit) is never 'missing information'");
-  ok(JSON.stringify(sellerItems(items).map((i) => i.key)) === JSON.stringify(["sales_handoff", "services", "service_areas", "website", "website_access"]), "1. the seller can answer the handoff + the four lead facts only");
+  ok(JSON.stringify(sellerItems(items).map((i) => i.key)) === JSON.stringify(["services", "service_areas", "website", "website_access"]), "1. the seller can answer the four lead facts only");
   ok(!clientItems(items).some((i) => i.key === "sales_handoff") && clientItems(items).some((i) => i.key === "domain") && clientItems(items).some((i) => i.key === "gbp_access"), "1. the client answers domain / GBP / their form, never the seller's handoff");
   const ob: HandoffOnboarding = { gbp_status: "done", services_list: ["Boilers"], areas_list: ["Portsmouth"], confirmed_location: "Portsmouth", business_website: "https://qa.example", website_manager: "direct_access", plan_tier: "keep" };
   const gbpPending = missingInformation(handoffReadiness(lead, ob, ev({ complete: true, missing: 0 })));
@@ -89,8 +89,7 @@ console.log("\n── WHO SOLD IT, AND WHEN ASK SALESPERSON SHOWS ──");
     "2. paid-client-hub derives the seller from sold_by_user_id ONLY (never the assigned owner)");
   ok(/if \(mi\.ask\.state !== "ask"\) return json\(\{ ok: false, error: "cannot_ask"/.test(HUB), "3. the SERVER refuses a request unless the same rule says ask (the screen never decides)");
   ok(/const canAsk = askState === 'ask'/.test(PANEL) && /canAsk && !pending && \(/.test(PANEL), "3/4. the button exists only when the rule says ask");
-  ok(/Not needed — your own sale/.test(CARD), "4. 'Not needed — your own sale' stays on the Sales handoff");
-  ok(/sh\.applies === 'required' && \(/.test(CARD) && /Salesperson: /.test(CARD) && /last update/.test(CARD), "Sales handoff shows the salesperson, last update and request status for someone else's sale");
+  ok(!/SalesHandoffForm/.test(CARD) && /What the salesperson wrote/.test(CARD), "an older sale's answers stay readable; there is no form");
 }
 
 console.log("\n── ONE REQUEST, IDEMPOTENT ──");

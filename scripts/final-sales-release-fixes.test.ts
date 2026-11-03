@@ -66,7 +66,7 @@ console.log('── 1. unsaved drafts: the one leave guard ──');
   ok(/function InternalNote[\s\S]{0,200}useUnsavedDraft\(`internal-note-\$\{useId\(\)\}`, note\.trim\(\) !== ''\)/.test(crm), 'Internal note marks itself while it holds text');
   const flow = read('src/components/LeadCallFlow.tsx');
   ok(/useUnsavedDraft\(`log-outcome-note-\$\{useId\(\)\}`, note\.trim\(\) !== ''\)/.test(flow), 'the Log window\'s note marks itself (and outlives the window: its state is outside the dialog)');
-  ok(/useUnsavedDraft\(`profile-\$\{draftId\}`, editing && !!lead && \(/.test(crm), 'the Details editor marks itself only when a field differs from what was opened');
+  ok(/save\('lead_set_profile'/.test(crm) && /const leaveField = \(\) => \{ auto\.set\('all'/.test(crm) && !/useUnsavedDraft\(`profile-/.test(crm), 'the Details editor saves itself as each field is left: there is nothing left unsaved to guard');
   const g = read('src/components/UnsavedDraftGuard.tsx');
   ok(/Discard unsaved changes\?/.test(g) && /<AlertDialogCancel autoFocus[^>]*>Keep editing<\/AlertDialogCancel>/.test(g) && />\s*Discard\s*</.test(g),
     'the prompt: "Discard unsaved changes?" — [Keep editing] (focused, the safe default) [Discard]');

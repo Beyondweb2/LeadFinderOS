@@ -44,7 +44,7 @@ const ended = (c: HandoffClient) => c.handoff?.stage === 'ended' || c.handoff?.s
 /** A handoff card's next step: the canonical one, or — once a seller has left the handoff HANDOFF_CHASE_DAYS — Paul chasing them. */
 export function handoffNext(c: HandoffClient, nowMs: number): { label: string; mine: boolean } {
   const d = daysSince(c.payment_date, nowMs);
-  if (c.handoff?.state === 'waiting_sales' && d !== null && d >= HANDOFF_CHASE_DAYS) return { label: `Chase ${c.sold_by_name ?? 'the seller'} for the handoff (paid ${d} days ago)`, mine: true };
+  if (c.handoff?.state === 'waiting_sales' && d !== null && d >= HANDOFF_CHASE_DAYS) return { label: `Ask ${c.sold_by_name ?? 'the seller'} for the missing details (paid ${d} days ago)`, mine: true };
   return { label: c.handoff?.next.label ?? 'Open the client', mine: !!c.handoff?.next.action };
 }
 
@@ -67,7 +67,7 @@ export function needsYouItems(attention: AttentionItem[], clients: HandoffClient
   if (readyNew.length) out.push({
     key: 'handoffs-ready', group: 'today', kind: 'handoffs_ready', leadId: null,
     business: `${readyNew.length} new client${readyNew.length === 1 ? ' needs' : 's need'} you`,
-    why: readyNew.slice(0, 3).map((c) => `${c.business_name}: ${chase(c) ? `chase ${c.sold_by_name ?? 'the seller'} for the handoff` : c.handoff!.next.label}`).join(' · ') + (readyNew.length > 3 ? ' …' : ''),
+    why: readyNew.slice(0, 3).map((c) => `${c.business_name}: ${chase(c) ? `ask ${c.sold_by_name ?? 'the seller'} for the missing details` : c.handoff!.next.label}`).join(' · ') + (readyNew.length > 3 ? ' …' : ''),
     owner: null, sinceIso: null, state: 'New sales', action: 'Open New sales & handoffs', open: 'client',
   });
   // In-delivery steps that are Paul's (Discovery, approve questions, run the baseline, build, remeasure…).

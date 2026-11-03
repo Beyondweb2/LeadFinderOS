@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-03-commission-stripe-no-handover', date: '2026-11-03', title: 'No handover form. Commission now checks itself against Stripe', audience: 'all',
+    body: 'There is no handover form any more. What you type on the lead saves as you type, and when the client pays it goes straight to Paul. Commission follows Stripe, and a daily check catches anything missed.',
+    report: {
+      added: ['A daily check compares the last 60 days of Stripe payments, refunds and disputes with the commission record, fixes anything missed and logs what it changed. Paul sees the last run on Commission owed.', 'New paid clients shows the phone, the email and everything typed during the sale.'],
+      changed: ['The plan on a sale is now read from what Stripe charged. If it differs from what was picked in Quick Close, Stripe wins and the sale is flagged.', 'Complete paid up front now stores its real 30% on the record, not the tier rate.', 'Services and areas, Correct a detail and Internal note now save themselves. An internal note saves when you click away.'],
+      removed: ['The Handoff for Paul form, Send to Paul and Submit for delivery in Quick Close.', 'Finish the handoff on the Sales page. It now lists only what Paul has asked you for.', 'The handoff item on the setup checklist: a client never waits for one.'],
+      effect: 'When a client pays, your part is done, with nothing more to fill in. Put anything special you promised in an internal note, because Paul reads those. Commission figures follow Stripe, and no money moves from here.',
+    } },
   { id: '2026-11-03-complete-upfront', date: '2026-11-03', title: 'Findable Complete can now be paid up front', audience: 'all',
     body: 'A client can pay £999 once for the 12 months of Findable Complete, instead of £99 a month. It saves them £189. Monthly Complete has not changed.',
     report: {

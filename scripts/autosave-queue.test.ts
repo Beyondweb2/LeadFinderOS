@@ -128,10 +128,11 @@ console.log('── 6. ONE-TAP ANSWERS ──');
 
 console.log('── 7. NO SUBMIT ──');
 {
-  const form = read('src/components/SalesHandoffForm.tsx');
-  ok(!/Save handoff|Save changes|Save without sending/.test(form), 'no Save button on the handoff form');
-  ok(form.includes('Send to Paul') && form.includes('onBlur={() => leave(q.key)}') && form.includes('<AutosaveIndicator'), 'saves on blur, shows the indicator, keeps Send to Paul');
-  ok(/focused\.current === q\.key \|\| auto\.isDirty\(q\.key\)/.test(form), 'a reply never overwrites what is being typed');
+  const profile = read('src/components/LeadCrmPanel.tsx');
+  ok(!/>Save<\/Button>/.test(profile.slice(profile.indexOf('prospect-profile'), profile.indexOf('/* ── WORK:'))), 'no Save button on Services and areas');
+  ok(!/Add note<\/Button>/.test(profile) && /onBlur=\{\(\) => void commit\(\)\}/.test(profile), 'an internal note saves when they leave the box');
+  const close = read('src/components/QuickCloseDialog.tsx');
+  ok(/function CorrectDetails/.test(close) && /<AutosaveIndicator status=\{auto\.status\} \/>/.test(close) && !/saveFixes/.test(close), 'Correct a detail saves itself, with the indicator');
   const fn = read('supabase/functions/quick-close/index.ts');
   const at = fn.indexOf('mode === "save_handoff_field"');
   ok(at > 0 && fn.slice(at, at + 400).includes('mayHandoff'), 'the field save has the same who-may-write check');

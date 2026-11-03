@@ -81,6 +81,10 @@ verify_jwt = false
 [functions.month12-reminder]
 verify_jwt = false
 
+# The daily check of Stripe against the commission ledger: internal only (CRON_SECRET + x-internal-job, checked in the handler).
+[functions.commission-stripe-check]
+verify_jwt = false
+
 # The v6 clause 9A.5 Plan Period reminder: internal only (CRON_SECRET + x-internal-job, checked in the handler).
 [functions.plan-period-reminder]
 verify_jwt = false

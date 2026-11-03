@@ -25,8 +25,6 @@ import { cn } from '@/lib/utils';
 import { COMPLETE_EXTRAS, COMPLETE_PAYMENT_PLANS, COMPLETE_UPFRONT_MONTHS, ESSENTIAL_PAYMENT_PLANS, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, PLAN_PRODUCT_NAME, V7_WINDOW_START_LINE, completeUpfrontSavingGbp, gbpWords, guaranteeForPlan, planShortLine, planTotalGbp, type PaymentPlan } from '@/lib/paymentPlans';
 import { ClosePanel } from '@/components/ClosePanel';
 import { SmsLinkSend } from '@/components/SmsLinkSend';
-import { SalesHandoffForm } from '@/components/SalesHandoffForm';
-import type { HandoffFieldKey, SalesHandoffFields } from '@/lib/salesHandoff';
 import type { NextStep } from '@/lib/deliveryStage';
 import { firstContactDueLabel, type FirstContactState } from '@/lib/firstContact';
 import { SellerClientInfoForm, type SellerClientInfo } from '@/components/SellerClientInfoForm';
@@ -76,11 +74,7 @@ interface View {
   /** THE TWO WAYS TO CLOSE: the route this sign-up is on, and the Full Setup link with how it has gone out. */
   close_route?: CloseRoute;
   full_setup?: { url: string; shared: { channel: string; at: string; status: string | null; template: string | null; to?: string | null }[] };
-  /** The sales handoff (src/lib/salesHandoff.ts) — editable by the seller even after payment. */
-  handoff?: { canEdit: boolean; fields: SalesHandoffFields; prefilled: HandoffFieldKey[]; saved_at: string | null; completed_at: string | null; complete: boolean; missing: HandoffFieldKey[];
-    /** SEND TO PAUL (2026-10-06): the one authoritative send, once made. */
-    sent?: { at: string; by: string | null; by_me: boolean; paid_when_sent: boolean; changed_since: boolean } | null };
-  /** After payment: the client's setup checklist, so the seller sees what is missing. */
+
   setup?: { ready: boolean; label: string; done: number; total: number; missing: string[]; state_label: string; next: NextStep; submitted: boolean; first_contact?: { state: FirstContactState; due: string | null } } | null;
   /** CLIENT INFO NEEDED (2026-10-05): Paul's open request to this seller, and the client details they may add. */
   info_request?: { requested_at: string; reminded_at: string | null; items: { key: string; label: string }[] } | null;
@@ -229,7 +223,6 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
   const [step, setStep] = useState<QcKey | 'review' | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
-  const [fix, setFix] = useState<Record<string, string>>({});
   const [trade, setTrade] = useState('');
   const [script, setScript] = useState(quickCloseScript(null));
   const [copied, setCopied] = useState<string | null>(null);
@@ -254,7 +247,6 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
   const shownQs = closeFlow(answers).map((k) => QUICK_CLOSE_QUESTIONS.find((x) => x.key === k)!).filter(Boolean);
   const hasSite = !!(v?.onboarding?.business_website || v?.lead.website);
   useEffect(() => { if (!open) { setStep(null); setEditing(false); setCopied(null); } }, [open]);
-  useEffect(() => { if (v?.onboarding) setFix({ contact_name: v.onboarding.contact_name ?? v.lead.contact_name ?? '', contact_email: v.onboarding.contact_email ?? v.lead.email ?? '', confirmed_phone: v.onboarding.confirmed_phone ?? v.lead.phone ?? '', business_website: v.onboarding.business_website ?? v.lead.website ?? '' }); }, [v?.onboarding?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const run = async (label: string, body: Record<string, unknown>, quiet = false) => {
     setBusy(label);
@@ -301,7 +293,17 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
     const r = await run('a:payment_plan', { mode: 'save', answers: { route: 'build', payment_plan: p }, expect_route: route, ...(switching ? { route_change: true } : {}) });
     if (!r && before) qc.setQueryData(quickCloseKey(leadId), before);
   };
-  const saveFixes = async () => { const r = await run('fix', { mode: 'save', answers: {}, expect_route: route, corrections: fix, ...(trade.trim() ? { trade: trade.trim() } : {}) }); if (r) setEditing(false); };
+  /* One detail, saved as they leave the field. A bad email is refused by the server: it says so, and the text stays for them to fix. */
+  const saveDetail = async (key: string, value: string) => {
+    try {
+      const r = await invokeEdge<View>('quick-close', { lead_id: leadId, mode: 'save', answers: {}, expect_route: route, corrections: { [key]: value } });
+      qc.setQueryData(quickCloseKey(leadId), r);
+    } catch (e) {
+      toast({ title: 'Not saved', description: edgeErrorMessage(e), variant: 'destructive' });
+      throw e;
+    }
+  };
+  const saveTrade = async () => { if (trade.trim() && !v?.lead.trade) await run('fix', { mode: 'save', answers: {}, expect_route: route, trade: trade.trim() }); };
   const generate = async () => {
     if (!v?.lead.trade && !trade.trim()) { toast({ title: 'Add the trade first', description: 'It decides what the baseline measures.', variant: 'destructive' }); return; }
     if (!v?.lead.trade && trade.trim()) { const ok = await run('fix', { mode: 'save', answers: {}, expect_route: route, trade: trade.trim() }); if (!ok) return; }
@@ -341,23 +343,12 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
   };
 
   /* AUTOSAVE: one answer, one small write, and the cached view follows so a reopened dialog shows it (docs/commission-owed.md). */
-  const saveHandoffField = async (field: string, value: string) => {
-    await invokeEdge('quick-close', { lead_id: leadId, mode: 'save_handoff_field', field, value });
-    qc.setQueryData<View>(quickCloseKey(leadId), (old) => (old?.handoff ? { ...old, handoff: { ...old.handoff, fields: { ...old.handoff.fields, [field]: value }, prefilled: old.handoff.prefilled.filter((k) => k !== field) } } : old));
-    notifyLeadChanged(leadId);
-  };
-  /* SEND TO PAUL (2026-10-06): saves what the form holds and sends it, once. The server re-checks every answer. */
-  const sendToPaul = async (h: SalesHandoffFields) => {
-    const r = await run('handoff', { mode: 'send_to_paul', handoff: h });
-    if (r) toast({ title: 'Sent to Paul', description: r.state === 'paid' ? 'Your part is done — Paul takes it from here.' : 'Paul has it. It joins their client record automatically when they pay.' });
-    return !!r;
-  };
+
   const saveClientInfo = async (ci: Record<string, string>) => {
     const r = await run('client-info', { mode: 'save_client_info', client_info: ci }) as { refused?: string[] } | null;
     if (r) toast({ title: 'Client details saved for Paul', description: r.refused?.length ? r.refused.join(' ') : undefined });
     return !!r;
   };
-  const submitDelivery = async () => { const r = await run('submit', { mode: 'submit_delivery' }); if (r) toast({ title: 'Submitted for delivery', description: 'Paul has been told.' }); };
   const notesDone = phoneCloseNotesComplete(v?.call);
   /* TWO OPTIONS: "what they offer / where they want to be found" is one more step, just before the plan. */
   const totalSteps = shownQs.length + 1;
@@ -404,33 +395,23 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
 
           {v && v.state === 'paid' && v.closed !== 'client_closed' && (
             <div className={cn(PANEL, 'border-l-[3px] border-l-emerald-500 text-sm')} data-testid="qc-paid">
-              <p className="flex items-center gap-2 text-lg font-bold"><CheckCircle2 className={cn('h-5 w-5 shrink-0', OK_TEXT)} />Paid — {v.handoff?.sent || !v.handoff?.canEdit ? 'your part is done.' : 'one step left: send the handoff.'}</p>
-              <p className="mt-1 text-muted-foreground">Paul takes it from here and will be in touch with them within two working days{v.setup?.first_contact?.due && (v.setup.first_contact.state === 'owed' || v.setup.first_contact.state === 'overdue') ? ` (by ${firstContactDueLabel(v.setup.first_contact.due)})` : ''}. Everything we already know about them is gathered automatically — your handoff answers, the contact details, their website and the AI check.</p>
+              <p className="flex items-center gap-2 text-lg font-bold"><CheckCircle2 className={cn('h-5 w-5 shrink-0', OK_TEXT)} />Paid: your part is done.</p>
+              <p className="mt-1 text-muted-foreground">Paul takes it from here and will be in touch with them within two working days{v.setup?.first_contact?.due && (v.setup.first_contact.state === 'owed' || v.setup.first_contact.state === 'overdue') ? ` (by ${firstContactDueLabel(v.setup.first_contact.due)})` : ''}. Everything you typed on this lead has gone to him, with the contact details, their website and the AI check.</p>
             </div>
           )}
 
-          {v && v.state === 'paid' && v.setup && (
-            <SubSection title={`Client setup · ${v.setup.done}/${v.setup.total} complete`} icon={ClipboardList} tone={v.setup.ready ? 'blue' : 'amber'} testId="qc-client-setup" className="text-sm">
-              <p className="text-xs text-muted-foreground">{v.setup.state_label}{v.setup.submitted ? ' · submitted for delivery' : ''}</p>
-              {v.setup.missing.length > 0 && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">Still missing: {v.setup.missing.join(' · ')}</p>}
-              {v.setup.ready && !v.setup.submitted && v.handoff?.canEdit && (
-                <Button className="mt-2 h-11 w-full" onClick={() => void submitDelivery()} disabled={busy === 'submit'}>{busy === 'submit' && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}Submit for delivery</Button>
-              )}
-            </SubSection>
-          )}
-
           {/* ── CLIENT INFO NEEDED: Paul asked this seller for missing details (client missing-info actions) ── */}
-          {v && v.state === 'paid' && v.closed !== 'client_closed' && (v.info_request || v.client_info?.canEdit) && v.client_info && (
-            <details className={cn(v.info_request ? cn('rounded-2xl p-3.5', TONE.amber.tint) : FOLD)} open={!!v.info_request} data-testid="qc-client-info">
+          {v && v.state === 'paid' && v.closed !== 'client_closed' && v.info_request && v.client_info && (
+            <details className={cn('rounded-2xl p-3.5', TONE.amber.tint)} open data-testid="qc-client-info">
               <summary className="flex cursor-pointer select-none items-center justify-between text-sm font-semibold">
-                {v.info_request ? 'CLIENT INFO NEEDED' : 'Client details for Paul'}
-                <span className="text-xs font-normal text-muted-foreground">{v.info_request ? `asked ${new Date(v.info_request.reminded_at ?? v.info_request.requested_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' })}` : 'optional'}</span>
+                CLIENT INFO NEEDED
+                <span className="text-xs font-normal text-muted-foreground">{`asked ${new Date(v.info_request.reminded_at ?? v.info_request.requested_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' })}`}</span>
               </summary>
-              {v.info_request && (
+              {(
                 <div className="mt-2 text-sm" data-testid="qc-info-request">
                   <p>{v.lead.business_name ?? 'This client'} is missing:</p>
                   <ul className="mt-1 list-disc pl-5">{v.info_request.items.map((i) => <li key={i.key}>{i.label}</li>)}</ul>
-                  <p className="mt-1 text-xs text-muted-foreground">Please add anything you collected during the sale — here, and in the handoff below. Saving tells Paul.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Please add anything you collected during the sale. Saving tells Paul.</p>
                 </div>
               )}
               <div className="mt-3"><SellerClientInfoForm info={v.client_info} onSave={saveClientInfo} busy={busy === 'client-info'} /></div>
@@ -552,7 +533,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                 <div className="mt-3 space-y-2 border-t border-border/60 pt-3" data-testid="qc-link">
                   {!v.lead.trade && (
                     <label className={cn('block rounded-xl p-2.5 text-sm font-medium', TONE.amber.tint)}>What is their trade? <span className="font-normal text-muted-foreground">(decides what the baseline measures)</span>
-                      <Input value={trade} onChange={(e) => setTrade(e.target.value)} placeholder="e.g. plumber" className="mt-1.5 h-11 text-base" />
+                      <Input value={trade} onChange={(e) => setTrade(e.target.value)} onBlur={() => void saveTrade()} placeholder="e.g. plumber" className="mt-1.5 h-11 text-base" />
                     </label>
                   )}
                   {!usableUrl ? (
@@ -650,24 +631,6 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
             </ul>
           )}
 
-          {/* The handoff folds to one line while the close is happening (M-013); it can be finished after payment.
-              It OPENS once the link is out (or they have paid) until it is sent, and it ENDS with Send to Paul. */}
-          {v?.handoff && v.handoff.canEdit && v.state !== 'not_started' && v.state !== 'blocked' && !declined && (() => {
-            const h = v.handoff;
-            const sent = h.sent ?? null;
-            const chip = sent ? { tone: 'green' as Tone, cls: SUCCESS_CHIP, text: 'sent to Paul' }
-              : h.complete ? { tone: 'blue' as Tone, cls: undefined, text: 'complete — ready to send' }
-              : { tone: 'amber' as Tone, cls: undefined, text: h.saved_at ? `${h.missing.length} still to answer` : 'not started — can wait until after the call' };
-            const openNow = !sent && (v.state === 'paid' || v.state === 'link_generated' || v.state === 'link_expired' || h.complete);
-            return (
-              <details className={cn(FOLD, sent ? 'border-l-[3px] border-l-emerald-500' : h.complete ? EDGE.blue : EDGE.amber)} open={openNow} data-testid="qc-handoff">
-                <summary className="flex min-h-[36px] cursor-pointer select-none flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm font-semibold">Handoff for Paul<ToneChip tone={chip.tone} dot className={chip.cls}>{chip.text}</ToneChip></summary>
-                <p className="mt-1 text-xs text-muted-foreground">{sent ? 'Paul has your handoff. You can still correct an answer.' : 'Most of this is already filled in from the call. Add only what you learned that Paul should know — nothing here is required — then Send to Paul.'}</p>
-                <div className="mt-3"><SalesHandoffForm fields={h.fields} prefilled={h.prefilled} route={route ?? 'build'} leadId={leadId} onSaveField={saveHandoffField} onSend={sendToPaul} sent={sent ? { at: sent.at, by: sent.by_me ? null : sent.by, changed_since: sent.changed_since } : null} busy={busy === 'handoff'} compact /></div>
-              </details>
-            );
-          })()}
-
           {v && (
             <details className={FOLD} open={v.state === 'not_started'}>
               <summary className="flex min-h-[36px] cursor-pointer select-none items-center justify-between gap-2 text-sm font-semibold"><span className="flex items-center gap-2"><span className={cn('h-4 w-1 shrink-0 rounded-full', TONE.grey.bar)} aria-hidden />What we already know</span><span className="text-xs font-normal text-muted-foreground">no need to ask</span></summary>
@@ -686,12 +649,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                   )}
                 </>
               ) : (
-                <div className="mt-2 space-y-2">
-                  {([['contact_name', 'Contact name'], ['contact_email', 'Email'], ['confirmed_phone', 'Phone'], ['business_website', 'Website']] as const).map(([k, label]) => (
-                    <label key={k} className="block text-xs text-muted-foreground">{label}<Input value={fix[k] ?? ''} onChange={(e) => setFix((f) => ({ ...f, [k]: e.target.value }))} className="mt-0.5 h-10 text-sm" inputMode={k === 'confirmed_phone' ? 'tel' : k === 'contact_email' ? 'email' : 'text'} /></label>
-                  ))}
-                  <div className="flex gap-2"><Button size="sm" className="h-10 flex-1" onClick={() => void saveFixes()} disabled={busy === 'fix'}>Save</Button><Button size="sm" variant="ghost" className="h-10" onClick={() => setEditing(false)}>Cancel</Button></div>
-                </div>
+                <CorrectDetails leadId={leadId} initial={{ contact_name: v.onboarding?.contact_name ?? v.lead.contact_name ?? '', contact_email: v.onboarding?.contact_email ?? v.lead.email ?? '', confirmed_phone: v.onboarding?.confirmed_phone ?? v.lead.phone ?? '', business_website: v.onboarding?.business_website ?? v.lead.website ?? '' }} onSave={saveDetail} onDone={() => setEditing(false)} />
               )}
               {v.canEdit && !editing && <button type="button" onClick={() => setEditing(true)} className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"><Pencil className="h-3 w-3" />Correct a detail</button>}
             </details>
@@ -710,6 +668,23 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
 
 /** TWO OPTIONS: the short "what do they offer, and where do they want to be found?" step, just before the plan. It saves
  *  the same two call notes the Call screen does (save_call), so a rep who already heard them there is never asked again. */
+/** "Correct a detail": each one saves as they leave it, and what is not yet saved survives a closed tab (useAutosaveFields). */
+function CorrectDetails({ leadId, initial, onSave, onDone }: { leadId: string; initial: Record<string, string>; onSave: (key: string, value: string) => Promise<void>; onDone: () => void }) {
+  const [draft, setDraft] = useState(initial);
+  const auto = useAutosaveFields({ save: onSave, storageKey: `qc-details:${leadId}`, onRestore: (left) => setDraft((d) => ({ ...d, ...left })) });
+  useEffect(() => { for (const [k, val] of Object.entries(initial)) auto.baseline(k, val); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className="mt-2 space-y-2" data-testid="qc-correct-details">
+      {([['contact_name', 'Contact name'], ['contact_email', 'Email'], ['confirmed_phone', 'Phone'], ['business_website', 'Website']] as const).map(([k, label]) => (
+        <label key={k} className="block text-xs text-muted-foreground">{label}
+          <Input value={draft[k] ?? ''} onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))} onBlur={(e) => { auto.set(k, e.target.value.trim()); auto.flush(k); }} className="mt-0.5 h-10 text-sm" inputMode={k === 'confirmed_phone' ? 'tel' : k === 'contact_email' ? 'email' : undefined} />
+        </label>
+      ))}
+      <div className="flex items-center justify-between gap-2"><AutosaveIndicator status={auto.status} /><Button size="sm" variant="ghost" className="h-10" onClick={onDone}>Done</Button></div>
+    </div>
+  );
+}
+
 function ServicesAreasStep({ leadId, call, busy, total, number, onSave }: { leadId: string; call: QcCallNotes | undefined; busy: boolean; total: number; number: number; onSave: (jobs: string, areas: string) => Promise<boolean> }) {
   const [jobs, setJobs] = useState(call?.jobs ?? '');
   const [areas, setAreas] = useState(call?.areas ?? '');

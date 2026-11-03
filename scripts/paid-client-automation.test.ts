@@ -47,7 +47,7 @@ const ob: HandoffOnboarding = {
   website_route: "optimise_existing", website_manager: "direct_access", gbp_status: "done",
 };
 const ev = (o: Partial<HandoffEvidence> = {}): HandoffEvidence => ({
-  crawl: true, crawlAgeDays: 3, hookAudit: true, salesHandoff: { applies: "required", complete: true, missing: 0 }, ...o,
+  crawl: true, crawlAgeDays: 3, hookAudit: true, ...o,
 });
 const stageIn = (o: Partial<StageInput> = {}): StageInput => ({
   readiness: handoffReadiness(lead, ob, ev()), lead: { ...lead }, onboarding: { baseline_status: "needs_questions" }, baselineAudit: null,
@@ -116,11 +116,7 @@ console.log("\n── CHECKLIST: required vs not needed ──");
 {
   const r = handoffReadiness(lead, ob, ev());
   ok(r.ready && r.label === READY_LABEL && r.done === r.total && r.waitingOn === null, "16. everything required in → READY TO SUBMIT, done = total");
-  const noHandoff = handoffReadiness(lead, ob, ev({ salesHandoff: { applies: "required", complete: false, missing: 2 } }));
-  ok(!noHandoff.ready && noHandoff.missing[0] === "Sales handoff" && noHandoff.waitingOn === "sales" && noHandoff.label === WAITING_LABEL, "9. a missing handoff is the first gap and waits on Sales");
-  ok(noHandoff.items.find((i) => i.key === "sales_handoff")!.detail === "Not complete — 2 answers missing", "…saying how much is missing");
-  const own = handoffReadiness(lead, ob, ev({ salesHandoff: { applies: "not_needed_own_sale", complete: false, missing: 0 } }));
-  ok(own.ready && own.items.find((i) => i.key === "sales_handoff")!.notNeeded === true, "15. Paul's own sale: the handoff is NOT NEEDED, never a block");
+  ok(!r.items.some((i) => (i.key as string) === "sales_handoff"), "9. no handoff item: a salesperson's sale never waits on a form (Paul, 2026-11-03)");
   const noGbp = handoffReadiness(lead, { ...ob, gbp_status: null, gbp_exists: "no" }, ev());
   ok(noGbp.ready && noGbp.items.find((i) => i.key === "gbp_access")!.notNeeded === true, "15. a client with no Google Business Profile is never blocked by 'GBP access'");
   const unsure = handoffReadiness(lead, { ...ob, gbp_status: null, gbp_exists: "not_sure" }, ev());
@@ -159,8 +155,6 @@ console.log("\n── STAGE + ONE NEXT STEP ──");
   ok(sub.stage === "ready" && sub.state === "ready" && sub.stateLabel === "READY FOR DELIVERY" && sub.next.label === "Run Discovery" && matchesFilter(sub, "ready") && !matchesFilter(sub, "ready_to_submit"), "19. submitted → READY FOR DELIVERY, next 'Run Discovery'");
   const waitClient = deliveryStage(stageIn({ readiness: handoffReadiness(lead, { ...ob, gbp_status: "will_do" }, ev()) }));
   ok(waitClient.state === "waiting_client" && /^Waiting for client: Google Business Profile access/.test(waitClient.next.label) && !waitClient.next.action, "19. a client gap → WAITING FOR CLIENT, naming it");
-  const waitSales = deliveryStage(stageIn({ readiness: handoffReadiness(lead, ob, ev({ salesHandoff: { applies: "required", complete: false, missing: 6 } })) }));
-  ok(waitSales.state === "waiting_sales" && waitSales.next.label === "Complete sales handoff", "19. a handoff gap → 'Complete sales handoff'");
   const gen = deliveryStage(stageIn({ discovery: { generated: true, started: false, finished: false } }));
   ok(gen.stage === "discovery" && gen.next.key === "run_discovery", "26. a generated pool → 'Run Discovery' (manual)");
   const running = deliveryStage(stageIn({ discovery: { generated: true, started: true, finished: false } }));
@@ -178,7 +172,7 @@ console.log("\n── STAGE + ONE NEXT STEP ──");
   const due = deliveryStage(stageIn({ onboarding: { baseline_status: "complete" }, lead: { ...lead, baseline_audit_id: "a", remeasure_due_date: "2026-10-05" }, baselineAudit: { baseline_completed_at: "2026-09-01T00:00:00Z" } }));
   ok(due.stage === "remeasure" && /Remeasure on 2026-10-05/.test(due.next.label), "the remeasure stage starts in the week before it is due");
   // 33. A legacy client past setup is placed by progress, never dragged back to "waiting".
-  const legacy = deliveryStage(stageIn({ readiness: handoffReadiness(lead, null, ev({ salesHandoff: { applies: "not_recorded_before", complete: false, missing: 0 } })), onboarding: { baseline_status: "complete" }, lead: { ...lead, baseline_audit_id: "a" }, baselineAudit: { baseline_completed_at: "2026-09-01T00:00:00Z" } }));
+  const legacy = deliveryStage(stageIn({ readiness: handoffReadiness(lead, null, ev()), onboarding: { baseline_status: "complete" }, lead: { ...lead, baseline_audit_id: "a" }, baselineAudit: { baseline_completed_at: "2026-09-01T00:00:00Z" } }));
   ok(legacy.state === "in_delivery" && legacy.stage !== "setup", "33. an in-delivery legacy client with gaps stays in delivery (no fabricated setup)");
   ok(deliveryStage(stageIn({ lead: { ...lead, status: "refunded" } })).state === "ended", "a refunded client is Ended, nothing to do");
   // 20. Filters.
@@ -210,19 +204,19 @@ console.log("\n── SUBMIT FOR DELIVERY ──");
 
 console.log("\n── EMAIL CONTENT ──");
 {
-  const r = handoffReadiness(lead, { ...ob, gbp_status: "will_do" }, ev({ salesHandoff: { applies: "required", complete: false, missing: 1 } }));
+  const r = handoffReadiness(lead, { ...ob, gbp_status: "will_do" }, ev());
   const st = deliveryStage(stageIn({ readiness: r }));
   const lines = newClientSetupLines({
     packageName: "Findable Optimise", salesperson: "Finn", amountGbp: 99, website: "https://abcplumbing.co.uk/", siteManagement: "No agency evidence · 78% (automatic check — not confirmed)",
-    services: { list: ["Emergency plumbing", "Boiler repair"], source: "crawl" }, handoff: { applies: "required", complete: false }, readiness: r, stage: st,
+    services: { list: ["Emergency plumbing", "Boiler repair"], source: "crawl" }, readiness: r, stage: st,
     clientLink: "https://app.leadfinderos.com/paid-clients/l1", setupLink: "https://findable.live/onboarding/?q2=o1&lead=l1",
   });
   const t = lines.join("\n");
   ok(/Package: Findable Optimise/.test(t) && /Salesperson: Finn/.test(t) && /Payment: £99\.00 received/.test(t) && /Website: abcplumbing\.co\.uk/.test(t), "27. package, salesperson, payment and website");
   ok(/Services \(found on their website — not yet confirmed\):\n  - Emergency plumbing/.test(t), "27. services found are labelled as a guess");
-  ok(/Sales handoff: NOT COMPLETE/.test(t) && new RegExp(`Setup: ${r.done}/${r.total} complete`).test(t), "27. handoff state and n/m");
-  ok(/Waiting for:\n  - Sales handoff \(sales\)\n  - Google Business Profile access \(client\)/.test(t), "27. what we wait for, and from whom");
-  ok(/Next step: Complete sales handoff/.test(t) && /Open the client: https:\/\/app\.leadfinderos\.com\/paid-clients\/l1/.test(t), "33. the next step and the link that opens THAT client");
+  ok(!/Sales handoff/.test(t) && new RegExp(`Setup: ${r.done}/${r.total} complete`).test(t), "27. no handoff line, and n/m");
+  ok(/Waiting for:\n  - Google Business Profile access \(client\)/.test(t), "27. what we wait for, and from whom");
+  ok(/Next step: Waiting for client/.test(t) && /Open the client: https:\/\/app\.leadfinderos\.com\/paid-clients\/l1/.test(t), "33. the next step and the link that opens THAT client");
   ok(/Client's setup link/.test(t), "…plus the client's own setup link while the client owes something");
 }
 
@@ -248,7 +242,7 @@ console.log("\n── ONE RECORD, NO DUPLICATES ──");
 {
   ok(/add column if not exists sales_handoff jsonb/.test(MIG) && !/create table/i.test(MIG), "no new client table: the lead stays the one client record");
   ok(/export function pickOnboarding/.test(SETUP) && /\.find\(\(r\) => r\.status === "paid"\) \?\? byNewest\[0\]/.test(SETUP), "21. one onboarding row per client: the newest paid row (never a free check)");
-  ok(!/password/i.test(strip(read("src/lib/salesHandoff.ts")) + strip(read("src/components/SalesHandoffForm.tsx")) + strip(read("src/components/ClientSetupCard.tsx"))), "32. no password field anywhere in the handoff or setup");
+  ok(!/password/i.test(strip(read("src/lib/salesHandoff.ts")) + strip(read("src/components/ClientSetupCard.tsx"))), "32. no password field anywhere in the handoff or setup");
 }
 
 console.log(`\n${f ? `${f} FAILURE${f === 1 ? "" : "S"}` : "ALL PASS"}`);

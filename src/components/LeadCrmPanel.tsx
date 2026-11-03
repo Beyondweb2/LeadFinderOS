@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { AutosaveIndicator, useAutosaveFields } from '@/hooks/useAutosaveFields';
 import { useUnsavedDraft } from '@/components/UnsavedDraftGuard';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { BriefcaseBusiness, Megaphone, Check, Clock, Globe, Link2, Lock, Loader2, RefreshCw, Sparkles, UserMinus } from 'lucide-react';
@@ -155,7 +156,8 @@ function useSave(leadId: string): SaveFn {
     }
     const r = await leadRpc(name, { _lead_id: leadId, ...args });
     /* A double-submitted call outcome is ONE call (migration 20261007105000): the server answers ok + duplicate. */
-    if (r.ok) { toast({ title: r.duplicate === true ? 'Already logged a moment ago — not recorded twice' : okText }); notifyLeadChanged(leadId, undefined, patch); }
+    /* An autosave passes no words: its small Saved line is the confirmation. */
+    if (r.ok) { if (okText || r.duplicate === true) toast({ title: r.duplicate === true ? 'Already logged a moment ago — not recorded twice' : okText }); notifyLeadChanged(leadId, undefined, patch); }
     else {
       if (patch) { qc.setQueryData(key, before ?? null); notifyLeadChanged(leadId); } // everyone re-reads the true row
       toast({ title: 'Not saved', description: refusalText(r.error), variant: 'destructive' });
@@ -197,25 +199,29 @@ export function ProspectProfilePanel({ leadId }: { leadId: string }) {
   const lead = crm.data;
   const [editing, setEditing] = useState(false);
   const [f, setF] = useState({ services: '', areas: '', address: '', website: '' });
-  /* Unsaved only when a field differs from what was opened (no prompt for an editor opened and left alone). */
-  const draftId = useId();
-  useUnsavedDraft(`profile-${draftId}`, editing && !!lead && (
-    f.services !== (lead.services_included ?? []).join(', ') || f.areas !== (lead.service_areas ?? []).join(', ')
-    || f.address !== (lead.address ?? '') || f.website !== (lead.website ?? '')));
+  /* AUTOSAVE (2026-11-03): one RPC holds all four, so one slot holds all four. Each leave writes one History line, not one per pause in typing;
+     what has not reached the server survives a closed tab. */
+  const auto = useAutosaveFields({
+    save: async (_k, json) => {
+      const next = JSON.parse(json) as typeof f;
+      const v = { services: splitLabels(next.services), areas: splitLabels(next.areas), address: next.address.trim(), website: next.website.trim() };
+      const r = await save('lead_set_profile', { _services: v.services, _areas: v.areas, _address: v.address, _website: v.website }, '', {
+        services_included: v.services.length ? v.services : null, service_areas: v.areas.length ? v.areas : null, address: v.address || null, website: v.website || null,
+      });
+      if (!r.ok) throw new Error(r.error ?? 'not_saved');
+    },
+    storageKey: `profile:${leadId}`,
+    onRestore: (left) => { try { setF(JSON.parse(left.all) as typeof f); setEditing(true); } catch { /* unreadable: nothing to bring back */ } },
+  });
+  const leaveField = () => { auto.set('all', JSON.stringify(f)); auto.flush('all'); };
   if (!lead) return null;
   const services = lead.services_included ?? [];
   const areas = lead.service_areas ?? [];
   const start = () => {
-    setF({ services: services.join(', '), areas: areas.join(', '), address: lead.address ?? '', website: lead.website ?? '' });
+    const opened = { services: services.join(', '), areas: areas.join(', '), address: lead.address ?? '', website: lead.website ?? '' };
+    setF(opened);
+    auto.baseline('all', JSON.stringify(opened));
     setEditing(true);
-  };
-  const submit = async () => {
-    const next = { services: splitLabels(f.services), areas: splitLabels(f.areas), address: f.address.trim(), website: f.website.trim() };
-    const r = await save('lead_set_profile', { _services: next.services, _areas: next.areas, _address: next.address, _website: next.website }, 'Profile saved', {
-      services_included: next.services.length ? next.services : null, service_areas: next.areas.length ? next.areas : null,
-      address: next.address || null, website: next.website || null,
-    });
-    if (r.ok) setEditing(false);
   };
   const none = <span className="italic text-muted-foreground/60">Not recorded yet</span>;
   return (
@@ -232,23 +238,23 @@ export function ProspectProfilePanel({ leadId }: { leadId: string }) {
       ) : (
         <div className="grid gap-2">
           <label className="text-[11px] text-muted-foreground">Main services they genuinely offer (comma separated)
-            <Textarea rows={2} className="mt-1 resize-none text-sm" value={f.services} onChange={(e) => setF((p) => ({ ...p, services: e.target.value }))} placeholder="e.g. boiler repair, bathroom fitting" />
+            <Textarea rows={2} className="mt-1 resize-none text-sm" value={f.services} onBlur={leaveField} onChange={(e) => setF((p) => ({ ...p, services: e.target.value }))} placeholder="e.g. boiler repair, bathroom fitting" />
           </label>
           <label className="text-[11px] text-muted-foreground">Towns / areas they genuinely serve (comma separated)
-            <Input className="mt-1 h-9 text-sm" value={f.areas} onChange={(e) => setF((p) => ({ ...p, areas: e.target.value }))} placeholder="e.g. Wakefield, Ossett, Horbury" />
+            <Input className="mt-1 h-9 text-sm" value={f.areas} onBlur={leaveField} onChange={(e) => setF((p) => ({ ...p, areas: e.target.value }))} placeholder="e.g. Wakefield, Ossett, Horbury" />
           </label>
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="text-[11px] text-muted-foreground">Address
-              <Input className="mt-1 h-9 text-sm" value={f.address} onChange={(e) => setF((p) => ({ ...p, address: e.target.value }))} />
+              <Input className="mt-1 h-9 text-sm" value={f.address} onBlur={leaveField} onChange={(e) => setF((p) => ({ ...p, address: e.target.value }))} />
             </label>
             <label className="text-[11px] text-muted-foreground">Website
-              <Input className="mt-1 h-9 text-sm" value={f.website} onChange={(e) => setF((p) => ({ ...p, website: e.target.value }))} placeholder="example.co.uk" />
+              <Input className="mt-1 h-9 text-sm" value={f.website} onBlur={leaveField} onChange={(e) => setF((p) => ({ ...p, website: e.target.value }))} placeholder="example.co.uk" />
             </label>
           </div>
           <p className="text-[11px] text-muted-foreground">Only what you actually know. The AI check builds its questions from these, and they go to Paul if the client signs up.</p>
-          <div className="flex justify-end gap-2">
-            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setEditing(false)}>Cancel</Button>
-            <Button size="sm" className="h-8 text-xs" onClick={() => void submit()}>Save</Button>
+          <div className="flex items-center justify-between gap-2">
+            <AutosaveIndicator status={auto.status} />
+            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setEditing(false)}>Done</Button>
           </div>
         </div>
       )}
@@ -520,18 +526,30 @@ const callBookedSummary = (lead: CrmRow) => callBookedSummaryOf(lead, Date.now()
 
 function InternalNote({ save }: { save: SaveFn }) {
   const [note, setNote] = useState('');
+  const latest = useRef('');
+  latest.current = note;
   useUnsavedDraft(`internal-note-${useId()}`, note.trim() !== '');
+  /* AUTOSAVE (2026-11-03): a note is one History row, so it saves when they leave the box, not on every pause. Refused or failed, the text stays. */
+  const saving = useRef(false);
+  const commit = useCallback(async () => {
+    const text = latest.current.trim();
+    if (!text || saving.current) return;
+    saving.current = true;
+    try {
+      const r = await save('lead_add_note', { _body: text }, 'Note saved');
+      if (r.ok && latest.current.trim() === text) setNote('');
+    } finally { saving.current = false; }
+  }, [save]);
+  /* Leaving the lead with the box still in focus: no blur comes, so the unmount saves it. */
+  const commitRef = useRef(commit);
+  commitRef.current = commit;
+  useEffect(() => () => { void commitRef.current(); }, []);
   return (
     /* Quiet until used (declutter pass, 2026-10-01): one line to type in; it grows while there is a note. */
     <section className={CARD}>
       <div className="mb-2 flex items-center gap-1.5"><Lock className="h-3 w-3" /><span className={LABEL}>Internal note</span><span className="text-[10px] uppercase tracking-wide text-amber-500">never sent</span></div>
-      <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={note ? 2 : 1} className="min-h-[36px] resize-none text-xs" placeholder="e.g. agency runs the site, call again next month" />
-      <div className={cn('mt-2 flex justify-end', !note.trim() && 'hidden')}>
-        <Button size="sm" className="h-8 text-xs" disabled={!note.trim()} onClick={async () => {
-          const r = await save('lead_add_note', { _body: note }, 'Note added');
-          if (r.ok) setNote('');
-        }}>Add note</Button>
-      </div>
+      <Textarea value={note} onChange={(e) => setNote(e.target.value)} onBlur={() => void commit()} rows={note ? 2 : 1} className="min-h-[36px] resize-none text-xs" placeholder="e.g. agency runs the site, anything you promised, best way to reach them" data-testid="internal-note" />
+      <p className={cn('mt-1 text-[11px] text-muted-foreground', !note.trim() && 'hidden')}>Saves when you click away. Paul sees it when the client pays.</p>
     </section>
   );
 }

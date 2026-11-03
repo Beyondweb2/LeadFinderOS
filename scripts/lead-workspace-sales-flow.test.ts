@@ -52,7 +52,8 @@ ok(mount.length > 0 && dlg.indexOf("<LeadCallFlow ") > dlg.indexOf("</Tabs>"), "
 ok(/onSendOnboarding=\{\(\) => goTab\('close'\)\}/.test(mount), "Send onboarding → the Close tab");
 ok(/const keepKeysHere = \(e: KeyboardEvent\) => \{ if \(e\.key === 'ArrowLeft' \|\| e\.key === 'ArrowRight'\) e\.stopPropagation\(\); \};/.test(flow) && (flow.match(/onKeyDown=\{keepKeysHere\}/g) ?? []).length === 2, "← / → inside the windows never step to another lead underneath");
 ok(flow.includes("const finish = () => setLogOpen(false);") && flow.includes("if (!o) { setStep('pick');") && flow.includes("<Dialog open={logOpen} onOpenChange={setLogOpen}>"), "every way the window closes (X, Escape, Skip, Later, a saved step) resets it: the next Log starts on What happened?");
-ok(!/Internal note|InternalNote|lead_add_note/.test(code(flow)), "no Internal note box in the Log window (Details keeps it)");
+ok(!/Internal note|InternalNote/.test(code(flow)), "no Internal note box in the Log window (Details keeps it)");
+ok(/leadRpc\('lead_add_note', \{ _lead_id: leadId, _body: text \}\)/.test(code(flow)), "a note typed in the Log window and never logged is kept as a note");
 ok(/data-testid="log-add-note"/.test(flow) && /useUnsavedDraft\(`log-outcome-note-\$\{useId\(\)\}`, note\.trim\(\) !== ''\)/.test(flow), "a small optional Add note, saved with the outcome, guarded as an unsaved draft");
 ok(/const \[note, setNote\] = useState\(''\);/.test(flow.slice(flow.indexOf("export function LeadCallFlow"), flow.indexOf("<Dialog open={logOpen}"))), "…its text lives outside the window, so closing the window does not lose it");
 

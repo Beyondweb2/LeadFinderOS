@@ -1,4 +1,6 @@
-/* ════════════════════════════════════════════════════════════════════════════════════════════════
+/* ⛔ NO HANDOVER FORM SINCE 2026-11-03 (Paul, docs/commission-owed.md). Nobody is asked to fill this in, and nothing waits on it. Answers
+   already saved stay readable (New paid clients, the client page, the new-client email). The rest of this file describes that older record.
+   ════════════════════════════════════════════════════════════════════════════════════════════════
    THE SALES HANDOFF (2026-10-02, docs/paid-client-automation.md) — what the salesperson tells Paul when
    a client closes. SHORT on purpose: six answers and an optional note, never a form.
 
@@ -109,9 +111,9 @@ export function cleanHandoff(raw: unknown): SalesHandoffFields {
 
 /** What the close should have recorded and has not, in plain words: for the New paid clients list. It blocks nothing (the rep is
  *  never made to fill in a form, 2026-10-07); it only shows Paul who to chase. An agency's contract is asked only of an agency. */
-export function closeInfoMissing(input: { handoff: SalesHandoffFields | null | undefined; manager: string | null | undefined; agencyContract: string | null | undefined; plan: string | null | undefined }): string[] {
+export function closeInfoMissing(input: { contactName: string | null | undefined; manager: string | null | undefined; agencyContract: string | null | undefined; plan: string | null | undefined }): string[] {
   const out: string[] = [];
-  if (!input.handoff?.decision_maker_name) out.push('decision maker');
+  if (!input.contactName) out.push('contact name');
   if (!input.manager) out.push('who runs the site');
   if ((input.manager === 'agency' || input.manager === 'freelancer' || input.manager === 'third_party') && !input.agencyContract) out.push('agency contract');
   if (!input.plan) out.push('plan');

@@ -8,7 +8,6 @@ import { DELIVERY_STAGES, DELIVERY_STAGE_LABEL, type DeliveryStage, type Deliver
 import { handoffSummaryLines, type HandoffApplies, type HandoffFieldKey, type SalesHandoffFields, type SalesHandoffRecord } from '@/lib/salesHandoff';
 import type { HandoffReadiness, HandoffWho } from '@/lib/handoffReadiness';
 import { ACTIVITY_LABEL } from '@/lib/salesCrm';
-import { SalesHandoffForm } from '@/components/SalesHandoffForm';
 import { cn } from '@/lib/utils';
 import { Callout, EDGE, IconTile, SubSection, SURFACE, TONE, ToneChip, type Tone } from '@/components/operator/ui';
 import { firstContactDueLabel, type FirstContactChannel, type FirstContactView } from '@/lib/firstContact';
@@ -57,7 +56,6 @@ export function ClientSetupCard({ leadId, businessName = null, h, route, onChang
 }) {
   const { toast } = useToast();
   const [busy, setBusy] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
   const s = h.setup;
   const r = h.readiness;
   const sh = h.sales_handoff;
@@ -76,13 +74,11 @@ export function ClientSetupCard({ leadId, businessName = null, h, route, onChang
   const recordContact = (via: FirstContactChannel) => run(`contact_${via}`, () => invokeEdge('paid-client-hub', { action: 'record_first_contact', lead_id: leadId, via }), 'First contact recorded');
   const fc = s.first_contact;
   const contactOwed = !!fc && (fc.state === 'owed' || fc.state === 'overdue');
-  const saveHandoffField = async (field: string, value: string) => { await invokeEdge('quick-close', { mode: 'save_handoff_field', lead_id: leadId, field, value }); };
   const go = (section: string) => document.getElementById(`hub-${section}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const nextAction = () => {
     const k = s.next.key;
     if (k === 'submit') return void submit();
     if (k === 'confirm_gbp') return void confirmGbp();
-    if (k === 'complete_handoff') return setEditing(true);
     if (k === 'run_discovery' || k === 'review_questions' || k === 'run_baseline') return onOpenBaseline();
     if (k === 'contact_client') return document.getElementById('setup-first-contact')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     go(s.next.section);
@@ -96,7 +92,6 @@ export function ClientSetupCard({ leadId, businessName = null, h, route, onChang
   const handoffLines = handoffSummaryLines(sh.saved);
 
   const tone = STATE_EDGE[s.state];
-  const handoffTone: Tone = sh.applies !== 'required' ? 'grey' : sh.completed_at ? 'green' : 'amber';
 
   return (
     <section id="hub-setup" data-testid="client-setup" className={cn(SURFACE, 'min-w-0 space-y-5 p-4 sm:p-5', EDGE[tone])}>
@@ -197,26 +192,12 @@ export function ClientSetupCard({ leadId, businessName = null, h, route, onChang
       </div>
 
       {/* The salesperson's handoff. */}
-      <SubSection title="Sales handoff" icon={UserRound} tone={handoffTone} testId="setup-sales-handoff" className="border-t border-border/60 pt-4"
-        action={<span className={cn('text-xs font-medium', handoffTone === 'grey' ? 'text-muted-foreground' : TONE[handoffTone].text)}>
-          {sh.applies !== 'required' ? (sh.applies === 'not_needed_own_sale' ? "Not needed — your own sale" : sh.applies === 'not_recorded_before' ? 'Not recorded — paid before handoffs existed' : 'Not needed — no salesperson')
-            : sh.completed_at ? `Complete${sh.saved_by ? ` · ${sh.saved_by}` : ''}` : 'Not complete — the salesperson owes it'}
-        </span>}>
-        {/* Someone else sold it: who, their handoff, and Paul's request to them (2026-10-05). */}
-        {sh.applies === 'required' && (
-          <p className="text-xs text-muted-foreground" data-testid="handoff-seller">
-            Salesperson: <span className="font-medium text-foreground">{h.missing_info?.ask.seller_name ?? sh.saved_by ?? 'Not recorded'}</span>
-            {sh.saved_at ? ` · last update ${day(sh.saved_at)}` : ' · nothing saved yet'}
-            {h.missing_info?.request.state === 'pending' ? ` · info requested ${day(h.missing_info.request.requestedAt)}` : ''}
-            {h.missing_info?.request.state === 'answered' ? ` · answered ${day(h.missing_info.request.answeredAt)}` : ''}
-          </p>
-        )}
-        {!editing && (handoffLines.length
-          ? <ul className="mt-2 space-y-1 text-sm">{handoffLines.map((l) => <li key={l} className="break-words">{l}</li>)}</ul>
-          : <p className="mt-1 text-xs text-muted-foreground">Nothing given yet.</p>)}
-        {!editing && <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(true)} className="mt-1 -ml-2 h-9 px-2 text-xs text-primary"><Pencil className="mr-1 h-3.5 w-3.5" />{handoffLines.length ? 'Edit' : 'Fill it in'}</Button>}
-        {editing && <div className="mt-3"><SalesHandoffForm fields={sh.fields} prefilled={sh.prefilled} route={route} leadId={leadId} onSaveField={saveHandoffField} onDone={() => { setEditing(false); onChanged(); }} /></div>}
-      </SubSection>
+      {/* A sale made before the handover form was removed (2026-11-03) keeps what its salesperson wrote. Read only. */}
+      {handoffLines.length > 0 && (
+        <SubSection title="What the salesperson wrote" icon={UserRound} tone="grey" testId="setup-sales-handoff" className="border-t border-border/60 pt-4">
+          <ul className="mt-1 space-y-1 text-sm">{handoffLines.map((l) => <li key={l} className="break-words">{l}</li>)}</ul>
+        </SubSection>
+      )}
 
       {/* History — the meaningful events only. */}
       <details className="border-t border-border/60 pt-4" data-testid="setup-history">

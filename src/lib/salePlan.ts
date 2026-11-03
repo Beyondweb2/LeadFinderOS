@@ -2,7 +2,7 @@
    mismatch. `sale_plan` on the ledger row is the plan in Stripe's own session; `sale_plan_picked` is what Quick Close held when the
    money landed. The plan id already says both the plan and the way to pay, so only the id is stored and the words come from here.
    Pure: read by the ledger writer, fn sales-earnings and the screens. ⚠️ Edge-reachable: relative imports, explicit .ts. */
-import { PAYMENT_PLAN_SPEC, isPaymentPlan, planProduct, type PaymentPlan, type PlanProduct } from './paymentPlans.ts';
+import { PAYMENT_PLANS, PAYMENT_PLAN_SPEC, isPaymentPlan, planProduct, type PaymentPlan, type PlanProduct } from './paymentPlans.ts';
 
 export type SalePlanFlag = 'plan_differs' | 'amount_differs' | 'monthly_differs';
 export type PayOption = 'monthly' | 'upfront' | 'full' | 'six' | 'twelve' | 'old';
@@ -15,12 +15,27 @@ export const SALE_PLAN_FLAG_WORDS: Record<SalePlanFlag, string> = {
 
 export const isSalePlanFlag = (v: unknown): v is SalePlanFlag => v === 'plan_differs' || v === 'amount_differs' || v === 'monthly_differs';
 
-/** The mismatch on a sale's first payment, or null. A sale with no plan on either side is the old v5 offer: nothing to compare. */
+const sameMoney = (a: number, b: number) => Math.abs(a - b) < 0.005;
+
+/** The plan a first payment was actually on (Paul, 2026-11-03: Stripe is the source of truth). The session's plan, when the amount agrees.
+ *  When it does not, the one plan whose first payment is that amount wins: £999 can only be Complete up front, £499 only Pay in full. £99
+ *  starts several plans, so it cannot overrule the session; that stays the session's plan and is flagged amount_differs. */
+export function salePlanFromCharge(input: { metaPlan: string | null | undefined; amountGbp: number }): PaymentPlan | null {
+  const meta = isPaymentPlan(input.metaPlan) ? input.metaPlan : null;
+  if (meta && sameMoney(PAYMENT_PLAN_SPEC[meta].firstGbp, input.amountGbp)) return meta;
+  const byAmount = PAYMENT_PLANS.filter((p) => sameMoney(PAYMENT_PLAN_SPEC[p].firstGbp, input.amountGbp));
+  return byAmount.length === 1 ? byAmount[0] : meta;
+}
+
+/** The mismatch on a sale's first payment, or null. A sale with no plan on either side is the old v5 offer: nothing to compare.
+ *  stripePlan is the plan on the session; the plan it is compared on is what was charged. */
 export function salePlanFlagAtPayment(input: { stripePlan: string | null | undefined; pickedPlan: string | null | undefined; amountGbp: number }): SalePlanFlag | null {
-  const stripe = isPaymentPlan(input.stripePlan) ? input.stripePlan : null;
+  const session = isPaymentPlan(input.stripePlan) ? input.stripePlan : null;
+  const charged = salePlanFromCharge({ metaPlan: session, amountGbp: input.amountGbp });
   const picked = isPaymentPlan(input.pickedPlan) ? input.pickedPlan : null;
-  if (picked && picked !== stripe) return 'plan_differs';
-  if (stripe && Math.abs(PAYMENT_PLAN_SPEC[stripe].firstGbp - input.amountGbp) >= 0.005) return 'amount_differs';
+  if (picked && picked !== charged) return 'plan_differs';
+  if (session && charged !== session) return 'plan_differs';
+  if (charged && !sameMoney(PAYMENT_PLAN_SPEC[charged].firstGbp, input.amountGbp)) return 'amount_differs';
   return null;
 }
 

@@ -6,7 +6,8 @@ import { recordLedger, stripeIdOf, type LedgerWrite } from "../_shared/payment-l
 import { londonDayOf } from "../../../src/lib/commission.ts";
 import { MARK_PAID_REFUSAL_WORDS, paidHistory, planMarkPaid } from "../../../src/lib/commissionOwed.ts";
 import { MARK_PAID_UNDO_HOURS } from "../../../src/lib/commissionConfig.ts";
-import { closeInfoMissing, cleanHandoff } from "../../../src/lib/salesHandoff.ts";
+import { closeInfoMissing } from "../../../src/lib/salesHandoff.ts";
+import { TYPED_ACTIVITY_KINDS, paidClientRecord } from "../../../src/lib/paidClientRecord.ts";
 import { monthlyDiffers, salePlanParts } from "../../../src/lib/salePlan.ts";
 
 // sales-earnings — commission from the payment ledger (Sales Experience, 2026-09-28; docs/sales-experience.md §4).
@@ -163,17 +164,18 @@ async function teamNames(service: Service): Promise<Record<string, string>> {
 /** NEW PAID CLIENTS, newest first, for the admin home. Money from the ledger where it holds the sale, and Stripe's plan over the pick. */
 async function newPaidClients(service: Service) {
   const { data: leads, error } = await service.from("outreach_leads")
-    .select("id, business_name, amount_paid, payment_date, status, sold_by_user_id, payment_plan, sales_handoff")
+    .select("id, business_name, amount_paid, payment_date, status, sold_by_user_id, payment_plan, sales_handoff, phone, email, contact_name, website, address, services_included, service_areas, website_control, website_control_note")
     .gt("amount_paid", 0).order("payment_date", { ascending: false, nullsFirst: false }).limit(50);
   if (error) throw new Error(error.message);
   const rows = (leads ?? []) as Obj[];
   const ids = rows.map((l) => l.id as string);
-  const [ledger, onboarding, exclusions] = await Promise.all([
+  const [ledger, onboarding, exclusions, activity] = await Promise.all([
     service.from("payment_ledger").select("lead_id, kind, status, amount_gbp, occurred_at, sold_by_user_id, sale_plan, sale_plan_flag").in("lead_id", ids).in("kind", ["initial", "recurring"]).limit(5000),
-    service.from("onboarding_responses").select("lead_id, website_manager, payment_plan, quick_close").in("lead_id", ids).order("updated_at", { ascending: false }).limit(1000),
+    service.from("onboarding_responses").select("lead_id, website_manager, payment_plan, quick_close, contact_name, contact_email, confirmed_phone, business_website, business_address, services_list, areas_list").in("lead_id", ids).order("updated_at", { ascending: false }).limit(1000),
     service.from("metric_exclusions").select("value").eq("kind", "lead").in("value", ids).limit(1000),
+    service.from("lead_activity").select("lead_id, kind, body, created_at").in("lead_id", ids).in("kind", TYPED_ACTIVITY_KINDS).not("body", "is", null).order("created_at", { ascending: false }).limit(1000),
   ]);
-  for (const r of [ledger, onboarding, exclusions]) if (r.error) throw new Error(r.error.message);
+  for (const r of [ledger, onboarding, exclusions, activity]) if (r.error) throw new Error(r.error.message);
   const firstOb = new Map<string, Obj>();
   for (const o of (onboarding.data ?? []) as Obj[]) if (!firstOb.has(o.lead_id)) firstOb.set(o.lead_id, o);
   const tests = new Set(((exclusions.data ?? []) as { value: string }[]).map((e) => e.value));
@@ -184,16 +186,24 @@ async function newPaidClients(service: Service) {
     const recurring = pays.filter((r) => r.kind === "recurring").sort((a, b) => String(a.occurred_at).localeCompare(String(b.occurred_at))).map((r) => Number(r.amount_gbp));
     const ob = firstOb.get(l.id) ?? null;
     const answers = ((ob?.quick_close as Obj | null)?.answers ?? {}) as Obj;
-    const missing = closeInfoMissing({ handoff: cleanHandoff(l.sales_handoff), manager: (answers.manager ?? ob?.website_manager ?? null) as string | null, agencyContract: (answers.agency_contract ?? null) as string | null, plan });
+    const record = paidClientRecord({ lead: l, onboarding: ob, activity: ((activity.data ?? []) as { lead_id: string; kind: string; body: string | null; created_at: string }[]).filter((a) => a.lead_id === l.id) });
+    const missing = closeInfoMissing({ contactName: record.contactName, manager: (answers.manager ?? ob?.website_manager ?? null) as string | null, agencyContract: (answers.agency_contract ?? null) as string | null, plan });
     return {
       lead_id: l.id, business: l.business_name ?? "Client", plan, plan_words: salePlanParts(plan).words,
       amount_paid: sale ? Number(sale.amount_gbp) : Number(l.amount_paid ?? 0),
       seller_id: (sale?.sold_by_user_id ?? l.sold_by_user_id ?? null) as string | null,
       paid_at: (sale?.occurred_at ?? l.payment_date ?? null) as string | null,
       missing, flag: (sale?.sale_plan_flag ?? (monthlyDiffers(plan, recurring) ? "monthly_differs" : null)) as string | null,
-      test: tests.has(l.id), refunded: l.status === "refunded",
+      test: tests.has(l.id), refunded: l.status === "refunded", record,
     };
   });
+}
+
+/** The daily check's last run, for the line on Commission owed. A failed read shows as "has not run", never as fine. */
+async function lastStripeCheck(service: Service) {
+  const { data, error } = await service.from("commission_stripe_checks").select("finished_at, ok, fixed_count, needs_you_count, needs_you, changes, error").order("started_at", { ascending: false }).limit(1);
+  if (error) { console.error("[sales-earnings] stripe check unreadable:", error.message); return null; }
+  return (data ?? [])[0] ?? null;
 }
 
 Deno.serve(async (req) => {
@@ -228,7 +238,7 @@ Deno.serve(async (req) => {
       if (actor.role === "sales" && [...owed.next, ...owed.quiet].some((i) => i.sellerId !== actor.id)) return json({ ok: false, error: "scope_error" }, 500);
       const history = paidHistory(earnings.linePayments);
       if (actor.role === "sales") return json({ ok: true, ...owed, history, names: {}, new_paid_clients: [], ms: Date.now() - started });
-      return json({ ok: true, ...owed, history, names: await teamNames(service), new_paid_clients: await newPaidClients(service), ms: Date.now() - started });
+      return json({ ok: true, ...owed, history, names: await teamNames(service), new_paid_clients: await newPaidClients(service), stripe_check: await lastStripeCheck(service), ms: Date.now() - started });
     }
     if (actor.role !== "admin") return await adminOnly();
 

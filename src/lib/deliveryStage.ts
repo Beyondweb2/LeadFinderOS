@@ -107,7 +107,7 @@ const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00
 function setupStep(r: HandoffReadiness): NextStep {
   const miss = r.items.filter((i) => i.required && !i.ok);
   const sales = miss.find((i) => i.who === 'sales');
-  if (sales) return step('complete_handoff', sales.key === 'sales_handoff' ? 'Complete sales handoff' : `Sales: add ${sales.label.toLowerCase()}`, false, 'setup');
+  if (sales) return step('complete_handoff', `Sales: add ${sales.label.toLowerCase()}`, false, 'setup');
   const crawl = miss.find((i) => i.key === 'crawl');
   if (crawl) return step('crawl', 'Crawl website', true, 'evidence');
   const gbp = miss.find((i) => i.key === 'gbp_access' && i.who === 'findable');
