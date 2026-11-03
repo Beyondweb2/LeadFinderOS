@@ -329,6 +329,8 @@ interface ConversationRowProps {
   statusLabel: string;
   statusTone: StatusPillTone;
   statusTitle: string;
+  /* The stored stage as the pill reads it: a plain stage takes its solid colour from it. */
+  statusStage: string | null;
   /* "Only confirmed" / "Auto-reply", now the preview's hover (the separate chip is gone, 2026-10-22). */
   inboundTitle: string | null;
   auditScore: LeadAuditScore | null;
@@ -353,7 +355,7 @@ interface ConversationRowProps {
    The AI chip, the state chip, "Only confirmed" / "Auto-reply", the Needs you reason line, the engagement pills
    and the next-action pill are off the row (the pill's hover carries what still matters; the header keeps the rest). */
 const ConversationRow = memo(function ConversationRow({
-  c, isActive, outsideFilters, st, statusKey, statusLabel, statusTone, statusTitle, inboundTitle, auditScore, siteScore, siteWebsite,
+  c, isActive, outsideFilters, st, statusKey, statusLabel, statusTone, statusTitle, statusStage, inboundTitle, auditScore, siteScore, siteWebsite,
   hookDueMode, hookChecked, bulkMode, bulkChecked, saving, listStageOf, onOpen, toggleHookSelect, toggleBulkSelect, handleSetStatus,
 }: ConversationRowProps) {
   return (
@@ -406,8 +408,8 @@ const ConversationRow = memo(function ConversationRow({
           {c.leadId ? (saving
             ? <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" />
             : <PipelineStatusSelect value={c.leadStatus} stage={listStageOf(c.leadId)} onValueChange={(status) => handleSetStatus(c, status)}
-                display={<StatusPill pillKey={statusKey} label={statusLabel} tone={statusTone} title={statusTitle} compact />} />)
-            : <StatusPill pillKey={statusKey} label={statusLabel} tone={statusTone} title={statusTitle} compact />}
+                display={<StatusPill pillKey={statusKey} label={statusLabel} tone={statusTone} title={statusTitle} stage={statusStage} compact />} />)
+            : <StatusPill pillKey={statusKey} label={statusLabel} tone={statusTone} title={statusTitle} stage={statusStage} compact />}
           {/* "Room to improve the website" at the right of the status line (Paul, 2026-10-31: the list card keeps it HERE, once). */}
           {c.leadId && (
             <span className="ml-auto shrink-0" data-testid="site-score-status-line">
@@ -1676,6 +1678,35 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
      template chosen. */
   const selectedSendability = template ? templateSendability(template) : { ok: false as const, reason: 'Choose a template first.' };
 
+  /* ⛔ AUTOMATIC "WOULD THIS SEND?" CHECK (2026-11-03, Paul; replaces the big Preview button). Choosing a template asks the server's
+     read-only dry run ONCE (preview, mode "dry_run": every guard, nothing sent) and, if it would be refused, shows a small amber
+     warning beside the eye with the reason. One answer is kept per lead, template and typed item, so choosing it again asks nothing;
+     hovering a row asks nothing (only the chosen template is checked). It never disables a button: it only warns. A check that could
+     not run (an old deploy without the dry run, a network drop) says nothing rather than guess. */
+  const sendCheckCache = useRef(new Map<string, string | null>());
+  const [sendCheck, setSendCheck] = useState<{ id: string; warning: string | null } | null>(null);
+  const sendCheckId = active?.leadId && template ? `${active.key}|${template}|${needsTypedItem(template) ? neededItem.trim() : ''}` : null;
+  useEffect(() => {
+    if (!sendCheckId || !active?.leadId || !template) { setSendCheck(null); return; }
+    if (!selectedSendability.ok) return; // the app's own guard already says why, right under the picker
+    if (needsTypedItem(template) && !neededItem.trim()) { setSendCheck(null); return; }
+    const cached = sendCheckCache.current.get(sendCheckId);
+    if (cached !== undefined) { setSendCheck({ id: sendCheckId, warning: cached }); return; }
+    setSendCheck(null);
+    let stale = false;
+    const lead = active, tpl = template;
+    const timer = setTimeout(async () => {
+      const r = await preview({ phone: lead.phone, leadId: lead.leadId, country: activeLead?.country ?? null, templateName: tpl, allowResend: thread.some((m) => m.direction === 'outbound' && m.template_name === tpl), ...(needsTypedItem(tpl) ? { templateVars: { needed_item: neededItem } } : {}) });
+      if (r.error === 'preview_unsupported') return;
+      const warning = r.ok ? null : (r.reason || r.error || 'the server would refuse it');
+      sendCheckCache.current.set(sendCheckId, warning);
+      if (!stale) setSendCheck({ id: sendCheckId, warning });
+    }, 400);
+    return () => { stale = true; clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sendCheckId, selectedSendability.ok]);
+  const sendCheckWarning = sendCheck && sendCheck.id === sendCheckId ? sendCheck.warning : null;
+
   /* ⛔ IN-WINDOW FREE TEXT (2026-10-31). WhatsApp with their 24 hours open: the picker FILLS THE COMPOSER instead of sending a template.
      The words come from the sender's own dry run (the same render, every value filled, every guard asked), so what the box shows is
      exactly what would go. A template with no plain-text version (a video) comes back as a template: then — and only then — the
@@ -1761,6 +1792,12 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
         {/* The chosen template's full wording, on hover, tap or keyboard focus. The big Preview button (the dry run) went on 2026-11-03,
             Paul: every send still runs the server's guards, and "Put in message box" still runs the dry run. */}
         {!!template && <TemplateEye selected label={pickerLabel(template)} getText={() => pickerWording(template)} />}
+        {!!sendCheckWarning && (
+          <span className="inline-flex min-w-0 max-w-[16rem] items-center gap-1 text-[11px] text-amber-600" title={sendCheckWarning} data-testid="picker-send-check-warning">
+            <AlertTriangle className="h-3 w-3 shrink-0" />
+            <span className="truncate">May not send: {sendCheckWarning}</span>
+          </span>
+        )}
         {/* Window open (WhatsApp): the wording goes into the message box. The template button appears only for a template the
             sender says has no plain-text version. Window closed (or a text): exactly as before. */}
         {inWindowWa && (
@@ -1865,7 +1902,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   const auditInFlight = !!active?.leadId && (auditRunningLeadIds.has(active.leadId) || firedAudits.has(active.leadId));
   /* ⛔ THE ONE ATTENTION PILL for a conversation (src/lib/inboxAttention.ts) — the list row and the thread header both call this,
      so the two can never show different states. Returned as words so the row memo compares by value. */
-  const rowAttention = (c: WaConversation): { statusKey: StatusPillKey; statusLabel: string; statusTone: StatusPillTone; statusTitle: string; inboundTitle: string | null } => {
+  const rowAttention = (c: WaConversation): { statusKey: StatusPillKey; statusLabel: string; statusTone: StatusPillTone; statusTitle: string; statusStage: string | null; inboundTitle: string | null } => {
     const last = c.lastMessage;
     const label = last?.direction === 'inbound' ? inboundLabel(last.body, last.message_type) : null;
     const at = attentionFor({
@@ -1890,7 +1927,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       followUpDue: !!stateByKey.get(c.key)?.followUpDue,
       meetingBooked: stage?.state === 'meeting_booked',
     });
-    return { statusKey: sp.key, statusLabel: sp.label, statusTone: sp.tone, statusTitle: sp.title, inboundTitle: label ? INBOUND_LABEL_TITLES[label] : null };
+    return { statusKey: sp.key, statusLabel: sp.label, statusTone: sp.tone, statusTitle: sp.title, statusStage: (stageStatus as string | null) ?? null, inboundTitle: label ? INBOUND_LABEL_TITLES[label] : null };
   };
   // Inline missing-inputs prompt — the inbox is NEVER left to run an audit. Prefilled from
   // whatever partial lead data exists; values are written back to the lead before running.
@@ -2695,7 +2732,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                       savingStatusKey === active.key
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                         : <PipelineStatusSelect value={active.leadStatus} stage={activeSales.view} onValueChange={(status) => handleSetStatus(active, status)}
-                            display={(() => { const sp = rowAttention(active); return <StatusPill pillKey={sp.statusKey} label={sp.statusLabel} tone={sp.statusTone} title={sp.statusTitle} />; })()} />
+                            display={(() => { const sp = rowAttention(active); return <StatusPill pillKey={sp.statusKey} label={sp.statusLabel} tone={sp.statusTone} title={sp.statusTitle} stage={sp.statusStage} />; })()} />
                     )}
                     {/* ⛔ ONE STATUS PILL (2026-10-01, Paul: "its still showing 2 of the same status pills"): the status
                         control above is the one solid pipeline pill; interested is the star — the separate
@@ -2703,7 +2740,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                     {/* The ONE next action (src/lib/nextActionView.ts), set by a person — shown AND set here (2026-10-02,
                         in place of "Find email": email outreach is not used). "+ Set next action", or the saved
                         action ("Call · Tomorrow"); the shared editor and the one write (lead_set_follow_up). */}
-                    {!active.leadId && (() => { const sp = rowAttention(active); return sp.statusKey !== 'stage' ? <StatusPill pillKey={sp.statusKey} label={sp.statusLabel} tone={sp.statusTone} title={sp.statusTitle} /> : null; })()}
+                    {!active.leadId && (() => { const sp = rowAttention(active); return sp.statusKey !== 'stage' ? <StatusPill pillKey={sp.statusKey} label={sp.statusLabel} tone={sp.statusTone} title={sp.statusTitle} stage={sp.statusStage} /> : null; })()}
                     {activeLead && <NextActionEditor lead={activeLead} variant="pill" />}
                     {/* ⛔ THE ONE ATTENTION PILL (2026-10-22): the same pill, same rule, as the list row (src/lib/inboxAttention.ts). */}
                     <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} />

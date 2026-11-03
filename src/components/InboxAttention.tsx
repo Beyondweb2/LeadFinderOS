@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { AlertTriangle, CheckCheck, Clock, Loader2, MessageCircleReply, Timer, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { pipelineStatusClass } from '@/components/PipelineStatusBadge';
 import type { AttentionKind } from '@/lib/inboxAttention';
 import type { StatusPillKey, StatusPillTone } from '@/lib/inboxStatusPill';
 import type { LeadAuditScore } from '@/lib/auditScore';
@@ -33,19 +34,37 @@ export const AttentionPill = memo(function AttentionPill({ kind, label, title, c
   );
 });
 
-/* ⛔ THE ONE STATUS PILL (src/lib/inboxStatusPill.ts decides the words). Fixed height, one line, never wraps and never grows:
-   every label is short and the pill truncates rather than balloon. Warm = needs me, cool = waiting, green = positive, muted = closed. */
-const STATUS_TONE: Record<StatusPillTone, string> = {
-  warm: 'bg-amber-500/20 text-amber-800 dark:text-amber-300',
-  cool: 'bg-sky-500/15 text-sky-800 dark:text-sky-300',
-  good: 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300',
-  muted: 'bg-muted text-muted-foreground',
-  neutral: 'bg-slate-500/15 text-slate-700 dark:text-slate-300',
+/* ⛔ THE ONE STATUS PILL (src/lib/inboxStatusPill.ts decides the words). The SOLID pipeline-pill style again (Paul, 2026-11-03: the
+   see-through tint of 2026-10-31, commit 5d7f6fbe, is gone): bright fill, dark text, rounded, ONE small size for every status.
+   A plain stage and the closed / money stages wear the colour the stored status always had (pipelineStatusClass, the Outreach
+   table's own); the derived "needs you" states get one solid colour each. Fixed height, one line, never wraps or grows. */
+const DERIVED_CLASS: Partial<Record<StatusPillKey, string>> = {
+  reply_needed: 'bg-[hsl(var(--badge-orange))] text-[hsl(var(--badge-orange-fg))]',
+  approve_draft: 'bg-[hsl(var(--badge-orange))] text-[hsl(var(--badge-orange-fg))]',
+  follow_up_due: 'bg-[hsl(var(--badge-orange))] text-[hsl(var(--badge-orange-fg))]',
+  send_failed: 'bg-red-700 text-white',
+  call_booked: 'bg-emerald-600 text-white',
+  auditing: 'bg-[hsl(var(--badge-sky))] text-[hsl(var(--badge-sky-fg))]',
+  queued: 'bg-[hsl(var(--badge-sky))] text-[hsl(var(--badge-sky-fg))]',
+  waiting_on_them: 'bg-[hsl(var(--badge-gray))] text-[hsl(var(--badge-gray-fg))]',
 };
-export const StatusPill = memo(function StatusPill({ pillKey, label, tone, title, compact = false }: { pillKey: StatusPillKey; label: string; tone: StatusPillTone; title: string; compact?: boolean }) {
+/** The stored status each closed / money pill key stands for (its colour is that status's own). */
+const KEY_STATUS: Partial<Record<StatusPillKey, string>> = {
+  won: 'won_pending_onboarding', paid: 'payment_received', in_delivery: 'in_delivery', completed: 'completed',
+  refunded: 'refunded', not_interested: 'not_interested', opted_out: 'opted_out',
+};
+/** Statuses the pipeline pill draws as a faint tint: in the Inbox they are solid too (one bright colour per status). */
+const SOLID_STATUS: Record<string, string> = {
+  payment_received: 'bg-green-600 text-white', in_delivery: 'bg-green-600 text-white', refunded: 'bg-rose-700 text-white', opted_out: 'bg-red-900 text-white',
+  second_attempt: 'bg-amber-500 text-black', awaiting_reply: 'bg-violet-500 text-white', site_sent: 'bg-emerald-500 text-black',
+  report_sent: 'bg-sky-500 text-black', already_visible: 'bg-teal-500 text-black', price_given: 'bg-indigo-500 text-white',
+};
+export const StatusPill = memo(function StatusPill({ pillKey, label, tone, title, stage, compact: _compact = false }: { pillKey: StatusPillKey; label: string; tone: StatusPillTone; title: string; stage?: string | null; compact?: boolean }) {
+  const status = KEY_STATUS[pillKey] ?? stage;
+  const colour = DERIVED_CLASS[pillKey] ?? (status ? SOLID_STATUS[status] : undefined) ?? pipelineStatusClass(status);
   return (
     <span data-testid="status-pill" data-kind={pillKey} data-tone={tone} title={title}
-      className={cn('inline-flex max-w-[11rem] shrink-0 items-center whitespace-nowrap rounded-full font-semibold leading-none', compact ? 'h-[18px] px-2 text-[10px]' : 'h-5 px-2.5 text-[11px]', STATUS_TONE[tone])}>
+      className={cn('inline-flex h-[18px] max-w-[11rem] shrink-0 items-center whitespace-nowrap rounded-md border border-transparent px-1.5 text-[10px] font-semibold leading-none', colour)}>
       <span className="truncate">{label}</span>
     </span>
   );

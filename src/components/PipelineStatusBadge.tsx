@@ -198,6 +198,11 @@ export function pipelineStatusLabel(status: string | null | undefined): string {
   return statusConfig[status]?.label ?? String(status).replace(/_/g, ' ');
 }
 
+/** The solid colour classes of a stored status, for a pill that shows other words in the same colours (the Inbox's one pill). */
+export function pipelineStatusClass(status: string | null | undefined): string {
+  return (status ? statusConfig[status]?.className : null) ?? defaultConfig.className;
+}
+
 export function PipelineStatusBadge({ status, compact }: PipelineStatusBadgeProps) {
   /* No status → New. A status this map does not know shows AS ITSELF, never as "New" — an unknown value
      read as the empty one is the absent-falls-through trap. */
