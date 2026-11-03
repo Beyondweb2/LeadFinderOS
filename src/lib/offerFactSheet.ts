@@ -19,13 +19,13 @@ import {
   FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_CONTINUING_GBP,
   FINDABLE_CONTACT_EMAIL, REMEASURE_WEEKS_STANDARD,
 } from './findableOffer.ts';
-import { FULL_PAY_HOSTING_INCLUDED_MONTHS, PAYMENT_PLAN_SPEC, PAY_IN_FULL_GBP, REDUCED_MONTHLY_GBP, V7_REFUND_WINDOW_DAYS, planTotalGbp } from './paymentPlans.ts';
+import { COMPLETE_UPFRONT_GBP, COMPLETE_UPFRONT_MONTHS, FULL_PAY_HOSTING_INCLUDED_MONTHS, PAYMENT_PLAN_SPEC, PAY_IN_FULL_GBP, REDUCED_MONTHLY_GBP, V7_REFUND_WINDOW_DAYS, completeUpfrontSavingGbp, planTotalGbp } from './paymentPlans.ts';
 
 const COMPLETE = PAYMENT_PLAN_SPEC.complete, FULL = PAYMENT_PLAN_SPEC.full, SIX = PAYMENT_PLAN_SPEC.six, TWELVE = PAYMENT_PLAN_SPEC.twelve;
 
-export const FACT_SHEET_VERSION = '2026-10-30.1';
+export const FACT_SHEET_VERSION = '2026-11-03.1';
 /** The agreement this sheet follows. A new agreement version needs a new sheet version (the test checks). */
-export const FACT_SHEET_AGREEMENT = 'v7';
+export const FACT_SHEET_AGREEMENT = 'v7.1';
 
 /** Paul's guarantee line, word for word (both plans). v7 5.4: everything they have paid back if the count is not higher. */
 export const GUARANTEE_LINE = 'We improve AI visibility or you get your money back.';
@@ -58,8 +58,8 @@ export interface Fact {
 const gbp = (n: number) => (Number.isInteger(n) ? `£${n}` : `£${n.toFixed(2)}`);
 
 export const FACT_SHEET: readonly Fact[] = [
-  { topic: 'price', status: 'live', source: 'v7 3.1',
-    say: `There are two plans. Findable Complete is ${gbp(COMPLETE.monthlyGbp)} a month, ${COMPLETE.totalPayments} payments in total, and on top of the website and the before and after it covers your Google reviews, your Google profile, directories, changes within reason and regular checks. Findable Essential is the AI optimised website with the before and after check: ${gbp(FULL.firstGbp)} once, or ${gbp(SIX.monthlyGbp)} a month for ${SIX.totalPayments} months, or ${gbp(TWELVE.firstGbp)} to start then ${gbp(TWELVE.monthlyGbp)} a month, ${TWELVE.totalPayments} payments in total.` },
+  { topic: 'price', status: 'live', source: 'v7.1 3.1',
+    say: `There are two plans. Findable Complete is ${gbp(COMPLETE.monthlyGbp)} a month, ${COMPLETE.totalPayments} payments in total, and on top of the website and the before and after it covers your Google reviews, your Google profile, directories, changes within reason and regular checks. It can also be paid up front: ${gbp(COMPLETE_UPFRONT_GBP)} once for the ${COMPLETE_UPFRONT_MONTHS} months, which saves ${gbp(completeUpfrontSavingGbp())}. Findable Essential is the AI optimised website with the before and after check: ${gbp(FULL.firstGbp)} once, or ${gbp(SIX.monthlyGbp)} a month for ${SIX.totalPayments} months, or ${gbp(TWELVE.firstGbp)} to start then ${gbp(TWELVE.monthlyGbp)} a month, ${TWELVE.totalPayments} payments in total.` },
   { topic: 'monthly_start', status: 'live', source: 'v7 5.3, 5.4, 5.6',
     say: `The monthly payment only starts after your results and the ${V7_REFUND_WINDOW_DAYS} day refund window, so nothing more is taken until you've seen whether it worked. That's normally about 5 weeks after your baseline check.` },
   { topic: 'term', status: 'live', source: 'v7 4.1',
@@ -131,7 +131,7 @@ export function factSheetForPrompt(topics?: readonly FactTopic[]): string {
 }
 
 /** Money figures the sheet allows a draft to state (the checker warns on any other £ figure). */
-export const SHEET_MONEY = [FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_CONTINUING_GBP, PAY_IN_FULL_GBP, REDUCED_MONTHLY_GBP, planTotalGbp('six'), planTotalGbp('twelve'), planTotalGbp('complete')].map(gbp);
+export const SHEET_MONEY = [FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_CONTINUING_GBP, PAY_IN_FULL_GBP, COMPLETE_UPFRONT_GBP, completeUpfrontSavingGbp(), REDUCED_MONTHLY_GBP, planTotalGbp('six'), planTotalGbp('twelve'), planTotalGbp('complete')].map(gbp);
 
 /* ── gaps and conflicts, for Paul (shown in the report and docs) ──────────────────────────────── */
 

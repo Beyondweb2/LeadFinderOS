@@ -5,7 +5,7 @@
 import { PAYMENT_PLAN_SPEC, isPaymentPlan, planProduct, type PaymentPlan, type PlanProduct } from './paymentPlans.ts';
 
 export type SalePlanFlag = 'plan_differs' | 'amount_differs' | 'monthly_differs';
-export type PayOption = 'monthly' | 'full' | 'six' | 'twelve' | 'old';
+export type PayOption = 'monthly' | 'upfront' | 'full' | 'six' | 'twelve' | 'old';
 
 export const SALE_PLAN_FLAG_WORDS: Record<SalePlanFlag, string> = {
   plan_differs: 'Stripe took a different plan from the one the salesperson picked. Stripe is used.',
@@ -43,8 +43,8 @@ export interface SalePlanParts { product: PlanProduct | null; option: PayOption;
 export function salePlanParts(plan: string | null | undefined): SalePlanParts {
   if (!isPaymentPlan(plan) || plan === 'legacy_twelve') return { product: null, option: 'old', words: 'Old plan' };
   const p: PaymentPlan = plan;
-  const option: PayOption = p === 'complete' ? 'monthly' : p;
+  const option: PayOption = p === 'complete' ? 'monthly' : p === 'complete_upfront' ? 'upfront' : p;
   const product = planProduct(p);
-  const optionWords: Record<PayOption, string> = { monthly: 'monthly', full: 'pay in full', six: '6 months', twelve: '12 months', old: 'old plan' };
+  const optionWords: Record<PayOption, string> = { monthly: 'monthly', upfront: 'paid up front', full: 'pay in full', six: '6 months', twelve: '12 months', old: 'old plan' };
   return { product, option, words: `${product === 'complete' ? 'Complete' : 'Essential'} · ${optionWords[option]}` };
 }

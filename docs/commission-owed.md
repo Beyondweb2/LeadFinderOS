@@ -50,6 +50,9 @@ amount is flagged on read (`monthly_differs`).
 An offset is never paid as a negative. It nets against that person's due money, and carries forward if bigger. A single line can be paid
 a little early (a warning says so). An offset cannot be marked on its own.
 
+**Complete paid up front (2026-11-03, `docs/two-plans.md`):** the first-payment rate on the whole £999, on the same payable date, no trailing.
+No commission code changed: it is a one-payment plan, as Pay in full is, and v7.1 stamps v7's terms, so the 7-day window holds.
+
 ## Autosave, no submit
 
 `src/lib/autosaveQueue.ts` (the rules) and `src/hooks/useAutosaveFields.tsx`. About 800ms after typing, at once on blur, before leaving.

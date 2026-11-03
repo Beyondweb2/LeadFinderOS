@@ -363,6 +363,7 @@ function PlanTabs({ guarantee }: { guarantee: ColdCallPlaybook['script']['guaran
       {tab === 'complete' ? (
         <div className="space-y-2 rounded-2xl border border-border/70 border-l-[3px] border-l-blue-500 bg-card p-3 text-sm shadow-sm" data-testid="call-plan-complete-body">
           <p className="font-bold">{gbpWords(c.monthlyGbp)} a month <span className="font-normal text-muted-foreground">· {c.totalPayments} payments ({gbpWords(planTotalGbp('complete'))} in total)</span></p>
+          <p className="text-muted-foreground" data-testid="call-plan-complete-upfront">Or {planShortLine('complete_upfront')}</p>
           <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Included</p>
           <ul className="list-disc space-y-0.5 pl-5">
             <li>Everything in {PLAN_PRODUCT_NAME.essential}</li>

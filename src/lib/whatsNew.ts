@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-03-complete-upfront', date: '2026-11-03', title: 'Findable Complete can now be paid up front', audience: 'all',
+    body: 'A client can pay £999 once for the 12 months of Findable Complete, instead of £99 a month. It saves them £189. Monthly Complete has not changed.',
+    report: {
+      added: ['In Quick Close, Findable Complete now shows two ways to pay: monthly first, then or pay up front, save £189.', 'A Complete up-front link in the Inbox sign-up link menu.', 'The sale shows as Complete · paid up front on the sales pages.'],
+      changed: ['New sign-ups now sign agreement v7.1, which adds the up-front option. Anyone who has already paid on v7 stays on v7. Someone who signed v7 but has not paid yet is asked to sign again when they reopen their link.'],
+      removed: [],
+      effect: 'You earn the normal first-payment rate on the whole £999, payable when the guarantee window closes, with no monthly commission after it because there are no monthly payments. The website still transfers at the end of the 12 months, not on payment.',
+    } },
   { id: '2026-11-03-website-check-accuracy', date: '2026-11-03', title: 'Website issues you can trust', audience: 'all',
     body: 'We checked 25 sites by hand against what the website check said, and about 30% of the serious claims were wrong. The check now reads sites properly, and says nothing when it cannot be sure.',
     report: {

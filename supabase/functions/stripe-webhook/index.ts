@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { startPaidBaseline } from "../_shared/audit-baseline.ts";
 import { createDelayedSubscription, resolvePaidRoute, subscriptionEndedByTerm, subscriptionRoute, subscriptionTotalPayments, type DelayedSubscriptionLead } from "../_shared/delayed-subscription.ts";
 import { establishLeadPayment, markOnboardingPaid, stampFirstContactOwed } from "../_shared/payment-state.ts";
-import { PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, paymentPlanFromMeta, planAfterWords, type PaymentPlan } from "../../../src/lib/paymentPlans.ts";
+import { PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, paymentPlanFromMeta, planAfterWords, planTransfersAtPayment, type PaymentPlan } from "../../../src/lib/paymentPlans.ts";
 import { clientClosed, maySetSubscriptionStatus, paymentDayOf, type ClosedReason, type PaymentStateLead } from "../../../src/lib/paymentState.ts";
 import { firstContactDueDay, firstContactDueLabel } from "../../../src/lib/firstContact.ts";
 import { effectiveQuestionnaireServices, questionnaireComplete } from "../../../src/lib/questionnaireComplete.ts";
@@ -1380,11 +1380,12 @@ Deno.serve(async (req) => {
                   .eq("id", findableLeadId).is("contract_total_payments", null);
                 if (cErr) console.error(`[stripe-webhook] could not stamp the contract on lead ${findableLeadId}: ${cErr.message}`);
                 /* The plan, stamped once. Pay in full: this ONE payment completes the plan, so the client is paid in full
-                   now and their Findable-built site becomes eligible to transfer (paid_in_full_at, only while blank). */
+                   now and their Findable-built site becomes eligible to transfer (paid_in_full_at, only while blank).
+                   ⛔ NOT Complete paid up front: one payment too, but the site transfers at the end of its Plan Period (v7.1 8.4). */
                 const { error: pErr } = await service.from("outreach_leads")
                   .update({ payment_plan: paidPlan }).eq("id", findableLeadId).is("payment_plan", null);
                 if (pErr) console.error(`[stripe-webhook] could not stamp the payment plan on lead ${findableLeadId}: ${pErr.message}`);
-                if (PAYMENT_PLAN_SPEC[paidPlan].totalPayments === 1) {
+                if (planTransfersAtPayment(paidPlan)) {
                   const { error: fErr } = await service.from("outreach_leads")
                     .update({ paid_in_full_at: new Date().toISOString() }).eq("id", findableLeadId).is("paid_in_full_at", null);
                   if (fErr) console.error(`[stripe-webhook] could not stamp paid in full on lead ${findableLeadId}: ${fErr.message}`);

@@ -1,4 +1,43 @@
-# Client Service Agreement v7: changes from v6, for review (Jess)
+# Client Service Agreement v7 and v7.1: changes, for review (Jess)
+
+## v7.1 (2026-11-03): Findable Complete paid up front
+
+**Status:** drafted for Paul's approval; goes live with the up-front plan, shipped the same way as v6 and v7: treated as approved, reviewed afterwards.
+Clients who signed v7 stay on v7. Everything below the next heading is the earlier v7 review, and its open points still stand.
+
+**What changed:** Findable Complete can now also be paid once: **£999 for 12 months** (against £99 × 12 = £1,188). Same inclusions and
+same guarantee. Full text with each point marked **[CHECK]**: `docs/agreement-v7.1.md`. Every clause not listed is v7 word for word,
+including the whole guarantee (5.2 to 5.5: the refund is "all payments you have made", so £999 here).
+
+| Clause | Change |
+|---|---|
+| Service description, Key points 1, 3, 4, 6 | Name the up-front option, its hosting and its transfer. |
+| 2.6 | New Plan Period: from the Start Date until 12 months after the date the payment cleared. |
+| 3.1, 3.2 | Complete has two options; Essential's relettered (c) to (e), same prices. No recurring payments on up front. |
+| 4.1, 4.3 | The one payment is the whole price of the 12 months. Transfer is by clause 8.4. |
+| 5.6 | No Payment Start Date on the one-payment options. |
+| 8.2, 8.4 | We own the work until the end of the Plan Period, or until the agreement ends if sooner, unless it ends under 5.5. |
+| 9.2 | Hosting for the 12-month Plan Period. |
+| Schedule 1 | Complete's Hosting and Payments cells. |
+
+### Open points for you
+
+- **[CHECK] Most important: money back outside the guarantee (4.1, 4.2, 15.3).** The agreement says nothing about any of the £999 coming
+  back after the Refund Window. If the client ends for OUR serious breach, 15.3 only releases them from "further minimum-term payments",
+  and they have none left, so a client who paid up front gets nothing from it, while a monthly client at least stops paying. We did not
+  invent a refund rule because Paul gave none. Should 15.3 give a pro-rata refund here? We think it probably should, as an unfair-terms and
+  fairness point, but it is Paul's and your call.
+- **[CHECK] When the 12 months start (2.6, 9.2).** We count from the date the payment cleared: fixed and provable. But a client who is slow
+  giving access, or a build that takes weeks, uses up some of what they paid for. The alternative is counting from the Baseline Date.
+- **[CHECK] Paid in full on day 1, transfer at month 12 (4.3, 8.2, 8.4).** Every other plan transfers on the final payment. Is it clear
+  enough that this one does not, and is the licence in 8.3 ("while payments are up to date") right for a client with nothing left to pay?
+- **[CHECK] Ending early (8.4).** We wrote that the site transfers when the agreement ends, if sooner, except on a valid guarantee claim. That
+  includes us ending it under 15.2 (for example abuse). The alternative, taking down a site they have paid for in full, looked like a penalty.
+- **[CHECK] 5.8(a).** It still says "within 30 days of the initial payment". On this plan that is the £999. Is the word clear enough?
+- **[CHECK] Unpaid v7 signatures.** A client who signed v7 but has not paid is asked to re-sign on v7.1 when they reopen their link, the same
+  rule as v6 to v7. A Stripe session already open on v7 completes on v7.
+
+# v7: changes from v6
 
 **For:** Jess (Paul's solicitor). **From:** Findable (drafted by Claude on Paul's instruction, 2026-10-30).
 **Status:** v7 is live for new sign-ups, shipped the same way as v6: treated as approved, reviewed afterwards. Clients who

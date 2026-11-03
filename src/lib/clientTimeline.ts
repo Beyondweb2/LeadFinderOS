@@ -59,7 +59,7 @@ export function isV7Terms(v: unknown): v is typeof COMMERCIAL_TERMS_V7 { return 
 export function isOptionBTerms(v: unknown): v is CommercialTerms { return v === COMMERCIAL_TERMS_V3 || v === COMMERCIAL_TERMS_V4 || v === COMMERCIAL_TERMS_V5 || v === COMMERCIAL_TERMS_V6 || v === COMMERCIAL_TERMS_V7; }
 /** The terms a signed agreement VERSION puts a sale on; null for a version that is not agreement-first (v1). */
 export function commercialTermsFor(agreementVersion: string | null | undefined): CommercialTerms | null {
-  return agreementVersion === 'v3' ? COMMERCIAL_TERMS_V3 : agreementVersion === 'v4' ? COMMERCIAL_TERMS_V4 : agreementVersion === 'v5' ? COMMERCIAL_TERMS_V5 : agreementVersion === 'v6' ? COMMERCIAL_TERMS_V6 : agreementVersion === 'v7' ? COMMERCIAL_TERMS_V7 : null;
+  return agreementVersion === 'v3' ? COMMERCIAL_TERMS_V3 : agreementVersion === 'v4' ? COMMERCIAL_TERMS_V4 : agreementVersion === 'v5' ? COMMERCIAL_TERMS_V5 : agreementVersion === 'v6' ? COMMERCIAL_TERMS_V6 : agreementVersion === 'v7' || agreementVersion === 'v7.1' ? COMMERCIAL_TERMS_V7 : null;
 }
 /** The terms a Stripe subscription was created under (its metadata). A subscription with the Option B timing marker
  *  and no `commercial_terms` was created under v3, before the v4 stamp existed. Anything else: null. */

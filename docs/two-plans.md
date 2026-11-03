@@ -1,5 +1,8 @@
 # Two plans: Findable Complete and Findable Essential (live 2026-10-30)
 
+> **2026-11-03: Findable Complete can be paid up front.** See "Complete paid up front" at the end. Agreement is now **v7.1**
+> for new signatures on both plans (`docs/agreement-v7.1.md`); anyone who signed v7 stays on v7.
+
 Paul, 2026-10-30: "V1 sells two plans." Branch `feat/two-plans`. Agreement v7 (`docs/agreement-v7.md`,
 `docs/v7-review-for-solicitor.md`). Plan module: `src/lib/paymentPlans.ts`. Before this: `docs/payment-options.md` (v6).
 
@@ -68,8 +71,29 @@ Complete includes hosting while paying (v7 9.2). Essential unchanged (while payi
 £29.99/month (`FINDABLE_CONTINUING_GBP`); Stripe has a £9.99 hosting price. Opting in is manual today, so nothing charges
 either automatically. Paul to decide which is right.
 
-## Not changed
+## Complete paid up front (Paul, 2026-11-03, branch `feat/complete-upfront`)
 
-findable.live (separate repo): its `/agreement` page still shows v5 and its self-service sign-up still sells £99 × 12.
-To sell the two plans there it reads fn findable-onboarding `plans` and sends `answers.payment_plan`
-(`docs/findable-site-plan-contract.md`); `scripts/check-cross-repo-sync.mjs` now checks any `SITE_PLAN_IDS` it declares.
+Plan id `complete_upfront`: £999 once (`COMPLETE_UPFRONT_GBP`), saves £189 against £99 × 12 (`completeUpfrontSavingGbp`, derived).
+Same inclusions and guarantee as Complete. Monthly Complete is unchanged and stays the default.
+
+| What | How |
+|---|---|
+| Charge | Inline `price_data` at checkout, exactly as Pay in full. No subscription, card not kept. |
+| Stripe Price object | **None.** Paul asked for a Price; a one-off dashboard Price cannot carry the guarantee as its line description (`scripts/stripe-payment-options-setup.ts` header) and there is no live Stripe key on this machine (edge secret only). Inline needs no setup and touches nothing existing. |
+| Agreement | v7.1, new signatures on every Complete and Essential plan. Terms stamp stays `csa_v7_two_plans`, because the clock is identical, so the commission payable days and `isV7Terms` do not move. Ask `isV7Family`, never `=== 'v7'`. |
+| Unpaid v7 signatures | Asked to re-sign on v7.1 when they reopen the link (same rule as v6 to v7). A Stripe session already open on v7 still completes on v7 (`payment-hold.ts`). |
+| Website transfer | ⛔ At the END of the 12 months (v7.1 8.4), not on payment. The webhook does not stamp `paid_in_full_at` for it (`planTransfersAtPayment`). If the agreement ends sooner the site transfers then, except on a valid guarantee claim. |
+| Plan Period, hosting | 12 months from the date the payment cleared. The Plan Period reminder runs from that date (`planPeriodEnd`). |
+| Commission | Nothing new in the code: `plan_v1` already does this for a one-payment plan. Ladder rate on the £999, payable on `commission_payable_on`, no trailing (`commission-owed.test.ts`). |
+| Sale record | `sale_plan = complete_upfront`, which `salePlanParts` shows as "Complete · paid up front". The id holds both the plan and the option; no extra column. |
+
+⚠️ Open for Jess (`docs/v7-review-for-solicitor.md`): whether any of the £999 comes back on early exit or on our serious breach (15.3 gives an
+up-front client nothing today), and when the 12 months start.
+
+⚠️ Tested with no real Stripe session: there is no Stripe test key on this machine. Proof is the plan tests, the gate tests and
+`scripts/qa-simulate-payment.ts`.
+
+## findable.live
+
+The site sells both plans through fn findable-onboarding `plans` and `answers.payment_plan`
+(`docs/findable-site-plan-contract.md`); `scripts/check-cross-repo-sync.mjs` checks its `SITE_PLAN_IDS`.

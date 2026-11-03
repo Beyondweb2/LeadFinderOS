@@ -70,6 +70,15 @@ console.log('── 2. FIRST PAYMENT ──');
   const due = run([s2], '2026-12-10T12:00:00Z')[0];
   ok(due.status === 'due' && due.payoutDate === '2026-12-10', 'on the payable date: due, on that date');
   ok(run([sale({ amount_gbp: 499, sale_plan: 'full', commission_rate: 0.4 })], '2026-11-06T12:00:00Z')[0].commission === 199.6, '40% of the £499 actually collected');
+  /* Complete paid up front (2026-11-03): the ladder rate on the whole £999, on the window's date, nothing trailing. */
+  const up = (o: Record<string, unknown> = {}) => sale({ amount_gbp: 999, sale_plan: 'complete_upfront', ...o });
+  ok(run([up({ commission_rate: 0.3 })], '2026-11-06T12:00:00Z')[0].commission === 299.7, 'up front: 30% of £999');
+  ok(run([up({ commission_rate: 0.4 })], '2026-11-06T12:00:00Z')[0].commission === 399.6, 'up front: 40% of £999');
+  ok(run([up({ commission_rate: 0.5, commission_month_seq: 25 })], '2026-11-06T12:00:00Z')[0].commission === 499.5, 'up front: 50% of £999');
+  const upWaiting = run([up()], '2026-11-06T12:00:00Z')[0];
+  ok(upWaiting.status === 'pending' && upWaiting.waitingForResults, 'up front: waits until the results go out');
+  const upDue = run([up({ commission_payable_on: '2026-12-10' })], '2026-12-10T12:00:00Z')[0];
+  ok(upDue.status === 'due' && upDue.payoutDate === '2026-12-10', 'up front: due the day the guarantee window closes');
   ok(run([sale({ commission_rate: 0.5, commission_month_seq: 25 })], '2026-11-06T12:00:00Z')[0].rate === 0.5, 'reads the stamped rate');
   /* No backstop, however long it has waited. */
   ok(run([sale()], '2029-01-01T12:00:00Z')[0].waitingForResults === true, 'no backstop: still waiting years later');
@@ -144,6 +153,9 @@ console.log('── 5. TRAILING ──');
   const full = sale({ sale_plan: 'full', amount_gbp: 499 });
   const fullHost = run([full, monthly(full, '2027-01-10T09:00:00Z', 29.99)], '2027-03-01T12:00:00Z').find((l) => l.kind === 'payment' && l.occurredAt.startsWith('2027-01'))!;
   ok(fullHost.commission === 0 && fullHost.status === 'not_commissionable', 'pay in full has no trailing');
+  const upfront = sale({ sale_plan: 'complete_upfront', amount_gbp: 999 });
+  const upHost = run([upfront, monthly(upfront, '2027-01-10T09:00:00Z', 29.99)], '2027-03-01T12:00:00Z').find((l) => l.kind === 'payment' && l.occurredAt.startsWith('2027-01'))!;
+  ok(upHost.commission === 0 && upHost.status === 'not_commissionable', 'Complete paid up front has no trailing');
   const six = sale({ sale_plan: 'six' });
   const sixRows = ['2027-01', '2027-02', '2027-03', '2027-04', '2027-05'].map((m) => monthly(six, `${m}-10T09:00:00Z`));
   const sixHost = monthly(six, '2027-06-10T09:00:00Z', 29.99);

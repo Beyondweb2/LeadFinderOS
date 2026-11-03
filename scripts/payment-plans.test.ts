@@ -30,8 +30,8 @@ ok(FINDABLE_SETUP_PRICE_GBP === 99 && FINDABLE_CONTINUING_GBP === 29.99 && FULL_
 ok(!CLIENT_PAYMENT_PLANS.includes('legacy_twelve') && STAFF_ONLY_PAYMENT_PLANS.includes('legacy_twelve'), 'the old plan is staff-only, never a client option');
 
 console.log('Which agreement each plan is signed on');
-ok(agreementVersionForPlan('legacy_twelve') === 'v5' && CLIENT_PAYMENT_PLANS.every((p) => agreementVersionForPlan(p) === 'v7'), 'old plan v5; Complete and Essential v7 (2026-10-30)');
-ok(SIGNABLE_VERSIONS.includes('v5') && SIGNABLE_VERSIONS.includes('v7') && !SIGNABLE_VERSIONS.includes('v6'), 'v5 and v7 can be signed; v6 is archived (never signed again)');
+ok(agreementVersionForPlan('legacy_twelve') === 'v5' && CLIENT_PAYMENT_PLANS.every((p) => agreementVersionForPlan(p) === 'v7.1'), 'old plan v5; Complete and Essential v7.1 (2026-11-03)');
+ok(SIGNABLE_VERSIONS.includes('v5') && SIGNABLE_VERSIONS.includes('v7.1') && !SIGNABLE_VERSIONS.includes('v6') && !SIGNABLE_VERSIONS.includes('v7'), 'v5 and v7.1 can be signed; v6 and v7 are archived (never signed again)');
 ok(commercialTermsFor('v6') === 'csa_v6_option_b' && isOptionBTerms('csa_v6_option_b') && continuingModeFor('csa_v6_option_b', 'build') === 'optional', 'v6 terms: Option B timing, hosting opt-in after the plan');
 ok(paymentPlanFromRow({}) === 'legacy_twelve' && paymentPlanFromRow({ payment_plan: null }) === 'legacy_twelve', 'a blank sign-up row is the v5 offer (rows made before plans; findable.live self-service)');
 ok(paymentPlanFromRow({ payment_plan: 'twelve' }) === 'twelve' && paymentPlanFromRow({ payment_plan: 'nonsense' }) === null, 'a stored plan reads positively; junk is refused');
@@ -60,7 +60,7 @@ for (const p of [...CLIENT_PAYMENT_PLANS, 'legacy_twelve' as const]) {
   const n = cardSavedNoticeForPlan(p);
   ok(!n.includes('—') && n.includes('signed agreement') && n.includes('£29.99'), `${p}: card notice, no em dash, names the agreement and optional hosting`);
   ok(planTermsLines(p).join(' ').includes('transfers to you'), `${p}: the rep's terms say the website transfers`);
-  ok(checkoutLineNameForPlan(p).startsWith(p === 'complete' ? 'Findable Complete' : p === 'legacy_twelve' ? 'Findable Build' : 'Findable Essential'), `${p}: Stripe line names its plan`);
+  ok(checkoutLineNameForPlan(p).startsWith(p === 'complete' || p === 'complete_upfront' ? 'Findable Complete' : p === 'legacy_twelve' ? 'Findable Build' : 'Findable Essential'), `${p}: Stripe line names its plan`);
 }
 ok(!/cancel any time|no commitment/i.test(paymentOptionsSummary() + CLIENT_PAYMENT_PLANS.map(planTermsLines).flat().join(' ')), 'never "cancel any time" / "no commitment"');
 
@@ -126,7 +126,7 @@ console.log('Quick Close');
   ok(q.closeTermsLines('build', 'legacy_twelve').join(' ') === q.routeTermsLines('build').join(' '), 'the old plan → exactly the v5 terms');
   ok(q.onboardingColumnsFor({ route: 'build', payment_plan: 'six' }).payment_plan === 'six', 'the plan is written to the sign-up row');
   const qo = q.QUICK_CLOSE_QUESTIONS.find((x) => x.key === 'payment_plan')!;
-  ok(qo.options.filter((o) => !o.legacy).map((o) => o.value).join() === 'complete,full,six,twelve' && /^Findable Complete/.test(qo.options[0].label) && /^Findable Essential/.test(qo.options[1].label) && qo.options.find((o) => o.value === 'legacy_twelve')?.legacy === true, 'Complete first and recommended, then Essential; the old plan is hidden (legacy)');
+  ok(qo.options.filter((o) => !o.legacy).map((o) => o.value).join() === 'complete,complete_upfront,full,six,twelve' && /^Findable Complete/.test(qo.options[0].label) && /^Findable Complete, paid up front/.test(qo.options[1].label) && /^Findable Essential/.test(qo.options[2].label) && qo.options.find((o) => o.value === 'legacy_twelve')?.legacy === true, 'Complete first and recommended, then Essential; the old plan is hidden (legacy)');
   ok(read('src/components/QuickCloseDialog.tsx').includes('Show the old plan (£99 × 12, staff only)'), '"Show the old plan" reveals it');
 }
 ok(!existsSync(new URL('../src/lib/priceModel.ts', import.meta.url)) && !/PriceModelSwitch|upfront_499/.test(read('src/components/QuickCloseDialog.tsx') + read('src/pages/SalesDashboard.tsx') + read('src/components/ColdCallPlaybook.tsx')), 'the old "£499 upfront then £99 × 12" model is gone');
@@ -139,7 +139,7 @@ console.log('TWO PLANS (2026-10-30): Complete beside Essential, agreement v7, th
   ok(DEFAULT_PAYMENT_PLAN === 'complete' && CLIENT_PAYMENT_PLANS[0] === 'complete' && planProduct('complete') === 'complete' && ['full', 'six', 'twelve', 'legacy_twelve'].every((p) => planProduct(p as 'full') === 'essential'), 'Complete is the default and first; the rest are Essential');
   ok(COMPLETE_EXTRAS.length === 5 && !/just the website|lesser|basic/i.test(ESSENTIAL_SUMMARY) && /baseline/.test(ESSENTIAL_SUMMARY) && /four-week/.test(ESSENTIAL_SUMMARY), 'Essential is never "just the website"; Complete has its five extras');
   ok(planAvailable('complete', (n) => (n === 'FINDABLE_STANDARD_MONTHLY_PRICE_ID' ? 'price_abc' : undefined)) && !planAvailable('complete', () => undefined), 'Complete reuses the existing £99 monthly Price (no new Stripe price)');
-  ok(publicPlanCatalogue(() => 'price_x').map((p) => p.plan).join() === 'complete,full,six,twelve' && publicPlanCatalogue(() => 'price_x')[0].recommended && publicPlanCatalogue(() => 'price_x')[1].product === 'essential', 'the public list: both plans, Complete recommended');
+  ok(publicPlanCatalogue(() => 'price_x').map((p) => p.plan).join() === 'complete,complete_upfront,full,six,twelve' && publicPlanCatalogue(() => 'price_x')[0].recommended && publicPlanCatalogue(() => 'price_x')[1].product === 'complete' && publicPlanCatalogue(() => 'price_x')[2].product === 'essential', 'the public list: both plans, Complete recommended');
   ok(readSignupPaymentPlan('complete', () => 'price_x').ok && !readSignupPaymentPlan('legacy_twelve', () => 'price_x').ok, 'findable.live may send complete; never the staff-only plan');
   ok(V7_REFUND_WINDOW_DAYS === T.REFUND_WINDOW_DAYS_V7 && V7_REFUND_WINDOW_DAYS === 7 && T.PAYMENT_START_DAY_V7 === 36, 'the 7-day window is one number in both modules; first monthly day 36');
   ok(V7_GUARANTEE.includes('within 7 days') && guaranteeForSigned('v6', 'six', FINDABLE_GUARANTEE) === V6_GUARANTEE && guaranteeForSigned('v7', 'six', FINDABLE_GUARANTEE) === V7_GUARANTEE, 'a v6 signer keeps 14 days; v7 is 7');

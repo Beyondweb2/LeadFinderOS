@@ -18,7 +18,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { REPORT_PUBLIC_ORIGIN } from './findableOffer.ts';
-import { isPaymentPlan, planAgreementWords, planAgreementWordsV7, type PaymentPlan } from './paymentPlans.ts';
+import { isPaymentPlan, isV7Family, planAgreementWords, planAgreementWordsV7, type PaymentPlan } from './paymentPlans.ts';
 
 /* v5 (2026-10-16): what NEW sign-ups sign. A client who signed v4 or v3 stays on it. */
 export const CLIENT_AGREEMENT_VERSION = 'v5';
@@ -873,17 +873,72 @@ const V7: AgreementVersion = {
   signatures: V6.signatures,
 };
 
-const VERSIONS: Record<string, AgreementVersion> = { v1: V1, v3: V3, v4: V4, v5: V5, v6: V6, v7: V7 };
+/* ⛔ V7.1 (Paul, 2026-11-03): v7 plus ONE new way to pay, Findable Complete paid up front (£999 once, for a 12-month Plan Period).
+   The guarantee, its clock, the prices and Complete's scope are v7's, word for word, and so are the commercial terms
+   (csa_v7_two_plans). Only the clauses that had to say "paid monthly" or name the new option change. What is genuinely new is that
+   the whole price is paid on day 1 but the website transfers at the end of the Plan Period (2.6, 4.3, 8.2, 8.4).
+   Written by Claude on Paul's instruction, for his solicitor (docs/v7-review-for-solicitor.md; the annotated copy is
+   docs/agreement-v7.1.md, rendered from THIS block by scripts/render-agreement-v7-1-doc.ts). Do not edit a word once a client has
+   signed it: a change is a new version. v7 stays for the clients who signed it, never signed again. */
+/** v7.1's changed clauses, by v7 number. ⚠️ DECLARED BEFORE V7_1, WHICH READS IT AT MODULE LOAD. */
+const V7_1_CLAUSES: Record<string, V6Clause[]> = {
+  "2.6": [{ num: "2.6", text: "The \"Plan Period\" is: on Findable Complete paid monthly and on the Findable Essential 6-month and 12-month payment options, from the Start Date until your final payment has cleared; on Findable Complete paid up front, from the Start Date until 12 months after the date your payment cleared; on Findable Essential paid in full, from the Start Date until 6 months after the website we build first goes live. During the Plan Period we will review your AI visibility and the website regularly and make the updates we judge most useful. The amount and type of work will vary depending on what the data shows. We may create or improve pages around genuine services, service areas and customer questions where that is useful and truthful." }],
+  "3.1": [{ num: "3.1", text: "You pay for the plan shown in your Client Details. Findable Complete, by one of: (a) paid monthly: a £99 initial payment, then 11 further monthly payments of £99 (12 payments in total, £1,188 in all); or (b) paid up front: £999, one payment, for a 12-month Plan Period. Or Findable Essential, by one of: (c) pay in full: £499, one payment; (d) 6 months: a £99 initial payment, then 5 further monthly payments of £99 (6 payments in total, £594 in all); or (e) 12 months: a £99 initial payment, then 11 further monthly payments of £49.99 (12 payments in total, £648.89 in all)." }],
+  "3.2": [{ num: "3.2", text: "On Findable Complete paid monthly and on the Findable Essential 6-month and 12-month payment options, your first recurring payment is taken on the Payment Start Date in clause 5.6. Later payments are taken monthly on the same calendar date, or on the last day of the month if that date does not exist. On Findable Complete paid up front and on Findable Essential paid in full there are no recurring payments." }],
+  "4.1": [{ num: "4.1", text: "On Findable Complete paid monthly, the minimum term is 12 payments, so the plan runs for 12 months of payments. On the Findable Essential 6-month and 12-month payment options, the minimum term is all the payments in your plan (6 or 12). In each case the initial payment counts as payment 1, and this is not a cancel-any-time plan during the minimum term. On Findable Complete paid up front, your one payment is the whole price of the 12-month Plan Period. On Findable Essential paid in full, your one payment is the whole price. In both of those cases nothing further is owed for the plan." }],
+  "4.3": [{ num: "4.3", text: "Ownership of the custom website and client-specific work transfers only once your final payment has cleared (on Findable Essential paid in full, your one payment; on Findable Complete paid up front, at the time clause 8.4 says)." }],
+  "5.6": [{ num: "5.6", lead: "Payment Start Date.", text: "On Findable Complete paid monthly and on the Findable Essential 6-month and 12-month payment options, your first recurring payment is taken on the day after the Refund Window ends: when the results are sent on day 28, that is day 36 counted from the Baseline Date. No recurring payment is scheduled before the Baseline Date, and none is taken while the Refund Window is still open, so if the Results Date is later than day 28 the Payment Start Date moves back to the day after the Refund Window. If the guarantee does not apply under clause 5.8 because required access or information was not provided, we may set the Payment Start Date to the day after six weeks from the initial payment and will tell you before charging. On Findable Complete paid up front and on Findable Essential paid in full there is no recurring payment, so there is no Payment Start Date." }],
+  "8.2": [{ num: "8.2", text: "Client-specific work we create remains ours until your final payment has cleared (on Findable Complete paid up front, until the time clause 8.4 says). This includes website design, code, page layouts, written content and structured data created specifically for you (\"Our Work\")." }],
+  "8.4": [{ num: "8.4", text: "Once your final payment has cleared we assign to you, to the extent we own it, copyright in Our Work created specifically for you, including Our Work we create for you later in the Plan Period (assigned as it is created). On Findable Complete paid up front we make that assignment at the end of the Plan Period, or when the agreement ends if it ends sooner, unless it ends under clause 5.5. On request we will provide a reasonable export or copy of website files and content where technically practicable." }],
+  "9.2": [{ num: "9.2", text: "Hosting is included during the Plan Period: on Findable Complete paid monthly and the Findable Essential 6-month and 12-month payment options while you are paying your plan; on Findable Complete paid up front for the 12-month Plan Period; and on Findable Essential paid in full for 6 months from the date the website we build first goes live. We use reputable providers and take reasonable care with security and backups, but cannot promise uninterrupted availability." }],
+};
+const V7_1: AgreementVersion = {
+  ...V7,
+  version: 'v7.1',
+  services: {
+    build: { name: "Findable", description: "The plan shown in your Client Details. Findable Complete: £99 a month for 12 months (12 payments, £1,188 in total), or £999 paid up front for 12 months. We build, host and manage a new website optimised for AI visibility, measure your AI visibility before and after, and also reply to your Google reviews, keep your Google Business Profile and directory listings up to date, make changes to the website within reason and run a monthly AI visibility audit. Findable Essential: we build, host and manage a new website optimised for AI visibility, with a baseline AI visibility audit and a four-week audit to measure the change, paid in full (£499, one payment), over 6 months (£99 a month, 6 payments, £594 in total) or over 12 months (£99 initial payment, then £49.99 a month, 12 payments, £648.89 in total). Once your final payment has cleared the website transfers to you (Complete paid up front: at the end of the 12 months). Hosting is included while you are paying (Essential paid in full: for 6 months; Complete paid up front: for the 12 months), then our £29.99/month hosting and maintenance service is optional." },
+  },
+  keyPoints: {
+    title: V7.keyPoints!.title,
+    points: [
+      "Your plan is the one shown in your Client Details: Findable Complete, paid monthly or up front, or Findable Essential with its payment option. On Complete paid monthly, and on Essential's 6-month and 12-month options, all of the plan's payments are your minimum term: if you end early outside the guarantee or our serious breach, the remaining payments stay due. On Complete paid up front, and on Essential paid in full, your one payment is the whole price.",
+      V7.keyPoints!.points[1],
+      "Monthly payments start only after the Refund Window closes (normally day 36 counted from your Baseline Date), except where the guarantee does not apply under clause 5.8. Nothing is scheduled before the baseline is taken. There are no monthly payments on Complete paid up front or Essential paid in full.",
+      "Hosting is included while you are paying your plan; on Complete paid up front for the 12 months, and on Essential paid in full for 6 months. After that, optional hosting and maintenance at £29.99/month only starts if you separately opt in.",
+      V7.keyPoints!.points[4],
+      "The custom website and our client-specific work transfer to you once your final payment has cleared (on Complete paid up front, at the end of the 12 months). Your domain, logo, photos, branding and other materials remain yours throughout.",
+      V7.keyPoints!.points[6],
+    ],
+  },
+  body: V7.body.flatMap((b): AgreementBlock[] => {
+    if (b.kind !== 'clause') return [b];
+    const r = V7_1_CLAUSES[b.num];
+    if (r === undefined) return [b];
+    return r.map((c) => ({ kind: 'clause', ...c }) as AgreementBlock);
+  }),
+  schedule: {
+    title: V7.schedule.title,
+    columns: V7.schedule.columns,
+    rows: V7.schedule.rows.map((row): string[] =>
+      row[0] === "Hosting during the Plan Period" ? [row[0], "Included while you are paying your plan; paid up front, for the 12 months.", row[2]]
+        : row[0] === "Payments" ? [row[0], "£99 a month, 12 payments (£1,188 in total); or £999 paid up front, one payment, for 12 months.", row[2]]
+          : row),
+  },
+};
 
-/** The versions a NEW sign-up may be made on: v5 for the old £99 × 12 plan (staff only), v7 for Complete and Essential.
- *  v6 is ARCHIVED (2026-10-30): its signed records stay valid, and it renders, but nobody signs it again. */
-export const SIGNABLE_VERSIONS: readonly string[] = ['v5', 'v7'];
-/** The current public agreement (what a client reads before choosing): v7. */
-export const PUBLIC_AGREEMENT_VERSION = 'v7';
+const VERSIONS: Record<string, AgreementVersion> = { v1: V1, v3: V3, v4: V4, v5: V5, v6: V6, v7: V7, 'v7.1': V7_1 };
+
+/** The versions a NEW sign-up may be made on: v5 for the old £99 × 12 plan (staff only), v7.1 for Complete and Essential.
+ *  v6 and v7 are ARCHIVED: their signed records stay valid, and they render, but nobody signs them again. */
+export const SIGNABLE_VERSIONS: readonly string[] = ['v5', 'v7.1'];
+/** The current public agreement (what a client reads before choosing): v7.1. */
+export const PUBLIC_AGREEMENT_VERSION = 'v7.1';
 /** The v6 clause numbers that differ from v5 (for the solicitor review and its test). */
 export const V6_CHANGED_CLAUSES: readonly string[] = Object.keys(V6_CLAUSES);
 /** The v6 clause numbers v7 replaces (2.7 also adds 2.8 to 2.11). */
 export const V7_CHANGED_CLAUSES: readonly string[] = Object.keys(V7_CLAUSES);
+/** The v7 clause numbers v7.1 replaces. */
+export const V7_1_CHANGED_CLAUSES: readonly string[] = Object.keys(V7_1_CLAUSES);
 
 
 export function agreementVersion(version: string = CLIENT_AGREEMENT_VERSION): AgreementVersion {
@@ -910,7 +965,7 @@ export function asksCurrentProvider(version: string = CLIENT_AGREEMENT_VERSION):
 /** Shown verbatim beside the agree button (Paul, 2026-10-02). */
 export function agreeConsentSentence(businessName: string, version: string = CLIENT_AGREEMENT_VERSION): string {
   /* v4 clause 1.2: the acceptance IS ticking this exact sentence (with the separate authority confirmation, 1.4). */
-  if (version === 'v4' || version === 'v5' || version === 'v6' || version === 'v7') return 'I have read and agree to the Client Service Agreement';
+  if (version === 'v4' || version === 'v5' || version === 'v6' || isV7Family(version)) return 'I have read and agree to the Client Service Agreement';
   return `By ticking this box and clicking 'I agree and sign', I confirm that I have read the Findable Client Service Agreement, that I agree to it on behalf of ${businessName}, that I am authorised to do so, and that I intend this to be my electronic signature.`;
 }
 
@@ -967,7 +1022,7 @@ export function clientDetailRows(fill: AgreementFill, v: AgreementVersion = agre
     [L.website, orNot(fill.websiteDomain)],
     ...(L.currentProvider ? [[L.currentProvider, clean(fill.currentProvider) || NO_CURRENT_PROVIDER] as [string, string]] : []),
     ...(L.freeToLeave ? [[L.freeToLeave, fill.freeToLeave === true ? 'Yes' : fill.freeToLeave === false ? 'No' : NOT_PROVIDED] as [string, string]] : []),
-    ...(L.paymentPlan ? [[L.paymentPlan, isPaymentPlan(fill.paymentPlan) ? (v.version === 'v7' ? planAgreementWordsV7(fill.paymentPlan) : planAgreementWords(fill.paymentPlan)) : NOT_PROVIDED] as [string, string]] : []),
+    ...(L.paymentPlan ? [[L.paymentPlan, isPaymentPlan(fill.paymentPlan) ? (isV7Family(v.version) ? planAgreementWordsV7(fill.paymentPlan) : planAgreementWords(fill.paymentPlan)) : NOT_PROVIDED] as [string, string]] : []),
   ];
 }
 

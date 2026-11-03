@@ -1,5 +1,9 @@
 # findable.live → LeadFinderOS: selling the plans (contract, 2026-10-29; two plans from 2026-10-30)
 
+> **2026-11-03, COMPLETE PAID UP FRONT:** `plans` returns a fifth id, `complete_upfront` (`product: "complete"`,
+> `recommended: false`), second in the list. `submit` accepts it: first payment **£999**, no monthly payments. Every plan now
+> signs agreement **v7.1**. An older page that does not know the id ignores it.
+
 > **2026-10-30, TWO PLANS:** `plans` now returns four ids: `complete` (Findable Complete, £99 × 12, `recommended: true`)
 > first, then Essential's `full`, `six`, `twelve`. Each entry is `{ plan, name, product, recommended, available }`
 > (`product` is `"complete"` or `"essential"`). `submit` accepts `"complete"` too; every plan now signs agreement **v7**.
