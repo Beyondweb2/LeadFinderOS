@@ -11,7 +11,8 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { answerExcerpt, cleanAnswerBlocks } from '../src/lib/answerText.ts';
 import { buildReportData } from '../src/lib/auditReport.ts';
-import { renderReportHtml, quickEngineTone, quickReplyOrder, ownNameVariants, QUICK_ANSWER_CHARS, QUICK_MAX_RIVALS } from '../src/lib/aiAuditReportHtml.ts';
+import { renderReportHtml as renderReportHtmlLive, quickEngineTone, quickReplyOrder, ownNameVariants, QUICK_ANSWER_CHARS, QUICK_MAX_RIVALS } from '../src/lib/aiAuditReportHtml.ts';
+const renderReportHtml = (d: Parameters<typeof renderReportHtmlLive>[0]) => renderReportHtmlLive(d, { sixAnswerQuickLayout: true }); // Concept 4 is switched off in production; these tests fence the preserved page
 import { initialHookStateV2 } from '../src/lib/hookScore.ts';
 import { buildHookReportSummary, countDistinctBusinesses, normaliseRivalName } from '../src/lib/hookAudit.ts';
 import { V7_CLAIM_SENTENCE } from '../src/lib/paymentPlans.ts';
@@ -268,7 +269,7 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
   const fullRun = { id: 'r1', run_number: 1, status: 'complete', mention_rate: 0, created_at: '2026-10-06T10:00:00Z', results: {} };
   const fullRows = grid.map(([c, g], i) => ({ id: `q${i}`, question: Q[i], status: 'done', result: { chatgpt: cell(c), gemini: cell(g) } }));
   const full = renderReportHtml({ ...(buildReportData(fullRows as never, fullRun as never, { businessName: BIZ, businessType: 'roofer', locationText: TOWN, specialisms: '', isAggregatorUrl: () => false, hasWebsite: true }) as object), generatedAtLabel: '6 October 2026', crawlFaults: faults, siteChecked: true } as never);
-  ok(/Your site doesn’t label the basics/.test(text(full)), 'I2: the full report still shows the structured-data line');
+  ok(/What we found on your website/.test(text(full)) && !/Your site doesn’t label the basics/.test(text(full)), 'I2: the long layout website section follows the same rule — the generic structured-data line never takes a slot (2026-11-03)');
   const v1 = { version: 1, planned: [Q[0]], executed: 1, next_index: 1, stop_reason: 'visibility_gap_found', named_in: [], gap: { question_index: 0, question: Q[0], engine: 'gemini', target_named: false, named_instead: ['B Co'], citations: [], named_on_engines: [], answer_excerpt: '' } };
   const v1r = report(grid, { crawlFaults: faults }, v1);
   ok(/Your site doesn’t label the basics/.test(v1r.t), 'I2: an older (version-1) hook report still shows it — only the six-answer report changed');
@@ -353,6 +354,24 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
   ok(o.filter((e) => e.me).length === 1 && quickReplyOrder(t, ['Slate Masters'], null).every((e) => !e.me), 'M: the business is listed only for an answer that named it');
   ok(quickReplyOrder('No names here at all.', ['B Co', 'A Co'], BIZ).map((e) => e.name).join('|') === `${BIZ}|B Co|A Co`, 'M: named by the verdict but not written → the business first, rivals in stored order');
   ok(quickReplyOrder('Apexian roofs. Apex Roofs too.', ['Apex Roofs'], null).length === 1, 'M: no match inside a longer word');
+}
+
+/* ── N. 2026-11-03: in production a six-answer hook renders in the FREE CHECK's long layout ──────── */
+{
+  const grid: Array<[Cell, Cell]> = [[hit(['Top Tiles Ltd']), miss(['Ridge Roofing Ltd', 'Slate Masters', 'Tile Doctors'])], [miss(['Top Tiles Ltd']), miss(['Slate Masters'])], [miss(['Leeds Roof Co']), miss(['Ridge Roofing'])]];
+  const run = { id: 'r1', run_number: 1, status: 'complete', mention_rate: 0, created_at: '2026-10-06T10:00:00Z', results: { hook: initialHookStateV2(Q), competitor_cleaning: { complete: true, at: 'x', attempts: 1, errors: [] } } };
+  const qr = grid.map(([c, g], i) => ({ id: `q${i}`, question: Q[i], status: 'done', result: { chatgpt: cell(c), gemini: cell(g) } }));
+  const d = buildReportData(qr as never, run as never, { businessName: BIZ, businessType: 'roofer', locationText: TOWN, specialisms: '', isAggregatorUrl: () => false, hasWebsite: true });
+  const faults = [{ title: 'AI can’t reach your site', detail: 'OAI-SearchBot is blocked.', minor: false, kind: 'search_blocked' }];
+  const live = renderReportHtmlLive({ ...(d as object), generatedAtLabel: '3 November 2026', showOffer: true, offerUrl: '#', crawlFaults: faults, siteChecked: true } as never);
+  ok(!live.includes('q4-head') && live.includes('class="hero"') && live.includes('<video'), 'N: the six-answer hook uses the long free-check layout, with its video');
+  ok(/class="num pct [a-z]+">\d+%/.test(live) && /class="l2">\d+ of 6 answers/.test(live), 'N: the headline is a percentage with "N of M answers" underneath');
+  ok(/What we found on your website/.test(live) && /may make it harder/.test(live), 'N: "What we found on your website" with the render-time wording');
+  const noCrawl = renderReportHtmlLive({ ...(d as object), generatedAtLabel: '3 November 2026' } as never);
+  ok(!/What we found on your website/.test(noCrawl), 'N: no crawl → the section is hidden');
+  const many = Array.from({ length: 8 }, (_, i) => ({ title: `Issue ${i}`, detail: `Detail ${i}`, minor: false, kind: `k${i}` }));
+  const capped = renderReportHtmlLive({ ...(d as object), generatedAtLabel: '3 November 2026', crawlFaults: many } as never);
+  ok((capped.match(/class="fault-t"/g) ?? []).length === 5, 'N: at most five findings');
 }
 
 if (failures) throw new Error(`${failures} Concept 4 report checks failed`);

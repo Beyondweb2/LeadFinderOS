@@ -55,13 +55,13 @@ console.log("── ⛔ NAMED SOMEWHERE -> NOTHING ON THE PAGE MAY SAY 'never' �
   ok(!/never (named|mentioned|appear)/i.test(text(html)), "⛔ no 'never named' anywhere when the business WAS named");
   ok(/wasn\u2019t mentioned in this search/.test(text(c)), "  the card's claim is scoped to the one search it shows");
   ok(/cc-brand[^>]*>[\s\S]*?Gemini/.test(c), "  and it attributes the engine");
-  ok(/8 times RG Locksmiths cambs showed up/.test(text(html)) && /out of 24 answers/.test(text(html)), "the headline still states the audit-wide count");
+  ok(/33%/.test(text(html)) && /RG Locksmiths cambs showed up/.test(text(html)) && /8 of 24 answers/.test(text(html)), "the headline states the audit-wide percentage, with the count underneath");
 }
 
 console.log("\n── THE ABSENT BUSINESS IS STATED BY THE COUNT ──");
 {
   const t = text(renderReportHtml(base(0, 24)));
-  ok(/0 times RG Locksmiths cambs showed up/.test(t), "named === 0 says 0 times, plainly; the absent case is not softened");
+  ok(/0%/.test(t) && /RG Locksmiths cambs showed up/.test(t) && /0 of 24 answers/.test(t), "named === 0 says 0%, plainly; the absent case is not softened");
 }
 
 console.log("\n── EDGE: named 1 of 24 is still 'named somewhere' ──");

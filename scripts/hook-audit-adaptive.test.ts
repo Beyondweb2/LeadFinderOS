@@ -348,7 +348,7 @@ ok(createAudit.includes('isMeasurement ? MEASUREMENT_AUDIT_PURPOSE') && /isHookA
 // Report: the hook summary is attached by the builder and rendered by its own section.
 ok(report.includes('const hookSummary = buildHookReportSummary({') && report.includes('hook: hookSummary,') && report.includes('engineOrder: SCORED_ENGINES'), 'the report builder attaches the hook summary from the run state, scored engines only');
 ok(report.includes('namedInstead: (competitors) => rivalsSuppressed ? [] :'), 'rival names on the hook card obey the same cleanliness gate as the rest of the report');
-ok(html.includes('export function renderHookSection(') && html.includes('d.hook ? `${renderHookSection(d.hook, d.businessName, d.generatedAtLabel)}'), 'the renderer branches narrowly on d.hook — the counted hero is replaced, nothing else is forked');
+ok(html.includes('export function renderHookSection(') && html.includes('d.hook && !sixComplete ? `${renderHookSection(d.hook, d.businessName, d.generatedAtLabel)}'), 'the renderer branches narrowly on d.hook (a complete six-answer hook renders as the free check) — the counted hero is replaced, nothing else is forked');
 ok(html.includes('hookReportCopy(h, businessName)'), 'the renderer uses the tested copy verbatim');
 /* Ends where the version-1 section ends: the six-answer Concept 4 report that follows it (2026-10-06)
    DOES print a percentage — that is its job — and is pinned by hook-report-concept4.test.ts. */

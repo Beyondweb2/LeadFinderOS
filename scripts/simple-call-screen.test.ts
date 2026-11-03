@@ -45,8 +45,8 @@ ok(SAY_IT_LINE === "Say it may make it harder. Never say it's the reason.", 'the
 
 console.log('── What we offer ──');
 const offer = offerLines();
-ok(offer.length === 9 && offer[0].startsWith('Money-back guarantee') && offer[1] === '£99 up front, then £99 a month' && offer[8] === 'We host the site. They own it after the final payment.', 'nine lines, the price read from the plan constants');
-ok(OFFER_UNDER_LINE === 'Price an issue? Offer Essential in Quick Close.', 'the Essential line under it');
+ok(offer.length === 9 && offer[0].startsWith('Money-back guarantee') && offer[1] === '£99 a month, or £999 up front for the year (saves £189)' && offer[8] === 'We host the site. They own it after the final payment (up front: after the 12 months).', 'nine lines, the price read from the plan constants');
+ok(OFFER_UNDER_LINE === 'Price an issue? Offer paying up front (save £189). Still an issue? Essential, in Quick Close.', 'the Essential line under it');
 
 console.log('── a website added to a lead that had none ──');
 ok(websiteWasAdded(null, 'smith.co.uk') && websiteWasAdded('', 'https://smith.co.uk') && websiteWasAdded('  ', 'smith.co.uk'), 'blank → a site is an add');

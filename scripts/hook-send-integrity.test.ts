@@ -8,7 +8,9 @@ import { resolve } from 'node:path';
 import { HOOK_ENGINE_LABELS, HOOK_SCORE_QUESTIONS, initialHookStateV2, scoreHookRun, topUpHookQuestions, type HookScoreRow } from '../src/lib/hookScore.ts';
 import { buildHookReportSummary, hookReportCopy } from '../src/lib/hookAudit.ts';
 import { buildReportData } from '../src/lib/auditReport.ts';
-import { renderReportHtml } from '../src/lib/aiAuditReportHtml.ts';
+import { renderReportHtml as renderReportHtmlLive } from '../src/lib/aiAuditReportHtml.ts';
+const renderReportHtml = (d: Parameters<typeof renderReportHtmlLive>[0]) => renderReportHtmlLive(d, { sixAnswerQuickLayout: true }); // Concept 4 is switched off in production; these tests fence the preserved page
+
 import { TEMPLATE_ENGINE_CLAIM_WAIVED, TEMPLATE_SINGLE_ENGINE_CLAIM, templateEngineConflict } from '../src/lib/rivalHook.ts';
 import { HOOK_INCOMPLETE_REASON, HOOK_NO_GAP_REASON, resolveAuditReplyVars } from '../supabase/functions/_shared/audit-reply.ts';
 import { WA_TEMPLATES, renderTemplateBody, templateBodyParams } from '../supabase/functions/_shared/whatsapp-send.ts';
