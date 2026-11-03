@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, BadgePoundSterling, Check, ChevronDown, Clock, Loader2, RefreshCw, Sparkles, Undo2 } from 'lucide-react';
+import { AlertTriangle, BadgePoundSterling, Check, ChevronDown, Clock, Loader2, Mail, Phone, RefreshCw, Sparkles, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Panel, SectionHeading, TONE, gbp } from '@/components/salesDash/ui';
@@ -9,6 +9,8 @@ import { edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { clientHubLink } from '@/lib/salesLinks';
 import type { LinePaymentRow, OwedItem, OwedView } from '@/lib/commissionOwed';
 import { SALE_PLAN_FLAG_WORDS, isSalePlanFlag } from '@/lib/salePlan';
+import { stripeCheckWords, type StripeCheckRow } from '@/lib/commissionReconcile';
+import type { PaidClientRecord } from '@/lib/paidClientRecord';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -20,10 +22,10 @@ import { useToast } from '@/hooks/use-toast';
 
 export interface NewPaidClient {
   lead_id: string; business: string; plan: string | null; plan_words: string; amount_paid: number; seller_id: string | null;
-  paid_at: string | null; missing: string[]; flag: string | null; test: boolean; refunded: boolean;
+  paid_at: string | null; missing: string[]; flag: string | null; test: boolean; refunded: boolean; record: PaidClientRecord;
 }
 type History = (LinePaymentRow & { planWords: string })[];
-export interface OwedResponse extends OwedView { ok: true; history: History; names: Record<string, string>; new_paid_clients: NewPaidClient[] }
+export interface OwedResponse extends OwedView { ok: true; history: History; names: Record<string, string>; new_paid_clients: NewPaidClient[]; stripe_check?: StripeCheckRow | null }
 
 export const owedKey = ['commission-owed'] as const;
 export function useCommissionOwed(enabled = true) {
@@ -142,6 +144,22 @@ function QuietList({ items, nameOf }: { items: OwedItem[]; nameOf?: (id: string)
   );
 }
 
+/** Did today's figures get checked against Stripe? Quiet when clean, loud when not. */
+function StripeCheckLine({ check }: { check: StripeCheckRow | null | undefined }) {
+  const w = stripeCheckWords(check, Date.now());
+  const needs = check?.needs_you ?? [];
+  const changes = check?.changes ?? [];
+  const cls = w.tone === 'good' ? 'text-muted-foreground' : w.tone === 'attention' ? TONE.amber.text : TONE.red.text;
+  if (!needs.length && !changes.length) return <p className={cn('mt-2 text-xs', cls)} data-testid="stripe-check">{w.text}</p>;
+  return (
+    <details className="mt-2 text-xs" data-testid="stripe-check">
+      <summary className={cn('cursor-pointer', cls)}>{w.text}</summary>
+      {needs.length > 0 && <ul className="mt-1 list-disc space-y-0.5 pl-4" data-testid="stripe-check-needs">{needs.map((n, i) => <li key={`${n.object}${i}`} className="break-words">{n.detail}</li>)}</ul>}
+      {changes.length > 0 && <><p className="mt-1.5 font-medium">Fixed in that run</p><ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-muted-foreground">{changes.map((c, i) => <li key={i} className="break-words">{c.what}</li>)}</ul></>}
+    </details>
+  );
+}
+
 export function CommissionOwedSection() {
   const q = useCommissionOwed();
   const qc = useQueryClient();
@@ -176,6 +194,7 @@ export function CommissionOwedSection() {
       <Panel title="You owe right now" icon={BadgePoundSterling} tone="green" hint="Money due to pay today or overdue. You pay it yourself by bank transfer, then mark it here."
         action={<Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Refresh" onClick={() => void q.refetch()}><RefreshCw className={cn('h-4 w-4', q.isFetching && 'animate-spin')} /></Button>}>
         <p className="text-4xl font-bold tracking-tight tabular-nums" data-testid="owed-total">{gbp(d.totalOwedNow)}</p>
+        <StripeCheckLine check={d.stripe_check} />
 
         {lastPaid && (
           <p className={cn('mt-3 flex flex-wrap items-center gap-2 rounded-xl px-3 py-2 text-sm', TONE.green.soft)} data-testid="undo-paid">
@@ -236,6 +255,45 @@ export function CommissionOwedSection() {
   );
 }
 
+/** One new client: who to ring, and everything the sale recorded. There is no form behind this: it is what was typed as it was typed. */
+function PaidClientRow({ c, sellerName }: { c: NewPaidClient; sellerName: string }) {
+  const [open, setOpen] = useState(false);
+  const r = c.record;
+  const hasMore = r.lines.length > 0 || r.notes.length > 0;
+  return (
+    <li className="border-t border-border/50 py-2.5 first:border-t-0" data-testid="new-paid-client">
+      <div className="flex flex-wrap items-start gap-x-4 gap-y-1">
+        <div className="min-w-0 flex-1 basis-52">
+          <Link to={clientHubLink(c.lead_id)} className="font-medium hover:underline">{c.business}</Link>
+          {c.test && <span className={cn('ml-1.5 rounded px-1 text-[10px] font-semibold', TONE.grey.soft, TONE.grey.text)}>test</span>}
+          {c.refunded && <span className={cn('ml-1.5 rounded px-1 text-[10px] font-semibold', TONE.red.soft, TONE.red.text)}>refunded</span>}
+          <span className="block text-xs text-muted-foreground">{c.plan_words} · {sellerName} · {dayWords(c.paid_at)}</span>
+          <FlagNote flag={c.flag} />
+        </div>
+        <span className="w-20 text-right font-semibold tabular-nums">{gbp(c.amount_paid)}</span>
+      </div>
+      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm" data-testid="new-paid-contact">
+        {r.contactName && <span className="font-medium">{r.contactName}</span>}
+        {r.phone ? <a href={`tel:${r.phone}`} className="inline-flex items-center gap-1 text-primary hover:underline"><Phone className="h-3.5 w-3.5" />{r.phone}</a> : <span className={cn('text-xs', TONE.amber.text)}>No phone</span>}
+        {r.email ? <a href={`mailto:${r.email}`} className="inline-flex min-w-0 items-center gap-1 break-all text-primary hover:underline"><Mail className="h-3.5 w-3.5 shrink-0" />{r.email}</a> : <span className={cn('text-xs', TONE.amber.text)}>No email</span>}
+      </div>
+      {c.missing.length > 0 && <p className={cn('mt-1 text-xs', TONE.amber.text)} data-testid="new-paid-missing">Not recorded: {c.missing.join(', ')}</p>}
+      {hasMore && (
+        <button type="button" className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground" aria-expanded={open} onClick={() => setOpen(!open)} data-testid="new-paid-more">
+          <ChevronDown className={cn('h-3.5 w-3.5 transition', open && 'rotate-180')} />Everything from the sale
+        </button>
+      )}
+      {open && (
+        <div className="mt-2 space-y-2 rounded-xl bg-muted/30 px-3 py-2 text-sm" data-testid="new-paid-record">
+          {r.website && <p className="break-all text-xs"><span className="text-muted-foreground">Website </span>{r.website}</p>}
+          {r.lines.length > 0 && <dl className="grid grid-cols-[minmax(0,auto)_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">{r.lines.map((l) => <div key={l.label} className="contents"><dt className="text-muted-foreground">{l.label}</dt><dd className="break-words">{l.value}</dd></div>)}</dl>}
+          {r.notes.length > 0 && <div><p className="text-xs font-semibold">Notes</p><ul className="mt-0.5 space-y-1 text-xs">{r.notes.map((n, i) => <li key={`${n.at}${i}`} className="break-words"><span className="text-muted-foreground">{dayWords(n.at)}: </span>{n.text}</li>)}</ul></div>}
+        </div>
+      )}
+    </li>
+  );
+}
+
 export function NewPaidClientsSection() {
   const q = useCommissionOwed();
   const [showAll, setShowAll] = useState(false);
@@ -245,27 +303,9 @@ export function NewPaidClientsSection() {
   return (
     <section className="space-y-3" data-testid="new-paid-clients">
       <SectionHeading title="New paid clients" tone="blue" />
-      <Panel title="Newest first" icon={Sparkles} tone="blue" hint="Click one to open it.">
+      <Panel title="Newest first" icon={Sparkles} tone="blue" hint="Who to ring, and everything the salesperson typed. Click a name to open the client.">
         {rows.length === 0 ? <p className="text-sm text-muted-foreground">No paid clients yet.</p> : (
-          <ul>
-            {(showAll ? rows : rows.slice(0, 8)).map((c) => (
-              <li key={c.lead_id} className="border-t border-border/50 first:border-t-0">
-                <Link to={clientHubLink(c.lead_id)} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2.5 hover:bg-muted/30" data-testid="new-paid-client">
-                  <span className="min-w-0 flex-1 basis-52">
-                    <span className="font-medium">{c.business}</span>
-                    {c.test && <span className={cn('ml-1.5 rounded px-1 text-[10px] font-semibold', TONE.grey.soft, TONE.grey.text)}>test</span>}
-                    {c.refunded && <span className={cn('ml-1.5 rounded px-1 text-[10px] font-semibold', TONE.red.soft, TONE.red.text)}>refunded</span>}
-                    <span className="block text-xs text-muted-foreground">{c.plan_words} · {nameOf(c.seller_id)} · {dayWords(c.paid_at)}</span>
-                    <FlagNote flag={c.flag} />
-                  </span>
-                  <span className="w-20 text-right font-semibold tabular-nums">{gbp(c.amount_paid)}</span>
-                  {c.missing.length === 0
-                    ? <span className={cn('w-44 text-xs font-medium', TONE.green.text)} data-testid="handoff-complete-chip">Handoff complete</span>
-                    : <span className={cn('w-44 text-xs', TONE.amber.text)} data-testid="handoff-missing-chip">Missing: {c.missing.join(', ')}</span>}
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <ul>{(showAll ? rows : rows.slice(0, 8)).map((c) => <PaidClientRow key={c.lead_id} c={c} sellerName={nameOf(c.seller_id)} />)}</ul>
         )}
         {rows.length > 8 && <Button size="sm" variant="ghost" className="mt-1 h-8" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show fewer' : `Show all ${rows.length}`}</Button>}
       </Panel>

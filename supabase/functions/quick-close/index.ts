@@ -694,7 +694,10 @@ Deno.serve(async (req) => {
       // The trade decides what the paid baseline measures (findable-checkout refuses a lead without one).
       // Only a BLANK trade is filled here — an existing one is never overwritten.
       const trade = typeof body.trade === "string" ? body.trade.trim().slice(0, 80) : "";
-      if (trade && !((lead.category || lead.search_keyword || "") as string).trim()) {
+      /* Only a blank trade, or the value this same box just saved a moment ago while they were still typing it (trade_prev). */
+      const tradePrev = typeof body.trade_prev === "string" ? body.trade_prev.trim() : "";
+      const tradeNow = ((lead.category || lead.search_keyword || "") as string).trim();
+      if (trade && (!tradeNow || (!!tradePrev && !lead.category && tradeNow === tradePrev))) {
         const { error: tErr } = await service.from("outreach_leads").update({ search_keyword: trade }).eq("id", leadId).is("category", null);
         if (tErr) return json({ ok: false, error: "not_saved", detail: tErr.message }, 500);
         lead.search_keyword = trade;

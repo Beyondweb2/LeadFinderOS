@@ -281,10 +281,10 @@ ok(quickCloseEmail({ greetName: null, businessName: "ABC Ltd", url: "u", route: 
 ok(QUICK_CLOSE_AGREEMENT_LINE.includes("read and sign the Client Service Agreement") && /payment only opens after they sign/.test(QUICK_CLOSE_AGREEMENT_LINE), "the rep's card says the client signs before payment can open (v3)");
 const dlg = read("src/components/QuickCloseDialog.tsx");
 ok(/data-testid="qc-route-terms"/.test(dlg) && /QUICK_CLOSE_GUARANTEE_LINES\[0\]/.test(dlg) && /QUICK_CLOSE_AGREEMENT_LINE/.test(dlg) && /routeOwnershipLine\(sellRoute\)/.test(dlg), "the rep's card shows terms, ownership, guarantee and agreement tick");
-ok(dlg.indexOf('data-testid="qc-route-terms"') < dlg.indexOf('data-testid="qc-handoff"') && dlg.indexOf('data-testid="qc-link"') < dlg.indexOf('data-testid="qc-handoff"'), "M-013: the terms and the link come BEFORE the handoff");
+ok(dlg.indexOf('data-testid="qc-route-terms"') < dlg.indexOf('data-testid="qc-link"'), "M-013: the terms come before the link");
 /* 2026-10-06 (Send to Paul): folded while the rep ANSWERS — it opens once the link is out, after payment, or when
    complete and not yet sent (the link card still comes first on screen, above). */
-ok(/const openNow = !sent && \(v\.state === 'paid' \|\| v\.state === 'link_generated' \|\| v\.state === 'link_expired' \|\| h\.complete\);/.test(dlg) && /open=\{openNow\}/.test(dlg), "M-013: the handoff is folded while answering (opens once the link is out, after payment, or ready to send)");
+ok(!/qc-handoff|SalesHandoffForm|send_to_paul/.test(dlg), "no handover form or step in Quick Close (Paul, 2026-11-03)");
 
 /* ═══ SHARING ═════════════════════════════════════════════════════════════════════════════════════ */
 console.log("\n── SHARING: copy, email, WhatsApp — each recorded, none overclaimed ──");

@@ -51,9 +51,7 @@ An offset is never paid as a negative. It nets against that person's due money, 
 a little early (a warning says so). An offset cannot be marked on its own.
 
 **Complete paid up front (2026-11-03, `docs/two-plans.md`):** always 30% of the £999, £299.70, whatever its Sale Number (`COMMISSION_UPFRONT_RATE`), on the same
-payable date, no trailing. v7.1 stamps v7's terms, so the 7-day window holds. ⚠️ The one exception to "the stamped rate decides": the database stamps this sale like any
-other, because its place must count toward the seller's tier for other sales, so `payment_ledger.commission_rate` on the row shows the tier. The engine pays
-`commissionFixedRateForPlan` instead. Read the rate from `commissionLines`, never from that column.
+payable date, no trailing. v7.1 stamps v7's terms, so the 7-day window holds. Its place still counts toward the seller's tier for other sales, and the row stores the 30% it earns (see below).
 
 ## Autosave, no submit
 
@@ -66,10 +64,24 @@ A reply never overwrites text being typed.
 - Call notes (`save_call` with `quiet: true`): the existing revision check handles two tabs.
 - Tapped answers (who runs the site, agency contract, plan, decision maker) already saved on tap. They now retry over a bad connection.
 
-**Send to Paul stays.** It saves nothing he would not already see. It is the salesperson's "I'm done", which rings his bell and writes the one
-send row. `SellerClientInfoForm` keeps its button: saving it tells Paul, so autosaving would notify him on every pause.
+**No handover form (Paul, 2026-11-03).** The form, Send to Paul, the seller's Submit for delivery and the checklist's "Sales handoff" item are gone. Everything typed on the prospect page reaches Paul in New paid clients (`paidClientRecord.ts`), with phone and email. Saved handoff answers on older sales stay readable there, on the client page and in the new-client email. `SellerClientInfoForm` appears only when Paul has asked (`client_info_requests`), and saving it tells him. Fn quick-close keeps `save_handoff`, `save_handoff_field` and `send_to_paul` for a tab still open during the deploy; nothing in the app calls them. The promise question has no box of its own now: the Internal note placeholder asks for it.
+
+What saves itself, about 800ms after typing stops, with the same Saved / Saving line: call answers and services/areas on the Call tab; Services and areas on the lead (`lead_set_profile` keeps one History line per edit, ten-minute window); Correct a detail (a half-typed email waits until valid or left); the trade (the box stays open, and `trade_prev` lets a save replace only what that box just saved, so a set trade is still never overwritten); an internal note (`lead_note_draft`: one row however many pauses, leaving the box finishes it, hint text "Who decides? Anything you promised? Best way to reach them?"); the older lead window's name, contact fields and private note. Escape or the cross puts back what was there on opening. ⛔ A number on a queued or already-messaged lead saves only on leaving, after its warning: the next send reads it. The website-control note saves on leaving, and a note typed in the Log window and never logged is kept as an internal note when leaving the lead. The private note says "only you", so it does not go to New paid clients. Next Action and Meeting stay explicit forms: they are decisions, not notes.
 
 **One answer to "when do I get paid?" (Paul, 2026-11-03).** Your payments is the only panel that names dates and the only one with that name (the list of every payment is Client payments). Earned this month says "earned, not paid yet" with no date, and the pop-up points to Your payments. Screens show a sale's plan through `salePlanWordsOr`; old-plan sales keep their route name.
+
+## Stripe is the source of truth (Paul, 2026-11-03)
+
+The webhook writes each payment, refund (cumulative, per charge) and dispute through `recordLedger`. The plan is read from what was charged (`salePlanFromCharge`): the session's plan when the amount agrees; otherwise the one plan with that first payment (£999, £499). £99 starts several plans, so it never overrules a session: it stays and is flagged `amount_differs`. Any difference from Quick Close is `plan_differs`, and Stripe wins. Monthly amounts are flagged on read (`monthly_differs`).
+
+**The daily check:** fn `commission-stripe-check`, cron `commission-stripe-check-daily` (04:10 UTC, `invoke_commission_stripe_check()`), rules in `src/lib/commissionReconcile.ts`, log in `commission_stripe_checks`, last run shown on Commission owed. Reads Stripe with the edge secret, pinned to API version 2024-06-20. `mode: dry_run` reads only.
+- Fixes: a missed payment, refund or dispute; a refund up or down (a failed refund moves it back); a dispute's status; a blank lead or Stripe id; a wrong plan on a `plan_v1` sale whose commission is unpaid.
+- Reports and never changes: a different amount on a recorded payment, a plan differing after its commission was paid, a held payment (no signature), a Findable payment with no paid lead (only `establishLeadPayment` writes paid state; replay the event from Stripe), a ledger row Stripe does not list, missing webhook events.
+- A charge is placed from Stripe ids and metadata only, never an email (the older admin `backfill` mode also matches on billing email, which is why it reports before applying).
+
+**The rate on the row:** `stamp_monthly_commission_for` stores `commission_fixed_rate_for_plan(sale_plan)` when a plan fixes one, so an up-front row holds 0.30 and keeps its place in the month. A trigger keeps the rate right if the plan is corrected. The engine still applies `commissionFixedRateForPlan`, so both agree.
+
+**Invoices:** Stripe moved `subscription`, `payment_intent` and `charge` off the invoice in API 2025-03-31. The webhook reads both shapes (`invoiceRefs`). No real monthly has landed yet, so this was never proved against a live one; the check's `webhook` field records the endpoint's API version.
 
 ## Open
 
@@ -81,6 +93,9 @@ send row. `SellerClientInfoForm` keeps its button: saving it tells Paul, so auto
 - A guarantee claim is an email; there is no claim record. Nothing cancels the line until the refund lands in Stripe, so check for an open claim before paying.
 
 ## Proof
+
+**Stripe check and no handover form, 2026-11-03, branch `fix/commission-stripe-and-handover`:** `scripts/commission-stripe-check.test.ts` (fixtures, totals to the penny). `supabase/tests/commission-stripe-check.sql` passed with the migration in a rolled-back transaction on the live database; read back, nothing stayed. Screens checked in headless Edge against made-up data. Not yet proved live: see the release notes when this merges.
+
 
 `scripts/commission-owed.test.ts`, `scripts/autosave-queue.test.ts`, `supabase/tests/commission-owed.sql` (migration + proof in a rolled-back
 transaction on the live database, 2026-11-02; read back, nothing stayed).

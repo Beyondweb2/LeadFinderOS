@@ -77,7 +77,7 @@ export function ClientHealthPanel({ o, onOpen, exclude }: { o: O; onOpen: (leadI
     <Panel collapseKey="admin.cc.clients" defaultOpen={false} title="Clients in delivery" icon={HeartPulse} tone="green"
       hint="Real statuses only — no health score. The weekly check is Paul's directional monitoring, separate from the official baseline, the guarantee and the four-week re-measure."
       summary={`${live.length} active client${live.length === 1 ? '' : 's'}${blocked ? ` · ${blocked} with a blocker` : ''}`}>
-      {!shown.length ? <Empty>{o.clients.length ? 'Every paid client is still being handed over — see New sales & handoffs above.' : 'No paid clients yet.'}</Empty> : (
+      {!shown.length ? <Empty>{o.clients.length ? 'Every paid client is still being set up — see New sales above.' : 'No paid clients yet.'}</Empty> : (
         <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
           {!healthRead && <p className="mb-2 text-xs text-amber-700 dark:text-amber-300">The weekly check and improvement items could not be read just now — only the basics are shown.</p>}
           <table className="w-full min-w-[980px] text-sm">

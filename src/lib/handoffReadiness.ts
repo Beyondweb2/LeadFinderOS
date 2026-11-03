@@ -9,7 +9,7 @@
    salesperson's edit changes it at once. The one stored act is Submit for delivery.
    ⛔ REQUIRED vs NOT NEEDED is decided per client: a client with no Google Business Profile is never
    blocked by "GBP access"; a client with no website is never blocked by a crawl; the domain question
-   binds a new-site build only; the sales handoff binds a salesperson's sale only (salesHandoff.ts).
+   binds a new-site build only. There is no sales handoff item: since 2026-11-03 there is no form to wait for.
 
    ⛔ EITHER SOURCE SATISFIES AN ITEM — the client's onboarding answers OR what Sales already collected
    on the lead (services_included / service_areas / website_control). Nothing is copied between them:
@@ -23,7 +23,6 @@ import { isPaidLead } from './leadPayment.ts';
 import { effectiveQuestionnaireServices, missingQuestionnaireFields } from './questionnaireComplete.ts';
 import { DOMAIN_REASON_TEXT, domainAuthority, domainInputFromRow, type DomainAuthorityVerdict, type DomainRow } from './domainAuthority.ts';
 import { CRAWL_FRESH_MS } from './crawlCheck.ts';
-import type { HandoffApplies } from './salesHandoff.ts';
 import { serviceEndView } from './serviceEnd.ts';
 import { serviceRouteForTotal, serviceRouteFromRow, type ServiceRoute } from './findableOffer.ts';
 
@@ -79,8 +78,6 @@ export interface HandoffEvidence {
   crawl: boolean;
   /** Age of that crawl in days (from its created_at). null = unknown age, which is never "fresh". */
   crawlAgeDays: number | null;
-  /** The salesperson's handoff (src/lib/salesHandoff.ts): whether one is owed and whether it is done. */
-  salesHandoff: { applies: HandoffApplies; complete: boolean; missing: number };
 }
 
 export type HandoffSource = 'onboarding' | 'sales' | 'findable' | 'payment' | null;
@@ -170,18 +167,6 @@ export function handoffReadiness(
   add({
     key: 'paid', label: 'Payment received', ok: paid, required: true, source: paid ? 'payment' : null, who: 'findable',
     detail: paid ? 'Payment recorded' : L.status === 'refunded' ? 'Refunded' : L.status === 'payment_received' ? 'Marked paid, but no amount is recorded' : 'No payment recorded',
-  });
-
-  /* The salesperson's handoff (salesHandoff.ts). Owed only for a salesperson's sale made since handoffs
-     existed; Paul's own sale and an older client are "not needed" — never fabricated, never a block. */
-  const sh = evidence.salesHandoff;
-  const shRequired = sh.applies === 'required';
-  add({
-    key: 'sales_handoff', label: 'Sales handoff', ok: !shRequired || sh.complete, required: shRequired, notNeeded: !shRequired,
-    source: shRequired && sh.complete ? 'sales' : null, who: 'sales',
-    detail: !shRequired
-      ? (sh.applies === 'not_needed_own_sale' ? "Not needed — Paul's own sale" : sh.applies === 'not_recorded_before' ? 'Not recorded — paid before handoffs existed' : 'Not needed — no salesperson on this sale')
-      : sh.complete ? 'Complete' : sh.missing > 0 ? `Not complete — ${sh.missing} answer${sh.missing === 1 ? '' : 's'} missing` : 'Not saved by the salesperson yet',
   });
 
   const name = text(L.business_name);

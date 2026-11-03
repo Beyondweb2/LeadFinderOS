@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { AutosaveIndicator, useAutosaveFields } from '@/hooks/useAutosaveFields';
 import { useUnsavedDraft } from '@/components/UnsavedDraftGuard';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { BriefcaseBusiness, Megaphone, Check, Clock, Globe, Link2, Lock, Loader2, RefreshCw, Sparkles, UserMinus } from 'lucide-react';
@@ -155,7 +156,8 @@ function useSave(leadId: string): SaveFn {
     }
     const r = await leadRpc(name, { _lead_id: leadId, ...args });
     /* A double-submitted call outcome is ONE call (migration 20261007105000): the server answers ok + duplicate. */
-    if (r.ok) { toast({ title: r.duplicate === true ? 'Already logged a moment ago — not recorded twice' : okText }); notifyLeadChanged(leadId, undefined, patch); }
+    /* An autosave passes no words: its small Saved line is the confirmation. */
+    if (r.ok) { if (okText || r.duplicate === true) toast({ title: r.duplicate === true ? 'Already logged a moment ago — not recorded twice' : okText }); notifyLeadChanged(leadId, undefined, patch); }
     else {
       if (patch) { qc.setQueryData(key, before ?? null); notifyLeadChanged(leadId); } // everyone re-reads the true row
       toast({ title: 'Not saved', description: refusalText(r.error), variant: 'destructive' });
@@ -197,25 +199,30 @@ export function ProspectProfilePanel({ leadId }: { leadId: string }) {
   const lead = crm.data;
   const [editing, setEditing] = useState(false);
   const [f, setF] = useState({ services: '', areas: '', address: '', website: '' });
-  /* Unsaved only when a field differs from what was opened (no prompt for an editor opened and left alone). */
-  const draftId = useId();
-  useUnsavedDraft(`profile-${draftId}`, editing && !!lead && (
-    f.services !== (lead.services_included ?? []).join(', ') || f.areas !== (lead.service_areas ?? []).join(', ')
-    || f.address !== (lead.address ?? '') || f.website !== (lead.website ?? '')));
+  /* AUTOSAVE (2026-11-03): one RPC holds all four, so one slot holds all four. It saves as they type; lead_set_profile keeps one History line for
+     the edit, not one per pause. What has not reached the server survives a closed tab. */
+  const auto = useAutosaveFields({
+    save: async (_k, json) => {
+      const next = JSON.parse(json) as typeof f;
+      const v = { services: splitLabels(next.services), areas: splitLabels(next.areas), address: next.address.trim(), website: next.website.trim() };
+      const r = await save('lead_set_profile', { _services: v.services, _areas: v.areas, _address: v.address, _website: v.website }, '', {
+        services_included: v.services.length ? v.services : null, service_areas: v.areas.length ? v.areas : null, address: v.address || null, website: v.website || null,
+      });
+      if (!r.ok) throw Object.assign(new Error(r.error ?? 'not_saved'), { status: 400 });
+    },
+    storageKey: `profile:${leadId}`,
+    onRestore: (left) => { try { setF(JSON.parse(left.all) as typeof f); setEditing(true); } catch { /* unreadable: nothing to bring back */ } },
+  });
+  const edit = (patch: Partial<typeof f>) => { const next = { ...f, ...patch }; setF(next); auto.set('all', JSON.stringify(next)); };
+  const leaveField = () => auto.flush('all');
   if (!lead) return null;
   const services = lead.services_included ?? [];
   const areas = lead.service_areas ?? [];
   const start = () => {
-    setF({ services: services.join(', '), areas: areas.join(', '), address: lead.address ?? '', website: lead.website ?? '' });
+    const opened = { services: services.join(', '), areas: areas.join(', '), address: lead.address ?? '', website: lead.website ?? '' };
+    setF(opened);
+    auto.baseline('all', JSON.stringify(opened));
     setEditing(true);
-  };
-  const submit = async () => {
-    const next = { services: splitLabels(f.services), areas: splitLabels(f.areas), address: f.address.trim(), website: f.website.trim() };
-    const r = await save('lead_set_profile', { _services: next.services, _areas: next.areas, _address: next.address, _website: next.website }, 'Profile saved', {
-      services_included: next.services.length ? next.services : null, service_areas: next.areas.length ? next.areas : null,
-      address: next.address || null, website: next.website || null,
-    });
-    if (r.ok) setEditing(false);
   };
   const none = <span className="italic text-muted-foreground/60">Not recorded yet</span>;
   return (
@@ -232,23 +239,23 @@ export function ProspectProfilePanel({ leadId }: { leadId: string }) {
       ) : (
         <div className="grid gap-2">
           <label className="text-[11px] text-muted-foreground">Main services they genuinely offer (comma separated)
-            <Textarea rows={2} className="mt-1 resize-none text-sm" value={f.services} onChange={(e) => setF((p) => ({ ...p, services: e.target.value }))} placeholder="e.g. boiler repair, bathroom fitting" />
+            <Textarea rows={2} className="mt-1 resize-none text-sm" value={f.services} onBlur={leaveField} onChange={(e) => edit({ services: e.target.value })} placeholder="e.g. boiler repair, bathroom fitting" />
           </label>
           <label className="text-[11px] text-muted-foreground">Towns / areas they genuinely serve (comma separated)
-            <Input className="mt-1 h-9 text-sm" value={f.areas} onChange={(e) => setF((p) => ({ ...p, areas: e.target.value }))} placeholder="e.g. Wakefield, Ossett, Horbury" />
+            <Input className="mt-1 h-9 text-sm" value={f.areas} onBlur={leaveField} onChange={(e) => edit({ areas: e.target.value })} placeholder="e.g. Wakefield, Ossett, Horbury" />
           </label>
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="text-[11px] text-muted-foreground">Address
-              <Input className="mt-1 h-9 text-sm" value={f.address} onChange={(e) => setF((p) => ({ ...p, address: e.target.value }))} />
+              <Input className="mt-1 h-9 text-sm" value={f.address} onBlur={leaveField} onChange={(e) => edit({ address: e.target.value })} />
             </label>
             <label className="text-[11px] text-muted-foreground">Website
-              <Input className="mt-1 h-9 text-sm" value={f.website} onChange={(e) => setF((p) => ({ ...p, website: e.target.value }))} placeholder="example.co.uk" />
+              <Input className="mt-1 h-9 text-sm" value={f.website} onBlur={leaveField} onChange={(e) => edit({ website: e.target.value })} placeholder="example.co.uk" />
             </label>
           </div>
           <p className="text-[11px] text-muted-foreground">Only what you actually know. The AI check builds its questions from these, and they go to Paul if the client signs up.</p>
-          <div className="flex justify-end gap-2">
-            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setEditing(false)}>Cancel</Button>
-            <Button size="sm" className="h-8 text-xs" onClick={() => void submit()}>Save</Button>
+          <div className="flex items-center justify-between gap-2">
+            <AutosaveIndicator status={auto.status} />
+            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setEditing(false)}>Done</Button>
           </div>
         </div>
       )}
@@ -393,7 +400,7 @@ export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved
 
       <LeadCampaign lead={lead} save={save} reached={reachedInConversation(activity.data)} />
 
-      <InternalNote save={save} />
+      <InternalNote leadId={leadId} save={save} />
 
       {/* Folded to its summary (declutter pass 2): who controls the site and domain.
           ⛔ ONE NEXT ACTION (2026-10-02): the "Call booked for" time box that lived here was a SECOND editor of the
@@ -518,20 +525,30 @@ function LeadCampaign({ lead, save, reached }: { lead: CrmRow; save: SaveFn; rea
 /** The Call booked section's folded line — the one rule in src/lib/workspaceHeader.ts (no time when the Next Action bar shows it). */
 const callBookedSummary = (lead: CrmRow) => callBookedSummaryOf(lead, Date.now(), { websiteControl: WEBSITE_CONTROL_OPTIONS, meetingWhen });
 
-function InternalNote({ save }: { save: SaveFn }) {
+function InternalNote({ leadId, save }: { leadId: string; save: SaveFn }) {
   const [note, setNote] = useState('');
-  useUnsavedDraft(`internal-note-${useId()}`, note.trim() !== '');
+  const [inBox, setInBox] = useState(false);
+  /* AUTOSAVE (2026-11-03): saves as they type, and lead_note_draft keeps it as ONE row. Leaving the box finishes the note, and the next one starts a new row. */
+  const noteId = useRef<string | null>(null);
+  const auto = useAutosaveFields({
+    save: async (_k, text) => {
+      const r = await save('lead_note_draft', { _note_id: noteId.current, _body: text }, '');
+      if (!r.ok) throw Object.assign(new Error(r.error ?? 'not_saved'), { status: 400 });
+      noteId.current = (r.id as string | null | undefined) ?? null;
+    },
+    storageKey: `internal-note:${leadId}`,
+    onRestore: (left) => { if (typeof left.note === 'string') setNote(left.note); },
+  });
+  useEffect(() => {
+    if (inBox || !note.trim() || auto.status !== 'saved' || auto.isDirty('note')) return;
+    setNote(''); noteId.current = null; auto.baseline('note', '');
+  }, [inBox, note, auto.status]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     /* Quiet until used (declutter pass, 2026-10-01): one line to type in; it grows while there is a note. */
     <section className={CARD}>
       <div className="mb-2 flex items-center gap-1.5"><Lock className="h-3 w-3" /><span className={LABEL}>Internal note</span><span className="text-[10px] uppercase tracking-wide text-amber-500">never sent</span></div>
-      <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={note ? 2 : 1} className="min-h-[36px] resize-none text-xs" placeholder="e.g. agency runs the site, call again next month" />
-      <div className={cn('mt-2 flex justify-end', !note.trim() && 'hidden')}>
-        <Button size="sm" className="h-8 text-xs" disabled={!note.trim()} onClick={async () => {
-          const r = await save('lead_add_note', { _body: note }, 'Note added');
-          if (r.ok) setNote('');
-        }}>Add note</Button>
-      </div>
+      <Textarea value={note} onChange={(e) => { setNote(e.target.value); auto.set('note', e.target.value); }} onFocus={() => setInBox(true)} onBlur={() => { setInBox(false); auto.flush('note'); }} rows={note ? 2 : 1} className="min-h-[36px] resize-none text-xs" placeholder="Who decides? Anything you promised? Best way to reach them?" data-testid="internal-note" />
+      <p className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground"><AutosaveIndicator status={auto.status} /><span>Paul sees it when the client pays.</span></p>
     </section>
   );
 }

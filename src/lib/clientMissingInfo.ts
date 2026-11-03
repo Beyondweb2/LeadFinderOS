@@ -34,7 +34,7 @@ export const MISSING_INFO_KEYS: readonly HandoffKey[] = [
  *  (services_included / service_areas / website / website_control) — the same lead fields the checklist
  *  already accepts "from Sales". Domain authority, Google access and the client's own form are the
  *  CLIENT'S answers only (the domain rule: only the client's onboarding can satisfy it). */
-export const SELLER_ANSWERABLE_KEYS: ReadonlySet<HandoffKey> = new Set<HandoffKey>(['sales_handoff', 'services', 'service_areas', 'website', 'website_access']);
+export const SELLER_ANSWERABLE_KEYS: ReadonlySet<HandoffKey> = new Set<HandoffKey>(['services', 'service_areas', 'website', 'website_access']);
 
 /** What the CLIENT can answer: everything except the salesperson's own handoff and the business name. */
 const CLIENT_ANSWERABLE_KEYS: ReadonlySet<HandoffKey> = new Set<HandoffKey>(['contact', 'services', 'service_areas', 'website', 'website_access', 'gbp_access', 'domain', 'onboarding']);

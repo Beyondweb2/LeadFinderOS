@@ -32,7 +32,6 @@ import { onboardingDoneHtml, onboardingFormHtml, onboardingUnavailableHtml } fro
 import { cleanFacts, whatsappCandidates, whatsappReviewNotes, worthReading } from '../src/lib/whatsappClientFacts.ts';
 import { intakeCandidates, mergeClientProfile } from '../src/lib/clientIntake.ts';
 import { createElement } from 'react';
-import { SalesHandoffForm } from '../src/components/SalesHandoffForm.tsx';
 
 let f = 0;
 const ok = (c: unknown, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
@@ -210,8 +209,6 @@ console.log('\n── HANDOFF: lightweight, filled from the call ──');
   ok(handoffKnownLines(pre.fields).map((l) => l.key).join() === 'work_type,site_situation,client_wants', 'shown as "Already known"');
   ok(HANDOFF_QUESTIONS.filter((q) => q.asked).map((q) => q.key).join() === 'decision_maker_name,decision_maker_role,promised,preferred_contact,notes_for_paul', 'asked: only what the rep uniquely learned');
   ok(cleanHandoff({ preferred_contact: 'pigeon' }).preferred_contact === undefined && cleanHandoff({ preferred_contact: 'phone' }).preferred_contact === 'phone', 'preferred contact is an allowlist');
-  const html = renderToStaticMarkup(createElement(SalesHandoffForm, { fields: pre.fields, prefilled: pre.prefilled, onSave: async () => true, onSend: async () => true } as never));
-  ok(/Already known/.test(html) && /data-testid="send-to-paul"/.test(html) && !/What does the client want\?/.test(html.replace(/Already known[\s\S]*?<\/dl>/, '')), 'the form: "Already known", then Send to Paul; the auto answers are not asked as questions');
 }
 
 console.log('\n── ONBOARDING: only what is missing, for their plan ──');

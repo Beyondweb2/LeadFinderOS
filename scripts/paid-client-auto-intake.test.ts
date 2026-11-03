@@ -33,7 +33,6 @@ import { isIntakeCrawlRequest, resolveCrawlMode } from "../src/lib/fullCrawl.ts"
 import { HANDOFF_SEND_REFUSAL_TEXT, handoffSendRefusal, handoffSentBody, handoffSentTitle } from "../src/lib/salesHandoff.ts";
 import { ACTIVITY_LABEL } from "../src/lib/salesCrm.ts";
 import type { KnownForItem } from "../src/lib/clientMissingInfo.ts";
-import { SalesHandoffForm } from "../src/components/SalesHandoffForm.tsx";
 
 let failures = 0;
 const ok = (c: unknown, label: string) => { if (!c) failures++; console.log(`${c ? "PASS" : "FAIL"} ${label}`); };
@@ -56,18 +55,8 @@ ok(handoffSentTitle("ABC Plumbing") === "NEW CLIENT HANDOFF · ABC Plumbing" && 
 ok(/^From Tom\. Awaiting payment/.test(handoffSentBody({ sellerName: "Tom", paid: false })) && /^From Tom\. Paid/.test(handoffSentBody({ sellerName: "Tom", paid: true })), "…from <salesperson>, and Awaiting payment before they pay");
 
 /* ═══ 2. SEND TO PAUL — the form's final state ═════════════════════════════════════════════════════ */
-console.log("\n── SEND TO PAUL: the form ──");
-const noop = async () => true;
-const formHtml = (props: Record<string, unknown>) => renderToStaticMarkup(createElement(SalesHandoffForm, { prefilled: [], leadId: "lead-1", onSaveField: noop, ...props } as never));
-const complete = formHtml({ fields: fullHandoff, onSend: noop });
-ok(/Ready to send/.test(complete) && /Send to Paul/.test(complete) && !/Save without sending/.test(complete), "complete → READY TO SEND + Send to Paul; there is no Save button, every answer saves itself (2026-11-02)");
-ok(!/>Save handoff</.test(complete), "…and the primary action is no longer 'Save handoff'");
-const partial = formHtml({ fields: { ...fullHandoff, why_bought: "" }, onSend: noop });
-ok(/data-testid="send-to-paul"/.test(partial) && !/required answer/.test(partial), "partial → still Send to Paul (no required answers since 2026-10-07)");
-const sentHtml = formHtml({ fields: fullHandoff, onSend: noop, sent: { at: "2026-10-06T10:00:00Z", by: null, changed_since: false } });
-ok(/Sent to Paul/.test(sentHtml) && !/Save changes/.test(sentHtml) && !/data-testid="send-to-paul"/.test(sentHtml), "sent → 'Sent to Paul · <time>', later edits save themselves (no second send)");
-const paulsPage = formHtml({ fields: fullHandoff });
-ok(!/Send to Paul/.test(paulsPage) && !/Save handoff/.test(paulsPage), "Paul's own page (no onSend) never shows Send to Paul, and has no Save button");
+console.log("\n── SEND TO PAUL: the form is gone (Paul, 2026-11-03) ──");
+ok(!fs.existsSync(new URL("../src/components/SalesHandoffForm.tsx", import.meta.url)), "no handover form; the server keeps reading what was already sent");
 
 /* ═══ 3. SEND TO PAUL — the server ═════════════════════════════════════════════════════════════════ */
 console.log("\n── SEND TO PAUL: fn quick-close ──");
@@ -306,9 +295,7 @@ console.log("\n── QUICK CLOSE: THE LOOK ──");
   ok(/className=\{cn\('min-w-0', PANEL, EDGE\.blue\)\} data-testid="qc-route-terms"/.test(dlg), "the Build / Optimise card is a dashboard surface with a thin accent edge (no coloured wash)");
   ok(/EMPHASIS_TEXT = 'text-yellow-500/.test(dlg) && /ShieldCheck className=\{cn\('h-4 w-4 shrink-0', EMPHASIS_TEXT\)\}/.test(dlg), "Findable yellow is used for emphasis (the guarantee)");
   ok(/SUCCESS_CHIP = 'bg-emerald-500/.test(dlg), "green is kept for genuine success (paid, link ready, sent)");
-  ok(/onSend=\{sendToPaul\}/.test(dlg) && /mode: 'send_to_paul'/.test(dlg), "the Close tab's handoff ends with Send to Paul");
-  const form = strip(read("src/components/SalesHandoffForm.tsx"));
-  ok(!/teal-|cyan-|emerald-500 bg-emerald/.test(form) && /border-blue-500 bg-blue-500\/10/.test(form), "the handoff form's choices are blue, not emerald");
+  ok(!/send_to_paul|SalesHandoffForm/.test(dlg), "the Close tab has no handover step");
 }
 
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nall passed");

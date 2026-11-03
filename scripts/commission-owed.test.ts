@@ -250,9 +250,9 @@ ok(salePlanParts('complete').words === 'Complete · monthly' && salePlanParts('f
 ok(salePlanParts(null).words === 'Old plan' && salePlanParts('legacy_twelve').option === 'old', 'blank is the old plan');
 
 console.log('── 10. HANDOFF COMPLETE ──');
-ok(closeInfoMissing({ handoff: { decision_maker_name: 'Sam' }, manager: 'owner', agencyContract: null, plan: 'complete' }).length === 0, 'an owner-run site needs no agency contract');
-ok(closeInfoMissing({ handoff: { decision_maker_name: 'Sam' }, manager: 'agency', agencyContract: null, plan: 'complete' }).join() === 'agency contract', 'an agency-run site does');
-ok(closeInfoMissing({ handoff: null, manager: null, agencyContract: null, plan: null }).join() === 'decision maker,who runs the site,plan', 'everything missing is named');
+ok(closeInfoMissing({ contactName: 'Sam', manager: 'owner', agencyContract: null, plan: 'complete' }).length === 0, 'an owner-run site needs no agency contract');
+ok(closeInfoMissing({ contactName: 'Sam', manager: 'agency', agencyContract: null, plan: 'complete' }).join() === 'agency contract', 'an agency-run site does');
+ok(closeInfoMissing({ contactName: null, manager: null, agencyContract: null, plan: null }).join() === 'contact name,who runs the site,plan', 'everything missing is named');
 
 console.log('── 11. SCOPE AND WIRING ──');
 {

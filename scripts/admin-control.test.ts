@@ -31,7 +31,7 @@ const h = handoffClients(all, NOW).map((c) => c.id);
 ok(["ready", "waitClient", "lateHandoff", "freshHandoff", "newBuild"].every((id) => h.includes(id)), "handoffs: every pre-delivery client, plus anything sold in the last two weeks");
 ok(!h.includes("oldBuild") && !h.includes("oldWaiting") && !h.includes("refunded"), "…never an older in-delivery client or an ended one");
 ok(h.indexOf("ready") < h.indexOf("waitClient") && h.indexOf("lateHandoff") < h.indexOf("waitClient"), "Paul's own next steps sort first");
-ok(handoffNext(lateHandoff, NOW).mine && /Chase Finn/.test(handoffNext(lateHandoff, NOW).label), "a handoff left too long becomes Paul's: chase the seller");
+ok(handoffNext(lateHandoff, NOW).mine && /Ask Finn for the missing details/.test(handoffNext(lateHandoff, NOW).label), "details missing too long becomes Paul's: ask the seller");
 ok(!handoffNext(freshHandoff, NOW).mine, "a handoff paid today is still the seller's to finish");
 
 console.log("\n── what needs you ──");

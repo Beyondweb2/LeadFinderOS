@@ -1,4 +1,4 @@
-import { useId, useState, type ComponentType, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode } from 'react';
 import { CalendarClock, Check, ChevronDown, ClipboardPen, Loader2, MessageSquarePlus, Pencil, PhoneMissed, PhoneOff, PhoneForwarded, Plus, Send, Star, ThumbsDown, Voicemail, X } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { DialogHero, LoadState } from '@/components/operator/ui';
@@ -10,6 +10,7 @@ import { NextActionForm, type NextActionPreset } from '@/components/NextActionFo
 import { SalesStatePill } from '@/components/SalesStatePill';
 import { QuickCloseButton } from '@/components/QuickCloseDialog';
 import { useLeadCrmRow, useLeadWork, type LoggedOutcome, type OutcomeResultLine } from '@/components/LeadCrmPanel';
+import { leadRpc } from '@/lib/leadRpc';
 import { askLostReason } from '@/lib/lostReasonAsk';
 import { LOST_REASON_UNRECORDED, lostReasonLabel } from '@/lib/lostReason';
 import { CONTACT_METHODS, contactMethodLabel } from '@/lib/contactMethods';
@@ -154,6 +155,10 @@ export function LeadCallFlow({ leadId, businessName, logOpen, onLogOpenChange, n
   /* The note outlives the window (it lives here, not in the window), so closing the window keeps it and
      leaving the lead with it typed asks first — the workspace's one draft guard. */
   useUnsavedDraft(`log-outcome-note-${useId()}`, note.trim() !== '');
+  /* AUTOSAVE (2026-11-03): leaving the lead with a note typed and no outcome tapped keeps it as an internal note, so nothing typed is lost. */
+  const unlogged = useRef('');
+  unlogged.current = note.trim();
+  useEffect(() => () => { const text = unlogged.current; if (text) void leadRpc('lead_add_note', { _lead_id: leadId, _body: text }); }, [leadId]);
 
   const recordedBySend = channelRecordedBySend(channel);
   const paid = isPaidLead(lead);

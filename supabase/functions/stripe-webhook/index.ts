@@ -25,6 +25,7 @@ import {
 } from "../_shared/whatsapp-send.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
 import { leadForPayment, recordLedger, stripeIdOf } from "../_shared/payment-ledger.ts";
+import { invoiceRefs } from "../../../src/lib/commissionReconcile.ts";
 import { quickCloseHandoffLines } from "../../../src/lib/quickClose.ts";
 import { recordCheckoutAcceptance } from "../_shared/client-agreement.ts";
 import { appendTermsEvent } from "../_shared/client-terms.ts";
@@ -212,7 +213,6 @@ async function paymentHandoff(service: any, leadId: string | null, onboardingId:
       const origin = (Deno.env.get("FINDABLE_SITE_ORIGIN") ?? "https://findable.live").replace(/\/$/, "");
       setupLines = newClientSetupLines({
         packageName, salesperson: soldBy, amountGbp, website, siteManagement, services,
-        handoff: { applies: setup.handoffApplies, complete: setup.readiness.items.some((i) => i.key === "sales_handoff" && i.ok && !i.notNeeded) },
         readiness: setup.readiness, stage: setup.stage,
         clientLink: operatorAppUrl("/paid-clients/" + leadId),
         setupLink: ob?.id ? origin + "/onboarding/?q2=" + String(ob.id) + "&lead=" + leadId : null,
@@ -1657,7 +1657,8 @@ Deno.serve(async (req) => {
          stripe_subscription_id. See findableLeadForSubscription. */
       case "invoice.paid": {
         const inv = event.data.object as Stripe.Invoice;
-        const subId = idFrom((inv as { subscription?: unknown }).subscription);
+        const refs = invoiceRefs(inv);
+        const subId = refs.subscription;
         /* ⛔ ONLY SUBSCRIPTION INVOICES. A one-off Findable payment produces no subscription, and
            the FIRST invoice of a new subscription is also handled by checkout.session.completed -
            writing "active" twice is harmless and idempotent, which is why this needs no dedupe. */
@@ -1676,8 +1677,8 @@ Deno.serve(async (req) => {
             await recordLedger(service, {
               lead_id: leadId, kind: "recurring", amount_gbp: paidMinor / 100, currency: inv.currency,
               occurred_at: new Date(Number(paidAt) * 1000).toISOString(), stripe_object_id: inv.id,
-              stripe_invoice_id: inv.id, stripe_payment_intent_id: stripeIdOf((inv as { payment_intent?: unknown }).payment_intent),
-              stripe_charge_id: stripeIdOf((inv as { charge?: unknown }).charge), stripe_customer_id: stripeIdOf(inv.customer),
+              stripe_invoice_id: inv.id, stripe_payment_intent_id: refs.paymentIntent,
+              stripe_charge_id: refs.charge, stripe_customer_id: stripeIdOf(inv.customer),
               stripe_event_id: event.id, note: `subscription ${subId}`,
             });
           }
@@ -1695,7 +1696,7 @@ Deno.serve(async (req) => {
       }
       case "invoice.payment_failed": {
         const inv = event.data.object as Stripe.Invoice;
-        const subId = idFrom((inv as { subscription?: unknown }).subscription);
+        const subId = invoiceRefs(inv).subscription;
         if (!subId) break;
         const leadId = await findableLeadForSubscription(subId, null);
         if (!leadId) break;

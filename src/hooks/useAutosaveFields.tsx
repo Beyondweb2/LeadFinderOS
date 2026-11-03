@@ -14,12 +14,15 @@ const isRefusal = (e: unknown) => { const s = (e as { status?: unknown } | null)
 
 export function useAutosaveFields(opts: { save: (key: string, value: string) => Promise<void>; storageKey: string | null; onRestore?: (values: Record<string, string>) => void }) {
   const [, tick] = useReducer((n: number) => n + 1, 0);
-  const saveRef = useRef(opts.save);
-  saveRef.current = opts.save;
-  const queue = useMemo(() => new AutosaveQueue({
-    save: (k, v) => saveRef.current(k, v), isRefusal, storageKey: opts.storageKey ? `autosave:${opts.storageKey}` : null, storage: storageOf(), onChange: tick,
+  /* ⛔ One save per queue: a new key (a different lead) gets a new queue, and the old queue's last flush still writes to its own lead. */
+  const { queue, latest } = useMemo(() => {
+    const held = { save: opts.save };
+    return { latest: held, queue: new AutosaveQueue({
+      save: (k, v) => held.save(k, v), isRefusal, storageKey: opts.storageKey ? `autosave:${opts.storageKey}` : null, storage: storageOf(), onChange: tick,
+    }) };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- one queue per form instance and key
-  }), [opts.storageKey]);
+  }, [opts.storageKey]);
+  latest.save = opts.save;
   const restored = useRef(false);
   useEffect(() => {
     if (restored.current) return;

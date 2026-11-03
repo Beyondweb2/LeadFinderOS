@@ -1,6 +1,6 @@
 /* 2026-10-17 tidy-ups: (1) no leftover Optimise option in the two admin forms; (2) the "declined" close state
    (still tied into a contract) is labelled in the sales next actions like the other close states. */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { WORK_TYPE_OPTIONS } from '../src/lib/salesHandoff.ts';
 import { QUICK_CLOSE_STATE_LABEL } from '../src/lib/quickClose.ts';
 
@@ -15,18 +15,8 @@ ok(/<option value="rebuild_existing">Rebuild existing site<\/option><option valu
 const hub = readFileSync('supabase/functions/paid-client-hub/index.ts', 'utf8');
 ok(!/website_route: text\(body\.website_route\) \|\| "optimise_existing"/.test(hub) && /\["rebuild_existing", "new_site"\]\.includes\(text\(body\.website_route\)\)/.test(hub), 'the server never writes optimise_existing for a new manual client');
 
-console.log('── 2. the sales handoff form on the paid client page ──');
-const form = readFileSync('src/components/SalesHandoffForm.tsx', 'utf8');
-const m = form.match(/const workOptions = WORK_TYPE_OPTIONS\.filter\((\(o\) => [^;]+)\);/);
-ok(!!m, 'the work-type options are one filter');
-// Drive the real filter: route unknown → no Optimise; route optimise / stored optimise → it stays readable.
-const filter = (route: 'build' | 'optimise' | null, stored: string | null) =>
-  // eslint-disable-next-line no-new-func
-  WORK_TYPE_OPTIONS.filter(new Function('route', 'fields', `return ${m![1]}`)(route, { work_type: stored }));
-ok(!filter(null, null).some((o) => o.value === 'optimise'), 'route not recorded: Optimise is NOT offered (it was)');
-ok(!filter('build', null).some((o) => o.value === 'optimise'), 'Build: not offered');
-ok(filter('optimise', null).some((o) => o.value === 'optimise') && filter(null, 'optimise').some((o) => o.value === 'optimise'), 'a client already on Optimise still reads it');
-ok(filter(null, null).length === 3, 'route not recorded: the three Build choices');
+console.log('── 2. the handoff form is gone (Paul, 2026-11-03) ──');
+ok(!existsSync('src/components/SalesHandoffForm.tsx'), 'no form left to offer Optimise');
 
 console.log('── 3. the declined state in the sales next actions ──');
 const ws = readFileSync('src/lib/salesWorkspace.ts', 'utf8');

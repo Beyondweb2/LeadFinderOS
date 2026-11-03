@@ -13,7 +13,7 @@ import { approvalDay } from "../../../src/lib/clientTimeline.ts";
 import { isServiceRoute } from "../../../src/lib/findableOffer.ts";
 import { loadAttributionHolds } from "./earnings.ts";
 import { payoutRuleForPaymentAt } from "../../../src/lib/commissionConfig.ts";
-import { salePlanFlagAtPayment } from "../../../src/lib/salePlan.ts";
+import { salePlanFlagAtPayment, salePlanFromCharge } from "../../../src/lib/salePlan.ts";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -31,7 +31,8 @@ export interface LedgerWrite {
   stripe_invoice_id?: string | null;
   stripe_customer_id?: string | null;
   stripe_event_id?: string | null;
-  source?: "webhook" | "backfill";
+  /** "reconcile": the daily Stripe check wrote it (fn commission-stripe-check). It may set a refund's amount down as well as up. */
+  source?: "webhook" | "backfill" | "reconcile";
   note?: string | null;
   /** An initial payment: the plan on Stripe's own session. It wins over what the salesperson picked. */
   stripe_plan?: string | null;
@@ -64,7 +65,7 @@ export async function recordLedger(service: Service, w: LedgerWrite): Promise<Le
         if (obErr) console.error("[payment-ledger] picked plan unreadable:", obErr.message);
         picked = ((ob ?? [])[0] as { payment_plan?: string | null } | undefined)?.payment_plan ?? null;
       }
-      saleBits = { sale_plan: w.stripe_plan ?? null, sale_plan_picked: picked, sale_plan_flag: salePlanFlagAtPayment({ stripePlan: w.stripe_plan, pickedPlan: picked, amountGbp: w.amount_gbp }) };
+      saleBits = { sale_plan: salePlanFromCharge({ metaPlan: w.stripe_plan, amountGbp: w.amount_gbp }), sale_plan_picked: picked, sale_plan_flag: salePlanFlagAtPayment({ stripePlan: w.stripe_plan, pickedPlan: picked, amountGbp: w.amount_gbp }) };
     }
     const row = {
       ...saleBits, payout_rule: payoutRuleForPaymentAt(w.occurred_at),
@@ -76,7 +77,7 @@ export async function recordLedger(service: Service, w: LedgerWrite): Promise<Le
       stripe_event_id: w.stripe_event_id ?? null, sold_by_user_id: soldBy, source: w.source ?? "webhook", note: w.note ?? null,
     };
     const { data: existing, error: readErr } = await service.from("payment_ledger")
-      .select("id, amount_gbp, status, lead_id").eq("kind", w.kind).eq("stripe_object_id", w.stripe_object_id).maybeSingle();
+      .select("id, amount_gbp, status, lead_id, stripe_payment_intent_id, stripe_charge_id, stripe_invoice_id, stripe_customer_id").eq("kind", w.kind).eq("stripe_object_id", w.stripe_object_id).maybeSingle();
     if (readErr) { await report(service, { step: "read", kind: w.kind, object: w.stripe_object_id, error: readErr.message }); return "failed"; }
     if (!existing) {
       const { error } = await service.from("payment_ledger").insert(row);
@@ -90,11 +91,14 @@ export async function recordLedger(service: Service, w: LedgerWrite): Promise<Le
       await report(service, { step: "insert", kind: w.kind, object: w.stripe_object_id, error: error.message });
       return "failed";
     }
-    const e = existing as { id: string; amount_gbp: number | string; status: string; lead_id: string | null };
+    const e = existing as { id: string; amount_gbp: number | string; status: string; lead_id: string | null; stripe_payment_intent_id: string | null; stripe_charge_id: string | null; stripe_invoice_id: string | null; stripe_customer_id: string | null };
     const patch: Record<string, unknown> = {};
-    if (w.kind === "refund" && row.amount_gbp > Number(e.amount_gbp)) patch.amount_gbp = row.amount_gbp;
+    const refundMoved = w.source === "reconcile" ? Math.abs(row.amount_gbp - Number(e.amount_gbp)) >= 0.005 : row.amount_gbp > Number(e.amount_gbp);
+    if (w.kind === "refund" && refundMoved) patch.amount_gbp = row.amount_gbp;
     if (w.kind === "chargeback" && row.status !== e.status) { patch.status = row.status; patch.amount_gbp = row.amount_gbp; }
     if (!e.lead_id && row.lead_id) { patch.lead_id = row.lead_id; patch.sold_by_user_id = soldBy; }
+    /* A blank Stripe id is filled, never replaced: it is what ties a later refund or dispute to this payment. */
+    for (const col of ["stripe_payment_intent_id", "stripe_charge_id", "stripe_invoice_id", "stripe_customer_id"] as const) if (!e[col] && row[col]) patch[col] = row[col];
     if (Object.keys(patch).length === 0) return "exists";
     const { error: upErr } = await service.from("payment_ledger").update(patch).eq("id", e.id);
     if (upErr) { await report(service, { step: "update", kind: w.kind, object: w.stripe_object_id, error: upErr.message }); return "failed"; }

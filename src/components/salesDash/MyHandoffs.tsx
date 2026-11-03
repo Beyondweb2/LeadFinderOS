@@ -6,16 +6,12 @@ import { Panel } from '@/components/salesDash/ui';
 import { invokeEdge } from '@/lib/edgeInvoke';
 import { QuickCloseDialog } from '@/components/QuickCloseDialog';
 
-/* ══ YOUR SALES THAT STILL OWE A HANDOFF (2026-10-02, docs/paid-client-automation.md) ═══════════════════
-   A paid client leaves the salesperson's Outreach and Inbox, so this is where they finish the handoff:
-   their OWN sales only (fn quick-close `my_handoffs`, sold_by_user_id), names and states only — never an
-   amount. Each row opens the same Quick Close screen, where the handoff stays editable after payment.
-   CLIENT INFO NEEDED (2026-10-05, client missing-info actions): a sale Paul has asked about is listed
-   first with what he asked for, even if the handoff itself is complete; the notification's link
-   (/sales-dashboard?handoff=<leadId>) opens that sale's screen directly.
-   Renders nothing when there is nothing owed. */
+/* ══ WHAT PAUL ASKED YOU FOR (2026-10-05; the handoff form it used to chase was removed 2026-11-03, docs/commission-owed.md) ═══════════
+   A paid client leaves the salesperson's Outreach and Inbox, so this is where a request from Paul reaches them. Their OWN sales only (fn
+   quick-close `my_handoffs`, sold_by_user_id), names only, never an amount. The notification's link (/sales-dashboard?handoff=<leadId>)
+   opens that sale's screen directly. Renders nothing when he has asked for nothing. */
 interface Sale {
-  id: string; business_name: string | null; paid_on: string; handoff_complete: boolean; missing: number; submitted: boolean;
+  id: string; business_name: string | null; paid_on: string;
   info_request?: { requested_at: string; items: string[] } | null;
 }
 const HANDOFF_PARAM = 'handoff';
@@ -35,13 +31,11 @@ export function MyHandoffs() {
     setOpen(linked);
     const next = new URLSearchParams(params); next.delete(HANDOFF_PARAM); setParams(next, { replace: true });
   }, [linked, params, setParams]);
-  const owed = (q.data?.sales ?? [])
-    .filter((s) => !!s.info_request || !s.handoff_complete || !s.submitted)
-    .sort((a, b) => Number(!!b.info_request) - Number(!!a.info_request));
+  const owed = (q.data?.sales ?? []).filter((s) => !!s.info_request);
   const dialog = open && <QuickCloseDialog leadId={open} open onOpenChange={(v) => { if (!v) { setOpen(null); void q.refetch(); } }} />;
   if (!owed.length) return dialog || null;
   return (
-    <Panel title="Finish the handoff" icon={ClipboardCheck} tone="amber" hint="Your paid sales still waiting on the handoff answers." className="ring-1 ring-amber-500/30">
+    <Panel title="Paul asked for details" icon={ClipboardCheck} tone="amber" hint="Your paid sales where Paul needs something you may know." className="ring-1 ring-amber-500/30">
       <ul className="space-y-1.5" data-testid="my-handoffs">
         {owed.map((s) => (
           <li key={s.id}>
@@ -49,7 +43,7 @@ export function MyHandoffs() {
               <span className="flex w-full min-w-0 items-center justify-between gap-2">
                 <span className="min-w-0 truncate font-medium">{s.business_name ?? 'A client'}</span>
                 <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-amber-700 dark:text-amber-300">
-                  {s.info_request ? 'CLIENT INFO NEEDED' : !s.handoff_complete ? (s.missing ? `${s.missing} answer${s.missing === 1 ? '' : 's'} to give` : 'Handoff not saved') : 'Ready to submit?'}<ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
+                  CLIENT INFO NEEDED<ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
                 </span>
               </span>
               {s.info_request && (
