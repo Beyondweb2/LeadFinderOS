@@ -142,7 +142,7 @@ const withHeader = { type: 'template', template: { name: 'video_template', langu
   ok(/\.\.\.\(args\.asFreeText \? \{ as_free_text: true \} : \{\}\)/.test(req), 'the one send request carries as_free_text only when asked');
 }
 
-/* ── 6. the Inbox: fill the composer, carry the marker, quick reply Send now ── */
+/* ── 6. the Inbox: fill the composer, carry the marker ── */
 {
   const s = read('src/pages/Inbox.tsx');
   ok(s.includes("const inWindowWa = !sms && win.open;"), 'in-window is WhatsApp only (a text has no 24-hour window)');
@@ -153,14 +153,9 @@ const withHeader = { type: 'template', template: { name: 'video_template', langu
     'the words come from the sender\'s own dry run, blanks refuse, and they land in the conversation they were asked for');
   ok(!fill.includes('doSend('), 'filling never sends');
   ok(s.includes("onSend={(bodyText) => doSend(false, bodyText, { marker: freeTextOf })}"), 'the composer\'s Send carries the marker');
-  const ds = s.slice(s.indexOf('const doSend = async'), s.indexOf('const quickReplyMenu'));
+  const ds = s.slice(s.indexOf('const doSend = async'), s.indexOf('/* ══ THE INBOX FILLS THE SCREEN'));
   ok(/const marker = !useTemplate && !sms && active\.leadId && opts\.marker\?\.key === sendKey \? opts\.marker : null;/.test(ds), 'the marker counts only for its own conversation, on WhatsApp, with a lead');
   ok(ds.includes('unresolvedTokens(body)') && ds.indexOf('unresolvedTokens(body)') < ds.indexOf('await send('), 'a message with a blank left is refused before anything is sent');
-  const qr = s.slice(s.indexOf('const quickReplyMenu'), s.indexOf('/* ══ THE INBOX FILLS THE SCREEN'));
-  ok(qr.includes('doSend(false, fillQuickReply(t.content), { keepDraft: true })'), 'quick reply Send now = the same doSend, keeping the half-typed draft');
-  ok(!qr.includes('marker'), 'a quick reply never carries a template marker (saved replies are unchanged)');
-  ok(qr.includes('disabled={!windowOpen || sending}') && qr.includes('{NO_REPLY_24H}') && s.includes("const NO_REPLY_24H = 'They haven’t replied in 24 hours';"), 'window closed: Send now is shown disabled with the reason');
-  ok(s.includes('{quickReplyMenu(false)}') && s.includes('{quickReplyMenu(true)}'), 'the quick reply menu shows in both window states');
 }
 
 /* ── 7. the cost notes say what Meta charges from 1 Oct 2026 ── */

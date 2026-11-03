@@ -109,7 +109,7 @@ console.log('9. the SMS inbox is the WhatsApp inbox twin');
     ok(new RegExp('\\b' + c + '\\b').test(s), `uses the same ${c} as the WhatsApp inbox`);
   }
   ok(/aria-label="Next action type"/.test(s) && /aria-label="Sort conversations"/.test(s) && /aria-label="Lead status"/.test(s), 'same filter bar (status, next action when/type, sort)');
-  ok(/aria-label="Send now"/.test(s) && /sms-queued-count/.test(s), 'same top-bar actions: queued count, Send now, New');
+  ok(/sms-queued-count/.test(s), 'same top-bar actions: queued count, New');
   ok(/\{!sms && \(win\.open \?/.test(s), 'no 24-hour window chip on SMS (the chip is WhatsApp-only)');
   const q = read('supabase/functions/process-sms-queue/index.ts');
   ok(/send_now !== true\) return json\(\{ ok: false, error: "forbidden" \}, 403\)/.test(q) && /who\.actor\.role !== "admin"/.test(q), 'Send now is admin-only on the server, and skips only the pacing wait');

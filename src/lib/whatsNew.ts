@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-03-inbox-simplify', date: '2026-11-03', title: 'A simpler Inbox reply area', audience: 'all',
+    body: 'The template picker is smaller. An eye icon on each template shows its full wording when you hover or tap it. Quick reply and the big Preview button are gone.',
+    report: {
+      added: ['An eye icon on every row of the template list and beside the template you picked. Hover it, tap it or tab to it to read the full wording.'],
+      changed: [],
+      removed: ['The Quick reply button in the reply area.', 'The big Preview button and the grey line of wording under the template picker.', 'Admin only: the Send now button at the top right of the Inbox. The queue keeps sending at its own pace.'],
+      effect: 'Less on screen while you reply. Queue template, Request a template, the 24-hour rules and every send check work exactly as before. To send a saved text, type it or use a template.',
+    } },
   { id: '2026-11-03-sales-page-wording', date: '2026-11-03', title: 'Clearer money words on your Sales page', audience: 'sales',
     body: 'Your payments is now the one place that says when you get paid. The list of every client payment is now called Client payments, and your sales show the plan they were sold on.',
     report: {

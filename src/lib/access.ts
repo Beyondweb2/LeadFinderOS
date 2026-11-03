@@ -127,7 +127,7 @@ export interface LeadPermissions {
   /** Paid-client and delivery data: payment, questionnaire, delivery cockpit, playbook, welcome pack,
    *  onboarding link, SEO scan, Mark Paid. Sales never RECEIVES those fields either (sales_leads). */
   clientDelivery: boolean;
-  /** Queue and automation settings: the queue panel, Send now, the first-reply rule, the follow-up
+  /** Queue and automation settings: the queue panel, the first-reply rule, the follow-up
    *  lanes, removing a lead from the queue. */
   queueControls: boolean;
   /** Assign / reassign / unassign an owner (assign_lead is admin-only in the database). */
