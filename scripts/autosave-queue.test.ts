@@ -131,6 +131,8 @@ console.log('── 7. NO SUBMIT ──');
   const profile = read('src/components/LeadCrmPanel.tsx');
   ok(!/>Save<\/Button>/.test(profile.slice(profile.indexOf('prospect-profile'), profile.indexOf('/* ── WORK:'))), 'no Save button on Services and areas');
   ok(!/Add note<\/Button>/.test(profile) && /onBlur=\{\(\) => void commit\(\)\}/.test(profile), 'an internal note saves when they leave the box');
+  const details = read('src/components/LeadDetailDialog.tsx');
+  ok(/onBlur=\{\(\) => \{ if \(!cancellingEdit\.current\) void saveField\(field\);/.test(details) && /onBlur=\{\(\) => \{ if \(notesDirty\) void handleSaveNotes\(\); \}\}/.test(details), 'the older lead window saves a contact field and the private note on leaving; Escape still throws an edit away');
   const close = read('src/components/QuickCloseDialog.tsx');
   ok(/function CorrectDetails/.test(close) && /<AutosaveIndicator status=\{auto\.status\} \/>/.test(close) && !/saveFixes/.test(close), 'Correct a detail saves itself, with the indicator');
   const fn = read('supabase/functions/quick-close/index.ts');

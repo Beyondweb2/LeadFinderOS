@@ -406,6 +406,8 @@ function LeadDetailBody({
     setEditingField(field);
     setEditValue(current ?? '');
   };
+  /* AUTOSAVE (2026-11-03): leaving a field saves it. Escape and the cross are the only ways to throw an edit away, so they must not save on the way out. */
+  const cancellingEdit = useRef(false);
   const cancelEditField = () => setEditingField(null);
   const saveField = async (field: ContactField) => {
     // Store raw-trimmed for ALL fields (no normalisation / E.164 / URL reformat) —
@@ -482,18 +484,19 @@ function LeadDetailBody({
                 <Input
                   value={editedName}
                   onChange={(e) => setEditedName(e.target.value)}
+                  onBlur={() => { if (!cancellingEdit.current) void handleSaveName(); cancellingEdit.current = false; }}
                   className="h-8 text-base font-semibold px-2 flex-1"
                   autoFocus
                   {...{ [ESCAPE_CANCELS_EDIT]: '' }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleSaveName();
-                    if (e.key === 'Escape') { setEditedName(lead.business_name); setEditingName(false); }
+                    if (e.key === 'Escape') { cancellingEdit.current = true; setEditedName(lead.business_name); setEditingName(false); }
                   }}
                 />
-                <button onClick={handleSaveName} className="h-7 w-7 flex items-center justify-center text-green-500 hover:bg-green-500/10 rounded">
+                <button onMouseDown={(e) => e.preventDefault()} onClick={handleSaveName} className="h-7 w-7 flex items-center justify-center text-green-500 hover:bg-green-500/10 rounded">
                   <Check className="h-4 w-4" />
                 </button>
-                <button onClick={() => { setEditedName(lead.business_name); setEditingName(false); }} className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:bg-muted/40 rounded">
+                <button onMouseDown={(e) => e.preventDefault()} onClick={() => { setEditedName(lead.business_name); setEditingName(false); }} className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:bg-muted/40 rounded">
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -728,18 +731,19 @@ function LeadDetailBody({
                               <Input
                                 value={editValue}
                                 onChange={(e) => setEditValue(e.target.value)}
+                                onBlur={() => { if (!cancellingEdit.current) void saveField(field); cancellingEdit.current = false; }}
                                 autoFocus
                                 className="h-7 flex-1 min-w-0 px-2 text-xs"
                                 {...{ [ESCAPE_CANCELS_EDIT]: '' }}
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter') saveField(field);
-                                  if (e.key === 'Escape') cancelEditField();
+                                  if (e.key === 'Escape') { cancellingEdit.current = true; cancelEditField(); }
                                 }}
                               />
-                              <button onClick={() => saveField(field)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-green-500 hover:bg-green-500/10" title="Save">
+                              <button onMouseDown={(e) => e.preventDefault()} onClick={() => saveField(field)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-green-500 hover:bg-green-500/10" title="Save">
                                 <Check className="h-3.5 w-3.5" />
                               </button>
-                              <button onClick={cancelEditField} className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted/40" title="Cancel">
+                              <button onMouseDown={(e) => e.preventDefault()} onClick={cancelEditField} className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted/40" title="Cancel">
                                 <X className="h-3.5 w-3.5" />
                               </button>
                             </>
@@ -866,14 +870,15 @@ function LeadDetailBody({
                       ref={notesRef}
                       value={notes}
                       onChange={(e) => { setNotes(e.target.value); setNotesDirty(true); }}
+                      onBlur={() => { if (notesDirty) void handleSaveNotes(); }}
                       rows={2}
                       className="resize-none text-xs border-border/50 min-h-[52px]"
                       placeholder="Add a private note..."
                       autoFocus
                     />
                     <div className="flex items-center justify-end gap-1.5">
-                      <Button size="sm" variant="ghost" className="h-6 text-[11px] text-muted-foreground" onClick={handleCancelNotes}>Cancel</Button>
-                      <Button size="sm" className="h-6 text-[11px] gap-1" onClick={handleSaveNotes}><Save className="h-2.5 w-2.5" /> Save</Button>
+                      <Button size="sm" variant="ghost" className="h-6 text-[11px] text-muted-foreground" onMouseDown={(e) => e.preventDefault()} onClick={handleCancelNotes}>Cancel</Button>
+                      <Button size="sm" className="h-6 text-[11px] gap-1" onMouseDown={(e) => e.preventDefault()} onClick={handleSaveNotes}><Save className="h-2.5 w-2.5" /> Save</Button>
                     </div>
                   </div>
                 ) : (
