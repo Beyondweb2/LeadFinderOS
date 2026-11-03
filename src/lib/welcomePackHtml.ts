@@ -1,7 +1,7 @@
 /* ⛔ EXPLICIT .ts ON EVERY RELATIVE IMPORT. This module is now reached from an EDGE FUNCTION
    (render-welcome-pack, via _shared/welcome-pack-render.ts), and Deno cannot resolve an
    extensionless specifier — CLAUDE.md §3. scripts/check-import-graph.mjs fences it. */
-import { FULL_PAY_HOSTING_INCLUDED_MONTHS, GUARANTEE_HEADLINE, MONTHLY_START_V7_WORDS, PAYMENT_PLAN_SPEC, V6_GUARANTEE_HEADLINE, V7_WINDOW_START_LINE, gbpWords, isPaymentPlan, planAfterWords,
+import { COMPLETE_UPFRONT_MONTHS, FULL_PAY_HOSTING_INCLUDED_MONTHS, GUARANTEE_HEADLINE, MONTHLY_START_V7_WORDS, PAYMENT_PLAN_SPEC, V6_GUARANTEE_HEADLINE, V7_WINDOW_START_LINE, completeUpfrontSavingGbp, gbpWords, isCompletePlan, isPaymentPlan, isV7Family, planAfterWords,
   planAgreementWords, planAgreementWordsV7, planTotalGbp, type PaymentPlan } from './paymentPlans.ts';
 import { renderReportHtml, esc, type AiAuditReportData } from './aiAuditReportHtml.ts';
 import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP,
@@ -552,7 +552,7 @@ export const AGREEMENT_KEY_POINTS: Record<'build' | 'optimise' | 'unknown', read
 export function agreementKeyPointsFor(a: { route?: 'build' | 'optimise' | null; version?: string | null; paymentPlan?: string | null }): readonly string[] {
   /* v6 (2026-10-29): the key points of the client's own payment plan (agreement v6 3.1, 4.3, 5.4, 8.6, 9.2).
      v7 (2026-10-30): a v7 signer (and every Complete client: Complete only exists on v7) gets v7's own key points. */
-  if (isV6Plan(a.paymentPlan)) return signedV7(a.version, a.paymentPlan) ? v7KeyPoints(a.paymentPlan) : v6KeyPoints(a.paymentPlan);
+  if (isV6Plan(a.paymentPlan)) return signedV7(a.version, a.paymentPlan) ? v7KeyPoints(a.paymentPlan, a.version) : v6KeyPoints(a.paymentPlan);
   const base = AGREEMENT_KEY_POINTS[a.route ?? 'unknown'];
   return (a.version === 'v4' || a.version === 'v5') && a.route ? [...base, endOfTermKeyPoint(a.route)] : base;
 }
@@ -580,9 +580,9 @@ function v6KeyPoints(p: PaymentPlan): readonly string[] {
 
 /* ── v7 (2026-10-30): TWO PLANS. Same rule as v6: the key points are the signed v7 agreement's own, never retyped. ── */
 /** Is this client on v7? The signed version says so; a Complete client is v7 by definition (Complete has no other version). */
-export const signedV7 = (version: string | null | undefined, p: unknown): boolean => version === 'v7' || p === 'complete';
-export function v7AgreementKeyPoints(): readonly string[] {
-  const points = agreementVersion('v7').keyPoints?.points ?? [];
+export const signedV7 = (version: string | null | undefined, p: unknown): boolean => isV7Family(version) || isCompletePlan(p);
+export function v7AgreementKeyPoints(version: 'v7' | 'v7.1' = 'v7'): readonly string[] {
+  const points = agreementVersion(version).keyPoints?.points ?? [];
   if (!points.length) throw new Error('welcomePack: agreement v7 has no key points');
   return points;
 }
@@ -592,9 +592,9 @@ export function v7GuaranteeWords(): string {
   if (!g) throw new Error('welcomePack: agreement v7 has no guarantee key point');
   return g;
 }
-function v7KeyPoints(p: PaymentPlan): readonly string[] {
-  /* Essential's pack never carries Complete's extras point; Complete's always does. */
-  const points = v7AgreementKeyPoints().filter((x) => p === 'complete' || !x.startsWith('Findable Complete also includes'));
+function v7KeyPoints(p: PaymentPlan, version: string | null | undefined): readonly string[] {
+  /* Essential's pack never carries Complete's extras point; Complete's always does. Complete paid up front only exists on v7.1. */
+  const points = v7AgreementKeyPoints(version === 'v7.1' || p === 'complete_upfront' ? 'v7.1' : 'v7').filter((x) => isCompletePlan(p) || !x.startsWith('Findable Complete also includes'));
   return [`Your plan: ${planAgreementWordsV7(p)}.`, ...points];
 }
 /** COMPLETE's extra scope, as "What you get" lines (agreement v7 2.8 to 2.11, Schedule 1 Complete column). */
@@ -608,6 +608,7 @@ function completeExtrasLis(): string {
 }
 /** Hosting while on the plan (v6 9.2): while paying; on Pay in full for the included months from go-live. */
 function v6HostingWords(p: PaymentPlan): string {
+  if (p === 'complete_upfront') return `hosting of your website for the ${COMPLETE_UPFRONT_MONTHS} months`;
   return p === 'full'
     ? `hosting of your website for ${FULL_PAY_HOSTING_INCLUDED_MONTHS} months from when it goes live`
     : 'hosting of your website while you are paying';
@@ -615,6 +616,7 @@ function v6HostingWords(p: PaymentPlan): string {
 function v6PaymentsLine(p: PaymentPlan, version: string | null = null): string {
   const s = PAYMENT_PLAN_SPEC[p];
   if (p === 'full') return `You paid ${gbpWords(s.firstGbp)} in full, one payment. Nothing more is owed for your plan. ${planAfterWords(p)}`;
+  if (p === 'complete_upfront') return `You paid ${gbpWords(s.firstGbp)} up front, one payment, for ${COMPLETE_UPFRONT_MONTHS} months, saving ${gbpWords(completeUpfrontSavingGbp())} against paying monthly. Nothing more is owed for your plan. ${planAfterWords(p)}`;
   return `Your ${gbpWords(s.firstGbp)} covers the measurement, the first round of work and the re-measure. ${gbpWords(s.monthlyGbp)} a month begins ${signedV7(version, p) ? MONTHLY_START_V7_WORDS : MONTHLY_START_V3_WORDS}, ${s.totalPayments} payments in total counting your first (${gbpWords(planTotalGbp(p))} in all). We will email you before it starts. ${planAfterWords(p)}`;
 }
 
@@ -747,7 +749,7 @@ function planPage1(name: string, totalPayments: number | null | undefined, amoun
                so no "new page every month" promise; hosting per 9.2. */
             ? `<li><b>During your plan.</b> Regular checks of your AI visibility and the updates the data says are most useful, plus ${v6HostingWords(v6)}.</li>`
             : '<li><b>Every month after that.</b> A new page, a check of your AI visibility, adjustments, and a short update.</li>'}
-          ${v6 === 'complete' ? completeExtrasLis() : ''}
+          ${isCompletePlan(v6) ? completeExtrasLis() : ''}
         </ul>
       </div>
 
@@ -931,7 +933,7 @@ function nextPage(totalPayments: number | null | undefined, remeasure: { weeks: 
           : 'The same frozen questions, the same AI tools, the same method, the same towns.')}
         ${step(4, 'Then', 'You get your before and after', 'Side by side, with every answer shown. If the number has not gone up, your guarantee applies.')}
         ${v6
-          ? step(5, 'During your plan', 'We keep improving', v6 === 'complete'
+          ? step(5, 'During your plan', 'We keep improving', isCompletePlan(v6)
             ? `A monthly AI visibility audit, the updates the data says are most useful, replies to your Google reviews, your Google Business Profile and directories kept up to date, small changes when you ask, plus ${v6HostingWords(v6)}.`
             : `We check your AI visibility regularly and make the updates the data says are most useful, plus ${v6HostingWords(v6)}. A short update tells you what changed.`)
           : step(5, 'Every month after', 'We keep building', `A new page each month, giving customers and AI another clear answer about what you do. We check your AI visibility monthly and adjust as we learn, plus ${upkeepPhrase(totalPayments, paymentPlan)}. A short update tells you what changed.`)}

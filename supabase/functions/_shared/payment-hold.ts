@@ -51,7 +51,9 @@ export async function verifyV3Checkout(service: Service, s: HoldSession, leadId:
   /* v7 (2026-10-30): a session CREATED on v6 (an Essential plan, before v7 shipped) that completes afterwards is still a
      v6 sale: it rests on its own v6 signature, which the gate below still re-checks in full. Only v6's own plans. */
   const v6Session = s.metadata?.agreement_version === "v6" && (plan === "full" || plan === "six" || plan === "twelve");
-  const version = v6Session ? "v6" : plan ? agreementVersionForPlan(plan) : "v5";
+  /* v7.1 (2026-11-03): the same for a session CREATED on v7 that completes after v7.1 shipped. v7 never sold the up-front plan. */
+  const v7Session = s.metadata?.agreement_version === "v7" && (plan === "complete" || plan === "full" || plan === "six" || plan === "twelve");
+  const version = v6Session ? "v6" : v7Session ? "v7" : plan ? agreementVersionForPlan(plan) : "v5";
   return webhookV3Verdict({
     metadata: s.metadata, acceptance, leadId, onboardingId, currentVersion: version,
     recomputedSha: acceptance ? await sha256Hex(acceptance.agreed_text) : null, expectedTerms: commercialTermsFor(version),

@@ -33,11 +33,12 @@ for (const bad of ['legacy_twelve', 'FULL', 'monthly', 6, true, {}]) {
 }
 
 console.log('── 2. dry run: the row → agreement version + first payment (what client-agreement / findable-checkout do) ──');
-const expect: Array<[PaymentPlan | null, 'v5' | 'v7', number, PaymentPlan]> = [
-  ['complete', 'v7', 99, 'complete'],
-  ['full', 'v7', 499, 'full'],
-  ['six', 'v7', 99, 'six'],
-  ['twelve', 'v7', 99, 'twelve'],
+const expect: Array<[PaymentPlan | null, 'v5' | 'v7.1', number, PaymentPlan]> = [
+  ['complete', 'v7.1', 99, 'complete'],
+  ['complete_upfront', 'v7.1', 999, 'complete_upfront'],
+  ['full', 'v7.1', 499, 'full'],
+  ['six', 'v7.1', 99, 'six'],
+  ['twelve', 'v7.1', 99, 'twelve'],
   [null, 'v5', 99, 'legacy_twelve'],   // the no-plan path: unchanged
 ];
 for (const [sent, version, gbp, planOnRow] of expect) {
@@ -50,9 +51,9 @@ for (const [sent, version, gbp, planOnRow] of expect) {
 
 console.log('── 3. the public plans list ──');
 const cat = publicPlanCatalogue(today);
-ok(cat.map((c) => c.plan).join() === 'complete,full,six,twelve', 'lists Complete then Essential\'s three, never the staff-only one');
+ok(cat.map((c) => c.plan).join() === 'complete,complete_upfront,full,six,twelve', 'lists Complete\'s two then Essential\'s three, never the staff-only one');
 ok(cat.every((c) => Object.keys(c).sort().join() === 'available,name,plan,product,recommended'), 'each entry is plan, name, product, recommended, available — nothing else (no prices, no ids)');
-ok(cat.find((c) => c.plan === 'twelve')?.available === false && cat.filter((c) => c.available).length === 3 && cat[0].recommended === true, 'today: 12 months not on sale, the other three are; Complete is recommended');
+ok(cat.find((c) => c.plan === 'twelve')?.available === false && cat.filter((c) => c.available).length === 4 && cat[0].recommended === true, 'today: 12 months not on sale, the other four are; Complete is recommended');
 ok(publicPlanCatalogue(withTwelve).every((c) => c.available), 'once the price is set: all three on sale');
 ok(!/price_|sk_|secret/i.test(JSON.stringify(publicPlanCatalogue(withTwelve))), 'no price id, key or secret in the answer');
 

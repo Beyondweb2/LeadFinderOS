@@ -22,7 +22,7 @@ import {
 import { LINK_READY_FALLBACK, type LinkRoute } from '@/lib/paymentLinkRoute';
 import { FINDABLE_SETUP_PRICE_GBP, SERVICE_ROUTE_NAME, isSaleableRoute, totalPaymentsFor, type ServiceRoute } from '@/lib/findableOffer';
 import { cn } from '@/lib/utils';
-import { COMPLETE_EXTRAS, ESSENTIAL_PAYMENT_PLANS, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, PLAN_PRODUCT_NAME, V7_WINDOW_START_LINE, gbpWords, guaranteeForPlan, planShortLine, type PaymentPlan } from '@/lib/paymentPlans';
+import { COMPLETE_EXTRAS, COMPLETE_PAYMENT_PLANS, COMPLETE_UPFRONT_MONTHS, ESSENTIAL_PAYMENT_PLANS, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, PLAN_PRODUCT_NAME, V7_WINDOW_START_LINE, completeUpfrontSavingGbp, gbpWords, guaranteeForPlan, planShortLine, planTotalGbp, type PaymentPlan } from '@/lib/paymentPlans';
 import { ClosePanel } from '@/components/ClosePanel';
 import { SmsLinkSend } from '@/components/SmsLinkSend';
 import { SalesHandoffForm } from '@/components/SalesHandoffForm';
@@ -142,27 +142,36 @@ const SHARE_WORDS: Record<QcLinkShare['channel'], string> = { copy: 'Copied', em
  *  recommended, neither framed as lesser; Essential carries its three ways to pay. One tap saves the plan, so the sign-up link the
  *  client receives is already the right one and they are never asked to choose a plan themselves. Every line is from paymentPlans.ts. */
 function PlanPicker({ chosen, busy, unavailable, onPick }: { chosen: PaymentPlan | null | undefined; busy: boolean; unavailable: Partial<Record<string, string>> | undefined; onPick: (p: PaymentPlan) => void }) {
-  const c = PAYMENT_PLAN_SPEC.complete;
-  const completeOff = unavailable?.complete ?? null;
+
   return (
     <div className="mt-3 space-y-2.5" data-testid="qc-plan-picker">
       <div className="rounded-xl bg-muted/30 p-2.5 text-sm ring-1 ring-inset ring-border/60" data-testid="qc-picker-guarantee">
         <p className="flex items-center gap-1.5 font-semibold"><ShieldCheck className={cn('h-4 w-4 shrink-0', EMPHASIS_TEXT)} />{QUICK_CLOSE_GUARANTEE_LINES[0]}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">{V7_WINDOW_START_LINE}</p>
       </div>
-      <div className="grid gap-2.5 sm:grid-cols-2">
-        <button type="button" disabled={busy || !!completeOff} onClick={() => onPick('complete')} data-testid="qc-plan-complete"
-          className={cn('flex flex-col items-start rounded-2xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50',
-            chosen === 'complete' ? PICKED : 'border-blue-500/50 bg-card hover:bg-muted/60')}>
+      <div className="grid gap-2.5">
+        <div className={cn('flex flex-col rounded-2xl border p-3', chosen && COMPLETE_PAYMENT_PLANS.includes(chosen) ? 'border-blue-500/70' : 'border-blue-500/50 bg-card')} data-testid="qc-plan-complete-card">
           <span className="flex flex-wrap items-center gap-1.5 text-base font-bold">{PLAN_PRODUCT_NAME.complete}<span className="rounded-full bg-yellow-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yellow-600 ring-1 ring-inset ring-yellow-500/40 dark:text-yellow-300">Recommended</span></span>
-          <span className="mt-1 text-sm font-semibold">{gbpWords(c.monthlyGbp)} a month · {c.totalPayments} payments</span>
           <span className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Included</span>
           <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-xs font-normal text-foreground/85">
             <li>Everything in {PLAN_PRODUCT_NAME.essential}</li>
             {COMPLETE_EXTRAS.map((x) => <li key={x}>{x}</li>)}
           </ul>
-          {completeOff && <span className="mt-1 text-xs font-normal text-muted-foreground">{completeOff}</span>}
-        </button>
+          <span className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">How do they want to pay?</span>
+          <div className="mt-1 space-y-1.5">
+            {COMPLETE_PAYMENT_PLANS.map((p) => {
+              const off = unavailable?.[p] ?? null;
+              return (
+                <button key={p} type="button" disabled={busy || !!off} onClick={() => onPick(p)} data-testid={p === 'complete' ? 'qc-plan-complete' : 'qc-plan-' + p}
+                  className={cn('flex w-full flex-col rounded-xl border px-3 py-2 text-left text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50',
+                    chosen === p ? PICKED : 'border-border/70 bg-card hover:border-blue-500/40 hover:bg-muted/60')}>
+                  {p === 'complete' ? `${gbpWords(PAYMENT_PLAN_SPEC.complete.monthlyGbp)} a month · ${PAYMENT_PLAN_SPEC.complete.totalPayments} payments` : `or pay up front, save ${gbpWords(completeUpfrontSavingGbp())}`}
+                  <span className="text-xs font-normal text-muted-foreground">{off ?? (p === 'complete' ? `${gbpWords(planTotalGbp('complete'))} in total` : `${gbpWords(PAYMENT_PLAN_SPEC.complete_upfront.firstGbp)} once, for ${COMPLETE_UPFRONT_MONTHS} months`)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <div className={cn('flex flex-col rounded-2xl border p-3', chosen && ESSENTIAL_PAYMENT_PLANS.includes(chosen) ? 'border-blue-500/70' : 'border-border/70 bg-card')} data-testid="qc-plan-essential">
           <span className="text-base font-bold">{PLAN_PRODUCT_NAME.essential}</span>
           <span className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Included</span>

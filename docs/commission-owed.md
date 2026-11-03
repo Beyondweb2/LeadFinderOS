@@ -50,6 +50,11 @@ amount is flagged on read (`monthly_differs`).
 An offset is never paid as a negative. It nets against that person's due money, and carries forward if bigger. A single line can be paid
 a little early (a warning says so). An offset cannot be marked on its own.
 
+**Complete paid up front (2026-11-03, `docs/two-plans.md`):** always 30% of the £999, £299.70, whatever its Sale Number (`COMMISSION_UPFRONT_RATE`), on the same
+payable date, no trailing. v7.1 stamps v7's terms, so the 7-day window holds. ⚠️ The one exception to "the stamped rate decides": the database stamps this sale like any
+other, because its place must count toward the seller's tier for other sales, so `payment_ledger.commission_rate` on the row shows the tier. The engine pays
+`commissionFixedRateForPlan` instead. Read the rate from `commissionLines`, never from that column.
+
 ## Autosave, no submit
 
 `src/lib/autosaveQueue.ts` (the rules) and `src/hooks/useAutosaveFields.tsx`. About 800ms after typing, at once on blur, before leaving.

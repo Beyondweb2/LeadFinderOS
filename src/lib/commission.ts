@@ -86,7 +86,7 @@
 import { isOptionBTerms, ukDayAtHourIso } from './clientTimeline.ts';
 import { FINDABLE_MONTHLY_GBP } from './findableOffer.ts';
 import { isAttributionHeld } from './saleAttribution.ts';
-import { COMMISSION_INITIAL_RATE, COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_COUNT_V3, COMMISSION_RECURRING_RATE, MONTHLY_TIERS, PAYOUT_RULE_PLAN_V1 } from './commissionConfig.ts';
+import { commissionFixedRateForPlan, COMMISSION_INITIAL_RATE, COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_COUNT_V3, COMMISSION_RECURRING_RATE, MONTHLY_TIERS, PAYOUT_RULE_PLAN_V1 } from './commissionConfig.ts';
 import { PAYMENT_PLAN_SPEC, isPaymentPlan } from './paymentPlans.ts';
 export { COMMISSION_INITIAL_RATE, COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_COUNT_V3, COMMISSION_RECURRING_RATE, MONTHLY_TIERS };
 
@@ -454,6 +454,9 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
           }
         }
         if (v3Excluded) { rate = 0; monthSeq = null; }
+        /* A plan with its own fixed rate (Complete paid up front): the place stands and still counts in the month, only this sale's rate differs. */
+        const fixedRate = commissionFixedRateForPlan(p.sale_plan);
+        if (fixedRate !== null && !testSale && !v3Excluded) rate = fixedRate;
         /* Plan rules: the stamped place and rate stand. A sale found to be a test before it became payable earns nothing. */
         const planExcluded = planRules && !testSale && v3ExcludedBeforeApproval(input.exclusionsOf?.get(leadId) ?? null, payableNow && payableOn ? ukDayAtHourIso(payableOn, 0) : null);
         if (planExcluded) { rate = 0; monthSeq = null; }

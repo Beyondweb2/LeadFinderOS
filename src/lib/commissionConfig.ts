@@ -14,6 +14,13 @@ export const MONTHLY_TIERS: readonly { upTo: number; rate: number }[] = [
 /** The flat rate a sale earned BEFORE the tiers. Applied only to a ledger row with no stamped rate. */
 export const COMMISSION_INITIAL_RATE = 0.30;
 
+/** Findable Complete paid up front always earns this on its first payment, whatever its Sale Number (Paul, 2026-11-03). The sale still
+ *  takes its place in the month, so it counts toward the tier of the seller's OTHER sales: the database stamps it as any other sale,
+ *  and the engine reads this rate instead of the stamped one. */
+export const COMMISSION_UPFRONT_RATE = 0.30;
+/** The first-payment rate a plan fixes regardless of the tiers, or null when the tiers decide. */
+export const commissionFixedRateForPlan = (plan: unknown): number | null => (plan === 'complete_upfront' ? COMMISSION_UPFRONT_RATE : null);
+
 /** Trailing commission: this share of each of the next COMMISSION_RECURRING_COUNT successful monthly payments. */
 export const COMMISSION_RECURRING_RATE = 0.20;
 export const COMMISSION_RECURRING_COUNT = 6;

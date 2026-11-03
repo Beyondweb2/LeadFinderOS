@@ -11,7 +11,7 @@
    ⚠️ EXPLICIT .ts ON EVERY RELATIVE IMPORT — reached from an edge function (client-agreement).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { afterTermSummaryWords } from './planTerms.ts';
-import { COMPLETE_SUMMARY, ESSENTIAL_SUMMARY, MONTHLY_START_V7_WORDS, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, PLAN_PRODUCT_NAME, gbpWords, planAfterWords, planFullName, planTotalGbp, type PaymentPlan } from './paymentPlans.ts';
+import { COMPLETE_SUMMARY, COMPLETE_UPFRONT_MONTHS, COMPLETE_UPFRONT_SUMMARY, ESSENTIAL_SUMMARY, MONTHLY_START_V7_WORDS, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, PLAN_PRODUCT_NAME, completeUpfrontSavingGbp, gbpWords, planAfterWords, planFullName, planTotalGbp, type PaymentPlan } from './paymentPlans.ts';
 import {
   FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS,
   SERVICE_ROUTE_NAME, totalPaymentsFor, type ServiceRoute,
@@ -60,10 +60,12 @@ export function signingDayWords(iso: string): string {
 export function planSummaryRowsForPlan(plan: PaymentPlan): PlanSummaryRow[] {
   const s = PAYMENT_PLAN_SPEC[plan];
   const rows: PlanSummaryRow[] = [
-    { key: 'plan', label: 'Your plan', value: plan === 'complete' ? `${PLAN_PRODUCT_NAME.complete}. ${COMPLETE_SUMMARY}` : plan === 'legacy_twelve' ? `${SERVICE_ROUTE_NAME.build}, ${PAYMENT_PLAN_NAME[plan].toLowerCase()}. ${PLAN_ONE_LINE.build}` : `${planFullName(plan)}. ${ESSENTIAL_SUMMARY}` },
+    { key: 'plan', label: 'Your plan', value: plan === 'complete' ? `${PLAN_PRODUCT_NAME.complete}. ${COMPLETE_SUMMARY}` : plan === 'complete_upfront' ? `${PAYMENT_PLAN_NAME[plan]}. ${COMPLETE_UPFRONT_SUMMARY}` : plan === 'legacy_twelve' ? `${SERVICE_ROUTE_NAME.build}, ${PAYMENT_PLAN_NAME[plan].toLowerCase()}. ${PLAN_ONE_LINE.build}` : `${planFullName(plan)}. ${ESSENTIAL_SUMMARY}` },
   ];
   if (plan === 'full') {
     rows.push({ key: 'today', label: 'Today', value: `${gbpWords(s.firstGbp)}, paid once. Nothing more to pay for the plan` });
+  } else if (plan === 'complete_upfront') {
+    rows.push({ key: 'today', label: 'Today', value: `${gbpWords(s.firstGbp)}, one payment, for ${COMPLETE_UPFRONT_MONTHS} months. Nothing more to pay, and you save ${gbpWords(completeUpfrontSavingGbp())} against paying monthly` });
   } else {
     rows.push(
       { key: 'today', label: 'Today', value: `${gbpWords(s.firstGbp)} initial payment (payment 1 of ${s.totalPayments})` },

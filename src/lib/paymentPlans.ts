@@ -1,9 +1,12 @@
 /* 🔴 THE PLANS (Paul, 2026-10-30: TWO PLANS) — the one place what we sell and how it is paid live.
 
-   TWO PLANS (docs/two-plans.md), signed on agreement v7 (clientAgreement.ts):
-     · FINDABLE COMPLETE (recommended, shown first) — plan id `complete`: FINDABLE_MONTHLY_GBP × COMPLETE_TOTAL_PAYMENTS,
-       monthly only (no pay in full). Everything in Essential, plus review replies, Google Business Profile, directories,
-       changes within reason (fair use) and monthly audits (COMPLETE_EXTRAS). Hosting included while paying.
+   TWO PLANS (docs/two-plans.md), signed on agreement v7.1 (clientAgreement.ts; v7 stays for those who signed it):
+     · FINDABLE COMPLETE (recommended, shown first), two ways to pay. Everything in Essential, plus review replies, Google
+       Business Profile, directories, changes within reason (fair use) and monthly audits (COMPLETE_EXTRAS).
+         complete          — FINDABLE_MONTHLY_GBP × COMPLETE_TOTAL_PAYMENTS. Hosting included while paying.
+         complete_upfront  — COMPLETE_UPFRONT_GBP once, for COMPLETE_UPFRONT_MONTHS months (Paul, 2026-11-03). Hosting included
+                             for those months. ⛔ PAID IN FULL ON DAY 1, BUT THE WEBSITE TRANSFERS AT THE END OF THE MONTHS
+                             (v7.1 8.4), never at payment: "one payment" does not mean "transfers now" (planTransfersAtPayment).
      · FINDABLE ESSENTIAL — the three ids below (`full`, `six`, `twelve`), prices and money timing unchanged from v6: an
        AI-optimised website plus a baseline audit and a four-week audit to measure the change. ⛔ Never "just the website".
    `planProduct(p)` says which plan a payment-plan id belongs to. Every Complete and Essential sale is route Build.
@@ -38,7 +41,9 @@ import { FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP
 export type PaymentPlan = typeof PAYMENT_PLAN_IDS[number];
 export const PAYMENT_PLANS: readonly PaymentPlan[] = PAYMENT_PLAN_IDS;
 /** The plans a client is offered, in the order they are shown: Complete first (recommended), then Essential's three. */
-export const CLIENT_PAYMENT_PLANS: readonly PaymentPlan[] = ['complete', 'full', 'six', 'twelve'];
+export const CLIENT_PAYMENT_PLANS: readonly PaymentPlan[] = ['complete', 'complete_upfront', 'full', 'six', 'twelve'];
+/** Complete's two ways to pay: monthly first (the default), then up front. */
+export const COMPLETE_PAYMENT_PLANS: readonly PaymentPlan[] = ['complete', 'complete_upfront'];
 /** Essential's three ways to pay (the v6 plans, unchanged). */
 export const ESSENTIAL_PAYMENT_PLANS: readonly PaymentPlan[] = ['full', 'six', 'twelve'];
 /** The plan a new close starts on (Paul, 2026-10-30: Complete is the default and recommended). */
@@ -51,10 +56,10 @@ export const STAFF_ONLY_PAYMENT_PLANS: readonly PaymentPlan[] = ['legacy_twelve'
 export type PlanProduct = 'complete' | 'essential';
 export const PLAN_PRODUCTS: readonly PlanProduct[] = ['complete', 'essential'];
 export const PLAN_PRODUCT_NAME: Record<PlanProduct, string> = { complete: 'Findable Complete', essential: 'Findable Essential' };
+export const isCompletePlan = (p: unknown): boolean => p === 'complete' || p === 'complete_upfront';
 /** Which plan a payment-plan id is. The old staff-only £99 × 12 is Build under v5, sold before the two plans: Essential's
  *  scope (it never included Complete's extras). */
-export function planProduct(p: PaymentPlan): PlanProduct { return p === 'complete' ? 'complete' : 'essential'; }
-export const isCompletePlan = (p: unknown): boolean => p === 'complete';
+export function planProduct(p: PaymentPlan): PlanProduct { return isCompletePlan(p) ? 'complete' : 'essential'; }
 /** What Essential is, in one line. ⛔ Never "just the website" and never framed as lesser. */
 export const ESSENTIAL_SUMMARY = 'An AI-optimised website, plus a baseline AI visibility audit and a four-week audit to measure the change.';
 /** What Complete adds on top of everything in Essential (the agreement's clause 2.8 and Schedule 1 say the same). */
@@ -65,9 +70,15 @@ export const COMPLETE_EXTRAS: readonly string[] = [
   'Changes to your website within reason (fair use: small edits, not rebuilds)',
   'A monthly AI visibility audit',
 ];
-export const COMPLETE_SUMMARY = `Everything in Essential, plus: ${COMPLETE_EXTRAS.map((x) => x.charAt(0).toLowerCase() + x.slice(1)).join('; ')}. Hosting is included while you are paying.`;
+const COMPLETE_SCOPE = `Everything in Essential, plus: ${COMPLETE_EXTRAS.map((x) => x.charAt(0).toLowerCase() + x.slice(1)).join('; ')}.`;
+export const COMPLETE_SUMMARY = `${COMPLETE_SCOPE} Hosting is included while you are paying.`;
 /** Complete: 12 monthly payments (the sign-up payment is payment 1). */
 export const COMPLETE_TOTAL_PAYMENTS = 12;
+/** Complete paid up front: one payment for the whole Plan Period. Charged inline at checkout, as Pay in full is. */
+export const COMPLETE_UPFRONT_GBP = 999;
+/** Complete paid up front: the Plan Period, counted from the date the payment cleared (v7.1 2.6). Hosting runs for all of it. */
+export const COMPLETE_UPFRONT_MONTHS = 12;
+export const COMPLETE_UPFRONT_SUMMARY = `${COMPLETE_SCOPE} Hosting is included for the ${COMPLETE_UPFRONT_MONTHS} months.`;
 
 /** Pay in full, once. */
 export const PAY_IN_FULL_GBP = 499;
@@ -88,6 +99,7 @@ export interface PaymentPlanSpec {
 
 export const PAYMENT_PLAN_SPEC: Record<PaymentPlan, PaymentPlanSpec> = {
   complete: { plan: 'complete', totalPayments: COMPLETE_TOTAL_PAYMENTS, firstGbp: FINDABLE_MONTHLY_GBP, monthlyGbp: FINDABLE_MONTHLY_GBP },
+  complete_upfront: { plan: 'complete_upfront', totalPayments: 1, firstGbp: COMPLETE_UPFRONT_GBP, monthlyGbp: 0 },
   full: { plan: 'full', totalPayments: 1, firstGbp: PAY_IN_FULL_GBP, monthlyGbp: 0 },
   six: { plan: 'six', totalPayments: 6, firstGbp: FINDABLE_SETUP_PRICE_GBP, monthlyGbp: FINDABLE_MONTHLY_GBP },
   twelve: { plan: 'twelve', totalPayments: 12, firstGbp: FINDABLE_SETUP_PRICE_GBP, monthlyGbp: REDUCED_MONTHLY_GBP },
@@ -96,6 +108,7 @@ export const PAYMENT_PLAN_SPEC: Record<PaymentPlan, PaymentPlanSpec> = {
 
 export const PAYMENT_PLAN_NAME: Record<PaymentPlan, string> = {
   complete: 'Findable Complete',
+  complete_upfront: 'Findable Complete, paid up front',
   full: 'Pay in full',
   six: '6 months',
   twelve: '12 months',
@@ -103,17 +116,20 @@ export const PAYMENT_PLAN_NAME: Record<PaymentPlan, string> = {
 };
 /** The plan with its way to pay, for a chip or a line: "Findable Complete" / "Findable Essential, 6 months". */
 export function planFullName(p: PaymentPlan): string {
-  if (p === 'complete' || p === 'legacy_twelve') return PAYMENT_PLAN_NAME[p];
+  if (isCompletePlan(p) || p === 'legacy_twelve') return PAYMENT_PLAN_NAME[p];
   return `${PLAN_PRODUCT_NAME.essential}, ${PAYMENT_PLAN_NAME[p].toLowerCase()}`;
 }
 
-/** The agreement a NEW signature for each plan is made on: the old plan stays on v5; Complete and Essential's three are v7
- *  (2026-10-30). v6 is archived: still readable and still binding for the clients who signed it, never signed again. */
-export function agreementVersionForPlan(p: PaymentPlan): 'v5' | 'v7' {
-  return p === 'legacy_twelve' ? 'v5' : 'v7';
+/** The agreement a NEW signature for each plan is made on: the old plan stays on v5; Complete and Essential are v7.1
+ *  (2026-11-03: v7 plus the up-front way to pay). v7 and v6 are archived: still readable and still binding for the clients who
+ *  signed them, never signed again. */
+export function agreementVersionForPlan(p: PaymentPlan): 'v5' | 'v7.1' {
+  return p === 'legacy_twelve' ? 'v5' : 'v7.1';
 }
+/** v7 and v7.1 have the same guarantee clock and commercial terms: only the ways to pay differ. Ask this, never `=== 'v7'`. */
+export const isV7Family = (version: unknown): boolean => version === 'v7' || version === 'v7.1';
 /** Versions that print the payment plan in Client Details (a signature on one is for ONE plan). */
-export const PLAN_PRINTING_VERSIONS: readonly string[] = ['v6', 'v7'];
+export const PLAN_PRINTING_VERSIONS: readonly string[] = ['v6', 'v7', 'v7.1'];
 
 export function isPaymentPlan(v: unknown): v is PaymentPlan {
   return typeof v === 'string' && (PAYMENT_PLANS as readonly string[]).includes(v);
@@ -126,7 +142,7 @@ export function isClientPaymentPlan(v: unknown): v is PaymentPlan {
 const PRICE_ID_RE = /^price_[A-Za-z0-9_]+$/;
 /** The edge secret each plan's MONTHLY needs (null = no monthly Price needed). */
 export const PLAN_MONTHLY_PRICE_SECRET: Record<PaymentPlan, string | null> = {
-  complete: 'FINDABLE_STANDARD_MONTHLY_PRICE_ID', full: null, six: 'FINDABLE_STANDARD_MONTHLY_PRICE_ID', twelve: 'FINDABLE_REDUCED_MONTHLY_PRICE_ID', legacy_twelve: 'FINDABLE_STANDARD_MONTHLY_PRICE_ID',
+  complete: 'FINDABLE_STANDARD_MONTHLY_PRICE_ID', complete_upfront: null, full: null, six: 'FINDABLE_STANDARD_MONTHLY_PRICE_ID', twelve: 'FINDABLE_REDUCED_MONTHLY_PRICE_ID', legacy_twelve: 'FINDABLE_STANDARD_MONTHLY_PRICE_ID',
 };
 export const PLAN_UNAVAILABLE_TEXT = 'Not available yet: its monthly payment is not set up in Stripe. Offer another option.';
 /** Is the plan's Stripe price configured? `env` reads a secret (Deno.env.get on the server). Shape only — the webhook and
@@ -176,6 +192,11 @@ export function planTotalPence(p: PaymentPlan): number {
   return pence(s.firstGbp) + recurringPaymentsForPlan(p) * pence(s.monthlyGbp);
 }
 export const planTotalGbp = (p: PaymentPlan): number => planTotalPence(p) / 100;
+/** What paying Complete up front saves against paying it monthly. Derived, never typed. */
+export const completeUpfrontSavingGbp = (): number => (planTotalPence('complete') - planTotalPence('complete_upfront')) / 100;
+/** Does the client's one payment also transfer the website? Only Essential paid in full; Complete paid up front transfers at the
+ *  end of its Plan Period (v7.1 8.4). The webhook stamps paid_in_full_at, "eligible to transfer", only when this is true. */
+export const planTransfersAtPayment = (p: PaymentPlan): boolean => PAYMENT_PLAN_SPEC[p].totalPayments === 1 && p !== 'complete_upfront';
 
 /** £499 / £49.99 / £1,188 — whole pounds print without pence. */
 export function gbpWords(n: number): string {
@@ -210,6 +231,7 @@ export function clientPaymentPlan(lead: { payment_plan?: unknown } | null | unde
 export function planShortLine(p: PaymentPlan): string {
   const s = PAYMENT_PLAN_SPEC[p];
   if (p === 'full') return `${gbpWords(s.firstGbp)} once`;
+  if (p === 'complete_upfront') return `${gbpWords(s.firstGbp)} once, for ${COMPLETE_UPFRONT_MONTHS} months (save ${gbpWords(completeUpfrontSavingGbp())})`;
   if (p === 'complete') return `${gbpWords(s.monthlyGbp)} a month for ${s.totalPayments} months (${gbpWords(planTotalGbp(p))} in total)`;
   if (s.firstGbp === s.monthlyGbp) return `${gbpWords(s.monthlyGbp)} × ${s.totalPayments} (${gbpWords(planTotalGbp(p))} in total)`;
   return `${gbpWords(s.firstGbp)} now, then ${gbpWords(s.monthlyGbp)} × ${recurringPaymentsForPlan(p)} (${s.totalPayments} payments, ${gbpWords(planTotalGbp(p))} in total)`;
@@ -220,13 +242,14 @@ export function planShortLine(p: PaymentPlan): string {
 export function planAgreementWords(p: PaymentPlan): string {
   const s = PAYMENT_PLAN_SPEC[p];
   if (p === 'full') return `Pay in full: ${gbpWords(s.firstGbp)}, one payment`;
+  if (p === 'complete_upfront') return `${PAYMENT_PLAN_NAME[p]}: ${gbpWords(s.firstGbp)}, one payment, for ${COMPLETE_UPFRONT_MONTHS} months`;
   if (s.firstGbp === s.monthlyGbp) return `${PAYMENT_PLAN_NAME[p]}: ${gbpWords(s.firstGbp)} initial payment, then ${recurringPaymentsForPlan(p)} monthly payments of ${gbpWords(s.monthlyGbp)} (${s.totalPayments} payments, ${gbpWords(planTotalGbp(p))} in total)`;
   if (p === 'legacy_twelve') return `${gbpWords(s.firstGbp)} initial payment, then ${recurringPaymentsForPlan(p)} monthly payments of ${gbpWords(s.monthlyGbp)} (${s.totalPayments} payments, ${gbpWords(planTotalGbp(p))} in total)`;
   return `${PAYMENT_PLAN_NAME[p]}: ${gbpWords(s.firstGbp)} initial payment, then ${recurringPaymentsForPlan(p)} monthly payments of ${gbpWords(s.monthlyGbp)} (${s.totalPayments} payments, ${gbpWords(planTotalGbp(p))} in total)`;
 }
 /** v7's "Payment plan" line: the PLAN first (Complete / Essential), then how it is paid. */
 export function planAgreementWordsV7(p: PaymentPlan): string {
-  if (p === 'complete') return planAgreementWords(p);
+  if (isCompletePlan(p)) return planAgreementWords(p);
   return `${PLAN_PRODUCT_NAME.essential}, ${planAgreementWords(p)}`;
 }
 
@@ -234,6 +257,7 @@ export function planAgreementWordsV7(p: PaymentPlan): string {
 export function planAfterWords(p: PaymentPlan): string {
   const after = `After that, hosting and maintenance is optional at ${gbpWords(FINDABLE_CONTINUING_GBP)} a month, only if you choose it.`;
   if (p === 'full') return `The website transfers to you once your payment has cleared. Hosting is included for ${FULL_PAY_HOSTING_INCLUDED_MONTHS} months from when the website goes live. ${after}`;
+  if (p === 'complete_upfront') return `The website transfers to you at the end of the ${COMPLETE_UPFRONT_MONTHS} months. Hosting is included for the ${COMPLETE_UPFRONT_MONTHS} months. ${after}`;
   return `The website transfers to you once your final payment clears. Hosting is included while you are paying. ${after}`;
 }
 
@@ -271,13 +295,19 @@ export function guaranteeForSigned(version: string | null | undefined, p: Paymen
 }
 /** When monthly payments start, by the version signed (v6: 14-day window from the results; v7: 7 days, from the baseline). */
 export function monthlyStartWordsFor(version: string | null | undefined): string {
-  return version === 'v7' ? MONTHLY_START_V7_WORDS : MONTHLY_START_V3_WORDS;
+  return isV7Family(version) ? MONTHLY_START_V7_WORDS : MONTHLY_START_V3_WORDS;
 }
 
 /** The terms a rep reads out before the link (Quick Close), per plan. Built from the constants. New sales are v7. */
 export function planTermsLines(p: PaymentPlan): string[] {
   const s = PAYMENT_PLAN_SPEC[p];
   if (p === 'full') return [`${PLAN_PRODUCT_NAME.essential}: ${gbpWords(s.firstGbp)} today, paid once. Nothing more to pay`, planAfterWords(p)];
+  if (p === 'complete_upfront') return [
+    `${PAYMENT_PLAN_NAME[p]}: ${gbpWords(s.firstGbp)} today, one payment, for ${COMPLETE_UPFRONT_MONTHS} months. Nothing more to pay`,
+    `That saves ${gbpWords(completeUpfrontSavingGbp())} against paying monthly (${gbpWords(planTotalGbp('complete'))})`,
+    `Includes everything in Essential, plus ${COMPLETE_EXTRAS.map((x) => x.charAt(0).toLowerCase() + x.slice(1)).join(', ')}`,
+    planAfterWords(p),
+  ];
   const head = `${PLAN_PRODUCT_NAME[planProduct(p)]}: ${gbpWords(s.firstGbp)} today`;
   return [
     head,
@@ -290,9 +320,9 @@ export function planTermsLines(p: PaymentPlan): string[] {
 
 /** The offer in one line, before a plan is chosen: both plans (AI reply facts, the call playbook). Complete first. */
 export function paymentOptionsSummary(): string {
-  return `Two plans. ${PLAN_PRODUCT_NAME.complete} (recommended): ${planShortLine('complete')}. ${COMPLETE_SUMMARY} `
+  return `Two plans. ${PLAN_PRODUCT_NAME.complete} (recommended): ${planShortLine('complete')}, or ${planShortLine('complete_upfront')}. ${COMPLETE_SUMMARY} `
     + `${PLAN_PRODUCT_NAME.essential}: ${ESSENTIAL_SUMMARY} Three ways to pay: ${ESSENTIAL_PAYMENT_PLANS.map((p) => `${PAYMENT_PLAN_NAME[p].toLowerCase()}, ${planShortLine(p)}`).join('; ')}. `
-    + `The website is yours once your final payment clears; hosting is included while you are paying (Essential pay in full: ${FULL_PAY_HOSTING_INCLUDED_MONTHS} months), then optional at ${gbpWords(FINDABLE_CONTINUING_GBP)} a month.`;
+    + `The website is yours once your final payment clears (Complete paid up front: at the end of the ${COMPLETE_UPFRONT_MONTHS} months); hosting is included while you are paying (Essential pay in full: ${FULL_PAY_HOSTING_INCLUDED_MONTHS} months; Complete paid up front: the ${COMPLETE_UPFRONT_MONTHS} months), then optional at ${gbpWords(FINDABLE_CONTINUING_GBP)} a month.`;
 }
 
 /** Essential's three ways to pay, said aloud. Constants only. */
@@ -322,6 +352,7 @@ export function plansSpokenShort(): string {
 /** The Stripe line-item name for a plan — what the payer sees on the Stripe page and the receipt. */
 export function checkoutLineNameForPlan(p: PaymentPlan): string {
   if (p === 'complete') return `${PLAN_PRODUCT_NAME.complete}: AI visibility, a new website we build and manage, review replies, Google profile, directories and monthly audits. ${planShortLine(p)}, payment 1 of ${PAYMENT_PLAN_SPEC[p].totalPayments}`;
+  if (p === 'complete_upfront') return `${PAYMENT_PLAN_NAME[p]}: AI visibility, a new website we build and manage, review replies, Google profile, directories and monthly audits. ${gbpWords(PAYMENT_PLAN_SPEC[p].firstGbp)} once, for ${COMPLETE_UPFRONT_MONTHS} months`;
   if (p === 'legacy_twelve') return `Findable Build — AI visibility + a new website we build and manage: ${PAYMENT_PLAN_NAME[p]}, ${planShortLine(p)}`;
   return `${PLAN_PRODUCT_NAME.essential}: an AI-optimised website with a baseline and four-week AI visibility audit. ${PAYMENT_PLAN_NAME[p]}, ${planShortLine(p)}`;
 }
@@ -330,6 +361,7 @@ export function checkoutLineNameForPlan(p: PaymentPlan): string {
 export function cardSavedNoticeForPlan(p: PaymentPlan): string {
   const s = PAYMENT_PLAN_SPEC[p];
   if (p === 'full') return `You pay ${gbpWords(s.firstGbp)} today and nothing more for the plan. ${planAfterWords(p)} That is what your signed agreement says.`;
+  if (p === 'complete_upfront') return `You pay ${gbpWords(s.firstGbp)} today, one payment, and nothing more for the ${COMPLETE_UPFRONT_MONTHS} months. ${planAfterWords(p)} That is what your signed agreement says.`;
   return `You pay ${gbpWords(s.firstGbp)} today. We save your card. ${gbpWords(s.monthlyGbp)} a month starts ${MONTHLY_START_V7_WORDS}. ${s.totalPayments} payments in total, including today's. ${planAfterWords(p)} That is what your signed agreement says.`;
 }
 

@@ -21,7 +21,7 @@
 import { addDays, addMonthsClamped, ukDay, ukDayWords, type TimelineFacts } from './clientTimeline.ts';
 import { finalPaymentDates } from './finalPaymentDates.ts';
 import { FINDABLE_CONTINUING_GBP, FINDABLE_CONTACT_EMAIL } from './findableOffer.ts';
-import { FULL_PAY_HOSTING_INCLUDED_MONTHS, PAYMENT_PLAN_SPEC, type PaymentPlan } from './paymentPlans.ts';
+import { COMPLETE_UPFRONT_MONTHS, FULL_PAY_HOSTING_INCLUDED_MONTHS, PAYMENT_PLAN_SPEC, type PaymentPlan } from './paymentPlans.ts';
 
 /** The sentence the signed agreement must contain (v6 9A.5). */
 export const PLAN_PERIOD_PROMISE_SENTENCE = 'We will remind you before the Plan Period ends that you can opt in.';
@@ -30,7 +30,7 @@ export const PLAN_PERIOD_REMINDER_LEAD_DAYS = 30;
 /** How far ahead the dry run looks by default (pay in full: go-live + 6 months, so look far). */
 export const PLAN_PERIOD_DRY_RUN_HORIZON_DAYS = 240;
 /** The plans whose signed v6 / v7 text carries the promise (v7 keeps 9A.5 word for word; Complete is v7 only). legacy_twelve is v5 (fn month12-reminder). */
-export const PLAN_PERIOD_REMINDER_PLANS: readonly PaymentPlan[] = ['complete', 'full', 'six', 'twelve'];
+export const PLAN_PERIOD_REMINDER_PLANS: readonly PaymentPlan[] = ['complete', 'complete_upfront', 'full', 'six', 'twelve'];
 
 const norm = (s: string) => s.replace(/[‘’]/g, "'").replace(/\s+/g, ' ').trim().toLowerCase();
 /** Does this signed agreement text contain the v6 9A.5 promise? Absent text → false. */
@@ -57,6 +57,11 @@ export function planPeriodEnd(plan: PaymentPlan | null, facts: TimelineFacts, si
     const live = ukDay(siteFirstLiveAt);
     if (!live) return null;
     endDay = addMonthsClamped(live, FULL_PAY_HOSTING_INCLUDED_MONTHS);
+  } else if (plan === 'complete_upfront') {
+    /* v7.1 2.6: 12 months from the date the one payment cleared, whatever the site's go-live day. */
+    const paid = ukDay(facts.initialPaidAt);
+    if (!paid) return null;
+    endDay = addMonthsClamped(paid, COMPLETE_UPFRONT_MONTHS);
   } else {
     const d = finalPaymentDates({ ...facts, recurringPaymentsNeeded: PAYMENT_PLAN_SPEC[plan].totalPayments - 1 });
     if (!d) return null;
@@ -136,9 +141,13 @@ export function planPeriodReminderEmail(i: { businessName: string; plan: Payment
   const day = ukDayWords(i.endDay);
   const when = i.plan === 'full'
     ? `On Pay in full, hosting is included for ${FULL_PAY_HOSTING_INCLUDED_MONTHS} months from the date your website first went live, so your Plan Period ends on ${day} (clauses 2.6 and 9.2).`
+    : i.plan === 'complete_upfront'
+    ? `You paid for Findable Complete up front, so your Plan Period ends on ${day}, ${COMPLETE_UPFRONT_MONTHS} months after your payment (clause 2.6). Hosting is included until then (clause 9.2).`
     : `Your Plan Period ends when your final payment, due on ${day}, has cleared (clause 2.6). Hosting is included until then (clause 9.2).`;
   const transfer = i.plan === 'full'
     ? '- Your payment has cleared, so the website we built for you has already transferred to you (clause 8.4).'
+    : i.plan === 'complete_upfront'
+    ? '- At the end of your Plan Period, the website we built for you transfers to you (clause 8.4).'
     : '- Once your final payment has cleared, the website we built for you transfers to you (clause 8.4).';
   return {
     subject: `Your Findable website after your Plan Period - ${i.businessName}`,
