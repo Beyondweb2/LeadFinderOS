@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-03-quick-check-free-layout', date: '2026-11-03', title: 'Quick checks now use the full report layout', audience: 'all',
+    body: 'The report you send after a quick check now looks like the free check: a percentage at the top, the questions asked, and what we found on the prospect\'s website. The offer on the call screen also now shows the pay-up-front price.',
+    report: {
+      added: ['A What we found on your website section on the report, up to five findings, worded as things that may make it harder for AI to recommend them.', 'The offer list on the call screen now shows 99 pounds a month or 999 up front for the year, and the saving.'],
+      changed: ['Quick check reports use the same long layout as the free check, with the explainer video.', 'The headline is a percentage, with the number of answers underneath, on every report.'],
+      removed: ['The short quick-check page, for new reports. Links already sent still open.'],
+      effect: 'Send the report link as before. Existing links keep working and now show the new layout. The website section only appears when we have checked their site.',
+    } },
   { id: '2026-11-03-commission-stripe-no-handover', date: '2026-11-03', title: 'No handover form. Commission now checks itself against Stripe', audience: 'all',
     body: 'There is no handover form any more. What you type on the lead saves as you type, and when the client pays it goes straight to Paul. Commission follows Stripe, and a daily check catches anything missed.',
     report: {

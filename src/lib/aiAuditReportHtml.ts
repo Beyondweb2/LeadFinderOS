@@ -1665,14 +1665,22 @@ export function engineVisibilitySentence(
   return `Visibility is much stronger in ${hi.label} than in ${lo.label}.`;
 }
 
-export function renderReportHtml(d: AiAuditReportData): string {
+const SIX_ANSWER_HOOK_USES_QUICK_LAYOUT = false;
+
+/** `sixAnswerQuickLayout` overrides SIX_ANSWER_HOOK_USES_QUICK_LAYOUT for one render: the tests that fence the preserved
+ *  Concept 4 page pass true; production never passes it. */
+export function renderReportHtml(d: AiAuditReportData, opts: { sixAnswerQuickLayout?: boolean } = {}): string {
   const type = d.businessType.trim() || "business like yours";
   /* THE QUICK AI VISIBILITY CHECK (2026-09-26): a complete six-result hook gets the short,
      percentage-first layout (renderQuickCheckTop); an incomplete one gets a notice with no figure.
      Both drop the long "the fix" section so the page stays one to two pages. Every other report,
      version-1 hooks included, renders exactly as before. */
-  const quick = d.hook?.shape === 'six' && !!d.hook.score;
-  const quickIncomplete = !quick && d.hookIncomplete === true;
+  const sixComplete = d.hook?.shape === 'six' && !!d.hook.score;
+  /* 2026-11-03 (Paul): a complete six-answer hook renders in the FREE CHECK's long layout again; the
+     short Concept 4 page is switched off for it. The code stays (renderQuickCheckReport is exported
+     and tested); flipping this constant is the whole way back. */
+  const quick = (opts.sixAnswerQuickLayout ?? SIX_ANSWER_HOOK_USES_QUICK_LAYOUT) && sixComplete;
+  const quickIncomplete = !sixComplete && d.hookIncomplete === true;
   /* CONCEPT 4 owns the page only where the quick layout actually renders: a complete six-answer hook
      that is neither still measuring nor waiting on the name check (those two branches come first and
      keep the ordinary band + explainer). */
@@ -1759,36 +1767,6 @@ export function renderReportHtml(d: AiAuditReportData): string {
     </section>`;
   }
 
-
-  /* "WHAT'S STOPPING AI READING YOUR SITE" — one line per real crawl-check fault (buildFaultLines),
-     each carrying its own number; red dot for a real fault, amber for the structured-data gap.
-     Rendered only when there ARE faults — a site that couldn't be fetched yields none (Paul's rule),
-     so the section is simply absent. */
-  const faultsSection = (d.crawlFaults && d.crawlFaults.length)
-    ? `
-    <section class="why" style="border-top:1px solid var(--line)">
-      <div class="sec-eyebrow">Your website</div>
-      <div class="sec-title">What&rsquo;s stopping AI reading your site</div>
-      <p style="margin:0 0 18px;max-width:70ch;font-size:14px;line-height:1.55;color:var(--muted)">We read your site the way ChatGPT and Gemini do.</p>
-      ${d.crawlFaults.map((f) => `
-      <div class="fault">
-        <div class="fault-dot${f.minor ? " fault-dot--minor" : ""}"></div>
-        <div>
-          <div class="fault-t">${esc(f.title)}</div>
-          <p class="fault-p">${esc(f.detail)}</p>
-        </div>
-      </div>`).join("")}
-    </section>`
-    : "";
-
-  /* THE WEBSITE SLOT. A PAID BASELINE keeps its graded Apify SEO — the deliverable it bought (Paul,
-     2026-09-16: do not strip it). Every other report shows the free crawl-check faults instead; a
-     no-website lead gets the "we'll build you one" slot; otherwise nothing. */
-  const seoSlot = d.seo
-    ? (d.seoStyle === 'issues' ? seoIssuesSection(d.seo) : d.seoStyle === 'pack' ? seoPackSection(d.seo, d.seoAfter ?? null) : seoSection(d.seo))
-    : (d.crawlFaults && d.crawlFaults.length) ? faultsSection
-    : d.hasWebsite === false ? noWebsiteSection(d.prospectOnly === true)
-    : "";
 
   /* THE HOOK REPORT'S OWN WEBSITE SLOT (2026-09-21). A hook audit never buys the paid SEO scan
      (SEO_SCAN_PURPOSES excludes it), so this covers the same two cases `seoSlot` does for every
@@ -1880,6 +1858,35 @@ export function renderReportHtml(d: AiAuditReportData): string {
     : d.hasWebsite === false ? { state: 'none' }
     : d.siteChecked === true ? { state: 'clean' }
     : { state: 'unknown' };
+
+  /* WHAT WE FOUND ON YOUR WEBSITE (2026-11-03, Paul). The free-check layout's website block: the crawl
+     findings in plain English, at most five (quickIssues is already ranked, de-duplicated and capped).
+     The "may make it harder" words are added HERE at render time, never stored, and the page never
+     says a finding is the reason AI did not name them. No findings -> no section (no website and no
+     completed crawl both reach here as an empty list). */
+  const websiteFindingsSection = quickIssues.length ? `
+    <section class="why" style="border-top:1px solid var(--line)">
+      <div class="sec-eyebrow">Your website</div>
+      <div class="sec-title">What we found on your website</div>
+      <p style="margin:0 0 18px;max-width:70ch;font-size:14px;line-height:1.55;color:var(--muted)">We read your site the way ChatGPT and Gemini do. These things may make it harder for AI to recommend you.</p>
+      ${quickIssues.map((f) => `
+      <div class="fault">
+        <div class="fault-dot${f.minor ? " fault-dot--minor" : ""}"></div>
+        <div>
+          <div class="fault-t">${esc(f.title)}</div>
+          <p class="fault-p">${esc(f.detail)}</p>
+        </div>
+      </div>`).join("")}
+    </section>` : "";
+
+  /* THE WEBSITE SLOT. A PAID BASELINE keeps its graded Apify SEO — the deliverable it bought (Paul,
+     2026-09-16: do not strip it). Every other report shows the free crawl-check faults instead; a
+     no-website lead gets the "we'll build you one" slot; otherwise nothing. */
+  const seoSlot = d.seo
+    ? (d.seoStyle === 'issues' ? seoIssuesSection(d.seo) : d.seoStyle === 'pack' ? seoPackSection(d.seo, d.seoAfter ?? null) : seoSection(d.seo))
+    : quickIssues.length ? websiteFindingsSection
+    : d.hasWebsite === false ? noWebsiteSection(d.prospectOnly === true)
+    : "";
 
   /* ── ONE REAL AI ANSWER, RECREATED (2026-09-16, Paul) ─────────────────────────────────────────
      ONE engine — the one that did NOT name them (pickGutPunch, scored engines only) — with its
@@ -2426,6 +2433,7 @@ ${REPORT_CHROME_CSS_CORE}
   .hero{ display:flex; align-items:stretch; gap:26px; padding:14px 28px 20px; }
   .hero-num{ display:flex; align-items:center; gap:18px; flex:0 0 auto; }
   .num{ font-size:104px; line-height:.82; font-weight:900; letter-spacing:-.04em; }
+  .num.pct{ font-size:84px; }
   .num.crit,.num.low{ color:var(--red); } .num.mid{ color:var(--amber); } .num.high{ color:var(--green); }
   .num-cap{ max-width:24ch; }
   .num-cap .l1{ font-size:17px; font-weight:700; color:var(--ink); line-height:1.1; }
@@ -2732,7 +2740,7 @@ ${REPORT_CHROME_CSS_FOOT}
     .hero{ flex-direction:column; gap:14px; }
     .hero-num{ align-items:flex-start; }
     .hero-rule{ display:none; }
-    .num{ font-size:72px; }
+    .num{ font-size:72px; } .num.pct{ font-size:60px; }
     /* 1b · Paid summary: the overall number shrinks, and the two engine cards stack into one column
        so each percentage keeps its own line rather than being squeezed side by side on a phone. */
     /* The score must not eat the viewport: at 375px a 76px numeral plus its panel already fills a
@@ -2893,7 +2901,7 @@ ${d.measuring ? `
 ${seoSlot}
 ` : concept4 && d.hook ? `${renderQuickCheckReport(d.hook, d.businessName, quickWebsite, d.prospectOnly === true, d.siteHost ?? null, d.siteShotUrl ? { url: d.siteShotUrl, at: d.siteShotAt ?? null } : null)}
 ` : quickIncomplete ? `${renderQuickCheckIncomplete()}
-` : d.hook ? `${renderHookSection(d.hook, d.businessName, d.generatedAtLabel)}
+` : d.hook && !sixComplete ? `${renderHookSection(d.hook, d.businessName, d.generatedAtLabel)}
 ${hookCrawlSection}
 ` : d.paidSummary ? `${paidSummarySection}
 ${questionsList}
@@ -2902,10 +2910,10 @@ ${seoSlot}
     <!-- HERO -->
     <div class="hero">
       <div class="hero-num">
-        <span class="num ${v.band}">${d.named}</span>
+        <span class="num pct ${v.band}">${d.total > 0 ? Math.round((d.named / d.total) * 100) : 0}%</span>
         <div class="num-cap">
-          <div class="l1">${plural(d.named, "time", "times")} ${esc(d.businessName)} showed up in AI search</div>
-          <div class="l2">out of ${d.total} ${plural(d.total, "answer")}</div>
+          <div class="l1">${esc(d.businessName)} showed up in AI search</div>
+          <div class="l2">${d.named} of ${d.total} ${plural(d.total, "answer")}</div>
           ${d.questionsAsked && d.enginesUsed
             ? `<div class="l3">${d.questionsAsked} way${d.questionsAsked === 1 ? "" : "s"} of asking &times; ${d.enginesUsed} AI engine${d.enginesUsed === 1 ? "" : "s"}${(d.measurementRuns ?? 1) > 1 ? ` &times; ${d.measurementRuns} asks each` : ""}</div>`
             : ""}

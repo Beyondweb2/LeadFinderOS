@@ -18,7 +18,9 @@ import { AI_OVERVIEW_STAMP_KEY, NO_OVERVIEW_TEXT, overviewFor, overviewSummary, 
 import { rowScoreFromPerEngine } from '../src/lib/outreachRowCheck.ts';
 import { HOOK_ENGINES, HOOK_SCORE_RESULTS, initialHookStateV2, scoreHookRun } from '../src/lib/hookScore.ts';
 import { SCORED_ENGINES, buildReportData } from '../src/lib/auditReport.ts';
-import { renderReportHtml } from '../src/lib/aiAuditReportHtml.ts';
+import { renderReportHtml as renderReportHtmlLive } from '../src/lib/aiAuditReportHtml.ts';
+const renderReportHtml = (d: Parameters<typeof renderReportHtmlLive>[0]) => renderReportHtmlLive(d, { sixAnswerQuickLayout: true }); // Concept 4 is switched off in production; these tests fence the preserved page
+
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };

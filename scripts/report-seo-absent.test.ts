@@ -52,11 +52,11 @@ console.log("── Branch 3 (2026-09-16 redesign): website but no scan → the 
   ok(!silent.includes("full check comes when we start work"), "the old sequencing line is gone");
   ok(!silent.includes("How findable is your website?"), "no graded panel without a grade");
   ok(!silent.includes("You don&rsquo;t have a website yet"), "and never the no-website copy for a business that has one");
-  ok(!silent.includes("What&rsquo;s stopping AI reading your site"), "with no crawl faults, the website section is silent");
+  ok(!silent.includes("What we found on your website"), "with no crawl faults, the website section is silent");
   // With crawl faults, the section renders and carries each fault's specific number.
   const withFaults = renderReportHtml({ ...base, seo: undefined, hasWebsite: true,
     crawlFaults: [{ title: "Your pages are too similar", detail: "20 near-identical pages, 98% the same. AI reads them as one.", minor: false }] });
-  ok(withFaults.includes("What&rsquo;s stopping AI reading your site"), "with crawl faults, the section renders");
+  ok(withFaults.includes("What we found on your website") && withFaults.includes("may make it harder"), "with crawl faults, the section renders, with the 'may make it harder' wording added at render time");
   ok(withFaults.includes("20 near-identical pages"), "and carries the specific number");
 }
 

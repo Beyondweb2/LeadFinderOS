@@ -15,7 +15,9 @@ import { HOOK_ENGINES, initialHookStateV2, type HookScoreRow } from '../src/lib/
 import { hookReportState, hookStateNeedsPolling, hookRunInFlight, pickHookAudit, scoreHookAuditForCard, type HookCardAudit } from '../src/lib/hookVisibility.ts';
 import { HookVisibilityView } from '../src/components/HookVisibilityView.tsx';
 import { buildReportData } from '../src/lib/auditReport.ts';
-import { renderReportHtml } from '../src/lib/aiAuditReportHtml.ts';
+import { renderReportHtml as renderReportHtmlLive } from '../src/lib/aiAuditReportHtml.ts';
+const renderReportHtml = (d: Parameters<typeof renderReportHtmlLive>[0]) => renderReportHtmlLive(d, { sixAnswerQuickLayout: true }); // Concept 4 is switched off in production; these tests fence the preserved page
+
 import { hookReportCopy } from '../src/lib/hookAudit.ts';
 import { MEASURING_STALL_MS } from '../src/lib/measuringState.ts';
 

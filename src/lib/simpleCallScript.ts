@@ -12,7 +12,7 @@
    Pure. No React, no fetch, no clock.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { plainIssueTitle, type WebsiteIssue } from './websiteCheck.ts';
-import { gbpWords, PAYMENT_PLAN_SPEC } from './paymentPlans.ts';
+import { COMPLETE_UPFRONT_MONTHS, PAYMENT_PLAN_SPEC, completeUpfrontSavingGbp, gbpWords } from './paymentPlans.ts';
 
 /** How many website issues "What we found" shows before "Show all". */
 export const FOUND_ISSUES_SHOWN = 3;
@@ -137,20 +137,23 @@ export function foundIssues(serious: readonly WebsiteIssue[]): { shown: WebsiteI
 
 /* ── What we offer (Findable Complete) ─────────────────────────────────────────────────────────── */
 
-export const OFFER_UNDER_LINE = 'Price an issue? Offer Essential in Quick Close.';
+export function offerUnderLine(): string {
+  return `Price an issue? Offer paying up front (save ${gbpWords(completeUpfrontSavingGbp())}). Still an issue? Essential, in Quick Close.`;
+}
+export const OFFER_UNDER_LINE = offerUnderLine();
 
 /** The offer list, top to bottom. Every figure is read from paymentPlans.ts, never typed here. */
 export function offerLines(): string[] {
   const c = PAYMENT_PLAN_SPEC.complete;
   return [
     'Money-back guarantee: we improve AI visibility or you get your money back',
-    `${gbpWords(c.firstGbp)} up front, then ${gbpWords(c.monthlyGbp)} a month`,
+    `${gbpWords(c.monthlyGbp)} a month, or ${gbpWords(PAYMENT_PLAN_SPEC.complete_upfront.firstGbp)} up front for the year (saves ${gbpWords(completeUpfrontSavingGbp())})`,
     'Day 1: a discovery audit to find the questions they can win, plus a 20-question baseline audit',
     'We build an AI-optimised website set up to win those questions',
     'Every month: we re-run the 20-question audit to measure how often AI names them',
     'We handle their review replies',
     'We add them to relevant directories, where it applies',
     'Changes and updates, within reason',
-    'We host the site. They own it after the final payment.',
+    `We host the site. They own it after the final payment (up front: after the ${COMPLETE_UPFRONT_MONTHS} months).`,
   ];
 }

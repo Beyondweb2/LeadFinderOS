@@ -110,11 +110,14 @@ const one = htmlFor(1, 6, "accountant");
    <div class="l1">time …</div> — so assert on the l1 text, not on "1 time" as one string. My first
    version of these two assertions failed against correct code for exactly that reason. */
 const l1 = (h: string) => (h.match(/class="l1">([^<]*)/) ?? [])[1] ?? "";
-ok(l1(one).startsWith("time Test Co showed up"), `1 -> "time": "${l1(one)}"`);
-ok(!l1(one).startsWith("times"), "  and the plural is gone");
-ok(l1(htmlFor(2, 6, "plumber")).startsWith("times Test Co showed up"), "2 -> 'times'");
-ok(htmlFor(1, 1, "plumber").includes("out of 1 answer<"), "a single answer reads 'out of 1 answer'");
-ok(one.includes("out of 6 answers"), "6 answers stays plural");
+/* 2026-11-03: the headline is a percentage, with "N of M answers" underneath (the l2 line). */
+const l2 = (h: string) => (h.match(/class="l2">([^<]*)/) ?? [])[1] ?? "";
+const bigNum = (h: string) => (h.match(/class="num pct [a-z]+">([^<]*)/) ?? [])[1] ?? "";
+ok(bigNum(one) === "17%" && l2(one) === "1 of 6 answers", `1 of 6 -> 17% over "${l2(one)}"`);
+ok(l1(one) === "Test Co showed up in AI search", "  the line beside it carries no count");
+ok(bigNum(htmlFor(2, 6, "plumber")) === "33%" && l2(htmlFor(2, 6, "plumber")) === "2 of 6 answers", "2 of 6 -> 33%");
+ok(l2(htmlFor(1, 1, "plumber")) === "1 of 1 answer", "a single answer reads '1 of 1 answer'");
+ok(bigNum(htmlFor(0, 0, "plumber")) === "0%", "no answers -> 0%, never NaN");
 
 ok(one.includes("looking for an <b>accountant"), "vowel trade -> 'an accountant'");
 ok(htmlFor(1, 6, "plumber").includes("looking for a <b>plumber"), "consonant trade -> 'a plumber'");

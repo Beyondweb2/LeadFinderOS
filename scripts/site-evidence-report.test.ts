@@ -128,7 +128,7 @@ const ordinary = renderReportHtml({
   crawlFaults: [{ title: 'AI can’t reach your site', detail: 'OAI-SearchBot is blocked from fetching your pages.', minor: false }],
 });
 ok(!ordinary.includes('sec-title">I had a look at your website too'), 'an ordinary (non-hook) report does not grow the new section');
-ok(ordinary.includes('What&rsquo;s stopping AI reading your site'), '…and keeps its own fault section, unchanged');
+ok(ordinary.includes('What we found on your website'), '…and gets the free-check "What we found on your website" section (2026-11-03)');
 ok(!ordinary.includes('class="chatcard evcard"'), '…and has no hook evidence card');
 
 console.log(f === 0 ? '\nALL PASS' : `\n${f} FAILED`);
