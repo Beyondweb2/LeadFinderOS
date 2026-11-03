@@ -84,7 +84,7 @@ Same inclusions and guarantee as Complete. Monthly Complete is unchanged and sta
 | Unpaid v7 signatures | Asked to re-sign on v7.1 when they reopen the link (same rule as v6 to v7). A Stripe session already open on v7 still completes on v7 (`payment-hold.ts`). |
 | Website transfer | ⛔ At the END of the 12 months (v7.1 8.4), not on payment. The webhook does not stamp `paid_in_full_at` for it (`planTransfersAtPayment`). If the agreement ends sooner the site transfers then, except on a valid guarantee claim. |
 | Plan Period, hosting | 12 months from the date the payment cleared. The Plan Period reminder runs from that date (`planPeriodEnd`). |
-| Commission | Nothing new in the code: `plan_v1` already does this for a one-payment plan. Ladder rate on the £999, payable on `commission_payable_on`, no trailing (`commission-owed.test.ts`). |
+| Commission | Always 30% of the £999, £299.70, whatever its Sale Number (`COMMISSION_UPFRONT_RATE`, Paul 2026-11-03). It still counts toward the seller's monthly tier for other sales. Payable on `commission_payable_on`, no trailing (`commission-owed.test.ts`). |
 | Sale record | `sale_plan = complete_upfront`, which `salePlanParts` shows as "Complete · paid up front". The id holds both the plan and the option; no extra column. |
 
 ⚠️ Open for Jess (`docs/v7-review-for-solicitor.md`): whether any of the £999 comes back on early exit or on our serious breach (15.3 gives an

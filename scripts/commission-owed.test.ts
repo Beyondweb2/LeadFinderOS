@@ -2,7 +2,7 @@
    drift. Live proof of the database half: supabase/tests/commission-owed.sql (a rolled-back transaction). */
 import { readFileSync } from 'node:fs';
 import { commissionLines, firstOfNextMonth, type LedgerRow } from '../src/lib/commission.ts';
-import { COMMISSION_PAYABLE_DAYS_OLDER, COMMISSION_PAYABLE_DAYS_V7, COMMISSION_RECURRING_COUNT, commissionPayableDays, payoutRuleForPaymentAt } from '../src/lib/commissionConfig.ts';
+import { COMMISSION_UPFRONT_RATE, commissionFixedRateForPlan, COMMISSION_PAYABLE_DAYS_OLDER, COMMISSION_PAYABLE_DAYS_V7, COMMISSION_RECURRING_COUNT, commissionPayableDays, payoutRuleForPaymentAt } from '../src/lib/commissionConfig.ts';
 import { REFUND_WINDOW_DAYS, REFUND_WINDOW_DAYS_V7 } from '../src/lib/clientTimeline.ts';
 import { buildOwed, countdownWords, paidHistory, planMarkPaid, type LinePaymentRow } from '../src/lib/commissionOwed.ts';
 import { monthlyDiffers, salePlanFlagAtPayment, salePlanParts, salePlanWordsOr } from '../src/lib/salePlan.ts';
@@ -70,11 +70,19 @@ console.log('── 2. FIRST PAYMENT ──');
   const due = run([s2], '2026-12-10T12:00:00Z')[0];
   ok(due.status === 'due' && due.payoutDate === '2026-12-10', 'on the payable date: due, on that date');
   ok(run([sale({ amount_gbp: 499, sale_plan: 'full', commission_rate: 0.4 })], '2026-11-06T12:00:00Z')[0].commission === 199.6, '40% of the £499 actually collected');
-  /* Complete paid up front (2026-11-03): the ladder rate on the whole £999, on the window's date, nothing trailing. */
+  /* Complete paid up front (Paul, 2026-11-03): always 30% of the whole £999, on the window's date, nothing trailing. */
   const up = (o: Record<string, unknown> = {}) => sale({ amount_gbp: 999, sale_plan: 'complete_upfront', ...o });
-  ok(run([up({ commission_rate: 0.3 })], '2026-11-06T12:00:00Z')[0].commission === 299.7, 'up front: 30% of £999');
-  ok(run([up({ commission_rate: 0.4 })], '2026-11-06T12:00:00Z')[0].commission === 399.6, 'up front: 40% of £999');
-  ok(run([up({ commission_rate: 0.5, commission_month_seq: 25 })], '2026-11-06T12:00:00Z')[0].commission === 499.5, 'up front: 50% of £999');
+  ok(COMMISSION_UPFRONT_RATE === 0.3 && commissionFixedRateForPlan('complete_upfront') === 0.3 && commissionFixedRateForPlan('complete') === null && commissionFixedRateForPlan('full') === null, 'the fixed rate is in the config, for the up-front plan only');
+  ok(run([up({ commission_rate: 0.3 })], '2026-11-06T12:00:00Z')[0].commission === 299.7, 'up front, sale 1 to 12: £299.70');
+  ok(run([up({ commission_rate: 0.4, commission_month_seq: 13 })], '2026-11-06T12:00:00Z')[0].commission === 299.7, 'up front, sale 13 to 24: still £299.70');
+  const upTop = run([up({ commission_rate: 0.5, commission_month_seq: 25 })], '2026-11-06T12:00:00Z')[0];
+  ok(upTop.commission === 299.7 && upTop.rate === 0.3, 'up front, sale 25+: still £299.70, at 30%');
+  ok(upTop.monthSeq === 25, 'it keeps its place in the month');
+  const later = sale({ commission_rate: 0.5, commission_month_seq: 26 });
+  ok(run([up({ commission_rate: 0.5, commission_month_seq: 25 }), later], '2026-11-06T12:00:00Z').find((l) => l.leadId === later.lead_id)?.rate === 0.5, 'the next normal sale keeps its tier: the up-front sale counted toward it');
+  ok(run([sale({ commission_rate: 0.5, commission_month_seq: 25 })], '2026-11-06T12:00:00Z')[0].rate === 0.5, 'monthly Complete still earns its tier');
+  ok(run([sale({ amount_gbp: 499, sale_plan: 'full', commission_rate: 0.5, commission_month_seq: 25 })], '2026-11-06T12:00:00Z')[0].commission === 249.5, 'Essential paid in full still earns its tier');
+  ok(run([up({ commission_rule: 'test_excluded', commission_rate: 0 })], '2026-11-06T12:00:00Z')[0].commission === 0, 'a test sale on it still earns nothing');
   const upWaiting = run([up()], '2026-11-06T12:00:00Z')[0];
   ok(upWaiting.status === 'pending' && upWaiting.waitingForResults, 'up front: waits until the results go out');
   const upDue = run([up({ commission_payable_on: '2026-12-10' })], '2026-12-10T12:00:00Z')[0];

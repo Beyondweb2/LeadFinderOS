@@ -27,6 +27,7 @@ including the whole guarantee (5.2 to 5.5: the refund is "all payments you have 
   and they have none left, so a client who paid up front gets nothing from it, while a monthly client at least stops paying. We did not
   invent a refund rule because Paul gave none. Should 15.3 give a pro-rata refund here? We think it probably should, as an unfair-terms and
   fairness point, but it is Paul's and your call.
+- **Paul's position on the point above (2026-11-03):** "Pro-rata refund of unused months on an up-front plan if Findable seriously breaches; no refund if the client simply ends early, as they keep the site." This is not in the v7.1 text yet.
 - **[CHECK] When the 12 months start (2.6, 9.2).** We count from the date the payment cleared: fixed and provable. But a client who is slow
   giving access, or a build that takes weeks, uses up some of what they paid for. The alternative is counting from the Baseline Date.
 - **[CHECK] Paid in full on day 1, transfer at month 12 (4.3, 8.2, 8.4).** Every other plan transfers on the final payment. Is it clear
