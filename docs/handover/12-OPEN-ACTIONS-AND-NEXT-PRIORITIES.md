@@ -12,10 +12,7 @@ Paul may have done some of the manual ones since.*
 2. **Open the four admin screens once, signed in, on https://app.leadfinderos.com**: a Paid Client page, Website Build, a
    client's Welcome Pack, Admin → API Usage & Security. They are deployed and marker-verified but nobody has seen them
    rendered. If they load, the 2026-10-05 deployment is complete.
-3. **Approve the four-week results email copy** (`docs/pre-sales-certification/final-certification.md` §8 — three versions).
-   Until then `REMEASURE_RESULTS_COPY_APPROVED = false` holds every result. (No client is currently due — RG is refunded,
-   Ronnie and MCL are ended — so this is urgent only before the next real client's day-28.) After approval: one commit flips
-   the constant + redeploy `paid-baseline`, `process-ai-audit-queue`, `render-remeasure-results`.
+3. **Done 2026-11-04:** the four-week results copy is approved and on (`docs/four-week-results-approved.md`). No result has been sent yet, so watch the first real send.
 4. **Stripe:** deactivate the **two old Payment Links** from Paul's old "Pricing" text; **look once at MCL's Stripe customer**
    for any subscription or schedule (our database shows none) and cancel if found.
 5. **Finish the Findable Meta / WhatsApp setup** (app, business number, templates) and **obtain the exact Findable App

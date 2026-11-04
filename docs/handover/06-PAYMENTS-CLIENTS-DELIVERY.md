@@ -120,7 +120,7 @@ from revenue (and keeps the amount).
 - The monthly client update (paid client page step 8) is prepared and sent **by hand**; only its measurement paragraph is
   generated from stored weekly-check counts.
 - Day-28 replay and the guarantee decision: `02-AI-VISIBILITY-METHODOLOGY.md`.
-- **Results-email approval hold:** `REMEASURE_RESULTS_COPY_APPROVED = false` — nothing is sent until Paul approves the exact
+- **Results-email approval hold (lifted 2026-11-04, `docs/four-week-results-approved.md`):** while `REMEASURE_RESULTS_COPY_APPROVED` is false, nothing is sent until Paul approves the exact
   copy (`final-certification.md` §8: three versions — clear improvement / inside the 5-point band / fell; signed "Paul,
   Findable"; the not-gone-up versions name no upcoming payment). Then a deliberate commit flips the constant and redeploys
   every function reaching the sender (`paid-baseline`, `process-ai-audit-queue`, `render-remeasure-results`).

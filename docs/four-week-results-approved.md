@@ -18,6 +18,12 @@ v6 stays at 14 days (signed clause 5.4). The footer is unchanged.
 
 Results go automatically: when a replay finishes, and from a 15-minute sweep of unsent replays. Sending stamps `remeasure_results_sent_at`, which starts the refund window, publishes the page, sets the Stripe first monthly date and sets the commission date.
 
+## Live, 2026-11-04 (main 6dcdf14b)
+
+Migration `20261208090000` applied and read back. No ledger row held a date, so nothing moved. Fifteen functions deployed, the whole import closure of the change: render-remeasure-results, paid-baseline, process-ai-audit-queue, sales-earnings, sales-performance, admin-overview, business-summary, client-intake, client-onboarding, commission-stripe-check, conversation-triage, findable-onboarding, paid-client-hub, quick-close, stripe-webhook. `whatsapp-status` was not touched.
+
+`supabase/tests/commission-fixed-amounts.sql` passed in a rolled-back transaction with the new date. `supabase/tests/commission-owed.sql` stops at its first check ("existing rows moved off legacy: 2"), which assumes no newer rows exist, so it is out of date since the fixed-amount migration and did not run.
+
 ## Not proven live
 
 No client has a finished re-measure, so the Send button appears nowhere and nothing has ever been sent. The switch was confirmed by reading the deployed function code. The first real send is the first real test.

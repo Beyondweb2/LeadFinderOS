@@ -132,7 +132,7 @@ lead with a `baseline_audit_id` can never be re-drafted.
   cells on one side as on the other, the result is held (one engine having a bad day must not decide a refund).
 - **Ended-client exclusion:** an ended or refunded client is never re-measured and never sent results.
 - **The results email** (`_shared/remeasure-results.ts`) is claim-first on `remeasure_results_sent_at` (sends once) and is
-  **HELD**: `REMEASURE_RESULTS_COPY_APPROVED = false` (`src/lib/remeasureResults.ts:38`) until Paul approves the exact copy
+  **ON since 2026-11-04** (`REMEASURE_RESULTS_COPY_APPROVED`, `docs/four-week-results-approved.md`). Before that it was held until Paul approved the exact copy
   in `docs/pre-sales-certification/final-certification.md` §8. Then a deliberate commit flips it.
 
 **Guarantee logic** (identical on Build and Optimise): if the number has not gone up (beyond the noise band), the client
