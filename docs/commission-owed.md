@@ -26,7 +26,9 @@
 - ⚠️ **The sales contractor agreement (draft v2)** still describes percentages and trailing payments. Paul is updating it to match, the leaver rule included.
 - ⚠️ **Until `REMEASURE_RESULTS_COPY_APPROVED` is on**, no results go, so everything collected stays in Waiting with no date. Now that includes monthlies, not just first payments.
 
-**Proof, not yet live:** `scripts/commission-fixed-amounts.test.ts` (totals to the penny, every case Paul listed). `supabase/tests/commission-fixed-amounts.sql` passed with the migration in a rolled-back transaction on the live database; read back, nothing stayed.
+**Proof:** `scripts/commission-fixed-amounts.test.ts` (totals to the penny, every case Paul listed). `supabase/tests/commission-fixed-amounts.sql` passed with the migration in a rolled-back transaction on the live database; read back, nothing stayed.
+
+**Live, 2026-11-04 (main 961c0584).** Migration `20261207090000` applied and read back (default, check, both claim columns, four functions); the ledger's 27 rows hashed the same before and after, and none is `fixed_v1` yet. 13 functions deployed, each body holding the change: admin-overview, business-summary, client-intake, client-onboarding, commission-stripe-check, conversation-triage, findable-onboarding, paid-baseline, paid-client-hub, quick-close, sales-earnings, sales-performance, stripe-webhook (not whatsapp-status). The live bundle holds the markers (`CommissionOwed`, `SalesDashboard`, `whatsNew` chunks). sales-earnings refuses with 401 unauthenticated, and the loader's ledger read ran by SQL with no error. ⚠️ The screen itself has not been read signed in on the fixed rules. No real sale has gone through them; the first is the real proof. The full gate twice ended 486/495: each time nine different suites printed only PASS yet were marked failed, and each passes run alone, so the runner's marking on this machine needs a look.
 
 Everything below is the older record. Where it names a percentage, it now applies only to rows already on `legacy` or `plan_v1`.
 
