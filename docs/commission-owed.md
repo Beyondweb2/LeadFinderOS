@@ -1,5 +1,35 @@
 # Commission owed, plan on every close, New paid clients, autosave (Paul, 2026-11-02)
 
+## Fixed amounts (Paul, 2026-11-04, branch `feat/commission-fixed-amounts`). This is the rule for every new sale.
+
+**Every pound lives in `src/lib/commissionConfig.ts`** (`FIXED_COMMISSION`, `BIG_MONTH_BONUS_GBP`, `BIG_MONTH_BONUS_FROM_SALE`). No screen shows a percentage.
+
+| Plan | Earns | Most |
+|---|---|---|
+| Complete monthly | £25 on each of the first 6 Successfully Collected payments, the sign-up is the first | £150 |
+| Complete up front (£999) | £300, once | £300 |
+| Essential paid in full (£499) | £150, once | £150 |
+| Essential 6 and 12 months | £15 on each of the first 6 | £90 |
+| Old £99 × 12 (`legacy_twelve`) | £25 on each of the first 6, as Complete monthly (Paul, 2026-11-04) | £150 |
+| No plan recorded on the sale (blank) | £15 on each of the first 6 (Paul, 2026-11-04). `BLANK_PLAN_COMMISSION` | £90 |
+
+- **Big-month bonus:** the database still numbers each sale in its UK month when the first payment lands (`stamp_monthly_commission_for`). Sale 13+ adds £25 to that sale's first payment line, so it is paid with it and goes with it. Not backdated. Resets on the 1st. As before, a sale fully refunded or lost before the next one lands no longer counts towards the next number.
+- **Nothing on** payments after the first 6, hosting, renewals or upsells.
+- **Payable:** collected on or before the window's last day (or with no date yet) waits for `commission_payable_on` (results sent + the client's own window: 7 days on v7, 14 on older agreements). Collected after: the 1st of the next month. No backstop. On the window's last day the client can still claim until midnight, as before.
+- **A claim:** a guarantee claim is an email, so Paul records it: "Client claimed" on the sale under Commission owed (fn `sales-earnings` `set_claim`, `payment_ledger.commission_claim_at`, admin only, can be undone). It refunds nobody. The first payment fully refunded or lost inside the window counts as a claim by itself. Either way every unpaid line on the sale is cancelled. A line already paid stays paid until its refund lands, which then makes it an offset.
+- **Refunds, disputes:** kept. An open dispute holds that line. A refund cancels the line, or the same share of its pounds if partial, or is an offset after payout. A refunded monthly still used its place in the first 6.
+- **Non-payment:** a failed payment is not a payment. A recovered one earns in its place, payable the 1st after it landed.
+- **Leavers:** a salesperson whose engagement ended is still paid on the first 6 as they arrive (this replaces "only while engaged" for these sales). The first payment must still be a sale they closed while engaged. Payments after the CLIENT's service ended still earn nothing.
+- **Old rows:** a sale's `payout_rule` decides. A payment dated before `PAYOUT_RULE_FIXED_V1_FROM` keeps `legacy` or `plan_v1`, and the engine keeps those paths. On 2026-11-04 the ledger held 27 rows and no real earning sale (test sales, the QA fixture, the admin's own at £0), so no real person's commission moves.
+- **Screens:** Commission owed: per person, Owed now, Paid so far, Mark as paid, their next payments with a countdown; open a person for their sales ("Complete monthly · 2 of 6 paid · £50 of £150", "+£25 big-month bonus"). The Sales page's Your payments shows the same for one person, no buttons. The month card counts to the bonus. The rate column is gone from the tables.
+- ⚠️ **What's New keeps its old entries** that mention percentages, as dated history.
+- ⚠️ **The sales contractor agreement (draft v2)** still describes percentages and trailing payments. Paul is updating it to match, the leaver rule included.
+- ⚠️ **Until `REMEASURE_RESULTS_COPY_APPROVED` is on**, no results go, so everything collected stays in Waiting with no date. Now that includes monthlies, not just first payments.
+
+**Proof, not yet live:** `scripts/commission-fixed-amounts.test.ts` (totals to the penny, every case Paul listed). `supabase/tests/commission-fixed-amounts.sql` passed with the migration in a rolled-back transaction on the live database; read back, nothing stayed.
+
+Everything below is the older record. Where it names a percentage, it now applies only to rows already on `legacy` or `plan_v1`.
+
 Branch `feat/commission-owed-tracker`. Every number lives in `src/lib/commissionConfig.ts`. The database mirrors two of them
 (`monthly_tier_rate`, `commission_payable_days`), pinned by `scripts/monthly-commission-tiers.test.ts` and `scripts/commission-owed.test.ts`.
 

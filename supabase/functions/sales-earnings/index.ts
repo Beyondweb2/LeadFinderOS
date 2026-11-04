@@ -20,6 +20,8 @@ import { monthlyDiffers, salePlanParts } from "../../../src/lib/salePlan.ts";
 //   mark_paid (admin) — record a bank transfer Paul made: { person } (everything due now) or { item_key }, with { expected_total }.
 //     The server works the money out again from the ledger; the browser's figure only has to agree. Nothing moves money here.
 //   undo_paid (admin) — { batch_id }, for a payment this admin just recorded.
+//   set_claim (admin) — { lead_id, claimed }: record, or take back, a guarantee claim on a fixed-rules sale. Nothing on that sale is then
+//     payable. It only records what Paul was told by email; it refunds nobody.
 //   record_payout (admin) — record a payout actually made: { user_id, period_month: "YYYY-MM", amount_gbp, paid_at, note }.
 //   backfill (admin) — rebuild ledger rows from Stripe's own history. { apply: false } (the default) only
 //     REPORTS what it would write; { apply: true } writes (idempotent — unique by the Stripe object).
@@ -235,7 +237,7 @@ Deno.serve(async (req) => {
       const earnings = await loadEarnings(service, personId, today);
       const owed = owedFrom(earnings, today);
       /* The belt: a salesperson's answer holds nobody else's money. */
-      if (actor.role === "sales" && [...owed.next, ...owed.quiet].some((i) => i.sellerId !== actor.id)) return json({ ok: false, error: "scope_error" }, 500);
+      if (actor.role === "sales" && [...owed.next, ...owed.quiet, ...owed.sales].some((i) => i.sellerId !== actor.id)) return json({ ok: false, error: "scope_error" }, 500);
       const history = paidHistory(earnings.linePayments);
       if (actor.role === "sales") return json({ ok: true, ...owed, history, names: {}, new_paid_clients: [], ms: Date.now() - started });
       return json({ ok: true, ...owed, history, names: await teamNames(service), new_paid_clients: await newPaidClients(service), stripe_check: await lastStripeCheck(service), ms: Date.now() - started });
@@ -273,6 +275,16 @@ Deno.serve(async (req) => {
       if (error) return json({ ok: false, error: "write_failed", detail: "Not undone. Try again." }, 500);
       if (!data?.length) return json({ ok: false, error: "too_late", detail: "This payment can no longer be undone here." }, 409);
       return json({ ok: true, count: data.length });
+    }
+    if (mode === "set_claim") {
+      const leadId = String(body.lead_id ?? "");
+      if (!UUID_RE.test(leadId) || typeof body.claimed !== "boolean") return json({ ok: false, error: "bad_request" }, 400);
+      const { data, error } = await service.from("payment_ledger")
+        .update(body.claimed ? { commission_claim_at: new Date().toISOString(), commission_claim_by: actor.id } : { commission_claim_at: null, commission_claim_by: null })
+        .eq("lead_id", leadId).eq("kind", "initial").eq("payout_rule", "fixed_v1").eq("status", "succeeded").select("id");
+      if (error) return json({ ok: false, error: "write_failed", detail: "Not saved. Try again." }, 500);
+      if (!data?.length) return json({ ok: false, error: "not_found", detail: "That sale is not on the fixed rules." }, 404);
+      return json({ ok: true, claimed: body.claimed });
     }
     if (mode === "record_payout") {
       const month = String(body.period_month ?? "");

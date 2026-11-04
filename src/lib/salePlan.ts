@@ -52,6 +52,12 @@ export function salePlanWordsOr(plan: string | null | undefined, oldPlanWords: s
   return isPaymentPlan(plan) && plan !== 'legacy_twelve' ? salePlanParts(plan).words : oldPlanWords;
 }
 
+/** The plan's name on a commission screen: "Complete monthly" · "Complete up front" · "Essential in full" · "Essential 6 months". */
+export function commissionPlanWords(plan: string | null | undefined): string {
+  const words: Partial<Record<PaymentPlan, string>> = { complete: 'Complete monthly', complete_upfront: 'Complete up front', full: 'Essential in full', six: 'Essential 6 months', twelve: 'Essential 12 months' };
+  return (isPaymentPlan(plan) ? words[plan] : undefined) ?? 'Old plan';
+}
+
 export interface SalePlanParts { product: PlanProduct | null; option: PayOption; words: string; }
 
 /** "Complete · monthly" / "Essential · pay in full" / "Old plan". A blank plan is the v5 offer (paymentPlans.ts). */

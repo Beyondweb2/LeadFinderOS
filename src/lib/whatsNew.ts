@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-04-commission-fixed-admin', date: '2026-11-04', title: 'Commission is now fixed pounds, and easier to pay', audience: 'admin',
+    body: 'New sales earn fixed amounts by plan, with a £25 bonus from sale 13 in a month. Commission owed now shows each person, what you owe them, when, and each sale’s progress in plain words.',
+    report: {
+      added: ['Each person on Commission owed now lists their own next payments with a countdown. Open a person to see their sales, like Complete monthly · 2 of 6 paid · £50 of £150.', 'A big-month bonus: sale 13 and above in a UK calendar month earns +£25 once, paid with that sale’s first commission.', 'Client claimed, on a sale whose guarantee window is still open. It records a claim you were told about, so nothing on that sale becomes payable. It refunds nobody.'],
+      changed: ['Complete monthly earns £25 on each of the first 6 payments. Complete up front £300. Essential in full £150. Essential payment plans £15 on each of the first 6.', 'Anything collected before the guarantee window closes is payable when it closes. Anything after is payable on the 1st of the next month.', 'A salesperson who leaves is still paid on those first payments as they arrive.'],
+      removed: ['Percentages and the rate column from every commission screen.', 'The 30, 40 and 50 steps.'],
+      effect: 'You can see what you owe, to whom and when, in pounds. No real commission moved: no salesperson has earned yet. Still pay by bank transfer, then press Mark as paid.',
+    } },
+  { id: '2026-11-04-commission-fixed-sales', date: '2026-11-04', title: 'Your commission is now fixed pounds', audience: 'sales',
+    body: 'Every sale now earns a set amount, so you know what it pays before you close it. Sale 13 and above in a month earns an extra £25.',
+    report: {
+      added: ['Your sales on Your payments, like Complete monthly · 2 of 6 paid · £50 of £150.', 'A big-month bonus: sale 13 and above in a UK calendar month earns +£25 once, paid with that sale’s first commission. It resets on the 1st.'],
+      changed: ['Complete monthly: £25 on each of the customer’s first 6 payments, up to £150. Complete up front: £300. Essential in full: £150. Essential payment plans: £15 on each of the first 6, up to £90.', 'Anything collected before the guarantee window closes is payable when it closes, 7 days after the four-week audit is sent. Anything after is payable on the 1st of the next month. If the client claims, nothing on that sale is payable.', 'If you leave, you are still paid on those first payments as they arrive.'],
+      removed: ['Percentages from your commission screens.'],
+      effect: 'Your screen shows what you are owed and when, in pounds. Nothing on payments after the first 6, hosting, renewals or upsells.',
+    } },
   { id: '2026-11-03-quick-check-free-layout', date: '2026-11-03', title: 'Quick checks now use the full report layout', audience: 'all',
     body: 'The report you send after a quick check now looks like the free check: a percentage at the top, the questions asked, and what we found on the prospect\'s website. The offer on the call screen also now shows the pay-up-front price.',
     report: {

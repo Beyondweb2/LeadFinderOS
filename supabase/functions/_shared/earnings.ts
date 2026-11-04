@@ -102,7 +102,7 @@ export function engagementOf(events: EngagementEvent[] | undefined): Engagement 
 
 export async function loadEarnings(service: Service, personId: string | null, todayIso: string): Promise<Earnings> {
   const [ledgerRes, rolesRes, payoutsRes, teamRes, logRes, linePayRes] = await Promise.all([
-    service.from("payment_ledger").select("id, lead_id, kind, status, amount_gbp, occurred_at, stripe_object_id, stripe_payment_intent_id, stripe_charge_id, stripe_invoice_id, sold_by_user_id, commission_rule, commission_month_start, commission_month_seq, commission_rate, payout_rule, sale_plan, sale_plan_flag, commission_payable_on").order("occurred_at").limit(10000),
+    service.from("payment_ledger").select("id, lead_id, kind, status, amount_gbp, occurred_at, stripe_object_id, stripe_payment_intent_id, stripe_charge_id, stripe_invoice_id, sold_by_user_id, commission_rule, commission_month_start, commission_month_seq, commission_rate, payout_rule, sale_plan, sale_plan_flag, commission_payable_on, commission_claim_at").order("occurred_at").limit(10000),
     service.from("user_roles").select("user_id, role"),
     service.from("commission_payouts").select("user_id, period_month, amount_gbp, paid_at"),
     service.from("team_members").select("user_id, status, disabled_at, is_book_owner"),
@@ -219,7 +219,7 @@ export async function loadEarnings(service: Service, personId: string | null, to
     const monthly = lastRecurring.get(c.leadId) ?? planMonthly;
     const active = !!status && LIVE_SUBSCRIPTION.has(status);
     const route = serviceRouteForTotal(leads.get(c.leadId)?.contract_total_payments ?? null, leads.get(c.leadId)?.payment_plan);
-    return { ...c, subscriptionStatus: status, package: route ? SERVICE_ROUTE_NAME[route] : null, remainingPotential: active ? round2(c.commissionablePaymentsLeft * commissionOn(monthly, COMMISSION_RECURRING_RATE)) : 0, _proj: { leadId: c.leadId, paymentsLeft: c.commissionablePaymentsLeft, monthlyGbp: monthly, active } as ProjectionInput };
+    return { ...c, subscriptionStatus: status, package: route ? SERVICE_ROUTE_NAME[route] : null, remainingPotential: active ? round2(c.commissionablePaymentsLeft * (c.fixedPerPayment ?? commissionOn(monthly, COMMISSION_RECURRING_RATE))) : 0, _proj: { leadId: c.leadId, paymentsLeft: c.commissionablePaymentsLeft, monthlyGbp: monthly, active, fixedPerPayment: c.fixedPerPayment } as ProjectionInput };
   });
   const totals = earningsTotals(lines, payouts, clients.map((c) => c._proj), todayIso);
   const sellers = [...new Set(lines.map((l) => l.sellerId).filter((s): s is string => !!s && sales.has(s)))];
@@ -233,7 +233,7 @@ export async function loadEarnings(service: Service, personId: string | null, to
     const l = leads.get(c.leadId);
     return {
       leadId: c.leadId, business: l?.business_name ?? "Client", nextPaymentAt: l?.subscription_renews_at ?? null,
-      paymentsLeft: c.commissionablePaymentsLeft, monthlyGbp: c._proj.monthlyGbp, live: !!l?.subscription_status && FORECAST_LIVE.has(l.subscription_status),
+      paymentsLeft: c.commissionablePaymentsLeft, monthlyGbp: c._proj.monthlyGbp, fixedPerPayment: c.fixedPerPayment, live: !!l?.subscription_status && FORECAST_LIVE.has(l.subscription_status),
     };
   }), todayIso);
   const recurringOf = new Map<string, number[]>();

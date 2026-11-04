@@ -2,7 +2,8 @@ import { CalendarRange, Info, PiggyBank, TrendingUp, UserX, Wallet } from 'lucid
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { KpiCard, Panel, gbp } from '@/components/salesDash/ui';
-import { COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, ENGAGEMENT_END_UNKNOWN, FORECAST_MONTHS, type CommissionForecast, type EarningsTotals, type ForecastMonth } from '@/lib/commission';
+import { ENGAGEMENT_END_UNKNOWN, FORECAST_MONTHS, type CommissionForecast, type EarningsTotals, type ForecastMonth } from '@/lib/commission';
+import { FIXED_COMMISSION } from '@/lib/commissionConfig';
 
 /* ══ YOUR MONEY — THREE FIGURES AND THE NEXT SIX MONTHS (Paul, 2026-10-02; redesigned the same day) ══
    EarningsStats: the three money figures, each once, beside the month's ladder — earned this month,
@@ -13,7 +14,6 @@ import { COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, ENGAGEMENT_END_U
    from the payments table and each live subscription's next billing date. Never a sale that has not
    happened. */
 
-const pct = (r: number) => `${Math.round(r * 100)}%`;
 const shortMonth = (ms: string) => new Date(`${ms.slice(0, 7)}-15T12:00:00Z`).toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' });
 const longMonth = (ms: string) => new Date(`${ms.slice(0, 7)}-15T12:00:00Z`).toLocaleString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const dayMonth = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' });
@@ -92,7 +92,7 @@ export function CommissionForecastCard({ forecast, engagement }: {
         {ended && (
           <p className="mb-3 flex items-start gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200" data-testid="forecast-engagement-ended">
             <UserX className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            Engagement ended{engagement?.endedAt && engagement.endedAt !== ENGAGEMENT_END_UNKNOWN ? ` on ${dayMonthYear(engagement.endedAt)}` : ''}. Commission earned before then stays payable; client payments after it earn no new commission.
+            Engagement ended{engagement?.endedAt && engagement.endedAt !== ENGAGEMENT_END_UNKNOWN ? ` on ${dayMonthYear(engagement.endedAt)}` : ''}. What you have earned stays payable, and you are still paid on each sale’s first payments as they arrive.
           </p>
         )}
         <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6" role="list" aria-label="Commission by month">
@@ -110,7 +110,7 @@ export function CommissionForecastCard({ forecast, engagement }: {
         <p className="mt-3 flex items-start gap-1.5 border-t border-border/60 pt-3 text-[11px] leading-relaxed text-muted-foreground">
           <Info className="mt-0.5 h-3 w-3 shrink-0" />
           <span>
-            Expected is {pct(COMMISSION_RECURRING_RATE)} of each live client's next monthly payments (up to {COMMISSION_RECURRING_COUNT} per client; older sales keep their own count), on the date Stripe will bill them — not earned until they pay — plus first-payment commission on the date it becomes payable. A failed or refunded payment drops out. New sales are never guessed.
+            Expected is the fixed pounds on each live client's next monthly payments, up to the first {FIXED_COMMISSION.complete.payments} payments of the sale, on the date Stripe will bill them — not earned until they pay — plus commission waiting for the guarantee on the date it becomes payable. A failed or refunded payment drops out. New sales are never guessed.
           </span>
         </p>
       </div>

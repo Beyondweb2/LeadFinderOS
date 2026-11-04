@@ -1,33 +1,27 @@
-import { CalendarDays, Check, Lock, Sparkles, Undo2 } from 'lucide-react';
+import { CalendarDays, Sparkles, Undo2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { SURFACE, gbp } from '@/components/salesDash/ui';
-import { COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, MONTHLY_TIERS, monthName, monthlyTracker, monthlyTrackerNextLine, type CommissionLine, type LadderSale } from '@/lib/commission';
+import { monthName, monthlyTracker, monthlyTrackerNextLine, type CommissionLine, type LadderSale } from '@/lib/commission';
+import { BIG_MONTH_BONUS_FROM_SALE, BIG_MONTH_BONUS_GBP } from '@/lib/commissionConfig';
 import { salePlanWordsOr } from '@/lib/salePlan';
 import type { EarningsResponse } from '@/hooks/useEarnings';
 
-/* ══ THE MONTH'S LADDER — the Sales dashboard's hero (2026-10-01; redesigned 2026-10-02) ═══════════
-   The first thing a salesperson sees: how many sales this month, the progress line to the next rate and
-   what the next sale earns. Below them the three rates as three steps — unlocked (teal, ticked), the one
-   you are on (amber, bright) and the ones still to unlock (muted, locked) — with one dot per sale that
-   counts (src/lib/commission.ts MONTHLY_TIERS, the same table the database stamps with). Tapping a dot
-   shows that sale. The money (earned this month, to date, expected) sits beside it in EarningsStats, so
-   no figure is drawn twice.
+/* ══ THE MONTH CARD — the Sales dashboard's hero (2026-10-01; fixed pounds 2026-11-04, docs/commission-owed.md) ═══════════
+   The first thing a salesperson sees: how many sales this month and how far off the big-month bonus they are. Below that the month in
+   two steps: the sales before the bonus and the sales that earn it, with one dot per sale that counts. Tapping a dot shows that sale.
+   The money (earned this month, to date, expected) sits beside it in EarningsStats, so no figure is drawn twice.
    ⛔ STYLE (Paul, 2026-10-02): the dark card language of the work tiles — dark navy, a deep coloured
    wash, a coloured edge, white numbers. NOT a solid green card ("green on green with white text looks
    washed out"; "no green hero"). The steps sit side by side from lg and stack on a phone. */
 
-const pct = (r: number) => `${Math.round(r * 100)}%`;
 const dayMonth = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' });
-/** How many empty dots the open-ended top tier draws before it says "and every sale after". */
-const TOP_TIER_DOTS = 3;
-/** "1–12 sales this month = 30% · 13–24 = 40% · 25+ = 50%" from the tier table. */
-const zoneWords = (zones: { rate: number; from: number; to: number | null }[]) =>
-  zones.map((z, i) => `${z.to !== null ? `${z.from}–${z.to}` : `${z.from}+`}${i === 0 ? ' sales this month' : ''} = ${pct(z.rate)}`).join(' · ');
+/** How many empty dots the open-ended bonus step draws before it says "and every sale after". */
+const BONUS_STEP_DOTS = 3;
 
 type Client = EarningsResponse['clients'][number];
-type StepState = 'done' | 'here' | 'locked';
-const DOT: Record<StepState, string> = { done: 'bg-teal-300', here: 'bg-amber-300', locked: 'bg-slate-400' };
+type StepState = 'done' | 'here' | 'ahead';
+const DOT: Record<StepState, string> = { done: 'bg-teal-300', here: 'bg-amber-300', ahead: 'bg-slate-400' };
 
 function SaleDot({ sale, client, plan, state }: { sale: LadderSale; client: Client | undefined; plan: string | null | undefined; state: StepState }) {
   const sold = salePlanWordsOr(plan, client?.package ?? '');
@@ -40,10 +34,10 @@ function SaleDot({ sale, client, plan, state }: { sale: LadderSale; client: Clie
       <PopoverContent className="w-64 space-y-1.5 p-3 text-xs" align="start">
         <p className="text-sm font-semibold">{client?.business ?? 'Client'}</p>
         <p className="text-muted-foreground">Sale {sale.seq} · {dayMonth(sale.occurredAt)}{sold ? ` · ${sold}` : ''}</p>
-        <p><span className="font-semibold text-teal-600 dark:text-teal-300">{gbp(sale.commission)}</span> commission ({pct(sale.rate)} of the first payment)</p>
+        <p><span className="font-semibold text-teal-600 dark:text-teal-300">{gbp(sale.commission)}</span> on the first payment{sale.seq >= BIG_MONTH_BONUS_FROM_SALE ? `, with the +£${BIG_MONTH_BONUS_GBP} big-month bonus` : ''}</p>
         <p className="text-muted-foreground">{!client ? null : client.commissionablePaymentsLeft > 0
-          ? `Plus 20% of the next ${client.commissionablePaymentsLeft} monthly payment${client.commissionablePaymentsLeft === 1 ? '' : 's'}${client.remainingPotential ? ` (up to ${gbp(client.remainingPotential)})` : ''}.`
-          : 'Monthly commission on this client: all received.'}</p>
+          ? `Plus ${client.commissionablePaymentsLeft} more payment${client.commissionablePaymentsLeft === 1 ? '' : 's'} that earn${client.commissionablePaymentsLeft === 1 ? 's' : ''}${client.remainingPotential ? ` (up to ${gbp(client.remainingPotential)})` : ''}.`
+          : 'Nothing more to come on this sale.'}</p>
       </PopoverContent>
     </Popover>
   );
@@ -57,11 +51,11 @@ export function MonthlyLadder({ lines, clients, sales, todayIso = new Date().toI
   const planOf = new Map((sales ?? []).map((s) => [s.leadId, s.plan]));
   const counted = t.sales.filter((s) => s.counted);
   const gone = t.sales.filter((s) => !s.counted);
-  const zones = MONTHLY_TIERS.map((z, i) => {
-    const from = i === 0 ? 1 : MONTHLY_TIERS[i - 1].upTo + 1;
-    const to = Number.isFinite(z.upTo) ? z.upTo : null;
-    return { ...z, i, from, to };
-  });
+  const beforeBonus = BIG_MONTH_BONUS_FROM_SALE - 1;
+  const steps = [
+    { key: 'before', title: `Sales 1–${beforeBonus}`, from: 1, to: beforeBonus as number | null, words: 'The plan’s commission' },
+    { key: 'bonus', title: `Sale ${BIG_MONTH_BONUS_FROM_SALE}+`, from: BIG_MONTH_BONUS_FROM_SALE, to: null as number | null, words: `+£${BIG_MONTH_BONUS_GBP} big-month bonus` },
+  ];
   const nextIndex = counted.length; // 0-based slot of the next sale
   return (
     <section className={cn('relative flex h-full min-w-0 flex-col overflow-hidden p-5 sm:p-6', SURFACE, 'border-indigo-400/30 bg-[hsl(226_52%_9%)]')} data-testid="monthly-ladder">
@@ -72,32 +66,26 @@ export function MonthlyLadder({ lines, clients, sales, todayIso = new Date().toI
       <div className="relative">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/20 px-2.5 py-1 text-xs font-semibold text-indigo-100 ring-1 ring-inset ring-indigo-400/30"><CalendarDays className="h-3.5 w-3.5" />{monthName(t.monthStart)}</p>
-          <p className="text-xs font-medium text-slate-300">Your next sale earns <span className="rounded-full bg-amber-400 px-2 py-0.5 font-extrabold text-amber-950">{pct(t.nextSaleRate)}</span></p>
+          {t.bonusOn && <p className="text-xs font-medium text-slate-300">Your next sale earns <span className="rounded-full bg-amber-400 px-2 py-0.5 font-extrabold text-amber-950">+£{BIG_MONTH_BONUS_GBP}</span></p>}
         </div>
         <p className="mt-4 text-6xl font-extrabold leading-none tracking-tight tabular-nums text-white" data-testid="ladder-count">{t.counted}<span className="ml-3 text-xl font-semibold text-slate-300">sale{t.counted === 1 ? '' : 's'} this month</span></p>
-        {/* ⛔ THE PROGRESS LINE IS THE HEADLINE (Paul, 2026-10-02): "1 more sale to unlock 40%", then
-            "40% unlocked · 12 more sales to unlock 50%". */}
         <p className="mt-3 text-xl font-bold leading-snug text-amber-200" data-testid="ladder-next-line">{monthlyTrackerNextLine(t)}</p>
       </div>
 
-      <div className="relative mt-5 mb-4 grid gap-2.5 lg:grid-cols-[12fr_12fr_7fr]" role="list" aria-label="Sales this month by commission rate">
-        {zones.map((z) => {
-          const slots = z.to !== null ? z.to - z.from + 1 : Math.max(TOP_TIER_DOTS, counted.length - z.from + 2);
+      <div className="relative mt-5 mb-4 grid gap-2.5 lg:grid-cols-[12fr_7fr]" role="list" aria-label="Sales this month">
+        {steps.map((z) => {
+          const slots = z.to !== null ? z.to - z.from + 1 : Math.max(BONUS_STEP_DOTS, counted.length - z.from + 2);
           const here = nextIndex + 1 >= z.from && (z.to === null || nextIndex + 1 <= z.to);
           const done = z.to !== null && counted.length >= z.to;
-          const state: StepState = here ? 'here' : done ? 'done' : 'locked';
+          const state: StepState = here ? 'here' : done ? 'done' : 'ahead';
           return (
-            <div key={z.i} role="listitem" data-testid="ladder-tier"
+            <div key={z.key} role="listitem" data-testid="ladder-tier"
               className={cn('rounded-2xl border p-3',
                 state === 'here' ? 'border-amber-400/60 bg-amber-500/[0.14] shadow-[0_0_0_1px_rgba(251,191,36,0.15),0_10px_24px_-12px_rgba(245,158,11,0.45)]'
                   : state === 'done' ? 'border-teal-400/35 bg-teal-500/[0.10]' : 'border-white/[0.07] bg-slate-950/40')}>
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1.5">
-                  <span className={cn('text-2xl font-extrabold tabular-nums', state === 'here' ? 'text-amber-300' : state === 'done' ? 'text-teal-200' : 'text-slate-400')}>{pct(z.rate)}</span>
-                  {state === 'done' && <span className="flex h-5 w-5 items-center justify-center rounded-full bg-teal-400 text-teal-950" title="Unlocked"><Check className="h-3 w-3" strokeWidth={3} /></span>}
-                  {state === 'locked' && <Lock className="h-3.5 w-3.5 text-slate-500" aria-label="Not yet unlocked" />}
-                </span>
-                <span className={cn('whitespace-nowrap text-xs font-semibold', state === 'locked' ? 'text-slate-500' : 'text-slate-300')}>{z.to !== null ? `Sales ${z.from}–${z.to}` : `Sale ${z.from}+`}</span>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2">
+                <span className={cn('text-sm font-extrabold', state === 'here' ? 'text-amber-300' : state === 'done' ? 'text-teal-200' : 'text-slate-400')}>{z.words}</span>
+                <span className={cn('whitespace-nowrap text-xs font-semibold', state === 'ahead' ? 'text-slate-500' : 'text-slate-300')}>{z.title}</span>
               </div>
               <div className="flex flex-wrap gap-1.5 lg:gap-1">
                 {Array.from({ length: slots }, (_, k) => {
@@ -107,7 +95,7 @@ export function MonthlyLadder({ lines, clients, sales, todayIso = new Date().toI
                   return <span key={k} aria-hidden className={cn('h-4 w-4 rounded-full border-2 lg:h-3 lg:w-3 lg:border-[1.5px]', idx === nextIndex ? 'animate-pulse border-dashed border-amber-300 motion-reduce:animate-none' : state === 'here' ? 'border-amber-200/30' : 'border-slate-600/70')} />;
                 })}
               </div>
-              {state === 'here' && <p className="mt-2 flex items-center gap-1 text-xs font-bold text-amber-200"><Sparkles className="h-3 w-3" />{z.to === null ? 'You are on the top rate' : `${(z.to ?? 0) - counted.length} to go at ${pct(z.rate)}`}</p>}
+              {state === 'here' && z.to !== null && <p className="mt-2 flex items-center gap-1 text-xs font-bold text-amber-200"><Sparkles className="h-3 w-3" />{z.to - counted.length} to go before the bonus</p>}
               {state !== 'here' && z.to === null && <p className="mt-2 text-[11px] text-slate-500">and every sale after</p>}
             </div>
           );
@@ -115,11 +103,11 @@ export function MonthlyLadder({ lines, clients, sales, todayIso = new Date().toI
       </div>
       {gone.length > 0 && (
         <p className="relative mt-3 flex items-center gap-1.5 text-xs text-slate-300" data-testid="ladder-refunded"><Undo2 className="h-3.5 w-3.5" />
-          {gone.length} sale{gone.length === 1 ? '' : 's'} refunded this month — {gone.length === 1 ? 'it no longer counts' : 'they no longer count'} towards your rate.</p>
+          {gone.length} sale{gone.length === 1 ? '' : 's'} refunded this month — {gone.length === 1 ? 'it no longer counts' : 'they no longer count'} towards the bonus.</p>
       )}
       {/* The whole scheme in one line, from the same constants that pay it. */}
       <p className="relative mt-4 border-t border-white/[0.08] pt-3 lg:mt-auto text-xs leading-relaxed text-slate-300" data-testid="ladder-scheme">
-        {zoneWords(zones)} of the first payment, <span className="font-bold text-white">plus {pct(COMMISSION_RECURRING_RATE)} of the next {COMMISSION_RECURRING_COUNT} successful monthly payments</span> from each client. Each sale keeps its rate; the count restarts on the 1st (UK time).
+        Sale {BIG_MONTH_BONUS_FROM_SALE} and above in a month earns <span className="font-bold text-white">+£{BIG_MONTH_BONUS_GBP} once</span>, paid with that sale’s first commission. Sales are numbered when the first payment is collected. Never backdated; the count restarts on the 1st (UK time).
       </p>
     </section>
   );
