@@ -163,7 +163,7 @@ ok(!d1.send && d1.kind === 'engine_imbalance', 'an engine drop-out HOLDS the res
 ok(remeasureResultsDecision({ replayRuns: runsDone, replayTarget: 3, comparison: balanced, terms, copyApproved: true }).send === true, 'a balanced comparison may send (copy approved)');
 const noEngineCount = { ...balanced } as Record<string, unknown>; delete noEngineCount.engineShort;
 ok(remeasureResultsDecision({ replayRuns: runsDone, replayTarget: 3, comparison: noEngineCount as never, terms, copyApproved: true }).send === false, 'a comparison with no engine count HOLDS (absent means do not, on a sending path)');
-ok(remeasureResultsDecision({ replayRuns: runsDone, replayTarget: 3, comparison: balanced, terms }).send === false, 'still held while REMEASURE_RESULTS_COPY_APPROVED is false');
+ok(remeasureResultsDecision({ replayRuns: runsDone, replayTarget: 3, comparison: balanced, terms, copyApproved: false }).send === false, 'held whenever the copy is not approved');
 const extra = compareMeasurements(side(4), side(4, { extraQ: true }), opts);
 ok(extra.after.answered === balanced.after.answered && extra.after.named === balanced.after.named, 'a question asked only on one side moves NEITHER total (matched questions only)');
 ok(extra.onlyAfter.length === 1, '…and is reported as asked only after');

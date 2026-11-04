@@ -6,7 +6,7 @@ import {
   type DeliveryChecklist as ChecklistMap,
 } from '@/lib/deliveryCockpit';
 import type { ClientPageLine } from '@/hooks/useClientPages';
-import { LEGACY_TERMS_LABEL, claimWindowCloseIso } from '@/lib/remeasureResults';
+import { LEGACY_TERMS_LABEL } from '@/lib/remeasureResults';
 
 /* ══ THE DELIVERY CHECKLIST — ONE COMPONENT, TWO HOMES (2026-09-13) ═══════════════════════════
    Rendered by the lead card's cockpit (Outreach / Inbox) AND the Dashboard's client delivery card,
@@ -32,6 +32,8 @@ export interface DeliveryChecklistProps {
   results: {
     sentAt: string | null;
     held: boolean;
+    /** The last day this client can claim, from the terms they signed (timelineView; 7 days on v7, 14 before). Absent = no date shown, never a guess. */
+    windowCloseDay?: string | null;
     /** ⛔ THE REASON THE SENDER WILL REFUSE THIS CLIENT, or null when they are on today's terms.
      *  Shown INSTEAD of "not sent yet", which would be a lie: nothing is coming, and the operator
      *  has to write to them by hand. Same predicate the server runs (currentTermsVerdict). */
@@ -56,7 +58,7 @@ export function DeliveryChecklistList({
   checklist, onToggle, pages, pagesLoading, onTogglePage, remeasure, results, baselineDone, baselineDoneLabel, compact,
 }: DeliveryChecklistProps) {
   const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : null);
-  const windowClose = claimWindowCloseIso(results.sentAt);
+  const windowClose = results.windowCloseDay ?? null;
   const rm = remeasureStatus(remeasure.dueISO, Date.now());
   const rmTone =
     rm.state === 'red' ? 'border-red-500/50 bg-red-500/10 text-red-500'

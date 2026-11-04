@@ -19,7 +19,7 @@ import {
   REPORT_CHROME_CSS_CORE, REPORT_CHROME_CSS_FOOT, REPORT_CHROME_CSS_PRINT,
 } from './aiAuditReportHtml.ts';
 import type { MeasurementComparison } from './measurementCompare.ts';
-import { numberWentUp, resultsDocumentMeaning, weeksWord } from './remeasureResults.ts';
+import { numberWentUp, resultsDocumentMeaning, weeksWord, type ResultsTermsCopy } from './remeasureResults.ts';
 
 export interface RemeasureResultsDoc {
   businessName: string;
@@ -30,6 +30,8 @@ export interface RemeasureResultsDoc {
   sentAtLabel: string;         // e.g. "13 Sep 2026"
   /** The client's re-measure clock (remeasureWeeksFor): 4, or 8 for a site we build on a brand-new domain. */
   weeks?: number | null;
+  /** This client's plan, window and first monthly date: the same facts the email was written from (resultsTermsCopy). */
+  terms?: ResultsTermsCopy;
 }
 
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : 'date not recorded');
@@ -43,6 +45,7 @@ export function renderRemeasureResultsHtml(d: RemeasureResultsDoc): string {
     beforeNamed: c.before.named, beforeAnswered: c.before.answered,
     afterNamed: c.after.named, afterAnswered: c.after.answered,
     questions: c.matchedCount, wentUp: up, withinNoise: c.withinNoise, documentUrl: '', weeks: d.weeks, googleAiInScore: c.scoringMethod === 2,
+    ...d.terms,
   });
   const w = weeksWord(d.weeks);
   const W = w.charAt(0).toUpperCase() + w.slice(1);

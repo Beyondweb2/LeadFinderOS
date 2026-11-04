@@ -14,7 +14,7 @@
    different numbers.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { loadRemeasureBundle } from "../_shared/remeasure-results.ts";
+import { loadRemeasureBundle, prettyDate, resultsTermsCopy } from "../_shared/remeasure-results.ts";
 import { renderRemeasureResultsHtml } from "../../../src/lib/remeasureResultsHtml.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -55,6 +55,8 @@ Deno.serve(async (req) => {
       return unavailable("These results are not published.");
     }
     const { audit, lead, comparison, baselineRuns, replayRuns, town } = bundle;
+    /* The same terms the email was written from, as at the stamp. A failed read is the error page below, never wrong terms. */
+    const { copy } = await resultsTermsCopy(service, lead, lead.remeasure_results_sent_at);
     const html = renderRemeasureResultsHtml({
       businessName: (audit.business_name ?? lead.business_name ?? "your business").trim(),
       town,
@@ -63,6 +65,7 @@ Deno.serve(async (req) => {
       afterDate: replayRuns[replayRuns.length - 1]?.created_at ?? null,
       sentAtLabel: new Date(lead.remeasure_results_sent_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }),
       weeks: bundle.weeks,
+      terms: { ...copy, sentOnWords: prettyDate(lead.remeasure_results_sent_at) },
     });
     return htmlResponse(html, 200);
   } catch (e) {

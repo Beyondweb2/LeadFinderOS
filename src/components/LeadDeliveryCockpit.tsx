@@ -12,6 +12,7 @@ import { format } from 'date-fns';
 import { TONE } from '@/components/operator/ui';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { invokeEdge } from '@/lib/edgeInvoke';
 import { useAuth } from '@/hooks/useAuth';
 import { normalizeWaNumber } from '@/hooks/useInbox';
 import { REPORT_PUBLIC_ORIGIN } from '@/lib/findableOffer';
@@ -60,6 +61,17 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
      measurement (isInternalMeasurement), so the "Client report" link below can never resolve to a
      document the public renderer refuses. */
   const [audit, setAudit] = useState<BaselineAudit | null>(null);
+  /* Only asked once results have gone: the refund window depends on the terms signed, which only the server reads. A failed read shows no date. */
+  const [windowCloseDay, setWindowCloseDay] = useState<string | null>(null);
+  const resultsSentAt = lead.remeasure_results_sent_at ?? null;
+  useEffect(() => {
+    if (!resultsSentAt) { setWindowCloseDay(null); return; }
+    let live = true;
+    invokeEdge<{ view?: { refundWindowEndDay?: string | null } }>('paid-client-hub', { action: 'terms_status', lead_id: lead.id })
+      .then((r) => { if (live) setWindowCloseDay(r?.view?.refundWindowEndDay ?? null); })
+      .catch(() => { if (live) setWindowCloseDay(null); });
+    return () => { live = false; };
+  }, [lead.id, resultsSentAt]);
   const [auditLoading, setAuditLoading] = useState(true);
   const [questions, setQuestions] = useState<string[] | null>(null);
   const [questionsOpen, setQuestionsOpen] = useState(false);
@@ -280,7 +292,7 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
           remeasure={{ dueISO: remeasureDue, fired: !!lead.remeasure_audit_id }}
           /* The cockpit does not load the replay audit, so it cannot tell "held" from "not yet";
              the Dashboard's client card does. Here the stamp alone is shown. */
-          results={{ sentAt: lead.remeasure_results_sent_at ?? null, held: false }}
+          results={{ sentAt: lead.remeasure_results_sent_at ?? null, held: false, windowCloseDay }}
           baselineDone={!!audit?.completedAt}
           baselineDoneLabel={audit?.completedAt ? new Date(audit.completedAt).toLocaleDateString('en-GB') : null}
         />

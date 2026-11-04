@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-04-four-week-results-on', date: '2026-11-04', title: 'Four-week results now send', audience: 'admin',
+    body: 'You approved the wording, so four-week results now go by email on their own when a re-measure finishes. The email and the results page say the same thing for each client’s plan and agreement.',
+    report: {
+      added: ['The line "We improve AI visibility or you get your money back" when the number has not gone up.', 'When the number has not gone up, a monthly-plan client is told the date of their first payment if they don’t claim.'],
+      changed: ['The results page shows each client’s own refund terms: everything they paid, within 7 days on v7 and 14 on v6. It used to say 14 days and £99 for everyone.', 'Essential clients are told "We keep the work live", because monthly audits are Complete only.', 'The delivery checklist shows the claim window from the agreement they signed.'],
+      removed: ['The false "monthly not set up" and "payment start not set" alerts for clients who paid in full.'],
+      effect: 'Results no longer wait for you. A result still holds and tells you if the number cannot be proven or the client is on older terms. Sending one sets the client’s first monthly date in Stripe and starts the commission date.',
+    } },
+  { id: '2026-11-04-commission-day-after-window', date: '2026-11-04', title: 'Commission is payable the day after the guarantee window', audience: 'all',
+    body: 'Commission waiting on a client’s guarantee window now becomes payable the day after the window closes, never on its last day.',
+    report: {
+      added: [],
+      changed: ['The payable date moves one day later: the day after the window closes, not the last day of it.'],
+      removed: [],
+      effect: 'Nothing is due while a client can still claim. No amount changes, and no sale had a date yet.',
+    } },
   { id: '2026-11-04-commission-fixed-admin', date: '2026-11-04', title: 'Commission is now fixed pounds, and easier to pay', audience: 'admin',
     body: 'New sales earn fixed amounts by plan, with a £25 bonus from sale 13 in a month. Commission owed now shows each person, what you owe them, when, and each sale’s progress in plain words.',
     report: {

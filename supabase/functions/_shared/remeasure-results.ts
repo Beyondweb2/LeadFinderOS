@@ -26,8 +26,10 @@ import { scoringMethodFor } from "../../../src/lib/aiOverview.ts";
 import type { QueueRowLite } from "../../../src/lib/baselineView.ts";
 import {
   remeasureResultsDecision, numberWentUp, resultsEmailSubject, resultsEmailParagraphs, REMEASURE_CLAIM_WINDOW_DAYS,
-  currentTermsVerdict, resultsBillingStartIso, type CurrentTermsVerdict,
+  currentTermsVerdict, resultsBillingStartIso, type CurrentTermsVerdict, type ResultsTermsCopy,
 } from "../../../src/lib/remeasureResults.ts";
+import { PAYMENT_PLAN_SPEC, isPaymentPlan } from "../../../src/lib/paymentPlans.ts";
+import { qaEmailHold } from "./qa-guard.ts";
 import { REPORT_PUBLIC_ORIGIN, remeasureWeeksFor } from "../../../src/lib/findableOffer.ts";
 import { reportOnceAnHour } from "./audit-baseline.ts";
 import { REFUND_WINDOW_DAYS_V7, continuingModeFor, isOptionBTerms, isV7Terms, paymentStart } from "../../../src/lib/clientTimeline.ts";
@@ -136,10 +138,39 @@ export async function loadRemeasureBundle(service: Client, remeasureAuditId: str
 }
 
 /** "11 October 2026" — what a person reads. UTC so a late-evening stamp cannot print yesterday. */
-function prettyDate(iso: string | null): string | null {
+export function prettyDate(iso: string | null): string | null {
   if (!iso) return null;
   const t = new Date(iso);
   return Number.isNaN(t.getTime()) ? null : t.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+}
+
+/* ⛔ ONE READ OF THIS CLIENT'S TERMS, FOR THE EMAIL AND THE PAGE (Paul, 2026-11-04). The page used to be told no plan and no
+   window, so it offered every client 14 days and £99 whatever they signed. `sentAtIso` is the stamp about to be written (sender) or
+   the stamp as written (page), so both derive the same dates.
+   ⛔ A FAILED READ THROWS, never falls back to other terms: the sender then holds with nothing claimed, the page shows its error. */
+export async function resultsTermsCopy(service: Client, lead: RemeasureBundle["lead"], sentAtIso: string): Promise<{ copy: ResultsTermsCopy; billingStartIso: string | null; v3StartDay: string | null; v3Terms: boolean }> {
+  /* 🔴 v3 (2026-10-05): THE SEND IS THE RESULTS DATE (clause 5.3), and the Payment Start Date is the day after the Refund Window
+     that starts then (5.6) — derived from the stamp, never from Stripe's hold date. Legacy clients keep reading Stripe's own date. */
+  const v3 = await loadTimelineFacts(service, lead.id);
+  const v3Terms = !!v3 && isOptionBTerms(v3.facts.terms);
+  const v3StartDay = v3Terms ? paymentStart({ ...v3!.facts, resultsSentAt: sentAtIso }).day : null;
+  const billingStartIso = v3Terms
+    ? (v3StartDay ? `${v3StartDay}T12:00:00.000Z` : null)
+    : resultsBillingStartIso({
+      subscriptionId: lead.stripe_subscription_id, subscriptionStatus: lead.subscription_status,
+      subscriptionRenewsAt: lead.subscription_renews_at, nowIso: sentAtIso,
+    });
+  return {
+    billingStartIso, v3StartDay, v3Terms,
+    copy: {
+      monthlyStartsOn: prettyDate(billingStartIso),
+      totalPayments: lead.contract_total_payments ?? null,
+      paymentPlan: (lead as { payment_plan?: string | null }).payment_plan ?? null,
+      v3Terms,
+      continuingMode: v3 ? continuingModeFor(v3.facts.terms, v3.facts.route) : undefined,
+      refundWindowDays: v3 && isV7Terms(v3.facts.terms) ? REFUND_WINDOW_DAYS_V7 : null,
+    },
+  };
 }
 
 async function emailOperator(subject: string, lines: string[]): Promise<void> {
@@ -212,6 +243,12 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
     await emailOperator(`FOUR-WEEK RESULTS HELD — ${businessName}`, [`No contact email for <b>${businessName}</b> (lead ${lead.id}). The results were NOT sent.`]);
     return { kind: "held", reason: "no contact email" };
   }
+  /* QA: a test lead's results go only to the QA sink (qa-guard.ts), like every other client email. A failed read throws, nothing claimed. */
+  const qaRefusal = await qaEmailHold(service, lead.id, to);
+  if (qaRefusal) {
+    await reportOnceAnHour(service, "remeasure_results_held", lead.id, qaRefusal, { remeasure_audit_id: audit.id, kind: "qa_hold" });
+    return { kind: "held", reason: qaRefusal };
+  }
 
   /* ⛔ THE WORDS ARE BUILT BEFORE THE CLAIM (2026-09-23). They were built after it, and the billing
      line called an undefined `monthlyStartIso`: a ReferenceError there would have left the stamp set
@@ -220,18 +257,7 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
      The billing date is Stripe's own, from the subscription created at sign-up (resultsBillingStartIso);
      no subscription, or one already billing, names no date. */
   const nowIso = new Date().toISOString();
-  /* 🔴 v3 (2026-10-05): THIS SEND IS THE RESULTS DATE (clause 5.3), and the Payment Start Date is the day
-     after the Refund Window that starts now (5.6) — derived from the stamp about to be written, never from
-     Stripe's hold date. Legacy clients keep reading Stripe's own date. */
-  const v3 = await loadTimelineFacts(service, lead.id).catch(() => null);
-  const v3Terms = !!v3 && isOptionBTerms(v3.facts.terms);
-  const v3StartDay = v3Terms ? paymentStart({ ...v3!.facts, resultsSentAt: nowIso }).day : null;
-  const billingStartIso = v3Terms
-    ? (v3StartDay ? `${v3StartDay}T12:00:00.000Z` : null)
-    : resultsBillingStartIso({
-      subscriptionId: lead.stripe_subscription_id, subscriptionStatus: lead.subscription_status,
-      subscriptionRenewsAt: lead.subscription_renews_at, nowIso,
-    });
+  const { copy: termsCopy, billingStartIso, v3StartDay, v3Terms } = await resultsTermsCopy(service, lead, nowIso);
   const copy = {
     businessName, town,
     beforeNamed: comparison.before.named, beforeAnswered: comparison.before.answered,
@@ -240,12 +266,7 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
     googleAiInScore: comparison.scoringMethod === 2,
     documentUrl: resultsPublicUrl(audit.id),
     weeks: bundle.weeks,
-    monthlyStartsOn: prettyDate(billingStartIso),
-    totalPayments: lead.contract_total_payments ?? null,
-    paymentPlan: (lead as { payment_plan?: string | null }).payment_plan ?? null,
-    v3Terms,
-    continuingMode: v3 ? continuingModeFor(v3.facts.terms, v3.facts.route) : undefined,
-    refundWindowDays: v3 && isV7Terms(v3.facts.terms) ? REFUND_WINDOW_DAYS_V7 : null,
+    ...termsCopy,
   };
   const paragraphs = resultsEmailParagraphs(copy);
   const subject = resultsEmailSubject(copy);
@@ -284,7 +305,7 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
 
   /* The outcome lives on the replay audit's first run results (jsonb, no migration), like the
      free-check stamp: what was sent, to whom, when, the provider id, and the window close. */
-  const stamp = { at: nowIso, billing_starts: billingStartIso, to, provider_message_id: providerMessageId, error, window_days: REMEASURE_CLAIM_WINDOW_DAYS, went_up: copy.wentUp, within_noise: copy.withinNoise, before: comparison.before, after: comparison.after };
+  const stamp = { at: nowIso, billing_starts: billingStartIso, to, provider_message_id: providerMessageId, error, window_days: copy.refundWindowDays ?? REMEASURE_CLAIM_WINDOW_DAYS, went_up: copy.wentUp, within_noise: copy.withinNoise, before: comparison.before, after: comparison.after };
   const firstRun = replayRuns[0];
   if (firstRun) {
     const { data: rr } = await service.from("ai_audit_runs").select("results").eq("id", firstRun.id).maybeSingle();
@@ -303,9 +324,12 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
      sender only READS it. A current-terms client with NO subscription (signed up before that change,
      or the sign-up creation failed) will never be billed automatically, so Paul is told — and the
      email above named no billing date for them. Non-fatal: the client already has their results. */
+  /* A plan paid in full has no monthly, so no subscription and no Payment Start Date is right, not an alarm. Asked positively: an unknown plan still alerts. */
+  const planId = (lead as { payment_plan?: string | null }).payment_plan;
+  const noMonthlyPlan = isPaymentPlan(planId) && PAYMENT_PLAN_SPEC[planId].monthlyGbp === 0;
   const subscription = (lead.stripe_subscription_id ?? "").trim()
     ? { kind: "exists", id: lead.stripe_subscription_id, status: lead.subscription_status, billing_starts: billingStartIso }
-    : { kind: "missing" };
+    : { kind: noMonthlyPlan ? "not_needed" : "missing" };
   if (subscription.kind === "missing") {
     await reportOnceAnHour(service, "delayed_subscription_missing", lead.id, "no Stripe subscription on record at results time", { remeasure_audit_id: audit.id, sent_at: nowIso, has_customer: !!lead.stripe_customer_id });
     await emailOperator(`MONTHLY NOT SET UP — ${businessName}`, [
@@ -320,7 +344,7 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
      from the stored facts, refuses anything inside the Refund Window, and records it only when Stripe's
      read-back agrees. A failure is Paul's action on the client page — Stripe stays on its hold, so the
      only possible error is charging LATE, never early. */
-  if (v3Terms) {
+  if (v3Terms && !noMonthlyPlan) {
     try {
       const sched = await schedulePaymentStart(service, lead.id, null);
       if (sched.kind !== "scheduled") {

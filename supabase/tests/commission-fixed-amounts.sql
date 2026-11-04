@@ -38,7 +38,7 @@ begin
   if v_a.commission_payable_on is not null then raise exception 'a date before results: %', v_a.commission_payable_on; end if;
   update public.outreach_leads set remeasure_results_sent_at = '2031-12-01 10:00:00+00' where id = v_lead;
   select * into v_a from public.payment_ledger where id = v_a.id;
-  if v_a.commission_payable_on <> date '2031-12-01' + public.commission_payable_days(null) then raise exception 'payable: %', v_a.commission_payable_on; end if;
+  if v_a.commission_payable_on <> date '2031-12-01' + public.commission_payable_days(null) + 1 then raise exception 'payable: %', v_a.commission_payable_on; end if;
   update public.outreach_leads set remeasure_results_sent_at = null where id = v_lead;
   select * into v_a from public.payment_ledger where id = v_a.id;
   if v_a.commission_payable_on is not null then raise exception 'not cleared: %', v_a.commission_payable_on; end if;

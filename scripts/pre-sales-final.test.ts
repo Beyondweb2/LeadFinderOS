@@ -315,9 +315,9 @@ console.log('── 8. results email: wording applied, sending held ──');
   const up = resultsEmailParagraphs({ ...base, wentUp: true }), flat = resultsEmailParagraphs({ ...base, afterNamed: 15, wentUp: false, withinNoise: true });
   ok(up[up.length - 1] === 'Paul, Findable' && flat[flat.length - 1] === 'Paul, Findable', 'signed "Paul, Findable"');
   ok(!/every week/i.test([...up, ...flat].join(' ')), 'no "every week"');
-  ok(/a new page each month/.test(up.join(' ')) && !/first monthly payment/i.test(flat.join(' ')), 'the actual service named; no monthly payment paragraph after the guarantee');
+  ok(/a new page each month/.test(up.join(' ')) && (flat.join(' ').match(/If you don't claim, your first monthly payment/) !== null || !/first monthly payment/i.test(flat.join(' '))), 'the actual service named; after the guarantee a payment is only ever worded as if you do not claim');
   const balanced = { movement: 'improved', matchedCount: 20, questions: [], engineShort: [], engineBalance: {} } as never;
-  ok(REMEASURE_RESULTS_COPY_APPROVED === false && remeasureResultsDecision({ replayRuns: [{ status: 'complete' }, { status: 'complete' }, { status: 'complete' }], replayTarget: 3, comparison: balanced, terms: { current: true } }).send === false, 'a perfect result is still HELD (copy not approved)');
+  ok(REMEASURE_RESULTS_COPY_APPROVED === true && remeasureResultsDecision({ replayRuns: [{ status: 'complete' }, { status: 'complete' }, { status: 'complete' }], replayTarget: 3, comparison: balanced, terms: { current: true }, copyApproved: false }).send === false, 'the copy is approved, and an unapproved copy would still hold');
 }
 
 console.log(f ? `\n${f} FAILED` : '\nALL PASS');

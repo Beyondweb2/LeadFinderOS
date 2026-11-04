@@ -20,10 +20,10 @@ begin
   if v_row.payout_rule <> 'plan_v1' then raise exception 'new row rule: %', v_row.payout_rule; end if;
   if v_row.commission_payable_on is not null then raise exception 'no results yet, but a date: %', v_row.commission_payable_on; end if;
 
-  -- Results sent: the date appears, 7 days on v7.
+  -- Results sent: the date appears, the day after the 7-day window on v7.
   update public.outreach_leads set remeasure_results_sent_at = v_sent where id = v_lead;
   select * into v_row from public.payment_ledger where id = v_row.id;
-  if v_row.commission_payable_on <> date '2026-12-08' then raise exception 'payable: %', v_row.commission_payable_on; end if;
+  if v_row.commission_payable_on <> date '2026-12-09' then raise exception 'payable: %', v_row.commission_payable_on; end if;
 
   -- A failed send un-stamps: the date goes with it.
   update public.outreach_leads set remeasure_results_sent_at = null where id = v_lead;
@@ -38,7 +38,7 @@ begin
     values (v_lead2, 'initial', 99, now(), 'pi_zz_commission_test2', v_seller) returning * into v_row2;
   update public.outreach_leads set remeasure_results_sent_at = timestamptz '2026-07-01T23:30:00Z' where id = v_lead2;
   select * into v_row2 from public.payment_ledger where id = v_row2.id;
-  if v_row2.commission_payable_on <> date '2026-07-16' then raise exception 'older terms, BST day: %', v_row2.commission_payable_on; end if;
+  if v_row2.commission_payable_on <> date '2026-07-17' then raise exception 'older terms, BST day: %', v_row2.commission_payable_on; end if;
 
   -- A legacy row is never given a date.
   update public.payment_ledger set payout_rule = 'legacy', commission_payable_on = null where id = v_row2.id;

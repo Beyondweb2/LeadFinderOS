@@ -136,7 +136,7 @@ function QuietList({ items, nameOf }: { items: OwedItem[]; nameOf?: (id: string)
   ) : null;
   return (
     <div className="mt-3 space-y-2">
-      <Group title="Waiting for four-week audit" why="Payable when the client’s guarantee window closes: 7 days after their four-week audit is sent (14 on older agreements). There is no date until it is sent. If they claim, nothing on the sale is payable." rows={waiting} icon={Clock} />
+      <Group title="Waiting for four-week audit" why="Payable the day after the client’s guarantee window closes. The window is 7 days from when their four-week audit is sent (14 on older agreements). There is no date until it is sent. If they claim, nothing on the sale is payable." rows={waiting} icon={Clock} />
       <Group title="Held for a dispute" why="A dispute is open at the bank. Won, it comes back. Lost, it is taken off." rows={held} icon={AlertTriangle} />
     </div>
   );

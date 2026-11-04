@@ -2,6 +2,7 @@
    Pins Paul's 2026-09-13 spec: pooled engines; inside the noise band is NOT gone up; a replay that
    gave up or a thin question holds; the copy is gated until approved; the claim sentence is the
    guarantee's own second sentence. */
+import { readFileSync } from 'node:fs';
 import { afterTermSummaryWords } from '../src/lib/findableOffer.ts';
 import { compareMeasurements, MIN_CELLS_FOR_QUESTION_CLAIM, NOISE_BAND_PP } from '../src/lib/measurementCompare.ts';
 import type { QueueRowLite } from '../src/lib/baselineView.ts';
@@ -67,8 +68,8 @@ console.log('── The decision: holds when the number cannot be proven, sends 
 {
   const before = rows(QS, 3, [1, 0, 0, 0]), after = rows(QS, 3, [3, 3, 0, 0]);
   const c = compareMeasurements(before, after, { businessName: 'X' });
-  ok(remeasureResultsDecision({ ...three(1, 1, 1), comparison: c , terms: OK }).send === false, 'HELD while the copy is not approved (the default)');
-  ok(REMEASURE_RESULTS_COPY_APPROVED === false, 'REMEASURE_RESULTS_COPY_APPROVED is false — nothing goes to a client until Paul approves the words');
+  ok(remeasureResultsDecision({ ...three(1, 1, 1), comparison: c, copyApproved: false, terms: OK }).send === false, 'HELD whenever the copy is not approved');
+  ok(REMEASURE_RESULTS_COPY_APPROVED === true, 'REMEASURE_RESULTS_COPY_APPROVED is true: Paul approved the words on 2026-11-04');
   const d = remeasureResultsDecision({ ...three(1, 1, 1), comparison: c, copyApproved: true , terms: OK });
   ok(d.send === true, 'sends once approved, three complete runs, 6 cells a side per question');
   const gaveUp = remeasureResultsDecision({ replayRuns: [{ status: 'complete' }, { status: 'complete' }, { status: 'failed' }], replayTarget: 3, comparison: c, copyApproved: true , terms: OK });
@@ -283,10 +284,54 @@ console.log("── Paul's wording decisions (2026-10-05): no \"every week\", th
   for (const [label, p] of [['near-flat', flat], ['fell', fell]] as const) {
     const j = p.join(' ');
     ok(p.includes(resultsClaimParagraph()), `${label}: the guarantee paragraph is there`);
-    ok(!/first monthly payment|16 November 2026|£99 is on/i.test(j), `${label}: NO upcoming monthly payment paragraph after the guarantee says it stops the payments`);
-    ok(p.indexOf(resultsClaimParagraph()) === p.length - 2, `${label}: the guarantee paragraph is the last thing before the sign-off`);
+    ok(/If you don't claim, your first monthly payment of £99 is on 16 November 2026/.test(j), `${label}: names the payment a client who does not claim will get (Paul, 2026-11-04)`);
+    ok(p.indexOf(resultsClaimParagraph()) === p.length - 3, `${label}: the order is the guarantee, then the payment, then the sign-off`);
   }
-  ok(REMEASURE_RESULTS_COPY_APPROVED === false, 'and the copy is STILL held — nothing sends until Paul approves it');
+}
+
+console.log("── Paul's approval, 2026-11-04: the guarantee line, the page matches the email, Essential, the payment on both verdicts ──");
+{
+  const LINE = 'We improve AI visibility or you get your money back.';
+  const base = { businessName: 'Harlow Heating', town: 'Harlow', beforeNamed: 24, beforeAnswered: 156, afterNamed: 22, afterAnswered: 158, questions: 20, documentUrl: 'https://findable.live/results/x', withinNoise: false, wentUp: false, monthlyStartsOn: '2 December 2026', v3Terms: true };
+  const v7 = { ...base, paymentPlan: 'complete', refundWindowDays: 7 };
+  const v6 = { ...base, paymentPlan: 'six', refundWindowDays: null, monthlyStartsOn: '9 December 2026' };
+  const v7Up = { ...v7, afterNamed: 41, wentUp: true };
+  const e7 = resultsEmailParagraphs(v7);
+  ok(e7[e7.length - 4] === `Your number has not gone up, so the guarantee applies: ${LINE}`, 'v7 not up: the exact guarantee line');
+  ok(e7[e7.length - 3] === "Email us within 7 days of the date we send your four-week audit results (the date of this email) and we'll refund everything you have paid us. A valid claim also ends your plan: no further payments are taken.", 'v7 not up: 7 days from the send, everything paid');
+  ok(e7[e7.length - 2].startsWith("If you don't claim, your first monthly payment of £99 is on 2 December 2026, the day after your 7-day refund window closes. It is payment 2 of 12"), 'v7 not up: the payment paragraph');
+  const e6 = resultsEmailParagraphs(v6);
+  ok(e6.includes(`Your number has not gone up, so the guarantee applies: ${LINE}`) && e6.some((p) => p.startsWith("Email us within 14 days of your results and we'll refund everything you have paid us.")), 'v6 keeps its signed 14 days, with the line');
+  ok(e6.some((p) => p.startsWith("If you don't claim, your first monthly payment of £99 is on 9 December 2026, the day after your 14-day refund window closes.")), 'v6 not up: the payment paragraph');
+  for (const plan of ['full', 'complete_upfront']) {
+    const paidUp = resultsEmailParagraphs({ ...v7, paymentPlan: plan }).join(' ');
+    ok(!/first monthly payment/.test(paidUp) && paidUp.includes(LINE), `${plan}, not up: the guarantee and no payment paragraph`);
+  }
+  /* The page: the same paragraphs as the email, the send date named in place of "this email". */
+  const page = resultsDocumentMeaning({ ...v7, sentOnWords: '24 November 2026' });
+  ok(page[1] === "Email us within 7 days of the date we send your four-week audit results (24 November 2026) and we'll refund everything you have paid us. A valid claim also ends your plan: no further payments are taken.", 'page, v7: 7 days, everything paid, the date named');
+  ok(!page.join(' ').includes('£99.') && !page.join(' ').includes('14 days'), 'page, v7: never the old 14 days or £99 offer');
+  ok(page[0] === e7[e7.length - 4] && page[2] === e7[e7.length - 2], 'page, v7: the same line and payment paragraph as the email');
+  const html = renderRemeasureResultsHtml({ businessName: 'Harlow Heating', town: 'Harlow', beforeDate: null, afterDate: null, sentAtLabel: '24 Nov 2026', comparison: compareMeasurements(rows(QS, 3, [1, 1, 1, 1]), rows(QS, 3, [1, 1, 1, 0]), { businessName: 'X' }), terms: { paymentPlan: 'complete', refundWindowDays: 7, monthlyStartsOn: '2 December 2026', v3Terms: true, sentOnWords: '24 November 2026' } });
+  ok(html.includes('within 7 days') && html.includes('money back') && !html.includes('within 14 days'), 'the rendered page carries this client\'s terms');
+  /* Essential is not told we keep measuring; Complete and the older offer are. */
+  for (const plan of ['full', 'six', 'twelve']) {
+    const es = resultsEmailParagraphs({ ...v7Up, paymentPlan: plan }).join(' ');
+    ok(es.includes('We keep the work live.') && !/keep measuring/.test(es), `${plan}: never "keep measuring"`);
+    ok(!resultsDocumentMeaning({ ...v7Up, paymentPlan: plan }).join(' ').includes('keep measuring'), `${plan} page: never "keep measuring"`);
+  }
+  for (const plan of ['complete', 'complete_upfront', null]) ok(resultsEmailParagraphs({ ...v7Up, paymentPlan: plan }).join(' ').includes('keep measuring'), `${plan}: keeps measuring`);
+  ok(resultsDocumentMeaning({ ...v7Up, sentOnWords: '24 November 2026' }).some((p) => p.startsWith('Your first monthly payment of £99')), 'page, gone up: the same payment paragraph as the email');
+  /* The v5 claim stays byte-locked. */
+  ok(resultsEmailParagraphs({ ...base }).includes(resultsClaimParagraph()) && resultsClaimParagraph().includes(REMEASURE_CLAIM_SENTENCE), 'v5: the locked claim is untouched');
+  /* The sender: a QA lead asks the guard, a failed terms read holds, paid in full raises no false alarm. */
+  const sender = readFileSync(new URL('../supabase/functions/_shared/remeasure-results.ts', import.meta.url), 'utf8');
+  ok(sender.indexOf('qaEmailHold(service, lead.id, to)') > 0 && sender.indexOf('qaEmailHold(service, lead.id, to)') < sender.indexOf('.update({ remeasure_results_sent_at: nowIso })'), 'the QA guard runs before the send is claimed');
+  ok(!/loadTimelineFacts\([^)]*\)\.catch/.test(sender), 'a failed terms read never falls back to other terms');
+  ok(/noMonthlyPlan \? "not_needed" : "missing"/.test(sender) && /v3Terms && !noMonthlyPlan/.test(sender), 'paid in full raises neither monthly alarm');
+  ok(/copy\.refundWindowDays \?\? REMEASURE_CLAIM_WINDOW_DAYS/.test(sender), 'the record keeps the window this client signed');
+  const render = readFileSync(new URL('../supabase/functions/render-remeasure-results/index.ts', import.meta.url), 'utf8');
+  ok(/resultsTermsCopy\(service, lead, lead\.remeasure_results_sent_at\)/.test(render), 'the page reads the same terms as the email, as at the stamp');
 }
 
 console.log(f ? `\n${f} FAILURES` : '\nALL PASS');
