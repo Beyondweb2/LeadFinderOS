@@ -431,7 +431,7 @@ export function CommissionPanel({ o }: { o: O }) {
   const t = c.totals;
   return (
     <Panel collapseKey="admin.cc.commission" title="Commission" icon={Wallet} tone="green" defaultOpen={false}
-      hint="From the commission ledger, at the rate each sale earned when it landed — never recalculated at today's rates."
+      hint="From the commission ledger, in pounds. Old sales keep what they earned when they landed."
       summary={t ? `${gbp(t.due)} due · ${gbp(t.earned)} earned all time` : 'Unavailable'}>
       {o.commissionError || !t ? <Empty>{o.commissionError ?? 'Commission could not be read.'}</Empty> : (
         <>

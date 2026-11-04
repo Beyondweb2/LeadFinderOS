@@ -5,9 +5,10 @@
    - A row is written only when its lead is known from a Stripe id or Stripe's own metadata. Never from an email, never a guess.
    - A payment Stripe has on hold with us (client_payment_holds) is not a sale yet. It is reported, never written.
    - Money facts on an existing payment row are never overwritten: a different amount is reported.
-   - A plan is corrected only on a plan_v1 sale, and only before its commission has been paid.
+   - A plan is corrected only on a plan_v1 or fixed_v1 sale, and only before its commission has been paid.
    - Nothing is ever deleted. A ledger row Stripe does not know is reported.
    Pure. ⚠️ Edge-reachable: relative imports, explicit .ts. */
+import { isLinePaidRule } from './commissionConfig.ts';
 import { salePlanFlagAtPayment, salePlanFromCharge } from './salePlan.ts';
 import { isPaymentPlan, type PaymentPlan } from './paymentPlans.ts';
 
@@ -150,7 +151,7 @@ export function planReconcile(input: {
       if ((!row.lead_id && place.leadId) || blankId) {
         out.writes.push({ ...base, amount_gbp: Number(row.amount_gbp), occurred_at: row.occurred_at, lead_id: row.lead_id ?? place.leadId, kind, note: `daily check: charge ${c.id}`, why: !row.lead_id && place.leadId ? 'Payment tied to its lead' : 'Stripe ids filled in, so refunds and disputes tie to this payment' });
       }
-      if (kind === 'initial' && row.payout_rule === 'plan_v1') {
+      if (kind === 'initial' && isLinePaidRule(row.payout_rule)) {
         const resolved = salePlanFromCharge({ metaPlan: place.plan, amountGbp: c.amountGbp });
         if (resolved && resolved !== row.sale_plan) {
           if (input.paidLedgerIds.has(row.id)) {

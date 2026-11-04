@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { CalendarCheck2, Info, Layers3, PiggyBank, Repeat, ShieldCheck, Trophy } from 'lucide-react';
+import { CalendarCheck2, Info, PiggyBank, Repeat, ShieldCheck, Sparkles, Trophy, UserRoundX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,11 +10,8 @@ import { useToast } from '@/hooks/use-toast';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { cn } from '@/lib/utils';
 import { Empty, Panel, TONE, gbp, type Tone } from '@/components/salesDash/ui';
-import { FINDABLE_CONTINUING_GBP } from '@/lib/findableOffer';
-import {
-  COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, MONTHLY_TIERS, londonDayOf,
-  type CommissionLine,
-} from '@/lib/commission';
+import { londonDayOf, type CommissionLine } from '@/lib/commission';
+import { BIG_MONTH_BONUS_FROM_SALE, BIG_MONTH_BONUS_GBP, FIXED_COMMISSION, fixedCommissionMax } from '@/lib/commissionConfig';
 import { salePlanWordsOr } from '@/lib/salePlan';
 import type { EarningsResponse } from '@/hooks/useEarnings';
 
@@ -26,7 +23,6 @@ import type { EarningsResponse } from '@/hooks/useEarnings';
 
 import { COMMISSION_PAYABLE_DAYS_V7 } from '@/lib/commissionConfig';
 
-const pct = (r: number) => `${Math.round(r * 100)}%`;
 const day = (iso: string) => new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' });
 type Client = EarningsResponse['clients'][number];
 
@@ -51,7 +47,7 @@ function whenWords(iso: string, todayIso: string): string {
 export function RecentWins({ lines, clients, sales, todayIso = new Date().toISOString(), max = 5 }: { lines: CommissionLine[]; clients: Client[]; sales?: EarningsResponse['sales']; todayIso?: string; max?: number }) {
   const clientOf = new Map(clients.map((c) => [c.leadId, c]));
   const planOf = new Map((sales ?? []).map((s) => [s.leadId, s.plan]));
-  const wins = lines.filter((l) => l.kind === 'payment' && l.paymentNumber === 1 && !l.testSale).slice(0, max);
+  const wins = lines.filter((l) => l.kind === 'payment' && l.paymentNumber === 1 && !l.testSale && l.status !== 'cancelled').slice(0, max);
   return (
     <Panel title="Recent wins" icon={Trophy} tone="amber" hint="Your newest sales and what each one earned you.">
       {wins.length === 0 ? <Empty icon={Trophy}>Your first sale will show here the day the client pays.</Empty> : (
@@ -77,21 +73,19 @@ export function RecentWins({ lines, clients, sales, todayIso = new Date().toISOS
   );
 }
 
-/** How commission works, in plain words. The rates themselves are on the month's ladder (the hero) and
- *  the money on Your earnings, so this card holds only the rules — nothing drawn twice. ⛔ REMOVED
- *  2026-10-02 (Paul): "This month, week by week" — a bar per week of a month already counted on the
- *  ladder, which told a salesperson nothing they could act on; and this card's own repeat of the rate,
- *  the tiers, the next rate and the recurring totals. */
+/** How commission works, in plain words and pounds, from the same constants that pay it. ⛔ REMOVED 2026-10-02 (Paul): "This month, week
+ *  by week" — a bar per week of a month already counted on the month card, which told a salesperson nothing they could act on. */
 export function CommissionExplainer() {
+  const f = FIXED_COMMISSION;
   const rules: { icon: typeof Info; text: ReactNode }[] = [
-    { icon: Layers3, text: <>Each sale keeps the rate it earned — reaching sale 13 never changes sales 1–12. The count starts again on the 1st of each month (UK time).</> },
-    { icon: Repeat, text: <>Monthly payments: {pct(COMMISSION_RECURRING_RATE)} of each of the next {COMMISSION_RECURRING_COUNT} successful monthly payments, whatever the plan’s monthly amount. Pay in full has none, and nothing on hosting (£{FINDABLE_CONTINUING_GBP}). A failed, refunded or charged-back payment earns nothing. (Sales made before the current client agreement keep the next {COMMISSION_RECURRING_COUNT}.)</> },
-    { icon: ShieldCheck, text: <>First-payment commission becomes payable when the client’s guarantee window closes: {COMMISSION_PAYABLE_DAYS_V7} days after their four-week audit results are sent. Until they are sent it shows as waiting for the four-week audit. If the client claims a refund, it is never payable.</> },
-    { icon: CalendarCheck2, text: <>Monthly commission is payable on the 1st of the month after each payment. Any refund or chargeback earns nothing, and one after you were paid comes off your next commission. A refunded sale stops counting towards your rate.</> },
-    { icon: ShieldCheck, text: <>Only money the client actually paid counts. Monthly commission is earned while you work with Findable; if that ends, everything you earned before stays yours.</> },
+    { icon: Repeat, text: <>Complete monthly: £{f.complete.perPayment} on each of the customer’s first {f.complete.payments} payments, the sign-up payment included (up to £{fixedCommissionMax('complete')}). Complete paid up front: £{f.complete_upfront.perPayment}, once. Essential paid in full: £{f.full.perPayment}, once. Essential payment plans: £{f.six.perPayment} on each of the first {f.six.payments} payments (up to £{fixedCommissionMax('six')}). Nothing on payments after those, hosting, renewals or upsells.</> },
+    { icon: Sparkles, text: <>Big-month bonus: sale {BIG_MONTH_BONUS_FROM_SALE} and above in a UK calendar month earns +£{BIG_MONTH_BONUS_GBP} once, paid with that sale’s first commission. Sales are numbered when the first payment is collected. Never backdated, and the count starts again on the 1st. A refunded sale stops counting.</> },
+    { icon: ShieldCheck, text: <>Anything collected before the client’s guarantee window closes, and any bonus, becomes payable when it closes: {COMMISSION_PAYABLE_DAYS_V7} days after their four-week audit is sent. Until it is sent it shows as waiting for the four-week audit. If the client claims, nothing on that sale is payable.</> },
+    { icon: CalendarCheck2, text: <>Anything collected after the window closes is payable on the 1st of the following month. A payment that never arrives earns nothing; if a missed payment is recovered later, it earns as normal. A refund or chargeback earns nothing, and one after you were paid comes off your next commission. While a dispute is open that money is held.</> },
+    { icon: UserRoundX, text: <>Only money the client actually paid counts. If you leave, you are still paid on those first payments as they arrive.</> },
   ];
   return (
-    <Panel collapseKey="sales.commission-rules" defaultOpen={false} title="How your commission works" icon={Info} tone="blue" hint="The rules behind every number on this page." summary={`${MONTHLY_TIERS.map((z) => pct(z.rate)).join(' · ')} of the first payment, plus ${pct(COMMISSION_RECURRING_RATE)} of the next ${COMMISSION_RECURRING_COUNT} monthly payments. Open for the rules.`}>
+    <Panel collapseKey="sales.commission-rules" defaultOpen={false} title="How your commission works" icon={Info} tone="blue" hint="The rules behind every number on this page." summary={`£${f.complete.perPayment} × ${f.complete.payments} on Complete monthly, £${f.complete_upfront.perPayment} up front, £${f.full.perPayment} Essential in full, £${f.six.perPayment} × ${f.six.payments} on Essential plans. Open for the rules.`}>
       <ul className="space-y-2.5" data-testid="commission-explainer">
         {rules.map((r, i) => (
           <li key={i} className="flex items-start gap-3 text-[13px] leading-relaxed">
@@ -106,14 +100,14 @@ export function CommissionExplainer() {
 
 /** Every payment and refund, newest first. The admin also sees who sold it. */
 export function PaymentsTable({ lines, bizOf, sellerOf }: { lines: CommissionLine[]; bizOf: Map<string, string>; sellerOf?: (id: string | null) => string }) {
-  const head = ['Client', ...(sellerOf ? ['Sold by'] : []), 'Payment', 'Date', 'Client paid', 'Rate', 'Commission', 'Status', 'Paid on'];
+  const head = ['Client', ...(sellerOf ? ['Sold by'] : []), 'Payment', 'Date', 'Client paid', 'Commission', 'Status', 'Paid on'];
   return (
     <Panel collapseKey="sales.payments" defaultOpen={false} title="Client payments" icon={PiggyBank} tone="green" hint="Every client payment and refund, newest first, with the commission on it.">
       {lines.length === 0 ? <Empty>Nothing yet.</Empty> : (
         <div className="-mx-1 overflow-x-auto">
           <table className="w-full min-w-[720px] border-collapse text-sm">
             <thead><tr className="border-b border-border/60 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-              {head.map((h) => <th key={h} className={cn('px-2 py-2 font-semibold', ['Client paid', 'Rate', 'Commission', 'Paid on'].includes(h) && 'text-right')}>{h}</th>)}
+              {head.map((h) => <th key={h} className={cn('px-2 py-2 font-semibold', ['Client paid', 'Commission', 'Paid on'].includes(h) && 'text-right')}>{h}</th>)}
             </tr></thead>
             <tbody>
               {lines.map((l) => (
@@ -123,7 +117,6 @@ export function PaymentsTable({ lines, bizOf, sellerOf }: { lines: CommissionLin
                   <td className="px-2 py-2 text-muted-foreground" data-testid="line-label">{l.label}</td>
                   <td className="whitespace-nowrap px-2 py-2 text-muted-foreground">{day(l.occurredAt)}</td>
                   <td className="px-2 py-2 text-right tabular-nums">{l.kind === 'reversal' ? `−${gbp(l.clientAmount)}` : gbp(l.clientAmount)}</td>
-                  <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{pct(l.rate)}</td>
                   <td className={cn('px-2 py-2 text-right font-semibold tabular-nums', l.commission > 0 ? 'text-emerald-600 dark:text-emerald-300' : l.commission < 0 ? 'text-red-600 dark:text-red-300' : 'text-muted-foreground')}>{l.commission < 0 ? `−${gbp(-l.commission)}` : gbp(l.commission)}</td>
                   <td className="px-2 py-2"><span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', TONE[STATUS[l.status].tone].soft, TONE[STATUS[l.status].tone].text)}>{STATUS[l.status].label}</span></td>
                   <td className="whitespace-nowrap px-2 py-2 text-right text-muted-foreground">{l.status === 'not_commissionable' ? '—' : l.payoutDate ? day(l.payoutDate) : 'After four-week audit'}</td>

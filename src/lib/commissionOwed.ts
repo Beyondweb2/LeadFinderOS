@@ -10,7 +10,9 @@
    against that person's next commission and never paid out as a negative: an offset bigger than what is due carries forward.
    Pure. ⚠️ Edge-reachable: relative imports, explicit .ts. */
 import type { CommissionLine } from './commission.ts';
-import { salePlanParts } from './salePlan.ts';
+import { BIG_MONTH_BONUS_GBP, FIXED_COMMISSION } from './commissionConfig.ts';
+import { commissionPlanWords, salePlanParts } from './salePlan.ts';
+import { isPaymentPlan } from './paymentPlans.ts';
 
 export type OwedBucket = 'now' | 'soon' | 'waiting' | 'held';
 export interface OwedPart { lineId: string; part: number; amount: number }
@@ -74,6 +76,23 @@ export interface OwedPerson {
   nowKeys: string[];
 }
 
+/** One sale on the fixed rules, in plain progress. */
+export interface OwedSale {
+  leadId: string;
+  sellerId: string;
+  business: string;
+  /** "Complete monthly · 2 of 6 paid · £50 of £150", "Complete up front · £300", "Complete monthly · client claimed · nothing payable". */
+  progress: string;
+  /** "+£25 big-month bonus", or null. */
+  bonusWords: string | null;
+  /** Earned so far, net of refunds and bonus included. Zero once a claim stops the sale. */
+  earned: number;
+  /** A guarantee claim: 'marked' by Paul (he can undo it), 'refunded' by Stripe. */
+  claim: 'marked' | 'refunded' | null;
+  /** The client can still claim: the first payment's commission has not become payable and has not been paid. */
+  windowOpen: boolean;
+}
+
 export interface OwedView {
   today: string;
   totalOwedNow: number;
@@ -82,6 +101,8 @@ export interface OwedView {
   next: OwedItem[];
   /** Waiting for the audit, and held for a dispute. */
   quiet: OwedItem[];
+  /** Every sale on the fixed rules, newest first. */
+  sales: OwedSale[];
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -102,9 +123,59 @@ export function countdownWords(payableOn: string | null, today: string): string 
   return d === -1 ? '1 day overdue' : `${-d} days overdue`;
 }
 
+/** "£50" for whole pounds, "£7.58" otherwise. */
+export const poundWords = (n: number): string => (Number.isInteger(round2(n)) ? `£${round2(n)}` : `£${round2(n).toFixed(2)}`);
+
+export const BONUS_WORDS = `+£${BIG_MONTH_BONUS_GBP} big-month bonus`;
+
 function whatItIs(l: CommissionLine): string {
+  if (l.fixedRules) {
+    if (l.fixedCount === 1) return l.bonus ? `One payment, ${BONUS_WORDS}` : 'One payment';
+    return `Payment ${l.paymentNumber} of ${l.fixedCount}${l.bonus ? `, ${BONUS_WORDS}` : ''}`;
+  }
   if (l.paymentNumber === 1) return 'First payment';
   return `Monthly payment ${l.paymentNumber - 1}`;
+}
+
+/** Each sale's plain progress. "Paid" counts the customer's payments that earned and were not taken back, not what Paul has paid the salesperson. */
+export function saleProgress(input: { lines: readonly CommissionLine[]; businessOf: (leadId: string) => string; planOf: (leadId: string) => string | null }): OwedSale[] {
+  const byLead = new Map<string, CommissionLine[]>();
+  for (const l of input.lines) {
+    if (!l.fixedRules && !(l.kind === 'reversal' && input.lines.some((x) => x.id === l.reversesLineId && x.fixedRules))) continue;
+    const a = byLead.get(l.leadId) ?? []; a.push(l); byLead.set(l.leadId, a);
+  }
+  const out: (OwedSale & { at: string })[] = [];
+  for (const [leadId, lines] of byLead) {
+    const pays = lines.filter((l) => l.kind === 'payment' && l.fixedRules);
+    const first = pays.find((l) => l.paymentNumber === 1);
+    if (!first?.sellerId || first.testSale || pays.every((l) => l.status === 'not_commissionable')) continue;
+    const plan = input.planOf(leadId);
+    const planKey = isPaymentPlan(plan) ? plan : 'legacy_twelve';
+    const fixed = FIXED_COMMISSION[planKey];
+    const name = commissionPlanWords(plan);
+    const claim = first.claim ?? null;
+    const taken = (id: string) => lines.filter((r) => r.kind === 'reversal' && r.reversesLineId === id && !r.held && r.status !== 'not_commissionable').reduce((s, r) => s + r.commission, 0);
+    const live = pays.filter((l) => l.commission > 0 && l.status !== 'cancelled' && l.status !== 'reversed' && l.status !== 'not_commissionable');
+    const net = live.map((l) => round2(l.commission + taken(l.id))).filter((n) => n > 0);
+    const earned = round2(net.reduce((s, n) => s + n, 0));
+    const bonusKept = live.some((l) => (l.bonus ?? 0) > 0);
+    const base = bonusKept ? round2(earned - BIG_MONTH_BONUS_GBP) : earned;
+    const heldLines = lines.filter((r) => r.kind === 'reversal' && r.held && r.status !== 'cancelled' && r.status !== 'not_commissionable');
+    const held = round2(heldLines.reduce((s, r) => s - r.commission, 0));
+    const max = fixed.perPayment * fixed.payments;
+    const progress = claim ? `${name} · client claimed · nothing payable`
+      : earned <= 0 && !live.length ? `${name} · nothing payable`
+      : fixed.payments === 1 ? `${name} · ${poundWords(base)}`
+      : `${name} · ${net.length} of ${fixed.payments} paid · ${poundWords(base)} of ${poundWords(max)}`;
+    out.push({
+      leadId, sellerId: first.sellerId, business: input.businessOf(leadId),
+      progress: held > 0 ? `${progress} · ${poundWords(held)} held` : progress,
+      bonusWords: bonusKept && !claim ? BONUS_WORDS : null,
+      earned, claim, windowOpen: first.status === 'pending' || (claim === 'marked' && !first.paidAmount),
+      at: first.occurredAt,
+    });
+  }
+  return out.sort((a, b) => b.at.localeCompare(a.at)).map(({ at: _at, ...s }) => s);
 }
 
 export function buildOwed(input: {
@@ -131,7 +202,7 @@ export function buildOwed(input: {
     if (!l.sellerId) return;
     const plan = input.planOf(l.leadId);
     items.push({
-      key: o.key, bucket: o.bucket, sellerId: l.sellerId, leadId: l.leadId, business: input.businessOf(l.leadId), plan, planWords: salePlanParts(plan).words,
+      key: o.key, bucket: o.bucket, sellerId: l.sellerId, leadId: l.leadId, business: input.businessOf(l.leadId), plan, planWords: l.fixedRules ? commissionPlanWords(plan) : salePlanParts(plan).words,
       label: o.label, amount: round2(o.amount), clientAmount: l.clientAmount, rate: l.rate, collectedAt: l.occurredAt,
       payableOn: o.payableOn, countdown: countdownWords(o.payableOn, today), overdueDays: o.payableOn ? Math.max(0, -daysUntil(o.payableOn, today)) : 0,
       flag: input.flagOf?.(l.leadId) ?? null, parts: o.parts,
@@ -188,6 +259,7 @@ export function buildOwed(input: {
     people,
     next: items.filter((i) => i.bucket === 'now' || i.bucket === 'soon').sort(byDate),
     quiet: items.filter((i) => i.bucket === 'waiting' || i.bucket === 'held').sort(byDate),
+    sales: saleProgress({ lines, businessOf: input.businessOf, planOf: input.planOf }),
   };
 }
 

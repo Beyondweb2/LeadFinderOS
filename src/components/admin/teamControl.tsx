@@ -5,7 +5,8 @@ import { Empty, Figure, KpiCard, Panel, TONE, ago, gbp, type Tone } from '@/comp
 import { Rate } from '@/components/admin/controlCentre';
 import type { AdminOverviewResponse } from '@/hooks/useAdminOverview';
 import type { TeamRow } from '@/lib/adminMetrics';
-import { MONTHLY_TIERS, monthlyTracker, type CommissionLine } from '@/lib/commission';
+import { monthlyTracker, type CommissionLine } from '@/lib/commission';
+import { BIG_MONTH_BONUS_GBP } from '@/lib/commissionConfig';
 import { activityStatus, handoffClients, handoffNext, type ActivityStatus, type HandoffClient } from '@/lib/adminControl';
 
 /* ══ THE ADMIN CONTROL CENTRE'S NEW SECTIONS (2026-10-02, docs/dashboards-redesign.md) ══════════════
@@ -14,7 +15,6 @@ import { activityStatus, handoffClients, handoffNext, type ActivityStatus, type 
    (the Paid Clients page's own list). Drawn from the shared dashboard design system. */
 
 type O = AdminOverviewResponse;
-const pct = (r: number) => `${Math.round(r * 100)}%`;
 const num = (n: number) => n.toLocaleString('en-GB');
 const londonMonth = (iso: string) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/London' }).slice(0, 7);
 const dayMonth = (iso: string | null | undefined) => (iso ? new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : '');
@@ -163,8 +163,9 @@ export function TeamPerformanceTable({ o, rows, lines, lastActivity, hidden, onO
                       {seller && m ? (
                         <span className="flex items-center gap-2">
                           <span className="text-base font-extrabold">{m.counted}</span>
-                          <span className="rounded-full bg-amber-400/90 px-1.5 py-0.5 text-[10px] font-extrabold text-amber-950">{pct(m.nextSaleRate)}</span>
-                          <span className="text-[11px] text-muted-foreground">{m.topTier || m.salesToNextTier === null ? 'top rate' : `${m.salesToNextTier} to ${pct(m.nextTierRate ?? MONTHLY_TIERS[MONTHLY_TIERS.length - 1].rate)}`}</span>
+                          {m.bonusOn
+                            ? <span className="rounded-full bg-amber-400/90 px-1.5 py-0.5 text-[10px] font-extrabold text-amber-950">+£{BIG_MONTH_BONUS_GBP} bonus on</span>
+                            : <span className="text-[11px] text-muted-foreground">{m.salesToBonus} to +£{BIG_MONTH_BONUS_GBP} bonus</span>}
                         </span>
                       ) : <span className="text-muted-foreground">—</span>}
                     </Td>

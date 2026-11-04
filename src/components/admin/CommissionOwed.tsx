@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Panel, SectionHeading, TONE, gbp } from '@/components/salesDash/ui';
 import { edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { clientHubLink } from '@/lib/salesLinks';
-import type { LinePaymentRow, OwedItem, OwedView } from '@/lib/commissionOwed';
+import type { LinePaymentRow, OwedItem, OwedSale, OwedView } from '@/lib/commissionOwed';
 import { SALE_PLAN_FLAG_WORDS, isSalePlanFlag } from '@/lib/salePlan';
 import { stripeCheckWords, type StripeCheckRow } from '@/lib/commissionReconcile';
 import type { PaidClientRecord } from '@/lib/paidClientRecord';
@@ -33,7 +33,6 @@ export function useCommissionOwed(enabled = true) {
 }
 
 const dayWords = (d: string | null) => (d ? new Date(d.length === 10 ? `${d}T12:00:00Z` : d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' }) : '');
-const pct = (r: number | null) => (r === null ? '' : `${Math.round(Number(r) * 100)}%`);
 
 function Countdown({ item }: { item: OwedItem }) {
   const late = item.overdueDays > 0;
@@ -103,7 +102,7 @@ function PaidHistory({ rows, nameOf, showPaidBy }: { rows: History; nameOf: (id:
   return (
     <div className="overflow-x-auto" data-testid="paid-history">
       <table className="w-full min-w-[34rem] text-xs">
-        <thead className="text-left text-muted-foreground"><tr><th className="py-1 pr-2 font-medium">Paid</th><th className="py-1 pr-2 font-medium">Customer</th><th className="py-1 pr-2 font-medium">Plan</th><th className="py-1 pr-2 font-medium">For</th><th className="py-1 pr-2 text-right font-medium">Collected</th><th className="py-1 pr-2 text-right font-medium">Rate</th><th className="py-1 text-right font-medium">Paid</th></tr></thead>
+        <thead className="text-left text-muted-foreground"><tr><th className="py-1 pr-2 font-medium">Paid</th><th className="py-1 pr-2 font-medium">Customer</th><th className="py-1 pr-2 font-medium">Plan</th><th className="py-1 pr-2 font-medium">For</th><th className="py-1 pr-2 text-right font-medium">Collected</th><th className="py-1 text-right font-medium">Paid</th></tr></thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.id} className="border-t border-border/40">
@@ -112,7 +111,6 @@ function PaidHistory({ rows, nameOf, showPaidBy }: { rows: History; nameOf: (id:
               <td className="whitespace-nowrap py-1.5 pr-2">{r.planWords}</td>
               <td className="py-1.5 pr-2 text-muted-foreground">{r.label}</td>
               <td className="py-1.5 pr-2 text-right tabular-nums">{r.client_amount_gbp === null ? '' : gbp(Number(r.client_amount_gbp))}</td>
-              <td className="py-1.5 pr-2 text-right tabular-nums">{pct(r.rate)}</td>
               <td className="py-1.5 text-right font-semibold tabular-nums">{r.amount_gbp < 0 ? `−${gbp(-r.amount_gbp)}` : gbp(r.amount_gbp)}</td>
             </tr>
           ))}
@@ -138,9 +136,30 @@ function QuietList({ items, nameOf }: { items: OwedItem[]; nameOf?: (id: string)
   ) : null;
   return (
     <div className="mt-3 space-y-2">
-      <Group title="Waiting for four-week audit" why="Payable 7 days after the client’s four-week results are sent (14 on older agreements). There is no date until then." rows={waiting} icon={Clock} />
+      <Group title="Waiting for four-week audit" why="Payable when the client’s guarantee window closes: 7 days after their four-week audit is sent (14 on older agreements). There is no date until it is sent. If they claim, nothing on the sale is payable." rows={waiting} icon={Clock} />
       <Group title="Held for a dispute" why="A dispute is open at the bank. Won, it comes back. Lost, it is taken off." rows={held} icon={AlertTriangle} />
     </div>
+  );
+}
+
+/** Each sale, in plain words: the plan, how many of its payments have earned, the pounds so far. Paul can record a guarantee claim here. */
+function SaleRows({ sales, onClaim }: { sales: OwedSale[]; onClaim?: (s: OwedSale) => void }) {
+  if (!sales.length) return <p className="py-1 text-xs text-muted-foreground">No sales on these rules yet.</p>;
+  return (
+    <ul data-testid="owed-sales">
+      {sales.map((s) => (
+        <li key={s.leadId} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/40 py-2 first:border-t-0" data-testid="owed-sale">
+          <div className="min-w-0 flex-1 basis-56">
+            <Link to={clientHubLink(s.leadId)} className="text-sm font-medium hover:underline">{s.business}</Link>
+            <p className="text-xs text-muted-foreground" data-testid="owed-sale-progress">{s.progress}</p>
+          </div>
+          {s.bonusWords && <span className={cn('whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold', TONE.amber.soft, TONE.amber.text)} data-testid="owed-sale-bonus">{s.bonusWords}</span>}
+          {onClaim && s.claim !== 'refunded' && (s.claim === 'marked' || s.windowOpen) && (
+            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" data-testid="owed-sale-claim" onClick={() => onClaim(s)}>{s.claim === 'marked' ? 'Undo claim' : 'Client claimed'}</Button>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -169,10 +188,18 @@ export function CommissionOwedSection() {
   const [lastPaid, setLastPaid] = useState<{ batchId: string; total: number; title: string } | null>(null);
   const [undoing, setUndoing] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
-  const [showAll, setShowAll] = useState(false);
+  const [claimOf, setClaimOf] = useState<OwedSale | null>(null);
+  const [claimSaving, setClaimSaving] = useState(false);
   const d = q.data;
   const nameOf = useMemo(() => (id: string) => d?.names[id] ?? 'Former member', [d]);
   const refresh = () => qc.invalidateQueries({ queryKey: owedKey });
+  const saveClaim = async () => {
+    if (!claimOf) return;
+    setClaimSaving(true);
+    try { await invokeEdge('sales-earnings', { mode: 'set_claim', lead_id: claimOf.leadId, claimed: claimOf.claim !== 'marked' }); setClaimOf(null); await refresh(); }
+    catch (e) { toast({ title: 'Not saved', description: edgeErrorMessage(e), variant: 'destructive' }); }
+    finally { setClaimSaving(false); }
+  };
   const undo = async () => {
     if (!lastPaid) return;
     setUndoing(true);
@@ -187,7 +214,6 @@ export function CommissionOwedSection() {
     </section>
   );
   const nowItems = d.next.filter((i) => i.bucket === 'now');
-  const list = showAll ? d.next : d.next.slice(0, 8);
   return (
     <section className="space-y-3" data-testid="commission-owed">
       <SectionHeading title="Commission owed" tone="green" />
@@ -209,6 +235,7 @@ export function CommissionOwedSection() {
             {d.people.map((p) => {
               const hist = d.history.filter((h) => h.user_id === p.sellerId);
               const mineNow = nowItems.filter((i) => i.sellerId === p.sellerId);
+              const mineNext = d.next.filter((i) => i.sellerId === p.sellerId);
               return (
                 <div key={p.sellerId} className="rounded-xl border border-border/60 px-3 py-2.5" data-testid="owed-person">
                   <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
@@ -216,41 +243,50 @@ export function CommissionOwedSection() {
                       <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted-foreground transition', open === p.sellerId && 'rotate-180')} /><span className="truncate">{nameOf(p.sellerId)}</span>
                     </button>
                     <div className="text-right"><p className="text-[11px] text-muted-foreground">Owed now</p><p className={cn('font-bold tabular-nums', p.owedNow > 0 && TONE.green.text)}>{gbp(p.owedNow)}</p></div>
-                    <div className="text-right"><p className="text-[11px] text-muted-foreground">Coming soon</p><p className="tabular-nums">{gbp(p.comingSoon)}</p></div>
                     <div className="text-right"><p className="text-[11px] text-muted-foreground">Paid so far</p><p className="tabular-nums">{gbp(p.paidSoFar)}</p></div>
                     <Button size="sm" className="h-9" disabled={p.owedNow <= 0} data-testid="mark-person-paid"
                       onClick={() => setConfirm({ title: `Mark ${gbp(p.owedNow)} as paid to ${nameOf(p.sellerId)}?`, lines: mineNow, total: p.owedNow, person: p.sellerId })}>Mark as paid</Button>
                   </div>
                   {p.carriedOffset < 0 && <p className={cn('mt-1.5 text-xs', TONE.red.text)}>{gbp(-p.carriedOffset)} from a refund after payout comes off their next commission.</p>}
-                  {open === p.sellerId && <div className="mt-2 border-t border-border/50 pt-2"><p className="mb-1 text-xs font-semibold">Paid so far</p><PaidHistory rows={hist} nameOf={nameOf} /></div>}
+                  {/* ── This person's next payments ── */}
+                  {mineNext.length > 0 && (
+                    <ul className="mt-2 border-t border-border/50 pt-1" data-testid="owed-next">
+                      {mineNext.map((i) => (
+                        <ItemRow key={i.key} item={i} action={i.amount > 0 ? (
+                          <Button size="sm" variant="outline" className="h-8" data-testid="mark-line-paid"
+                            onClick={() => setConfirm({ title: `Mark ${gbp(i.amount)} as paid to ${nameOf(i.sellerId)}?`, lines: [i], total: i.amount, itemKey: i.key,
+                              warning: i.bucket === 'soon' ? `Not due until ${dayWords(i.payableOn)}. If the client is refunded after you pay, it comes off their next commission.` : mineNext.some((x) => x.amount < 0) || p.carriedOffset < 0 ? 'They have a refund to offset. Marking the person as paid takes it off. Marking this line alone does not.' : null })}>Mark as paid</Button>
+                        ) : <span className="h-8 w-[6.5rem] text-center text-xs leading-8 text-muted-foreground">comes off next</span>} />
+                      ))}
+                    </ul>
+                  )}
+                  {open === p.sellerId && (
+                    <div className="mt-2 space-y-3 border-t border-border/50 pt-2">
+                      <div><p className="mb-1 text-xs font-semibold">Their sales</p><SaleRows sales={d.sales.filter((s) => s.sellerId === p.sellerId)} onClaim={setClaimOf} /></div>
+                      <div><p className="mb-1 text-xs font-semibold">Paid so far</p><PaidHistory rows={hist} nameOf={nameOf} /></div>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
         )}
 
-        {/* ── The next payments ── */}
-        <h3 className="mt-5 text-sm font-semibold">Next payments</h3>
-        {d.next.length === 0 ? <p className="mt-1 text-sm text-muted-foreground">Nothing with a date yet.</p> : (
-          <ul className="mt-1" data-testid="owed-next">
-            {list.map((i) => {
-              const offset = d.people.find((p) => p.sellerId === i.sellerId)?.carriedOffset ?? 0;
-              const hasOffset = offset < 0 || d.next.some((x) => x.sellerId === i.sellerId && x.amount < 0);
-              return (
-                <ItemRow key={i.key} item={i} name={nameOf(i.sellerId)} action={i.amount > 0 ? (
-                  <Button size="sm" variant="outline" className="h-8" data-testid="mark-line-paid"
-                    onClick={() => setConfirm({ title: `Mark ${gbp(i.amount)} as paid to ${nameOf(i.sellerId)}?`, lines: [i], total: i.amount, itemKey: i.key,
-                      warning: i.bucket === 'soon' ? `Not due until ${dayWords(i.payableOn)}. If the client is refunded after you pay, it comes off their next commission.` : hasOffset ? 'They have a refund to offset. Marking the person as paid takes it off. Marking this line alone does not.' : null })}>Mark as paid</Button>
-                ) : <span className="h-8 w-[6.5rem] text-center text-xs leading-8 text-muted-foreground">comes off next</span>} />
-              );
-            })}
-          </ul>
-        )}
-        {d.next.length > 8 && <Button size="sm" variant="ghost" className="mt-1 h-8" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show fewer' : `Show all ${d.next.length}`}</Button>}
-
         <QuietList items={d.quiet} nameOf={nameOf} />
       </Panel>
       <ConfirmPaid target={confirm} onClose={() => setConfirm(null)} onDone={(batchId, total) => { setLastPaid({ batchId, total, title: confirm?.title.replace(/^Mark .* as paid to (.*)\?$/, '$1') ?? '' }); setConfirm(null); void refresh(); }} />
+      <Dialog open={!!claimOf} onOpenChange={(v) => { if (!v) setClaimOf(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{claimOf?.claim === 'marked' ? `Take back the claim on ${claimOf.business}?` : `Record a guarantee claim from ${claimOf?.business}?`}</DialogTitle>
+            <DialogDescription>{claimOf?.claim === 'marked' ? 'Their commission goes back to how it was.' : 'Nothing on this sale will be payable. This only records what the client told you. It refunds nobody: you do that in Stripe.'}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setClaimOf(null)} disabled={claimSaving}>Cancel</Button>
+            <Button onClick={() => void saveClaim()} disabled={claimSaving} data-testid="confirm-claim">{claimSaving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}{claimOf?.claim === 'marked' ? 'Yes, take it back' : 'Yes, they claimed'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
@@ -328,8 +364,9 @@ export function MyCommissionOwed() {
         <div><p className="text-[11px] text-muted-foreground">Paid so far</p><p className="text-2xl font-semibold tabular-nums">{gbp(me?.paidSoFar ?? 0)}</p></div>
       </div>
       {me && me.carriedOffset < 0 && <p className={cn('mt-2 text-xs', TONE.red.text)}>{gbp(-me.carriedOffset)} from a refund after payout comes off your next commission.</p>}
-      {d.next.length > 0 && <ul className="mt-3">{d.next.map((i) => <ItemRow key={i.key} item={i} />)}</ul>}
+      {d.next.length > 0 && <div className="mt-3"><p className="text-sm font-semibold">Next payments</p><ul data-testid="my-next">{d.next.map((i) => <ItemRow key={i.key} item={i} />)}</ul></div>}
       <QuietList items={d.quiet} />
+      {d.sales.length > 0 && <div className="mt-3"><p className="text-sm font-semibold">Your sales</p><SaleRows sales={d.sales} /></div>}
       <details className="mt-3 rounded-xl border border-border/50 px-3 py-2"><summary className="cursor-pointer text-sm font-medium">What you have been paid</summary><div className="mt-2"><PaidHistory rows={d.history} nameOf={() => ''} /></div></details>
     </Panel>
   );

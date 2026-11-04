@@ -122,7 +122,7 @@ async function notifyMoney(service: Service, leadId: string | null, kind: string
   try {
     if (!leadId) return;
     const [{ data: rows }, { data: lead }, { data: owner }] = await Promise.all([
-      service.from("payment_ledger").select("id, lead_id, kind, status, amount_gbp, occurred_at, stripe_object_id, stripe_payment_intent_id, stripe_charge_id, stripe_invoice_id, sold_by_user_id, commission_rule, commission_month_start, commission_month_seq, commission_rate, payout_rule, sale_plan, sale_plan_flag, commission_payable_on").eq("lead_id", leadId),
+      service.from("payment_ledger").select("id, lead_id, kind, status, amount_gbp, occurred_at, stripe_object_id, stripe_payment_intent_id, stripe_charge_id, stripe_invoice_id, sold_by_user_id, commission_rule, commission_month_start, commission_month_seq, commission_rate, payout_rule, sale_plan, sale_plan_flag, commission_payable_on, commission_claim_at").eq("lead_id", leadId),
       service.from("outreach_leads").select("business_name, sold_by_user_id, service_terminated_at, status, remeasure_results_sent_at").eq("id", leadId).maybeSingle(),
       service.from("team_members").select("user_id").eq("is_book_owner", true).maybeSingle(),
     ]);
@@ -158,10 +158,10 @@ async function notifyMoney(service: Service, leadId: string | null, kind: string
     const biz = String((lead as { business_name?: string | null } | null)?.business_name ?? "A client").trim() || "A client";
     const out: Record<string, unknown>[] = [];
     if (sellerIsSales && seller && line && line.commission !== 0 && line.status === "pending") {
-      out.push({ user_id: seller, kind: "commission_earned", title: `+£${line.commission.toFixed(2)} commission pending`, body: `${biz} paid £${line.clientAmount.toFixed(2)} (${Math.round(line.rate * 100)}%${line.planRules ? "" : ", provisional"}). ${line.planRules ? "It becomes payable once the client's four-week results have been sent and their refund window has closed." : `It is approved the day after the client's refund window closes${line.approvalDay ? ` (${line.approvalDay})` : ""}.`}`, link: "/sales-dashboard", lead_id: leadId, priority: 2, dedupe_key: `commission:${me.id}` });
+      out.push({ user_id: seller, kind: "commission_earned", title: `+£${line.commission.toFixed(2)} commission pending`, body: `${biz} paid £${line.clientAmount.toFixed(2)} ${line.planRules ? "" : " (provisional)"}. ${line.planRules ? "It becomes payable once the client's four-week results have been sent and their refund window has closed." : `It is approved the day after the client's refund window closes${line.approvalDay ? ` (${line.approvalDay})` : ""}.`}`, link: "/sales-dashboard", lead_id: leadId, priority: 2, dedupe_key: `commission:${me.id}` });
     } else if (sellerIsSales && seller && line && line.commission !== 0 && line.status !== "cancelled") {
       out.push(line.commission > 0
-        ? { user_id: seller, kind: "commission_earned", title: `+£${line.commission.toFixed(2)} commission earned`, body: `${biz} paid £${line.clientAmount.toFixed(2)} (${lower(line.label)}, ${Math.round(line.rate * 100)}%).`, link: "/sales-dashboard", lead_id: leadId, priority: 2, dedupe_key: `commission:${me.id}` }
+        ? { user_id: seller, kind: "commission_earned", title: `+£${line.commission.toFixed(2)} commission earned`, body: `${biz} paid £${line.clientAmount.toFixed(2)} (${lower(line.label)}).`, link: "/sales-dashboard", lead_id: leadId, priority: 2, dedupe_key: `commission:${me.id}` }
         : { user_id: seller, kind: "commission_reversed", title: `−£${(-line.commission).toFixed(2)} commission reversed`, body: `${biz}: ${lower(line.label)}.`, link: "/sales-dashboard", lead_id: leadId, priority: 2, dedupe_key: `commission:${me.id}` });
     }
     const ownerId = (owner as { user_id?: string } | null)?.user_id;

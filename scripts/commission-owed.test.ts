@@ -52,7 +52,7 @@ ok(commissionPayableDays('csa_v7_two_plans') === 7 && commissionPayableDays('csa
 const mig = read('supabase/migrations/20261203090000_commission_owed_tracker.sql');
 ok(mig.includes("case when _terms = 'csa_v7_two_plans' then 7 else 14 end"), 'public.commission_payable_days mirrors the config');
 ok(COMMISSION_RECURRING_COUNT === 6, 'trailing count is 6');
-ok(payoutRuleForPaymentAt('2026-10-07T08:00:00Z') === 'legacy' && payoutRuleForPaymentAt('2026-11-05T08:00:00Z') === 'plan_v1', 'a backfilled old payment stays on the old rules');
+ok(payoutRuleForPaymentAt('2026-10-07T08:00:00Z') === 'legacy' && payoutRuleForPaymentAt('2026-11-03T08:00:00Z') === 'plan_v1', 'a backfilled old payment stays on the old rules');
 ok(mig.includes("add column if not exists payout_rule text not null default 'legacy'") && mig.includes("alter column payout_rule set default 'plan_v1'"), 'existing rows become legacy, new rows plan_v1');
 const earningsSrc = read('supabase/functions/_shared/earnings.ts'); const ledgerSrc = read('supabase/functions/_shared/payment-ledger.ts');
 for (const col of ['payout_rule', 'sale_plan', 'commission_payable_on']) {
@@ -258,7 +258,7 @@ console.log('── 11. SCOPE AND WIRING ──');
 {
   const fn = read('supabase/functions/sales-earnings/index.ts');
   ok(/mode === "owed"[\s\S]{0,120}actor\.role === "sales" \? actor\.id : null/.test(fn), 'a salesperson always gets only their own');
-  ok(/\[\.\.\.owed\.next, \.\.\.owed\.quiet\]\.some\(\(i\) => i\.sellerId !== actor\.id\)/.test(fn), 'with a belt');
+  ok(/\[\.\.\.owed\.next, \.\.\.owed\.quiet, \.\.\.owed\.sales\]\.some\(\(i\) => i\.sellerId !== actor\.id\)/.test(fn), 'with a belt');
   const ownedAt = fn.indexOf('mode === "owed"'); const gateAt = fn.indexOf('if (actor.role !== "admin") return await adminOnly();');
   ok(ownedAt < gateAt && fn.indexOf('mode === "mark_paid"') > gateAt && fn.indexOf('mode === "undo_paid"') > gateAt, 'Mark as paid and undo are behind the admin gate');
   ok(mig.includes('revoke all on public.commission_line_payments from anon, authenticated'), 'no browser can read or write the payments');

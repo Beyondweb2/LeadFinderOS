@@ -54,7 +54,7 @@ console.log("\n── the Sales dashboard ──");
   /* 2026-10-02 (Paul): the dark card language of the work tiles, NOT a solid green hero. */
   ok(/from-indigo-500\/30 via-violet-600/.test(ladder) && !/emerald/.test(ladder), "the month is a dark indigo card — no green at all");
   ok(/state === 'here' \? 'border-amber-400/.test(ladder) && /state === 'done' \? 'border-teal-400/.test(ladder), "the current rate step is amber, unlocked steps teal");
-  ok(/<Check /.test(ladder) && /<Lock /.test(ladder), "each rate step shows unlocked (tick), current, or locked");
+  ok(/StepState = 'done' \| 'here' \| 'ahead'/.test(ladder), "each step of the month shows done, current, or ahead");
   ok(/export function EarningsStats/.test(card) && (card.match(/<KpiCard /g) ?? []).length === 3 && /data-testid="ladder-earned"/.test(card), "the three money figures sit beside the month, each once");
   ok(/grid-cols-3 gap-1\.5 sm:grid-cols-6/.test(card) && /BAR_PX/.test(card), "the six months are one bar chart (three columns on a phone, six from sm)");
   ok(/from-teal-300 to-teal-500/.test(card) && /from-violet-400 to-violet-600/.test(card), "collected teal, expected violet — never mixed");

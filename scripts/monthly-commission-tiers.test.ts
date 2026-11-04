@@ -63,14 +63,13 @@ ok(/sale 13 of October 2026/.test(initLine(lm, month[12].lead_id!).label), 'the 
 
 console.log('── 3. THE LADDER AND ITS WORDS ──');
 const tr = (k: number) => monthlyTracker(linesOf(month.slice(0, k)), TODAY);
-const words: [number, number, string][] = [
-  [0, 0.3, '12 more sales to unlock 40%'], [9, 0.3, '3 more sales to unlock 40%'], [11, 0.3, '1 more sale to unlock 40%'],
-  [12, 0.4, '40% unlocked · 12 more sales to unlock 50%'], [13, 0.4, '40% unlocked · 11 more sales to unlock 50%'], [23, 0.4, '40% unlocked · 1 more sale to unlock 50%'],
-  [24, 0.5, '50% unlocked · every sale earns 50%'], [25, 0.5, '50% unlocked · every sale earns 50%'],
+const words: [number, boolean, string][] = [
+  [0, false, '12 more sales, then every sale earns +£25'], [9, false, '3 more sales, then every sale earns +£25'], [11, false, '1 more sale, then every sale earns +£25'],
+  [12, true, 'Every sale this month earns +£25'], [13, true, 'Every sale this month earns +£25'], [25, true, 'Every sale this month earns +£25'],
 ];
-for (const [k, next, line] of words) {
+for (const [k, on, line] of words) {
   const x = k === 0 ? monthlyTracker([], TODAY) : tr(k);
-  ok(x.counted === k && x.nextSaleRate === next && monthlyTrackerNextLine(x) === line, `${k} sales: next sale earns ${Math.round(next * 100)}%, "${line}"`);
+  ok(x.counted === k && x.bonusOn === on && x.nextSaleNumber === k + 1 && monthlyTrackerNextLine(x) === line, `${k} sales: "${line}"`);
 }
 ok(tr(9).earned === Math.round(9 * 29.7 * 100) / 100 && tr(13).sales.length === 13, 'the ladder counts the same lines the payments table lists');
 
@@ -81,7 +80,7 @@ const nov1 = initial('2026-11-01T10:00:00Z', 1);
 const withNov = linesOf([...month, nov1]);
 ok(initLine(withNov, nov1.lead_id!).rate === 0.3, "the first sale of November earns 30% again (after October's 26)");
 const tNov = monthlyTracker(withNov, '2026-11-03T12:00:00Z');
-ok(tNov.counted === 1 && tNov.nextSaleRate === 0.3 && tNov.monthStart === '2026-11-01', 'the November ladder counts only November');
+ok(tNov.counted === 1 && tNov.nextSaleNumber === 2 && tNov.monthStart === '2026-11-01', 'the November ladder counts only November');
 
 console.log('── 5. REFUNDS, TEST SALES, OLDER RULES ──');
 const w = Array.from({ length: 13 }, (_, i) => initial(OCT(i), i + 1));
@@ -90,7 +89,7 @@ const lr = linesOf([...w, refund(w[2])]);
 ok(initLine(lr, w[12].lead_id!).rate === 0.4, 'sale 13 keeps its 40% after an earlier sale is refunded (never re-rated)');
 ok(lr.some((l) => l.kind === 'reversal' && l.leadId === w[2].lead_id && l.commission === -29.7), '…and only the refunded sale is reversed, at its own 30%');
 const trR = monthlyTracker(lr, TODAY);
-ok(trR.counted === 12 && trR.sales.filter((s) => !s.counted).length === 1 && trR.nextSaleRate === 0.4, 'the refunded sale no longer counts: 12 counted, the next sale earns 40% (what the database will stamp)');
+ok(trR.counted === 12 && trR.sales.filter((s) => !s.counted).length === 1 && trR.nextSaleNumber === 13, 'the refunded sale no longer counts: 12 counted, the next sale is number 13 (what the database will stamp)');
 const testSale = initial(OCT(30), null, { commission_rule: TEST_EXCLUDED_RULE, commission_rate: '0' });
 const lt = linesOf([...w.slice(0, 3), testSale]);
 ok(initLine(lt, testSale.lead_id!).commission === 0 && initLine(lt, testSale.lead_id!).testSale === true, 'a test sale earns 0% and says so');
@@ -112,8 +111,8 @@ ok(/commission_rule, commission_month_start, commission_month_seq, commission_ra
 ok(/commission_rule, commission_month_start, commission_month_seq, commission_rate/.test(read('supabase/functions/_shared/payment-ledger.ts')), 'the earned notification reads them too');
 const page = read('src/pages/SalesDashboard.tsx');
 const ladder = read('src/components/salesDash/MonthlyLadder.tsx');
-ok((page.match(/<MonthlyLadder /g) ?? []).length === 1 && /monthlyTracker\(lines, todayIso\)/.test(ladder) && /MONTHLY_TIERS\.map/.test(ladder), 'one ladder, built from the same lines and the one tier table');
-ok(/lg:grid-cols-\[12fr_12fr_7fr\]/.test(ladder) && !/grid-cols-\[12fr/.test(ladder.replace(/lg:grid-cols-\[12fr_12fr_7fr\]/, '')), 'the tiers sit side by side from lg and stack on a phone (no squeezed line)');
+ok((page.match(/<MonthlyLadder /g) ?? []).length === 1 && /monthlyTracker\(lines, todayIso\)/.test(ladder) && /BIG_MONTH_BONUS_FROM_SALE/.test(ladder), 'one month card, built from the same lines and the one bonus constant');
+ok(/lg:grid-cols-\[12fr_7fr\]/.test(ladder) && !/grid-cols-\[12fr/.test(ladder.replace(/lg:grid-cols-\[12fr_7fr\]/, '')), 'the steps sit side by side from lg and stack on a phone (no squeezed line)');
 ok(/data-testid="ladder-sale"/.test(ladder) && /PopoverContent/.test(ladder) && /client\?\.package/.test(ladder) && /remainingPotential/.test(ladder), 'each sale dot opens the client, date, package, commission and what monthly payments may still earn');
 const labels = [...page.matchAll(/<KpiCard label="([^"]+)"/g)].map((m) => m[1]);
 ok(JSON.stringify(labels) === JSON.stringify(['Calls made', 'People reached', 'Contacted → sale']), `three work numbers, none repeating the ladder (got ${labels.join(', ')})`);
