@@ -24,7 +24,7 @@ Everything saves itself. Nothing got a second home:
 
 Services and areas the lead already holds are shown as the answer, and are copied onto the call notes only when a link is made (`callNotesToCarry`): opening a lead writes nothing, and fn quick-close still requires the notes on the record.
 
-**Choices to check with Paul:** the contract question also offers **Not sure** (he asked for Yes / No). Without it a rep with an unsure customer must say No, which skips his review of clause 1.6, or Yes, which declines the sale. "Not sure" keeps his existing review. Tied in stays a decline.
+**A choice Paul approved with the merge:** the contract question also offers **Not sure** (he asked for Yes / No). Without it a rep with an unsure customer must say No, which skips his review of clause 1.6, or Yes, which declines the sale. "Not sure" keeps his existing review. Tied in stays a decline.
 
 The domain never stops a link. It is the same note for Paul it always was (`domain_handoff`).
 
@@ -55,10 +55,16 @@ The hook lived inside the popup body, so anything that remounted or closed the p
 
 `quick-close` is a heavy read. It loads when the questions come on screen, not on every popup stepped past (`useSeen`). The questions and Close still show if the script fails to load.
 
-## Deploying (not done yet: waiting for Paul's approval)
+## Deployed 2026-11-04
 
-Edge first. `quick-close` changed, and `src/lib/quickClose.ts` / `paymentLinkRoute.ts` changed under it: walk `check-import-graph --reached-by` for both, redeploy all of them, name them in the report, and skip `whatsapp-status`.
+Merge `b8d7c910`. Edge first, then the app.
+
+26 functions redeployed (the reach of `quickClose.ts` and `paymentLinkRoute.ts`): quick-close, send-whatsapp-message, admin-overview, ai-reply-drafts, business-summary, client-agreement, client-intake, client-onboarding, create-ai-audit, findable-checkout, findable-onboarding, inbox-scheduled-send, mockup, paid-client-hub, process-ai-audit-queue, process-sms-queue, process-whatsapp-queue, sales-earnings, sales-performance, send-whatsapp-media, send-whatsapp-voice, stripe-webhook, submissions, twilio-sms-send, warm-lead-reply, whatsapp-number-health. `whatsapp-status` skipped as the rule says (last updated 2026-09-30).
+
+Proved live: OPTIONS on send-whatsapp-message returns `x-swm-build: 2026-11-04a-one-page-close`; the quick-close body holds `freeTextInWindow` and `contract_until`; app.leadfinderos.com serves `index-ZeKV0dXV.js` with `data-keep-dialog-open`, the `statusFilter` chunk with the first question, and the `whatsNew` chunk with the entry. Main bundle 1,605,337 bytes against 1,612,384 before.
+
+Full gate before merge: 493 of 496. Two red suites were old popup checks, updated and passing. `exhaustive-crawl` was red only under the gate's load and passed alone twice. The whole gate was not re-run after the test-only fixes.
 
 ## How it was checked
 
-A throwaway Vite harness rendered the real popup with made-up data and mocked edge calls, driven with real mouse clicks in headless Edge. No real calls or messages. Nobody has seen it on the live app.
+A throwaway Vite harness rendered the real popup with made-up data and mocked edge calls, driven with real mouse clicks in headless Edge. No real calls or messages. Nobody has seen it signed in on the live app, and no real Twilio call or real send has been made through it.
