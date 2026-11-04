@@ -10,9 +10,8 @@
    against that person's next commission and never paid out as a negative: an offset bigger than what is due carries forward.
    Pure. ⚠️ Edge-reachable: relative imports, explicit .ts. */
 import type { CommissionLine } from './commission.ts';
-import { BIG_MONTH_BONUS_GBP, FIXED_COMMISSION } from './commissionConfig.ts';
+import { BIG_MONTH_BONUS_GBP } from './commissionConfig.ts';
 import { commissionPlanWords, salePlanParts } from './salePlan.ts';
-import { isPaymentPlan } from './paymentPlans.ts';
 
 export type OwedBucket = 'now' | 'soon' | 'waiting' | 'held';
 export interface OwedPart { lineId: string; part: number; amount: number }
@@ -150,8 +149,8 @@ export function saleProgress(input: { lines: readonly CommissionLine[]; business
     const first = pays.find((l) => l.paymentNumber === 1);
     if (!first?.sellerId || first.testSale || pays.every((l) => l.status === 'not_commissionable')) continue;
     const plan = input.planOf(leadId);
-    const planKey = isPaymentPlan(plan) ? plan : 'legacy_twelve';
-    const fixed = FIXED_COMMISSION[planKey];
+    /* What the engine paid on, so the words can never disagree with the money. */
+    const fixed = { perPayment: first.fixedPerPayment ?? 0, payments: first.fixedCount ?? 0 };
     const name = commissionPlanWords(plan);
     const claim = first.claim ?? null;
     const taken = (id: string) => lines.filter((r) => r.kind === 'reversal' && r.reversesLineId === id && !r.held && r.status !== 'not_commissionable').reduce((s, r) => s + r.commission, 0);

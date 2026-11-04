@@ -1,7 +1,7 @@
 /* FIXED-AMOUNT COMMISSION (Paul, 2026-11-04, docs/commission-owed.md). Every total to the penny, through the real engine and the real owed view. */
 import { readFileSync } from 'node:fs';
 import { commissionForecast, commissionLines, earningsTotals, monthlyTracker, monthlyTrackerNextLine, type CommissionLine, type EngagementEvent, type LedgerRow, type SaleClosing } from '../src/lib/commission.ts';
-import { BIG_MONTH_BONUS_FROM_SALE, BIG_MONTH_BONUS_GBP, FIXED_COMMISSION, PAYOUT_RULE_FIXED_V1_FROM, bigMonthBonusFor, fixedCommissionMax, isLinePaidRule, payoutRuleForPaymentAt } from '../src/lib/commissionConfig.ts';
+import { BIG_MONTH_BONUS_FROM_SALE, BIG_MONTH_BONUS_GBP, BLANK_PLAN_COMMISSION, FIXED_COMMISSION, PAYOUT_RULE_FIXED_V1_FROM, bigMonthBonusFor, fixedCommissionMax, isLinePaidRule, payoutRuleForPaymentAt } from '../src/lib/commissionConfig.ts';
 import { buildOwed, planMarkPaid, saleProgress, type LinePaymentRow } from '../src/lib/commissionOwed.ts';
 import { PAYMENT_PLANS } from '../src/lib/paymentPlans.ts';
 
@@ -106,8 +106,17 @@ ok(isLinePaidRule('fixed_v1') && isLinePaidRule('plan_v1') && !isLinePaidRule('l
     ok(total(p) === 90, `Essential ${plan}: exactly £90, whatever the monthly amount`);
     ok(p.slice(6).every((l) => l.commission === 0), `Essential ${plan}: nothing after six`);
   }
+  const old = sale({ sale_plan: 'legacy_twelve', commission_payable_on: '2026-12-10' });
+  const oldRest = [1, 2, 3, 4, 5, 6, 7].map((k) => monthly(old, `2027-0${k}-05T10:00:00Z`));
+  const oldP = pays(run([old, ...oldRest], '2027-09-01T10:00:00Z').lines);
+  ok(FIXED_COMMISSION.legacy_twelve.perPayment === 25 && oldP.slice(0, 6).every((l) => l.commission === 25) && total(oldP) === 150, 'the old £99 × 12: £25 × 6, exactly £150');
+  ok(saleProgress({ lines: run([old]).lines, businessOf: () => 'B', planOf: () => 'legacy_twelve' })[0].progress === 'Old plan · 1 of 6 paid · £25 of £150', 'the old plan’s words');
   const blank = sale({ sale_plan: null, commission_payable_on: '2026-12-10' });
-  ok(run([blank]).lines[0].commission === 15, 'a blank plan is the old offer and earns as an Essential plan');
+  const blankRest = [1, 2, 3, 4, 5, 6, 7].map((k) => monthly(blank, `2027-0${k}-05T10:00:00Z`));
+  const blankP = pays(run([blank, ...blankRest], '2027-09-01T10:00:00Z').lines);
+  ok(BLANK_PLAN_COMMISSION.perPayment === 15 && blankP.slice(0, 6).every((l) => l.commission === 15) && total(blankP) === 90, 'a blank plan: £15 × 6, exactly £90');
+  ok(saleProgress({ lines: run([blank]).lines, businessOf: () => 'B', planOf: () => null })[0].progress === 'Old plan · 1 of 6 paid · £15 of £90', 'a blank plan’s words');
+  ok(saleProgress({ lines: run([blank]).lines, businessOf: () => 'B', planOf: () => 'complete' })[0].progress === 'Complete monthly · 1 of 6 paid · £15 of £90', 'the most comes from what the engine paid on, whatever the lead row says');
 }
 
 /* ── 14 sales in a month: 13 and 14 get +£25 ── */

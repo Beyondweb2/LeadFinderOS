@@ -96,7 +96,7 @@
 import { isOptionBTerms, ukDayAtHourIso } from './clientTimeline.ts';
 import { FINDABLE_MONTHLY_GBP } from './findableOffer.ts';
 import { isAttributionHeld } from './saleAttribution.ts';
-import { BIG_MONTH_BONUS_FROM_SALE, bigMonthBonusFor, commissionFixedRateForPlan, COMMISSION_INITIAL_RATE, COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_COUNT_V3, COMMISSION_RECURRING_RATE, FIXED_COMMISSION, MONTHLY_TIERS, PAYOUT_RULE_FIXED_V1, isLinePaidRule } from './commissionConfig.ts';
+import { BIG_MONTH_BONUS_FROM_SALE, bigMonthBonusFor, commissionFixedRateForPlan, COMMISSION_INITIAL_RATE, COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_COUNT_V3, COMMISSION_RECURRING_RATE, BLANK_PLAN_COMMISSION, FIXED_COMMISSION, MONTHLY_TIERS, PAYOUT_RULE_FIXED_V1, isLinePaidRule } from './commissionConfig.ts';
 import { PAYMENT_PLAN_SPEC, isPaymentPlan } from './paymentPlans.ts';
 export { COMMISSION_INITIAL_RATE, COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_COUNT_V3, COMMISSION_RECURRING_RATE, MONTHLY_TIERS };
 
@@ -206,8 +206,9 @@ export interface CommissionLine {
   paidAmount?: number;
   /** The sale is on the fixed rules: `commission` is pounds from the config, `rate` is 0 and means nothing. */
   fixedRules?: boolean;
-  /** Fixed rules: how many of the customer's payments earn on this plan. */
+  /** Fixed rules: how many of the customer's payments earn on this plan, and the pounds on each. */
   fixedCount?: number;
+  fixedPerPayment?: number;
   /** Fixed rules: the big-month bonus inside `commission` on the first payment's line. */
   bonus?: number;
   /** Fixed rules: a guarantee claim stopped this sale. 'marked' = Paul recorded it, 'refunded' = the first payment went back inside the window. */
@@ -428,7 +429,7 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
     const salePlanId = isPaymentPlan(saleRow?.sale_plan) ? saleRow.sale_plan : 'legacy_twelve';
     const planSpec = PAYMENT_PLAN_SPEC[salePlanId];
     const planMonthlyCount = Math.max(0, planSpec.totalPayments - 1);
-    const fixed = FIXED_COMMISSION[salePlanId];
+    const fixed = isPaymentPlan(saleRow?.sale_plan) ? FIXED_COMMISSION[saleRow.sale_plan] : BLANK_PLAN_COMMISSION;
     const payableOn = planRules && saleRow?.commission_payable_on ? String(saleRow.commission_payable_on).slice(0, 10) : null;
     const payableNow = !!payableOn && todayDay >= payableOn;
     const paidOf = (lineId: string) => input.paidByLine?.get(lineId) ?? 0;
@@ -586,7 +587,7 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
           : (v3Initial && baseStatus === 'due' && !approvedNow) || (planInitial && baseStatus === 'due' && !payableNow) ? 'pending' : baseStatus,
         ...(paidOf(lineId) !== 0 ? { paidAmount: round2(paidOf(lineId)) } : {}),
         ...(planRules ? { planRules: true } : {}),
-        ...(fixedRules ? { fixedRules: true, fixedCount: fixed.payments } : {}),
+        ...(fixedRules ? { fixedRules: true, fixedCount: fixed.payments, fixedPerPayment: fixed.perPayment } : {}),
         ...(bonus > 0 ? { bonus } : {}),
         ...(claim ? { claim } : {}),
         ...(planInitial && !payableOn ? { waitingForResults: true } : {}),

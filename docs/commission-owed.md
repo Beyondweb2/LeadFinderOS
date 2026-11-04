@@ -10,7 +10,8 @@
 | Complete up front (£999) | £300, once | £300 |
 | Essential paid in full (£499) | £150, once | £150 |
 | Essential 6 and 12 months | £15 on each of the first 6 | £90 |
-| Old plan (`legacy_twelve`, or a blank plan) | £15 on each of the first 6. **Not on Paul's list: the safe default, as an Essential plan. Change one line in the config if he wants otherwise.** | £90 |
+| Old £99 × 12 (`legacy_twelve`) | £25 on each of the first 6, as Complete monthly (Paul, 2026-11-04) | £150 |
+| No plan recorded on the sale (blank) | £15 on each of the first 6 (Paul, 2026-11-04). `BLANK_PLAN_COMMISSION` | £90 |
 
 - **Big-month bonus:** the database still numbers each sale in its UK month when the first payment lands (`stamp_monthly_commission_for`). Sale 13+ adds £25 to that sale's first payment line, so it is paid with it and goes with it. Not backdated. Resets on the 1st. As before, a sale fully refunded or lost before the next one lands no longer counts towards the next number.
 - **Nothing on** payments after the first 6, hosting, renewals or upsells.
@@ -22,7 +23,7 @@
 - **Old rows:** a sale's `payout_rule` decides. A payment dated before `PAYOUT_RULE_FIXED_V1_FROM` keeps `legacy` or `plan_v1`, and the engine keeps those paths. On 2026-11-04 the ledger held 27 rows and no real earning sale (test sales, the QA fixture, the admin's own at £0), so no real person's commission moves.
 - **Screens:** Commission owed: per person, Owed now, Paid so far, Mark as paid, their next payments with a countdown; open a person for their sales ("Complete monthly · 2 of 6 paid · £50 of £150", "+£25 big-month bonus"). The Sales page's Your payments shows the same for one person, no buttons. The month card counts to the bonus. The rate column is gone from the tables.
 - ⚠️ **What's New keeps its old entries** that mention percentages, as dated history.
-- ⚠️ **The sales contractor agreement (draft v2)** still describes percentages, trailing payments and an end to commission on leaving. It needs updating to match.
+- ⚠️ **The sales contractor agreement (draft v2)** still describes percentages and trailing payments. Paul is updating it to match, the leaver rule included.
 - ⚠️ **Until `REMEASURE_RESULTS_COPY_APPROVED` is on**, no results go, so everything collected stays in Waiting with no date. Now that includes monthlies, not just first payments.
 
 **Proof, not yet live:** `scripts/commission-fixed-amounts.test.ts` (totals to the penny, every case Paul listed). `supabase/tests/commission-fixed-amounts.sql` passed with the migration in a rolled-back transaction on the live database; read back, nothing stayed.

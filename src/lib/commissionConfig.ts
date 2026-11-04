@@ -6,16 +6,17 @@
 /* ══ THE RULES FOR EVERY NEW SALE: FIXED POUNDS (Paul, 2026-11-04, docs/commission-owed.md) ═══════════════════════════════════════ */
 
 /** What each plan earns: this many pounds on each of the customer's first `payments` Successfully Collected payments. The sign-up payment
- *  counts as the first. Nothing on any payment after them. ⛔ legacy_twelve is the old £99 × 12, and a BLANK plan on a sale is that same old
- *  offer (paymentPlans.ts). It earns as an Essential payment plan (Paul's list does not name it; the safe default, see the record). */
+ *  counts as the first. Nothing on any payment after them. legacy_twelve is the old £99 × 12 and earns as Complete monthly (Paul, 2026-11-04).
+ *  ⛔ A sale with no plan recorded earns BLANK_PLAN_COMMISSION, not legacy_twelve's figure, though paymentPlans.ts treats its schedule as that offer. */
 export const FIXED_COMMISSION: Readonly<Record<string, { perPayment: number; payments: number }>> = {
   complete: { perPayment: 25, payments: 6 },
   complete_upfront: { perPayment: 300, payments: 1 },
   full: { perPayment: 150, payments: 1 },
   six: { perPayment: 15, payments: 6 },
   twelve: { perPayment: 15, payments: 6 },
-  legacy_twelve: { perPayment: 15, payments: 6 },
+  legacy_twelve: { perPayment: 25, payments: 6 },
 };
+export const BLANK_PLAN_COMMISSION: Readonly<{ perPayment: number; payments: number }> = { perPayment: 15, payments: 6 };
 /** The most a plan can earn, before any bonus. */
 export const fixedCommissionMax = (plan: string): number => FIXED_COMMISSION[plan].perPayment * FIXED_COMMISSION[plan].payments;
 
