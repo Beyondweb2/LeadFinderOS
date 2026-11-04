@@ -74,7 +74,7 @@ console.log('\n── THE BADGE FOLLOWS THE ANSWER IMMEDIATELY ──');
   const seq: Array<[string, QuickCloseAnswers['agency_contract'] | undefined, string | null]> = [['unanswered', undefined, 'build'], ['in contract', 'in_contract', null], ['free to leave', 'free', 'build'], ['not sure', 'not_sure', 'build'], ['in contract again', 'in_contract', null]];
   for (const [label, c, want] of seq) { a = { ...a, agency_contract: c }; ok(rec(a) === want, `contract ${label} → ${want ?? 'declined (nothing)'}`); }
   const dlg = read('src/components/QuickCloseDialog.tsx');
-  ok(/v\.offer\?\.recommended === o\.value/.test(dlg) && /\.sort\(\(x, y\) =>/.test(dlg) && /Recommended/.test(dlg) && /testId="qc-declined"/.test(dlg), 'the Quick Close plan cards read the offer from the live view, and a decline is shown');
+  ok(/function PlanPicker/.test(dlg) && /Recommended/.test(dlg) && /testId="qc-declined"/.test(dlg) && /!declined && !v\.prospect_only/.test(dlg), 'the plan cards are hidden on a decline, and the decline is shown');
   const fn = read('supabase/functions/quick-close/index.ts');
   ok(/offer: offerFit\(answers, hasWebsite\)/.test(fn), 'the server recomputes the offer from the stored answers on every view (every save returns it)');
   const cc = read('src/components/ColdCallPlaybook.tsx');

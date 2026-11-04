@@ -299,13 +299,17 @@ export interface QcCallNotes {
   areas?: string | null;
   /** What they pay their agency a month, roughly (£). */
   agency_monthly_gbp?: number | null;
+  /** "Until when?" — their contract with whoever looks after the site, in the rep's words (optional, never a date we rely on). */
+  contract_until?: string | null;
+  /** Who decides, when it is not the person on the call. */
+  decision_who?: string | null;
 }
 export const CALL_NOTE_MAX = 300;
 /** Only known keys survive; text is clipped; the spend is a sane positive number or nothing. */
 export function cleanCallNotes(raw: unknown): QcCallNotes {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const out: QcCallNotes = {};
-  for (const k of ['jobs', 'areas'] as const) {
+  for (const k of ['jobs', 'areas', 'contract_until', 'decision_who'] as const) {
     const v = r[k];
     if (typeof v === 'string') { const t = v.replace(/\s+/g, ' ').trim().slice(0, CALL_NOTE_MAX); if (t) out[k] = t; }
   }
@@ -347,16 +351,19 @@ export function closeRouteOf(qc: { answers?: unknown } | null | undefined): Clos
 }
 
 /** The call answers as label / answer lines (handoff, intake, Paul's email). Only what was answered. */
-export type CallLineKey = 'manager' | 'agency_contract' | 'agency_monthly_gbp' | 'jobs' | 'areas' | 'decision_maker';
+export type CallLineKey = 'manager' | 'agency_contract' | 'contract_until' | 'agency_monthly_gbp' | 'jobs' | 'areas' | 'decision_maker' | 'decision_who' | 'domain';
 export function callNotesLines(a: QuickCloseAnswers, n: QcCallNotes | null | undefined): { key: CallLineKey; label: string; answer: string }[] {
   const c = cleanCallNotes(n);
   const out: { key: CallLineKey; label: string; answer: string }[] = [];
   if (a.manager) out.push({ key: 'manager', label: 'Website run by', answer: answerLabel('manager', a.manager) });
   if (a.agency_contract) out.push({ key: 'agency_contract', label: 'Agency contract', answer: answerLabel('agency_contract', a.agency_contract) });
+  if (c.contract_until) out.push({ key: 'contract_until', label: 'Contract until', answer: c.contract_until });
   if (c.agency_monthly_gbp !== undefined && c.agency_monthly_gbp !== null) out.push({ key: 'agency_monthly_gbp', label: 'Pays the agency', answer: `about £${c.agency_monthly_gbp} a month` });
   if (c.jobs) out.push({ key: 'jobs', label: 'Jobs they want more of', answer: c.jobs });
   if (c.areas) out.push({ key: 'areas', label: 'Areas that matter most', answer: c.areas });
   if (a.decision_maker) out.push({ key: 'decision_maker', label: 'Decision maker on the call', answer: a.decision_maker === 'yes' ? 'Yes' : 'No — someone else decides' });
+  if (c.decision_who) out.push({ key: 'decision_who', label: 'Who decides', answer: c.decision_who });
+  if (a.domain) out.push({ key: 'domain', label: 'Who controls the domain', answer: answerLabel('domain', a.domain) });
   return out;
 }
 

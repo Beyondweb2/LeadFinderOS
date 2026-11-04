@@ -22,8 +22,8 @@ const crm = read("src/components/LeadCrmPanel.tsx");
 const strip = read("src/components/LeadStateStrip.tsx");
 const lib = read("src/lib/logOutcomeFlow.ts");
 const header = dlg.slice(dlg.indexOf("{/* ── Header: name + glanceable pills"), dlg.indexOf("<Tabs value={tab}"));
-const callTab = dlg.slice(dlg.indexOf('<TabsContent value="call"'), dlg.indexOf('<TabsContent value="close"'));
-const closeTab = dlg.slice(dlg.indexOf('<TabsContent value="close"'), dlg.indexOf('<TabsContent value="history"'));
+const callTab = dlg.slice(dlg.indexOf('<TabsContent value="call"'), dlg.indexOf('<TabsContent value="history"'));
+const closeTab = dlg.slice(dlg.indexOf('closeFooter={'), dlg.indexOf('<TabsContent value="history"'));
 const code = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, ""); // comments out
 
 console.log("── 1. the top: status + next action, no scrolling ──");
@@ -42,14 +42,14 @@ for (const [what, needle] of [
 ok(!/function LogContact\(/.test(crm) && !/part="call"/.test(dlg) && !/statusControl/.test(dlg + crm), "no LogContact component, no Call part of the Work panel, no status card slot");
 ok(!/<LeadWorkPanel/.test(callTab) && !/PipelineStatusSelect/.test(callTab), "the Call tab carries no CRM card and no second status control");
 // 2026-10-06 (sales-team-today, Paul): SCAN → SAY — the AI result moved to the TOP of the Call tab (no longer folded at the bottom).
-ok(callTab.indexOf("<LoggedLine") >= 0 && callTab.indexOf("<LoggedLine") < callTab.indexOf("<SimpleCallTab") && !/<details/.test(callTab), "Call order: the last result → the simple call tab (What we found, the script, the offer; the sticky Log / Quick Close bar)");
+ok(callTab.indexOf("<LoggedLine") >= 0 && callTab.indexOf("<LoggedLine") < callTab.indexOf("<SimpleCallTab") && !/<details/.test(callTab), "Call order: the last result → the simple call tab (What we found, the script, the questions, the offer, Close; the sticky Log bar)");
 
 console.log("── 3. the Log window ──");
 ok(/const \[windows, setWindows\] = useState\(\(\) => arrivalWindows\(callArrivalOf\(openNumberPopup, openLogContact\)/.test(dlg) && /const logOpen = windows\.logOpen;/.test(dlg) && /const logThisCall = \(\) => setWindows\(afterLogCall\(\)\);/.test(dlg), "Log opens the window; Outreach's Call arrives on the number window, never on it (2026-10-07)");
 ok(/onClick=\{logThisCall\}[^>]*data-testid="workspace-log"/.test(header) && /onLogCall=\{logThisCall\}/.test(callTab), "…from the header's Log and from the script's sticky bar");
 const mount = dlg.slice(dlg.indexOf("<LeadCallFlow "), dlg.indexOf("/>", dlg.indexOf("<LeadCallFlow ")));
 ok(mount.length > 0 && dlg.indexOf("<LeadCallFlow ") > dlg.indexOf("</Tabs>"), "the window is mounted once for the popup, outside the tabs (works from every tab, keeps its note)");
-ok(/onSendOnboarding=\{\(\) => goTab\('close'\)\}/.test(mount), "Send onboarding → the Close tab");
+ok(/onSendOnboarding=\{goToClose\}/.test(mount), "Send onboarding → the Close section, at the foot of the page");
 ok(/const keepKeysHere = \(e: KeyboardEvent\) => \{ if \(e\.key === 'ArrowLeft' \|\| e\.key === 'ArrowRight'\) e\.stopPropagation\(\); \};/.test(flow) && (flow.match(/onKeyDown=\{keepKeysHere\}/g) ?? []).length === 2, "← / → inside the windows never step to another lead underneath");
 ok(flow.includes("const finish = () => setLogOpen(false);") && flow.includes("if (!o) { setStep('pick');") && flow.includes("<Dialog open={logOpen} onOpenChange={setLogOpen}>"), "every way the window closes (X, Escape, Skip, Later, a saved step) resets it: the next Log starts on What happened?");
 ok(!/Internal note|InternalNote/.test(code(flow)), "no Internal note box in the Log window (Details keeps it)");
@@ -90,7 +90,7 @@ ok(/if \(next === 'none'\) \{ setLogOpen\(false\); return; \}/.test(flow), "an o
 console.log("── 6. Send onboarding is the approved sign-up, nothing else ──");
 const sendCode = code(flow + lib);
 ok(!/stripe|checkout|buy\.stripe|payment_link|paymentLink|create_onboarding_link|findable-checkout/i.test(sendCode), "the Log flow never makes or sends a payment / sign-up link itself");
-ok(/<TabsContent value="close"[\s\S]*?<ClosePanel leadId=\{lead\.id\}/.test(closeTab), "the Close tab is ClosePanel (which holds QuickClosePanel) — the client agreement, Ready to Sell and seller attribution stay on its server path");
+ok(/<ClosePanel leadId=\{leadId\} active=\{seen\} \/>/.test(read('src/components/SimpleCallTab.tsx')), "Close, at the foot of the Call tab, is ClosePanel (which holds QuickClosePanel) — the client agreement, Ready to Sell and seller attribution stay on its server path");
 
 console.log("── 7. the record and the rule, unchanged ──");
 const lo = crm.slice(crm.indexOf("const logOutcome = async"), crm.indexOf("const afterWrite"));
@@ -111,7 +111,7 @@ ok(/const src = leadSourceFor\(role\);/.test(crm) && /sb\.from\(src\.table\)\.se
 ok(!/\.from\([^)]*\)\.(update|insert|upsert|delete)\(/.test(flow + crm), "no direct table write anywhere in the flow — only ownership-checked server functions");
 const sales = leadPermissions("sales"), admin = leadPermissions("admin");
 ok(sales.clientDelivery === false && admin.clientDelivery === true, "Mark paid: admin yes, salesperson no");
-ok(closeTab.includes("{perms.clientDelivery && !isPaidLead(lead) && (") && /onClick=\{handleMarkPaid\}/.test(closeTab) && (dlg.match(/onClick=\{handleMarkPaid\}/g) ?? []).length === 1, "Mark paid lives on the Close tab only — admin only, unpaid only");
+ok(closeTab.includes("{perms.clientDelivery && !isPaidLead(lead) && (") && /onClick=\{handleMarkPaid\}/.test(closeTab) && (dlg.match(/onClick=\{handleMarkPaid\}/g) ?? []).length === 1, "Mark paid lives in the Close section only — admin only, unpaid only");
 const markPaid = dlg.slice(dlg.indexOf("const handleMarkPaid = async"), dlg.indexOf("return (", dlg.indexOf("const handleMarkPaid = async")));
 ok(/await onStatusChange\(lead\.id, 'payment_received' as LeadStatus\);/.test(markPaid) && /is_potential_work: false/.test(markPaid), "…the same handler and writes as before (the page's own write path; attribution is the server's)");
 ok(!/payment_received|amount_paid:|handleMarkPaid/.test(code(flow)), "the Log flow gives nobody a payment power");

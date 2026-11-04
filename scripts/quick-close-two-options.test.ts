@@ -64,11 +64,11 @@ console.log('\n── THE CLIENT CONFIRMATION ──');
 console.log('\n── THE SCREENS AND THE SERVER ──');
 {
   const cp = read('src/components/ClosePanel.tsx');
-  ok(/How do you want to close them\?/.test(cp) && /Close on the phone/.test(cp) && /Ask the questions now, then send agreement &amp; payment/.test(cp) && /Send full setup/.test(cp) && /Let the customer fill it in themselves/.test(cp), 'the chooser says exactly that, in plain words');
+  ok(/Or let them fill it in themselves/.test(cp) && /data-testid="close-full-setup"/.test(cp) && /Send full setup/.test(cp) && !/close-chooser/.test(cp), 'no chooser any more: the plan and send are the page, and full setup is folded under them');
   ok(/<QuickClosePanel leadId=\{leadId\}/.test(cp) && /mode: 'share_setup'/.test(cp) && /<OnboardingLinkCard lead=/.test(cp), 'phone → the one Quick Close panel; setup → share_setup + the existing link card');
   const dlg = read('src/components/QuickCloseDialog.tsx');
-  ok(/Create agreement &amp; payment link|Create agreement & payment link/.test(dlg) && /Send agreement &amp; payment link/.test(dlg) && /Copy link/.test(dlg), 'the phone close offers Create / Send agreement & payment link / Copy link');
-  ok(/ServicesAreasStep/.test(dlg) && /mode: 'save_call', call: \{ jobs, areas \}/.test(dlg) && /current === 'route'/.test(dlg), 'what they offer + where comes just before the plan and saves the same call notes the Call screen does');
+  ok(/mode: 'generate_link'/.test(dlg) && /mode: 'share_link', channel: ch/.test(dlg) && /Copy link instead/.test(dlg), 'the close sends: one press makes the link and shares it; Copy link stays');
+  ok(/ans\.saveCall\(\{ jobs: t \}\)/.test(read('src/components/ProspectQuestions.tsx')) && /ans\.saveCall\(\{ areas: t \}\)/.test(read('src/components/ProspectQuestions.tsx')) && /mode: 'save_call', call: carry/.test(dlg), 'what they offer + where are questions on the page and save the same call notes; what the lead already holds is carried across before a link');
   const qc = read('supabase/functions/quick-close/index.ts');
   ok(/mode === "share_setup"/.test(qc) && /link_variant: "setup"/.test(qc) && /template_name: SIGNUP_LINK_TEMPLATE_NAME/.test(qc), 'Full Setup is sent through the canonical sender on the approved findable_signup_link template');
   ok(/step\.kind === "claim" && !phoneCloseNotesComplete\(qc\?\.call\)/.test(qc) && /call_notes_missing/.test(qc), 'a NEW phone link is refused without services and areas; a link that already stands is reused untouched');

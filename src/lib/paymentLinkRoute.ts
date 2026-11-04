@@ -59,13 +59,17 @@ export function replyRouteOpen(f: ConversationFacts, nowMs: number = Date.now())
   return !!f.firstOutboundAt && repliedAfterOurMessage(f) && windowOpenAt(f.lastInboundAt, nowMs);
 }
 
+const REPLY_ROUTE_SAY = 'They replied to us on WhatsApp in the last 24 hours — the link can go in that conversation.';
+
 /** ⛔ Positive: every route to a WhatsApp send is a match on all its conditions; anything unknown is 'none'. */
-export function decideLinkRoute(f: ConversationFacts, o: { template: TemplateSendState | null; nowMs?: number }): LinkRouteDecision {
+export function decideLinkRoute(f: ConversationFacts, o: { template: TemplateSendState | null; nowMs?: number; freeTextInWindow?: boolean }): LinkRouteDecision {
   const now = o.nowMs ?? Date.now();
   if (!f.hasPhone) return { route: 'none', reason: 'no_phone', say: LINK_ROUTE_SAY.no_phone };
   if (f.blocked) return { route: 'none', reason: 'blocked', say: LINK_ROUTE_SAY.blocked };
+  /* Paul, 2026-11-04 (the sign-up link on the prospect page): inside the 24 hours it goes as free text, even with an approved template. */
+  if (o.freeTextInWindow && replyRouteOpen(f, now)) return { route: 'whatsapp_reply', reason: 'ok', say: REPLY_ROUTE_SAY };
   if (o.template?.sendable) return { route: 'whatsapp_template', reason: 'ok', say: o.template.say };
-  if (replyRouteOpen(f, now)) return { route: 'whatsapp_reply', reason: 'ok', say: 'They replied to us on WhatsApp in the last 24 hours — the link can go in that conversation.' };
+  if (replyRouteOpen(f, now)) return { route: 'whatsapp_reply', reason: 'ok', say: REPLY_ROUTE_SAY };
   if (o.template?.tryable) return { route: 'whatsapp_template', reason: 'ok_unverified', say: o.template.say };
   /* Why a normal message is not allowed — the first condition that fails, in Paul's order — and why the template can't help. */
   const why = !f.firstOutboundAt ? 'not_messaged' : !repliedAfterOurMessage(f) ? 'no_reply' : 'window_closed';

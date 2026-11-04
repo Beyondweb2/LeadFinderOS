@@ -127,7 +127,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
 /* 2026-10-31b: the four video templates go in-window as a normal VIDEO message (the header's video, the words as its caption);
    a queued needs_from_you whose words cannot be read back sends those words if the window is open, else refuses with a reason. */
 /* 2026-11-02: a person's cold send asks the cold guard (src/lib/whatsappColdGuard.ts): one cap, one gap, the cool-down, the tripwire. */
-const BUILD_ID = "2026-11-03c-complete-upfront";
+const BUILD_ID = "2026-11-04a-one-page-close";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

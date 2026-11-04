@@ -138,7 +138,7 @@ export function foundIssues(serious: readonly WebsiteIssue[]): { shown: WebsiteI
 /* ── What we offer (Findable Complete) ─────────────────────────────────────────────────────────── */
 
 export function offerUnderLine(): string {
-  return `Price an issue? Offer paying up front (save ${gbpWords(completeUpfrontSavingGbp())}). Still an issue? Essential, in Quick Close.`;
+  return `Price an issue? Offer paying up front (save ${gbpWords(completeUpfrontSavingGbp())}). Still an issue? Essential, in Close below.`;
 }
 export const OFFER_UNDER_LINE = offerUnderLine();
 

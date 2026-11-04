@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-04-prospect-one-page', date: '2026-11-04', title: 'The prospect popup is now one page', audience: 'all',
+    body: 'Facts, script, questions, then close and send the link at the bottom. Everything you type saves itself. A browser call now keeps going whatever you do on the page.',
+    report: {
+      added: ['Questions under the script: jobs, areas, who decides, who looks after the website, any contract and until when, and who owns the domain. They save as you type.', 'A Close section at the bottom: pick the plan, then send the right link by WhatsApp, Text or Email, with one quick confirm.', 'A red End call button with the timer on the right edge of the screen during a browser call.'],
+      changed: ['The tabs are now Call and History.', 'Inside the 24 hours WhatsApp sends the sign-up link as a normal message. Outside them it uses the approved template, or says why it cannot and offers Text or Email.', 'Closing the popup or moving to the next lead no longer ends a browser call.', 'Everything answered shows on New paid clients when they pay, including the domain answer and who decides.'],
+      removed: ['The Quick Close button and the Close tab. Send full setup is still there, folded at the bottom of Close.'],
+      effect: 'You can run the whole call and close from one scrolling page, and you cannot lose the call by accident. Nothing about the price, the agreement or who can be sold to has changed.',
+    } },
   { id: '2026-11-04-four-week-results-on', date: '2026-11-04', title: 'Four-week results now send', audience: 'admin',
     body: 'You approved the wording, so four-week results now go by email on their own when a re-measure finishes. The email and the results page say the same thing for each client’s plan and agreement.',
     report: {

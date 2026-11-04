@@ -171,8 +171,7 @@ console.log('\n── 5. CLOSE ──');
   const fn = read('supabase/functions/quick-close/index.ts');
   ok(/flags: quickCloseGate\(answers\)\.flags\.map\(\(f\) => paulFlagText\(f, answers\)\)/.test(fn) && /title: QC_REVIEW_HEADING,/.test(fn), 'the server returns the flags and words the payment stop truthfully');
   const dlg = read('src/components/LeadDetailDialog.tsx');
-  const closeTab = dlg.slice(dlg.indexOf('TabsContent value="close"'), dlg.indexOf('TabsContent value="history"'));
-  ok(/<ClosePanel leadId=\{lead\.id\}/.test(closeTab), 'Close tab: ClosePanel — close on the phone, or send full setup (the self-service link, only before payment, lives inside it)');
+  ok(/<ClosePanel leadId=\{leadId\}/.test(read('src/components/SimpleCallTab.tsx')) && /Send full setup/.test(read('src/components/ClosePanel.tsx')), 'Close, at the foot of the Call tab: ClosePanel, with send full setup (the self-service link, only before payment) folded inside it');
   ok(/Paul takes it from here/.test(read('src/components/QuickCloseDialog.tsx')), 'after payment the setup is Paul\'s (no setup link handed to the seller)');
 }
 

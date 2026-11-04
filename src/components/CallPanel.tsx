@@ -2,12 +2,14 @@ import { CircleAlert, Loader2, Mic, MicOff, PhoneCall, PhoneOff, FlaskConical, C
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { TONE } from '@/components/salesDash/primitives';
+import { useEffect } from 'react';
 import { fmtDuration, type TwilioCall } from '@/hooks/useTwilioCall';
+import { useLiveCall, useLiveCallActions } from '@/components/LiveCall';
 import { callNumberView } from '@/lib/callNumber';
 
 /* THE CALL PANEL (2026-10-09) — top of the Call tab: the Call in browser button (and a small Call on WhatsApp) and, when you choose to
    call from the browser, the live call (Calling… / Ringing / Connected 02:13 / Ended / Failed), Mute and Hang up.
-   Sits ABOVE the script, the AI result and Quick Close — all still on the same tab, so the rep keeps reading while talking.
+   Sits ABOVE the script, the questions and the Close section — all on one page, so the rep keeps reading while talking.
    ⛔ Opening the workspace or pressing a button here records nothing about the lead. When a call ends, the panel offers
       "Log this call" (the existing What happened? window): an outcome is still the rep's, never assumed.
    ⛔ The free alternative (WhatsApp app call, from the rep's own phone) is a separate, labelled button — never a silent
@@ -16,9 +18,13 @@ const STATE_WORDS: Record<TwilioCall['state'], string> = {
   idle: '', preparing: 'Getting ready…', connecting: 'Calling…', ringing: 'Ringing…', connected: 'Connected', ended: 'Call ended', failed: 'Call failed',
 };
 
-export function CallPanel({ leadId, phone, country, call, onLogCall }: {
-  leadId: string; phone: string | null | undefined; country?: string | null; call: TwilioCall; onLogCall: () => void;
+export function CallPanel({ leadId, businessName, phone, country, onLogCall }: {
+  leadId: string; businessName?: string | null; phone: string | null | undefined; country?: string | null; onLogCall: () => void;
 }) {
+  /* The app's one call (LiveCall.tsx): nothing on this page can end it. */
+  const call = useLiveCall();
+  const { setPanelLead } = useLiveCallActions();
+  useEffect(() => { setPanelLead(leadId); return () => setPanelLead(null); }, [leadId, setPanelLead]);
   const here = call.leadId === leadId;
   const otherLead = call.active && !here;
   const view = callNumberView(phone, country);
@@ -52,7 +58,7 @@ export function CallPanel({ leadId, phone, country, call, onLogCall }: {
           {(call.state === 'ended' || call.state === 'failed') && (
             <div className="flex flex-wrap items-center gap-2">
               {call.state === 'ended' && <Button size="sm" className="h-10 gap-1.5 font-bold" onClick={() => { onLogCall(); call.reset(); }} data-testid="call-log"><ClipboardPen className="h-4 w-4" />Log this call</Button>}
-              <Button size="sm" variant="outline" className="h-10 gap-1.5" onClick={() => { call.reset(); void call.start(leadId); }} data-testid="call-again"><PhoneCall className="h-4 w-4" />Call again</Button>
+              <Button size="sm" variant="outline" className="h-10 gap-1.5" onClick={() => { call.reset(); void call.start(leadId, businessName); }} data-testid="call-again"><PhoneCall className="h-4 w-4" />Call again</Button>
               <Button size="sm" variant="ghost" className="h-10" onClick={call.reset}>Dismiss</Button>
             </div>
           )}
@@ -60,7 +66,7 @@ export function CallPanel({ leadId, phone, country, call, onLogCall }: {
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <Button className="h-11 gap-2 rounded-xl bg-amber-500 font-bold text-white hover:bg-amber-600" onClick={() => void call.start(leadId)} disabled={!view} data-testid="call-start-browser">
+            <Button className="h-11 gap-2 rounded-xl bg-amber-500 font-bold text-white hover:bg-amber-600" onClick={() => void call.start(leadId, businessName)} disabled={!view} data-testid="call-start-browser">
               <PhoneCall className="h-4 w-4" />Call in browser
             </Button>
             {view?.whatsappUrl && (

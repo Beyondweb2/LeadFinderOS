@@ -16,6 +16,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { AccentInitializer } from "@/components/AccentInitializer";
 
 import { LeadSearchProvider } from "./contexts/LeadSearchContext";
+import { LiveCallProvider } from "@/components/LiveCall";
 import { FirstTimeRedirect } from "./components/FirstTimeRedirect";
 import { Loader2 } from "lucide-react";
 import { LegacySalesLeadRedirect } from "./components/LegacySalesLeadRedirect";
@@ -187,6 +188,8 @@ const App = () => {
            <LeadSearchProvider>
             <BrowserRouter>
               <ScrollToTop />
+              {/* ⛔ The one browser call lives above every route: no page, popup or reload can end it (LiveCall.tsx). */}
+              <LiveCallProvider>
               <Suspense fallback={<FullPageLoader />}>
           <Routes>
             <Route path="/auth" element={<Auth />} />
@@ -289,6 +292,7 @@ const App = () => {
             <Route path="*" element={<NotFound />} />
           </Routes>
               </Suspense>
+              </LiveCallProvider>
             </BrowserRouter>
           </LeadSearchProvider>
         </TooltipProvider>

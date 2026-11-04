@@ -12,6 +12,19 @@ import type { RouteChannel } from '@/lib/contactRouting';
       attributes the sale to the rep, and it texts through the one guarded sender). The browser never builds or types a link.
    ⛔ The status is the carrier's, read from sms_messages: "Queued" and "Sent" are not "Delivered"; a failure names the
       other ways to send the same link, and a resend is a deliberate second press, never automatic. */
+/** The last text of this link and whether a text can go: one reading for both the full-setup button and the Close section's Text button. */
+export function useSmsLink(leadId: string, kind: 'setup' | 'agreement', otherSent?: RouteChannel[]) {
+  const thread = useSmsThread(leadId);
+  const { decision } = useContactDecision(leadId, 'link', { alreadySent: otherSent });
+  const last = (thread.data ?? []).filter((m) => m.direction === 'outbound' && m.link_kind === kind).slice(-1)[0] ?? null;
+  const repliedAfter = last ? (thread.data ?? []).some((m) => m.direction === 'inbound' && m.created_at > last.created_at) : false;
+  const failed = !!last && (last.status === 'failed' || last.status === 'undelivered');
+  const words = !last ? null : failed ? 'That text did not arrive. Check the number with them, or send the link another way.' : smsStatusWords(last.status, repliedAfter);
+  return { last, repliedAfter, failed, words, option: decision?.options.find((o) => o.channel === 'sms') };
+}
+const smsStatusWords = (status: string | null | undefined, repliedAfter: boolean) =>
+  status === 'simulated' ? 'Texted (test mode — not sent)' : repliedAfter ? 'Texted · they replied' : status === 'delivered' ? 'Texted · delivered' : status === 'sent' ? 'Texted · sent to the network' : 'Texted · queued (delivery not confirmed yet)';
+
 export function SmsLinkSend({ leadId, kind, onSend, otherSent }: {
   leadId: string; kind: 'setup' | 'agreement';
   onSend: (resend: boolean) => Promise<boolean>;
@@ -19,12 +32,7 @@ export function SmsLinkSend({ leadId, kind, onSend, otherSent }: {
   otherSent?: RouteChannel[];
 }) {
   const [busy, setBusy] = useState(false);
-  const thread = useSmsThread(leadId);
-  const { decision } = useContactDecision(leadId, 'link', { alreadySent: otherSent });
-  const last = (thread.data ?? []).filter((m) => m.direction === 'outbound' && m.link_kind === kind).slice(-1)[0] ?? null;
-  const repliedAfter = last ? (thread.data ?? []).some((m) => m.direction === 'inbound' && m.created_at > last.created_at) : false;
-  const sms = decision?.options.find((o) => o.channel === 'sms');
-  const failed = !!last && (last.status === 'failed' || last.status === 'undelivered');
+  const { last, repliedAfter, failed, option: sms } = useSmsLink(leadId, kind, otherSent);
   const go = async (resend: boolean) => {
     if (resend && !window.confirm('Text this link to them again?')) return;
     setBusy(true);
@@ -37,7 +45,7 @@ export function SmsLinkSend({ leadId, kind, onSend, otherSent }: {
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-500/30 bg-blue-500/[0.06] px-3 py-2 text-sm" data-testid="sms-link-sent">
           <span className="flex items-center gap-1.5 font-semibold text-blue-700 dark:text-blue-300">
             {last.status === 'simulated' ? <FlaskConical className="h-4 w-4" /> : last.status === 'delivered' ? <CheckCheck className="h-4 w-4" /> : last.status === 'sent' ? <Check className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
-            {last.status === 'simulated' ? 'Texted (test mode — not sent)' : repliedAfter ? 'Texted · they replied' : last.status === 'delivered' ? 'Texted · delivered' : last.status === 'sent' ? 'Texted · sent to the network' : 'Texted · queued (delivery not confirmed yet)'}
+            {smsStatusWords(last.status, repliedAfter)}
           </span>
           <Button size="sm" variant="outline" className="h-9" onClick={() => void go(true)} disabled={busy} data-testid={`sms-link-resend-${kind}`}>
             {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1 h-4 w-4" />}Resend

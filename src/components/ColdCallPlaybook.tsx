@@ -11,7 +11,7 @@ import { BUILD_DEFAULT_REASON, offerFit, thirdPartyManaged, type QcAgencyContrac
 import { AlertTriangle, ArrowUp, Building2, Lock, Check, ChevronDown, Copy, Globe, HelpCircle, Loader2, MessageSquareQuote, PhoneCall, ScrollText, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
 import { CALL_WHAT_WE_DO_STEPS, GOOGLE_STILL_MATTERS_SHORT, WHY_IT_MATTERS_SOURCE_LINE, WHY_IT_MATTERS_STATS } from '@/lib/salesExplainer';
 import { VoiceNoteScriptBody } from '@/components/VoiceNoteScriptButton';
-import { QuickCloseButton, quickCloseKey, useQuickClose } from '@/components/QuickCloseDialog';
+import { quickCloseKey, useQuickClose } from '@/components/QuickCloseDialog';
 import { HookVisibilityCard } from '@/components/HookVisibilityCard';
 import { WebsiteCrawlSection } from '@/components/WebsiteCrawlSection';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -159,28 +159,44 @@ function Say({ p }: { p: ColdCallPlaybook }) {
    two saves. Enumerated answers go through `save` (who runs the site, the contract, the decision maker);
    free text through `save_call` (jobs, areas, agency spend). A rep who cannot save (not ready to sell, or the
    lead has paid) keeps the answers on screen only and is told so — never a pretend "saved". */
-function useCallAnswers(leadId: string) {
-  const q = useQuickClose(leadId);
+export function useCallAnswers(leadId: string, enabled = true) {
+  const q = useQuickClose(leadId, enabled);
   const qc = useQueryClient();
   const { toast } = useToast();
   const [busy, setBusy] = useState<string | null>(null);
+  const [savedOnce, setSavedOnce] = useState(false);
+  /* Tapped answers go one at a time, so a slow first reply can never land after a second tap and put the old answer back on screen. */
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
   const v = q.data;
   const answers: QuickCloseAnswers = v?.answers ?? {};
   const canSave = !!v?.canEdit;
-  const post = async (label: string, body: Record<string, unknown>) => {
-    if (!canSave) return false;
+  const post = (label: string, body: () => Record<string, unknown>, undo?: () => void) => {
+    if (!canSave) return Promise.resolve(false);
     setBusy(label);
-    try {
-      const r = await withSaveRetry(() => invokeEdge('quick-close', { lead_id: leadId, ...body }));
-      qc.setQueryData(quickCloseKey(leadId), r);
-      notifyLeadChanged(leadId);
-      return true;
-    } catch (e) {
-      toast({ title: 'Not saved', description: edgeErrorMessage(e), variant: 'destructive' });
-      return false;
-    } finally { setBusy(null); }
+    const job = queue.current.then(async () => {
+      try {
+        const r = await withSaveRetry(() => invokeEdge('quick-close', { lead_id: leadId, ...body() }));
+        qc.setQueryData(quickCloseKey(leadId), r);
+        notifyLeadChanged(leadId);
+        setSavedOnce(true);
+        return true;
+      } catch (e) {
+        undo?.();
+        toast({ title: 'Not saved', description: edgeErrorMessage(e), variant: 'destructive' });
+        void q.refetch();
+        return false;
+      } finally { setBusy((b) => (b === label ? null : b)); }
+    });
+    queue.current = job;
+    return job;
   };
-  const saveAnswer = (key: keyof QuickCloseAnswers, value: string) => post(`a:${key}`, { mode: 'save', answers: { [key]: value }, expect_route: answers.route ?? null });
+  /* Shown at once, undone if the server refuses it. The route is read when it goes, from the newest answer. */
+  const saveAnswer = (key: keyof QuickCloseAnswers, value: string) => {
+    const before = qc.getQueryData<typeof v>(quickCloseKey(leadId));
+    qc.setQueryData<typeof v>(quickCloseKey(leadId), (old) => (old ? { ...old, answers: { ...old.answers, [key]: value } } : old));
+    return post(`a:${key}`, () => ({ mode: 'save', answers: { [key]: value }, expect_route: qc.getQueryData<typeof v>(quickCloseKey(leadId))?.answers?.route ?? null }),
+      () => qc.setQueryData(quickCloseKey(leadId), before));
+  };
   /* Autosave's save: no busy state (the buttons must not flicker per pause in typing), and a failure is thrown so it retries. */
   const saveCall = async (patch: Record<string, string>) => {
     if (!canSave) return;
@@ -188,11 +204,11 @@ function useCallAnswers(leadId: string) {
     qc.setQueryData<typeof v>(quickCloseKey(leadId), (old) => (old ? { ...old, call: { ...old.call, ...patch } } : old));
     notifyLeadChanged(leadId);
   };
-  return { leadId, v, answers, canSave, busy, loading: q.isLoading, saveAnswer, saveCall };
+  return { leadId, v, answers, canSave, busy, savedOnce, loading: q.isLoading, isError: q.isError, error: q.error, refetch: q.refetch, saveAnswer, saveCall };
 }
 
 /** A text answer that saves when the rep moves on (blur / Enter) — only when it changed. */
-function SavedText({ value, onSave, placeholder, testId, label, inputMode, leadId }: { value: string; onSave: (v: string) => Promise<void>; placeholder: string; testId: string; label: string; inputMode?: 'text' | 'decimal'; leadId: string }) {
+export function SavedText({ value, onSave, placeholder, testId, label, inputMode, leadId, disabled }: { value: string; onSave: (v: string) => Promise<void>; placeholder: string; testId: string; label: string; inputMode?: 'text' | 'decimal'; leadId: string; disabled?: boolean }) {
   const [text, setText] = useState(value);
   const focused = useRef(false);
   const auto = useAutosaveFields({ save: (_k, v) => onSave(v.trim()), storageKey: `call:${leadId}:${testId}`, onRestore: (left) => { if (typeof left.v === 'string') setText(left.v); } });
@@ -202,7 +218,7 @@ function SavedText({ value, onSave, placeholder, testId, label, inputMode, leadI
   return (
     <>
     <input value={text} onFocus={() => { focused.current = true; }} onChange={(e) => { setText(e.target.value); auto.set('v', e.target.value); }} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-      placeholder={placeholder} aria-label={label} inputMode={inputMode} data-testid={testId}
+      placeholder={placeholder} aria-label={label} inputMode={inputMode} data-testid={testId} disabled={disabled}
       className="h-10 w-full min-w-0 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60" />
     {auto.status !== 'idle' && <AutosaveIndicator status={auto.status} className="mt-0.5" />}
     </>
@@ -261,7 +277,7 @@ function Ask({ p, ans }: { p: ColdCallPlaybook; ans: ReturnType<typeof useCallAn
           )}
         </div>
       </Step>
-      <Step title="Then ask" tone="purple" hint={ans.canSave ? 'saved as you go — Quick Close won’t ask again' : 'pick what fits'} testId="call-step-ask">
+      <Step title="Then ask" tone="purple" hint={ans.canSave ? 'saved as you go' : 'pick what fits'} testId="call-step-ask">
         <div className="space-y-3 text-[15px] leading-snug">
           <label className="block space-y-1.5"><span className="flex gap-2"><HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" />{s.discovery[0]}</span>
             <SavedText value={call.jobs ?? ''} leadId={ans.leadId} onSave={(t) => ans.saveCall({ jobs: t })} placeholder="e.g. kitchen fitting, extensions" label={s.discovery[0]} testId="call-jobs" /></label>
@@ -498,15 +514,13 @@ function Prospect({ p }: { p: ColdCallPlaybook }) {
   );
 }
 
-/** The call's outcome and next action go through the ONE Log window (LeadCallFlow); Quick Close opens its
- *  dialog. These two are the ONLY primary actions on the call screen. */
-export function LogCallBar({ onLogCall, leadId }: { onLogCall: () => void; leadId: string }) {
+/** The call's outcome and next action go through the ONE Log window (LeadCallFlow). */
+export function LogCallBar({ onLogCall }: { onLogCall: () => void }) {
   return (
     <div className="sticky bottom-0 z-10 mt-3 flex items-center gap-2 border-t border-border bg-background/95 py-2 backdrop-blur" data-testid="call-actions">
       <Button type="button" className="h-11 min-w-0 flex-1 rounded-full text-sm font-bold" onClick={onLogCall} data-testid="log-this-call">
         <PhoneCall className="mr-1.5 h-4 w-4 shrink-0" /><span className="truncate">Log this call</span>
       </Button>
-      <QuickCloseButton leadId={leadId} className="h-11 rounded-full px-4 text-sm" />
     </div>
   );
 }
@@ -549,7 +563,7 @@ export function ColdCallPlaybookInline({ leadId, initialScript, onLogCall, onSho
         <Warnings p={q.data} />
         <Scripts p={q.data} leadId={leadId} initial={initialScript} />
       </> : <ScriptLocked gate={gate} onShowCheck={onShowCheck} />}
-      {onLogCall && <LogCallBar onLogCall={onLogCall} leadId={leadId} />}
+      {onLogCall && <LogCallBar onLogCall={onLogCall} />}
     </div>
   );
 }

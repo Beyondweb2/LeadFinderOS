@@ -87,9 +87,9 @@ ok(/cleanCloseEmail\(draft\)/.test(ctl) && /setErr\(CLOSE_EMAIL_INVALID_TEXT\)/.
 ok(/await onSave\(c\.email\)/.test(ctl) && /setChanging\(false\)/.test(ctl), 'after a save the control flips to "Email goes to …" with no refresh');
 ok(/mode: 'save_email', email/.test(cp), 'Full Setup saves the customer email through the server mode (2026-10-30: the Quick Close dialog no longer collects an email)');
 ok(/qc\.setQueryData\(quickCloseKey\(leadId\), r\)/.test(dlg) && /qc\.setQueryData\(quickCloseKey\(leadId\), r\)/.test(cp), 'both routes put the server\'s fresh view straight into the cache (instant update; a reopen reads the saved value)');
-ok(!/CustomerEmailControl/.test(dlg) && /<CustomerEmailControl testId="setup-customer-email"/.test(cp) && /v\.share\?\.email && <Button/.test(dlg) && /data-testid="qc-send-email"/.test(dlg), 'Full Setup uses the one email control; the Quick Close dialog only offers "Email the link" when an address already exists');
+ok(!/CustomerEmailControl/.test(dlg) && /<CustomerEmailControl testId="setup-customer-email"/.test(cp) && /data-testid="close-email"/.test(dlg) && /mode: 'save_email'/.test(dlg), 'Full Setup uses the one email control; the Close section has its own box, pre-filled, saved to the lead through save_email');
 ok(!/No email address on file/.test(dlg) && !/No email address for them — add one under/.test(dlg), 'the old "add one under Correct a detail" dead end is gone');
-ok(/data-testid="qc-send-whatsapp"/.test(dlg) && /doCopy\('message'/.test(dlg) && /doCopy\('link'/.test(dlg), 'WhatsApp, Copy link and Copy message do not depend on an email');
+ok(/'close-send-whatsapp'/.test(dlg) && /'close-send-sms'/.test(dlg) && /data-testid="qc-copy-link"/.test(dlg) && /button\('email', emailOk/.test(dlg), 'WhatsApp, Text and Copy link do not depend on an email: only the Email button does');
 ok(/data-testid="setup-send-whatsapp"/.test(cp) && /data-testid="setup-copy-link"/.test(cp), 'Full Setup: WhatsApp and Copy link do not depend on an email');
 ok(!/useAuth|user\??\.email|session\??\.user/.test(ctl + dlg.slice(dlg.indexOf('saveEmail')) + cp), 'no screen reads the logged-in user\'s email');
 ok(/inputMode="email"/.test(ctl) && /w-full/.test(ctl) && /flex-1/.test(ctl), 'compact, full-width on a phone');

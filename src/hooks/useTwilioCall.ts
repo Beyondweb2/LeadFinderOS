@@ -38,6 +38,7 @@ export function useTwilioCall() {
   const [state, setState] = useState<CallState>('idle');
   const [leadId, setLeadId] = useState<string | null>(null);
   const [callId, setCallId] = useState<string | null>(null);
+  const [label, setLabel] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -61,9 +62,9 @@ export function useTwilioCall() {
   }, [cleanup, set]);
   const ended = useCallback(() => { cleanup(); set('ended'); }, [cleanup, set]);
 
-  const start = useCallback(async (forLeadId: string) => {
+  const start = useCallback(async (forLeadId: string, forLabel?: string | null) => {
     if (['preparing', 'connecting', 'ringing', 'connected'].includes(stateRef.current)) return;
-    setLeadId(forLeadId); setError(null); setMuted(false); setSeconds(0); setSimulated(false); setCallId(null);
+    setLeadId(forLeadId); setLabel(forLabel ?? null); setError(null); setMuted(false); setSeconds(0); setSimulated(false); setCallId(null);
     set('preparing');
     let tok: TokenOk | TokenNo;
     try {
@@ -115,7 +116,7 @@ export function useTwilioCall() {
     setMuted((m) => { const next = !m; try { callRef.current?.mute(next); } catch { /* sim */ } return next; });
   }, []);
 
-  const reset = useCallback(() => { cleanup(); setError(null); setLeadId(null); setCallId(null); setSeconds(0); setMuted(false); set('idle'); }, [cleanup, set]);
+  const reset = useCallback(() => { cleanup(); setError(null); setLeadId(null); setLabel(null); setCallId(null); setSeconds(0); setMuted(false); set('idle'); }, [cleanup, set]);
 
   useEffect(() => () => { cleanup(); }, [cleanup]);
   // Closing the tab or leaving the page ends the call rather than leaving it live.
@@ -126,7 +127,7 @@ export function useTwilioCall() {
   }, []);
 
   const active = ['preparing', 'connecting', 'ringing', 'connected'].includes(state);
-  return { state, active, leadId, callId, muted, seconds, error, simulated, start, hangup, toggleMute, reset };
+  return { state, active, leadId, label, callId, muted, seconds, error, simulated, start, hangup, toggleMute, reset };
 }
 export type TwilioCall = ReturnType<typeof useTwilioCall>;
 

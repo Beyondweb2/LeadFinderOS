@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ArrowLeft, ShieldAlert, Check, CheckCircle2, Copy, FileText, Loader2, MessageCircle, Phone, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ShieldAlert, Check, CheckCircle2, Copy, FileText, Loader2, MessageCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/operator/ui';
 import { useToast } from '@/hooks/use-toast';
@@ -15,51 +15,27 @@ import { CustomerEmailControl } from '@/components/CustomerEmailControl';
 import { SmsLinkSend } from '@/components/SmsLinkSend';
 import { cn } from '@/lib/utils';
 
-/* ══ THE TWO WAYS TO CLOSE (2026-10-07, fix/quick-close-two-options) ═══════════════════════════════════════
-   How do you want to close them?
-     CLOSE ON THE PHONE — ask the short questions now, then send the Agreement & Payment link (QuickClosePanel).
-     SEND FULL SETUP    — send their own set-up link; they answer the questions, then agreement, then payment.
-   One sign-up either way (the same onboarding row, agreement link and checkout); neither link is a Stripe URL.
-   The choice is only a way in: once answers exist, or a set-up link has gone out, this opens on that way. */
-
-type Way = 'phone' | 'setup';
-
-const WAY_CARD = 'flex min-h-[88px] w-full items-start gap-3 rounded-2xl border border-border/70 bg-card p-4 text-left shadow-sm transition hover:border-blue-500/50 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary';
-
+/* ══ THE CLOSE SECTION (Paul, 2026-11-04, docs/prospect-one-page-close.md) ═════════════════════════════════════════════
+   The foot of the prospect page: the plan, then WhatsApp / Text / Email (QuickClosePanel). The other way to close, letting the customer
+   fill in the questions on their own link, is folded under it: same sign-up row, same agreement, same checkout. Neither link is a Stripe URL. */
 export function ClosePanel({ leadId, active = true, framed = false }: { leadId: string; active?: boolean; framed?: boolean }) {
   const q = useQuickClose(leadId, active);
   const v = q.data;
-  const [picked, setPicked] = useState<Way | 'chooser' | null>(null);
-  if (!v) return <QuickClosePanel leadId={leadId} active={active} framed={framed} />; // loading / error states live there
-  /* Paid, ended or not editable: nothing to choose — the one panel says where it stands. */
-  if (v.state === 'paid' || !v.canEdit) return <QuickClosePanel leadId={leadId} active={active} framed={framed} />;
-  const started = Object.keys(v.answers ?? {}).length > 0 || !!v.link;
-  const sentSetup = (v.full_setup?.shared.length ?? 0) > 0;
-  const way: Way | null = picked === 'chooser' ? null : picked ?? (started ? 'phone' : sentSetup ? 'setup' : null);
-  const back = (
-    <button type="button" onClick={() => setPicked('chooser')} className="mb-2 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground" data-testid="close-change-way">
-      <ArrowLeft className="h-3 w-3" />How do you want to close them?
-    </button>
-  );
+  /* Loading, error, paid, ended or not editable: the one panel says where it stands. */
+  if (!v || v.state === 'paid' || !v.canEdit || v.prospect_only) return <QuickClosePanel leadId={leadId} active={active} framed={framed} />;
+  const noAnswers = Object.keys(v.answers ?? {}).length === 0;
+  const setupSent = (v.full_setup?.shared.length ?? 0) > 0;
   return (
-    <div className={cn(framed && 'h-full overflow-y-auto px-4 py-4')} data-testid="close-panel">
-      {v.state === 'needs_review' && Object.keys(v.answers ?? {}).length === 0 && <SelfServeHold leadId={leadId} reasons={v.review.reasons} />}
-      {v.state === 'declined' && Object.keys(v.answers ?? {}).length === 0 && <SelfServeDeclined reasons={v.review.reasons} />}
-      {way === null && (
-        <section className="space-y-3" data-testid="close-chooser">
-          <p className="text-lg font-bold tracking-tight">How do you want to close them?</p>
-          <button type="button" className={WAY_CARD} onClick={() => setPicked('phone')} data-testid="close-way-phone">
-            <Phone className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
-            <span><span className="block text-base font-bold">Close on the phone</span><span className="mt-0.5 block text-sm text-muted-foreground">Ask the questions now, then send agreement &amp; payment</span></span>
-          </button>
-          <button type="button" className={WAY_CARD} onClick={() => setPicked('setup')} data-testid="close-way-setup">
-            <FileText className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
-            <span><span className="block text-base font-bold">Send full setup</span><span className="mt-0.5 block text-sm text-muted-foreground">Let the customer fill it in themselves</span></span>
-          </button>
-        </section>
-      )}
-      {way === 'phone' && <div>{back}<QuickClosePanel leadId={leadId} active={active} /></div>}
-      {way === 'setup' && <div>{back}<FullSetupPanel leadId={leadId} /></div>}
+    <div className={cn('space-y-3', framed && 'h-full overflow-y-auto px-4 py-4')} data-testid="close-panel">
+      {v.state === 'needs_review' && noAnswers && <SelfServeHold leadId={leadId} reasons={v.review.reasons} />}
+      {v.state === 'declined' && noAnswers && <SelfServeDeclined reasons={v.review.reasons} />}
+      <QuickClosePanel leadId={leadId} active={active} />
+      <details className="group rounded-xl border border-border/60 px-3 py-2" open={setupSent} data-testid="close-full-setup">
+        <summary className="flex min-h-[36px] cursor-pointer list-none items-center gap-1.5 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+          <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />Or let them fill it in themselves<ChevronDown className="ml-auto h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden />
+        </summary>
+        <div className="mt-2"><FullSetupPanel leadId={leadId} /></div>
+      </details>
     </div>
   );
 }

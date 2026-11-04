@@ -4,8 +4,6 @@ import { isDemoLead } from '@/lib/demoLeads';
 import { StickyNote, Save, Check, X, Pencil, Calendar as CalendarIconLucide, PoundSterling, Mail, Copy, Share2, Globe, Phone, MapPin, Loader2, PhoneCall, ChevronDown, MessageCircle, Wrench, ClipboardCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { whatsAppLinkForLead } from '@/lib/salesLinks';
-import { QuickCloseNav } from '@/components/QuickCloseDialog';
-import { ClosePanel } from '@/components/ClosePanel';
 import { LeadQuestionnaireSection } from '@/components/LeadQuestionnaireSection';
 import { LeadSiteCheckButton } from '@/components/LeadSiteCheckButton';
 import { CrawlCheckButton } from '@/components/CrawlCheckButton';
@@ -17,7 +15,7 @@ import { useCheckNewWebsite } from '@/hooks/useCheckNewWebsite';
 import { CallNumberPopup } from '@/components/CallNumberPopup';
 import { CallPanel } from '@/components/CallPanel';
 import { LeadSmsSection } from '@/components/LeadSmsPanel';
-import { useTwilioCall } from '@/hooks/useTwilioCall';
+import { useLiveCallActions } from '@/components/LiveCall';
 import { afterLogCall, afterStartCall, arrivalWindows, callArrivalOf } from '@/lib/callArrival';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProspectFacts } from '@/components/ProspectFacts';
@@ -188,18 +186,18 @@ function StepperBar({ s }: { s: LeadStepper }) {
   );
 }
 
-/* ⛔ SIMPLE PROSPECT POPUP (Paul, 2026-11-03): THREE TABS — CALL (what we found, the script, what we offer, objections, and
-   the sticky Log this call + Quick Close; the status and the ONE Next Action are in the header), CLOSE (the one close UI —
-   QuickClosePanel), HISTORY. CLIENT is the admin's delivery tab and appears only once the lead has paid. DETAILS is gone: who
-   they are (phone, website, area) is in the header, and what the old Details tab held sits folded at the foot of History. */
-export type WorkspaceTab = 'call' | 'close' | 'history' | 'client';
-/** Older callers and links named the tabs Work / Scripts / Prospect (before v2) or Details (before the simple popup):
- *  they open the matching tab — Details' content now lives at the foot of History. */
-export type WorkspaceTabInput = WorkspaceTab | 'work' | 'scripts' | 'prospect' | 'details';
+/* ⛔ ONE-PAGE PROSPECT POPUP (Paul, 2026-11-04, docs/prospect-one-page-close.md): TWO TABS — CALL (what we found, the script, the
+   questions, what we offer, objections, then CLOSE at the bottom: pick the plan and send the link; the status and the ONE Next Action
+   are in the header) and HISTORY. CLIENT is the admin's delivery tab and appears only once the lead has paid. Who they are (phone,
+   website, area) is in the header, and what the old Details tab held sits folded at the foot of History. */
+export type WorkspaceTab = 'call' | 'history' | 'client';
+/** Older callers and links named the tabs Work / Scripts / Prospect (before v2), Details (before the simple popup) or Close (before the
+ *  one page): they open the matching tab — Details' content now lives at the foot of History, Close at the foot of Call. */
+export type WorkspaceTabInput = WorkspaceTab | 'work' | 'scripts' | 'prospect' | 'details' | 'close';
 export function workspaceTabOf(t: WorkspaceTabInput | string | null | undefined): WorkspaceTab | undefined {
-  if (t === 'work' || t === 'scripts' || t === 'call') return 'call';
+  if (t === 'work' || t === 'scripts' || t === 'call' || t === 'close') return 'call';
   if (t === 'prospect' || t === 'details') return 'history';
-  if (t === 'close' || t === 'history' || t === 'client') return t;
+  if (t === 'history' || t === 'client') return t;
   return undefined;
 }
 
@@ -346,9 +344,15 @@ function LeadDetailBody({
   const [nextOpen, setNextOpen] = useState(false);
   const [logged, setLogged] = useState<LoggedResult | null>(null);
   const logThisCall = () => setWindows(afterLogCall());
-  /* The browser call lives HERE, above the tabs, so it survives switching tabs (script, Details, Close) mid-call. */
-  const twilioCall = useTwilioCall();
+  /* The browser call lives above every route (LiveCall.tsx): this popup only starts it, so nothing here can end it. */
+  const { start: startBrowserCall } = useLiveCallActions();
   const goTab = (next: WorkspaceTab) => { setTab(next); if (bodyRef.current) bodyRef.current.scrollTop = 0; };
+  /* Close is the foot of the Call tab. The tab has to be drawn before there is anything to scroll to. */
+  const goToClose = () => {
+    setTab('call');
+    window.setTimeout(() => bodyRef.current?.querySelector('[data-testid="close-section"]')?.scrollIntoView({ block: 'start' }), 0);
+  };
+  useEffect(() => { if (initialTab === 'close') goToClose(); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- once, on arrival
 
   const [notes, setNotes] = useState(lead.notes || '');
   const [notesDirty, setNotesDirty] = useState(false);
@@ -638,28 +642,21 @@ function LeadDetailBody({
           note). Every write in here is the same server function Outreach uses. Full screen on a phone. ══ */}
       {/* ⛔ NO ONBOARDING BANNER IN THE LEAD POPUP (sales-team-today, 2026-10-06): the checklist no longer blocks
           selling, and a genuinely restricted account is told on the Sales dashboard and Find Leads. */}
-      <QuickCloseNav.Provider value={{ openClose: () => goTab('close') }}>
       <Tabs value={tab} onValueChange={(v) => goTab(v as WorkspaceTab)} className="flex min-h-0 flex-1 flex-col">
-        <TabsList className={cn('mx-3 mt-2.5 grid h-9 shrink-0 sm:mx-5', showClientTab ? 'grid-cols-4' : 'grid-cols-3')}>
+        <TabsList className={cn('mx-3 mt-2.5 grid h-9 shrink-0 sm:mx-5', showClientTab ? 'grid-cols-3' : 'grid-cols-2')}>
           <TabsTrigger value="call" className="text-xs">Call</TabsTrigger>
-          <TabsTrigger value="close" className="text-xs">Close</TabsTrigger>
           <TabsTrigger value="history" className="text-xs">History</TabsTrigger>
           {showClientTab && <TabsTrigger value="client" className="text-xs">Client</TabsTrigger>}
         </TabsList>
         <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto thin-scrollbar px-3 py-3 sm:px-5 sm:py-4">
-          {/* ── CALL (Paul, 2026-11-03): WHAT WE FOUND → SCRIPT → WHAT WE OFFER → OBJECTIONS, then the sticky Log this call +
-                Quick Close (src/components/SimpleCallTab.tsx). The call button sits above it (CallPanel).
+          {/* ── CALL (Paul, 2026-11-04): WHAT WE FOUND → SCRIPT → QUESTIONS → WHAT WE OFFER → OBJECTIONS → CLOSE, then the sticky
+                Log this call (src/components/SimpleCallTab.tsx). The call button sits above it (CallPanel).
                 ⛔ No CRM cards here: the status and the Next Action are in the header, the outcome is the Log window. ── */}
           <TabsContent value="call" className="mt-0 space-y-4" data-testid="workspace-call">
-            {!isDemoLead(lead.id) && <CallPanel leadId={lead.id} phone={lead.phone} country={lead.country} call={twilioCall} onLogCall={logThisCall} />}
-            {logged && <LoggedLine leadId={lead.id} logged={logged} onDismiss={() => setLogged(null)} />}
-            {!isDemoLead(lead.id) && <SimpleCallTab leadId={lead.id} contactName={lead.contact_name} onLogCall={logThisCall} />}
-          </TabsContent>
-
-          {/* ── CLOSE: the one close UI (QuickClosePanel), then — before payment only — the self-service sign-up link. ── */}
-          <TabsContent value="close" className="mt-0 space-y-4" data-testid="workspace-close">
-            {/* TWO WAYS TO CLOSE (2026-10-07): Close on the phone, or Send full setup — one sign-up either way (ClosePanel). */}
-            {!isDemoLead(lead.id) && <ClosePanel leadId={lead.id} active={tab === 'close'} />}
+            {!isDemoLead(lead.id) && <CallPanel leadId={lead.id} businessName={lead.business_name} phone={lead.phone} country={lead.country} onLogCall={logThisCall} />}
+            {logged && <LoggedLine logged={logged} onDismiss={() => setLogged(null)} onGoToClose={goToClose} />}
+            {!isDemoLead(lead.id) && <SimpleCallTab leadId={lead.id} contactName={lead.contact_name} hasWebsite={!!lead.website && !isAggregatorUrl(lead.website)} onLogCall={logThisCall}
+              closeFooter={<>
             {/* ⛔ MARK PAID BY HAND (moved 2026-10-06 from the footer of EVERY tab, Paul: "should not dominate every
                 Call screen"). Admin only (clientDelivery — a salesperson never had it and still has not), unpaid
                 only, the SAME handler and writes as before: payment_received through onStatusChange (the page's own
@@ -675,6 +672,7 @@ function LeadDetailBody({
                 </Button>
               </section>
             )}
+              </>} />}
           </TabsContent>
 
           {/* ── HISTORY (everything recorded), then — folded — what the old Details tab held: what was learned on the call,
@@ -937,14 +935,13 @@ function LeadDetailBody({
       {!isDemoLead(lead.id) && (
         <LeadCallFlow leadId={lead.id} businessName={lead.business_name}
           logOpen={logOpen} onLogOpenChange={setLogOpen} nextOpen={nextOpen} onNextOpenChange={setNextOpen}
-          onSendOnboarding={() => goTab('close')} onLogged={setLogged} />
+          onSendOnboarding={goToClose} onLogged={setLogged} />
       )}
       {/* The number window (2026-10-07): over the popup, which stays open underneath. CALL closes only it. */}
       <CallNumberPopup open={windows.numberOpen} onOpenChange={(o) => setWindows((w) => ({ ...w, numberOpen: o }))}
         businessName={lead.business_name} phone={lead.phone} country={lead.country} onStartCall={startCall}
-        onBrowserCall={() => { startCall(); setTab('call'); void twilioCall.start(lead.id); }} />
-      </QuickCloseNav.Provider>
-      {/* ⛔ NO FOOTER (2026-10-06): Mark paid moved to the Close tab (admin only, the same handler). */}
+        onBrowserCall={() => { startCall(); setTab('call'); void startBrowserCall(lead.id, lead.business_name); }} />
+      {/* ⛔ NO FOOTER (2026-10-06): Mark paid moved to the Close section (admin only, the same handler). */}
 
       {/* Payment Received popup */}
       <Dialog open={showPaidPopup} onOpenChange={setShowPaidPopup}>

@@ -4,6 +4,7 @@ Moved verbatim from CLAUDE.md §10 on 2026-10-15. Add a row here when you write 
 
 | Touching… | Read first |
 |---|---|
+| The prospect popup's questions or Close section, sending the sign-up link from it, the browser call or the End call button | `docs/prospect-one-page-close.md` |
 | Sending from the Inbox outside the lead's send hours: the queue (inbox_scheduled_sends), its drain, the holds (they replied since / 24h expired), the reply-hours setting | `docs/inbox-send-window.md` |
 | Closing items on the Sales dashboard (What to do next / Follow-ups): lead_close_work, the closed-until-they-reply rule (isClosedItem), Done vs Dead lead | `docs/close-dashboard-items.md` |
 | Any cold WhatsApp limit: team and country caps, the gap, the probe, the cool-down, the tripwire | `docs/whatsapp-safety-guard.md` |

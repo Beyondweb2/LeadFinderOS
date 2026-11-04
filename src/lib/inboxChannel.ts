@@ -66,7 +66,7 @@ export type SmsTemplateAvailability = { ok: true } | { ok: false; reason: string
 /** Greyed-out-with-a-reason for a template a text genuinely cannot send. Everything else is available, with the WhatsApp wording and the
  *  WhatsApp placeholder filling (the server builds the text with the same code as the WhatsApp sender). */
 export function smsTemplateAvailability(name: string): SmsTemplateAvailability {
-  if (name === SMS_LINK_TEMPLATE) return { ok: false, reason: 'Sent from Quick Close, which makes the right link for this customer.' };
+  if (name === SMS_LINK_TEMPLATE) return { ok: false, reason: 'Sent from Close on the lead, which makes the right link for this customer.' };
   if (VIDEO_TEMPLATES.has(name)) return { ok: false, reason: 'Has a video — WhatsApp only.' };
   if (WA_TEMPLATE_REQS[name]?.group === 'site') return { ok: false, reason: 'Retired barber template — not sent.' };
   return { ok: true };
