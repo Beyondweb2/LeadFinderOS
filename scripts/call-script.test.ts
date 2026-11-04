@@ -243,7 +243,7 @@ console.log('── 12. The Call screen UI: removed noise stays removed ──')
   ok(/manager === 'agency' && after &&/.test(ui), 'the agency questions appear only after Agency is chosen');
   ok(/useState<PlanTab>\('complete'\)/.test(ui) && /data-testid=\{'call-plan-' \+ t\}/.test(ui) && !/routes\.map\(\(r[^)]*\) => \(\s*<div key=\{r\.route\}[^]*?r\.spoken/.test(ui), 'one plan open at a time (two tabs), starting on Findable Complete');
   ok(/useState<number \| null>\(null\)/.test(ui) && /open !== null && p\.script\.objections\[open\]/.test(ui), 'objections: closed by default, one answer open at a time');
-  ok((code.match(/<QuickCloseButton/g) ?? []).length === 1, 'exactly ONE Quick Close on the call screen (the sticky bar)');
+  ok(!/<QuickCloseButton/.test(code), 'no Quick Close button on the call screen (Close is the foot of the page)');
   ok(/data-testid="log-this-call"/.test(ui) && /Log this call/.test(ui), 'the sticky bar: Log this call');
   ok(!/AiOpportunity|CallEvidence|AiCheckCount|TalkAbout/.test(code), 'no second AI-result block inside the script');
   const dlg = read('src/components/LeadDetailDialog.tsx');

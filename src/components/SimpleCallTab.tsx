@@ -1,19 +1,23 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
-   THE CALL TAB, DEAD SIMPLE (Paul, 2026-11-03): facts, script, offer, close button. No explaining text.
+   THE PROSPECT PAGE IS ONE PAGE (Paul, 2026-11-03; 2026-11-04, docs/prospect-one-page-close.md). No explaining text.
 
      1 WHAT WE FOUND — who AI named instead (the best missed search) with the ChatGPT / Gemini / Google AI scores;
        the top website issues, de-duplicated, "Show all" for the rest; one small reminder line.
      2 THE SCRIPT — the WEBSITE or the NO WEBSITE version (src/lib/simpleCallScript.ts), Voice note beside it.
-     3 WHAT WE OFFER — Findable Complete, one list.
-     4 OBJECTIONS — closed.
-     5 Sticky bottom: Log this call + Quick Close (the only Quick Close on this screen).
+     3 QUESTIONS — every answer saves itself (ProspectQuestions.tsx).
+     4 WHAT WE OFFER — Findable Complete, one list.
+     5 OBJECTIONS — closed.
+     6 CLOSE — pick the plan, send the link by WhatsApp, Text or Email (ClosePanel.tsx).
+     7 Sticky bottom: Log this call.
 
    ⛔ The script is chosen ONCE, when the tab first has the lead: adding the website mid-call (the NO WEBSITE script's
       "what's the address?") must not swap the page under the rep. A new lead remounts the tab.
-   ⛔ No send, no audit control of its own: the AI check's run / re-run / full audit stay in LeadHookPanel, folded below
-      the facts (open when there is no result yet). The ONE website watch is useWebsiteCrawl (WebsiteCrawlSection.tsx).
+   ⛔ The AI check's run / re-run / full audit stay in LeadHookPanel, folded below the facts (open when there is no result yet).
+      The ONE website watch is useWebsiteCrawl (WebsiteCrawlSection.tsx).
+   ⛔ The questions and the close read one heavier function (quick-close), so it loads when they come into view, not on every
+      popup someone steps past. They still show if the script failed to load: a sale never waits on the script.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, ChevronDown, Loader2, RefreshCw, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -21,6 +25,9 @@ import { cn } from '@/lib/utils';
 import { AiOverviewChip } from '@/components/AiOverviewChip';
 import { LeadHookPanel, useAddWebsite } from '@/components/LeadCrmPanel';
 import { LogCallBar, Objections, ScriptLocked } from '@/components/ColdCallPlaybook';
+import { CallBlock as Block } from '@/components/CallBlock';
+import { ClosePanel } from '@/components/ClosePanel';
+import { ProspectQuestions } from '@/components/ProspectQuestions';
 import { VoiceNoteScriptBody } from '@/components/VoiceNoteScriptButton';
 import { useWebsiteCrawl } from '@/components/WebsiteCrawlSection';
 import { useColdCallPlaybook } from '@/hooks/useColdCallPlaybook';
@@ -42,18 +49,19 @@ import {
 
 const GREY = 'text-[11px] leading-snug text-muted-foreground';
 
-/** A section: a small heading, then its content. */
-function Block({ title, children, testId, action }: { title: string; children: ReactNode; testId?: string; action?: ReactNode }) {
-  return (
-    <section className="space-y-2" data-testid={testId}>
-      <div className="flex items-center gap-2">
-        <span className="h-4 w-1 shrink-0 rounded-full bg-blue-500" aria-hidden />
-        <h3 className="text-[11px] font-bold uppercase tracking-wider text-foreground/80">{title}</h3>
-        {action && <span className="ml-auto">{action}</span>}
-      </div>
-      {children}
-    </section>
-  );
+/** True once the element has come on screen, and stays true. */
+function useSeen(): [boolean, (el: HTMLElement | null) => void] {
+  const [seen, setSeen] = useState(false);
+  const observer = useRef<IntersectionObserver | null>(null);
+  const ref = useCallback((el: HTMLElement | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
+    if (!el) return;
+    if (typeof IntersectionObserver === 'undefined') { setSeen(true); return; }
+    observer.current = new IntersectionObserver((entries) => { if (entries.some((e) => e.isIntersecting)) setSeen(true); });
+    observer.current.observe(el);
+  }, []);
+  return [seen, ref];
 }
 
 /* ── 1 · WHAT WE FOUND ─────────────────────────────────────────────────────────────────────────── */
@@ -262,21 +270,34 @@ function Offer() {
 
 /* ── THE TAB ───────────────────────────────────────────────────────────────────────────────────── */
 
-export function SimpleCallTab({ leadId, contactName, onLogCall }: { leadId: string; contactName?: string | null; onLogCall: () => void }) {
+export function SimpleCallTab({ leadId, contactName, hasWebsite, onLogCall, closeFooter }: { leadId: string; contactName?: string | null; hasWebsite: boolean; onLogCall: () => void; closeFooter?: ReactNode }) {
   const q = useColdCallPlaybook(leadId, true);
+  const [seen, seenRef] = useSeen();
   /* The script is picked once, from the first read of the lead (see the header). */
   const kind = useRef<ScriptKind | null>(null);
   if (kind.current === null && q.data) kind.current = classifyLeadWebsite(q.data.context.website).source === 'own_site' ? 'website' : 'no_website';
-  if (q.isLoading) return <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading the call…</p>;
-  if (q.isError) return <p className="text-sm text-destructive">Couldn't load the call: {(q.error as { message?: string })?.message ?? 'unknown error'}</p>;
-  if (!q.data || !kind.current) return <p className="text-sm text-muted-foreground">Lead not found.</p>;
+  const p = q.data ?? null;
   return (
     <div className="space-y-5 pb-2" data-testid="cold-call-playbook">
-      <WhatWeFound p={q.data} leadId={leadId} />
-      <Script p={q.data} leadId={leadId} kind={kind.current} contactName={contactName} />
-      <Offer />
-      <Objections p={q.data} startOpen={false} />
-      <LogCallBar onLogCall={onLogCall} leadId={leadId} />
+      {q.isLoading && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading the call…</p>}
+      {q.isError && <p className="text-sm text-destructive">Couldn't load the call: {(q.error as { message?: string })?.message ?? 'unknown error'}</p>}
+      {!q.isLoading && !q.isError && !p && <p className="text-sm text-muted-foreground">Lead not found.</p>}
+      {p && kind.current && <>
+        <WhatWeFound p={p} leadId={leadId} />
+        <Script p={p} leadId={leadId} kind={kind.current} contactName={contactName} />
+      </>}
+      <div ref={seenRef} className="space-y-5">
+        <ProspectQuestions leadId={leadId} enabled={seen} hasWebsite={hasWebsite} />
+        {p && <>
+          <Offer />
+          <Objections p={p} startOpen={false} />
+        </>}
+        <Block title="Close" testId="close-section">
+          <ClosePanel leadId={leadId} active={seen} />
+          {closeFooter}
+        </Block>
+      </div>
+      <LogCallBar onLogCall={onLogCall} />
     </div>
   );
 }

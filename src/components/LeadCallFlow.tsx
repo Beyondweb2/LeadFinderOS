@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { useUnsavedDraft } from '@/components/UnsavedDraftGuard';
 import { NextActionForm, type NextActionPreset } from '@/components/NextActionForm';
 import { SalesStatePill } from '@/components/SalesStatePill';
-import { QuickCloseButton } from '@/components/QuickCloseDialog';
 import { useLeadCrmRow, useLeadWork, type LoggedOutcome, type OutcomeResultLine } from '@/components/LeadCrmPanel';
 import { leadRpc } from '@/lib/leadRpc';
 import { askLostReason } from '@/lib/lostReasonAsk';
@@ -32,7 +31,7 @@ import { cn } from '@/lib/utils';
        needs a next step then asks for it, in the same small window.
    Every write is useLeadWork (src/components/LeadCrmPanel.tsx): lead_log_contact + THE ONE RULE (leadState /
    leadOutcome), the one Next Action write, the one meeting write — exactly what the old cards wrote.
-   ⛔ Send onboarding is the Close tab (QuickClosePanel), never a raw payment link.
+   ⛔ Send onboarding is the Close section (QuickClosePanel), never a raw payment link.
    ⛔ The optional note is saved WITH the outcome (lead_log_contact's _note) and is marked as an unsaved draft
      while typed: it survives closing the window and leaving the lead asks first. The Internal note stays
      on Details. */
@@ -101,7 +100,7 @@ export function LostReasonLine({ leadId, businessName }: { leadId: string; busin
 }
 
 /* ── THE RESULT LINE: what the last Log recorded, on the Call tab (never toast-only) ──────────────── */
-export function LoggedLine({ leadId, logged, onDismiss }: { leadId: string; logged: LoggedResult; onDismiss: () => void }) {
+export function LoggedLine({ logged, onDismiss, onGoToClose }: { logged: LoggedResult; onDismiss: () => void; onGoToClose: () => void }) {
   const r = logged.result;
   return (
     <div className="space-y-1 rounded-xl border border-emerald-600/30 bg-emerald-500/[0.06] px-3 py-2 text-xs" data-testid="logged-line">
@@ -119,8 +118,8 @@ export function LoggedLine({ leadId, logged, onDismiss }: { leadId: string; logg
       {/* They are interested: the close is one tap away (call-first, 2026-10-04). */}
       {CLOSE_READY_OUTCOMES.has(logged.outcome) && r.state.state !== 'not_interested' && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-1.5" data-testid="logged-quick-close">
-          <span className="text-muted-foreground">Ready to pay now? Take the £99 on the call.</span>
-          <QuickCloseButton leadId={leadId} />
+          <span className="text-muted-foreground">Ready to pay now? Send the link while you’re on the call.</span>
+          <button type="button" onClick={onGoToClose} className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-blue-600 px-2.5 text-xs font-semibold text-white hover:bg-blue-700" data-testid="logged-go-to-close">Go to Close</button>
         </div>
       )}
     </div>
@@ -232,7 +231,7 @@ export function LeadCallFlow({ leadId, businessName, logOpen, onLogOpenChange, n
           {choices.map((c) => {
             const Icon = ICON[c.key] ?? Check;
             return (
-              <button key={c.key} type="button" disabled={busy !== null} data-testid={`outcome-${c.key}`} title={c.key === 'send_onboarding' ? 'Records Interested and opens the Close tab (Quick Close).' : outcomeRule(c.outcome).does}
+              <button key={c.key} type="button" disabled={busy !== null} data-testid={`outcome-${c.key}`} title={c.key === 'send_onboarding' ? 'Records Interested and takes you to Close, at the bottom of the page.' : outcomeRule(c.outcome).does}
                 onClick={() => void tap(c.key, c.outcome)}
                 className={cn('flex h-12 items-center gap-2 rounded-xl border px-3 text-left text-sm font-semibold transition-colors disabled:opacity-50', TONE[c.tone], c.key === 'send_onboarding' && 'col-span-2 justify-center')}>
                 {busy === c.key ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : <Icon className="h-4 w-4 shrink-0" />}

@@ -1,9 +1,10 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertTriangle, ArrowLeft, BadgePoundSterling, Check, CheckCircle2, ClipboardCopy, ClipboardList, Copy, Flag, Loader2, Lock, Mail, MessageCircle, Pencil, PoundSterling, RefreshCw, ShieldAlert, ShieldCheck, Zap,
+  AlertTriangle, Check, CheckCircle2, Copy, Flag, Loader2, Lock, Mail, MessageCircle, MessageSquareText, Pencil, PoundSterling, RefreshCw, ShieldAlert, ShieldCheck,
 } from 'lucide-react';
 import { Callout, EDGE, IconTile, SubSection, TONE, ToneChip, type Tone } from '@/components/operator/ui';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,22 +16,27 @@ import { AutosaveIndicator, useAutosaveFields } from '@/hooks/useAutosaveFields'
 import { withSaveRetry } from '@/lib/autosaveQueue';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import {
-  APPROACH_LABEL, APPROACH_ROUTE, QC_REVIEW_HEADING, ROUTE_WITHDRAWN_TEXT, TIED_IN_DECLINE_HEADING, TIED_IN_DECLINE_REASON, QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_AGREEMENT_LINE, QUICK_CLOSE_GUARANTEE_LINES, QUICK_CLOSE_QUESTIONS, QUICK_CLOSE_STATE_LABEL,
-  closeFlow, linkTimeLeftWords, missingQuestions, phoneCloseNotesComplete, quickCloseMessage, quickCloseScript, routeAfterAnswer, routeAvailable, routeSwitchText, routeOwnershipLine, routePaymentsShort, closeTermsLines, closeChipText, firstPaymentGbp,
-  type QcApproach, type QcCallNotes, type CloseRoute, type QcKey, type QcLinkShare, type OfferFit, type QuickCloseAnswers, type QuickCloseGate, type QuickCloseState,
+  APPROACH_LABEL, APPROACH_ROUTE, QC_REVIEW_HEADING, ROUTE_WITHDRAWN_TEXT, TIED_IN_DECLINE_HEADING, TIED_IN_DECLINE_REASON, QUICK_CLOSE_AGREEMENT_LINE, QUICK_CLOSE_GUARANTEE_LINES, QUICK_CLOSE_STATE_LABEL,
+  linkTimeLeftWords, quickCloseScript, routeAfterAnswer, routeSwitchText, routeOwnershipLine, routePaymentsShort, closeTermsLines, closeChipText, firstPaymentGbp,
+  type QcApproach, type QcCallNotes, type CloseRoute, type QcLinkShare, type OfferFit, type QuickCloseAnswers, type QuickCloseGate, type QuickCloseState,
 } from '@/lib/quickClose';
-import { LINK_READY_FALLBACK, type LinkRoute } from '@/lib/paymentLinkRoute';
-import { FINDABLE_SETUP_PRICE_GBP, SERVICE_ROUTE_NAME, isSaleableRoute, totalPaymentsFor, type ServiceRoute } from '@/lib/findableOffer';
+import type { LinkRoute } from '@/lib/paymentLinkRoute';
+import { SERVICE_ROUTE_NAME, isSaleableRoute, type ServiceRoute } from '@/lib/findableOffer';
 import { cn } from '@/lib/utils';
 import { COMPLETE_EXTRAS, COMPLETE_PAYMENT_PLANS, COMPLETE_UPFRONT_MONTHS, ESSENTIAL_PAYMENT_PLANS, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, PLAN_PRODUCT_NAME, V7_WINDOW_START_LINE, completeUpfrontSavingGbp, gbpWords, guaranteeForPlan, planShortLine, planTotalGbp, type PaymentPlan } from '@/lib/paymentPlans';
 import { ClosePanel } from '@/components/ClosePanel';
-import { SmsLinkSend } from '@/components/SmsLinkSend';
-import { cleanCloseEmail } from '@/lib/closeEmail';
+import { useSmsLink } from '@/components/SmsLinkSend';
+import { PROSPECT_ONLY_DETAIL } from '@/lib/prospectOnly';
+import { callNotesToCarry, closeStillNeeded, planSendName, sendConfirmText, type SendChannel } from '@/lib/prospectClose';
+import { CLOSE_EMAIL_INVALID_TEXT, cleanCloseEmail } from '@/lib/closeEmail';
 import type { NextStep } from '@/lib/deliveryStage';
 import { firstContactDueLabel, type FirstContactState } from '@/lib/firstContact';
 import { SellerClientInfoForm, type SellerClientInfo } from '@/components/SellerClientInfoForm';
 
-/* ══ QUICK CLOSE (Sales Experience, 2026-09-29) — src/lib/quickClose.ts has the rules ═══════════════════
+/* ⛔ ONE PAGE (Paul, 2026-11-04, docs/prospect-one-page-close.md): there is no Quick Close button and no Close tab any more. The questions are
+   on the prospect page (ProspectQuestions.tsx), this panel is the Close section at its foot, and the dialog below is only that panel in a
+   frame, for the Sales dashboard's "Paul asked for details". The history below explains the rules it still keeps.
+   ══ QUICK CLOSE (Sales Experience, 2026-09-29) — src/lib/quickClose.ts has the rules ═══════════════════
    Built for a phone call on a phone: one question at a time, big buttons, every tap SAVED (so a dropped
    call resumes where it stopped), what we already know shown instead of asked, then one button for the
    £99 link and one-tap copy. The server (fn quick-close) decides everything that matters.
@@ -43,16 +49,16 @@ import { SellerClientInfoForm, type SellerClientInfo } from '@/components/Seller
    dialog below is only that panel in a frame (for screens outside the workspace). The questions follow the
    website approach (quickClose.ts closeFlow): a new site is never asked for current-site access, and an
    unresolved domain is a handoff note for Paul, not a stop. Inside the workspace every Quick Close button
-   switches to the Close tab (QuickCloseNav).
+   switches to the Close tab.
    🔴 v5 (Paul, 2026-10-16): ONE PLAN FOR SALE — Findable Build. Optimise is never offered (a close stored on it
    before v5 is asked the plan again, Build only). Still tied into a contract with their current provider is
    DECLINED (clause 1.6): the close stops, nothing else is offered, no link, and Paul's release cannot lift it. */
 
-interface View {
+export interface View {
   ok: true; canEdit: boolean;
   /** Set when the lead is already a client (already_paid) or its engagement ended / was refunded (client_closed). */
   closed?: 'already_paid' | 'client_closed' | null;
-  lead: { id: string; business_name: string | null; phone: string | null; email: string | null; website: string | null; address: string | null; town: string | null; trade: string | null; contact_name: string | null; rating: number | null; review_count: number | null; campaign: string | null; lead_source: string | null; salesperson: string | null };
+  lead: { id: string; business_name: string | null; phone: string | null; email: string | null; website: string | null; address: string | null; town: string | null; trade: string | null; contact_name: string | null; rating: number | null; review_count: number | null; campaign: string | null; lead_source: string | null; salesperson: string | null; services?: string[]; service_areas?: string[] };
   onboarding: { id: string; status: string; contact_name: string | null; contact_email: string | null; confirmed_phone: string | null; business_website: string | null } | null;
   answers: QuickCloseAnswers; state: QuickCloseState; gate: QuickCloseGate;
   consents?: { lines: string[]; wording: string; confirmed: { wording: string; at: string } | null };
@@ -71,6 +77,8 @@ interface View {
   /** 2026-10-29: payment plans that cannot be sold yet (their Stripe price is not set up), with the reason. */
   plans_unavailable?: Partial<Record<string, string>>;
   has_website?: boolean;
+  /** A prospect-only country (Australia): never closed (src/lib/prospectOnly.ts). */
+  prospect_only?: boolean;
   events: { kind: string; at: string; by_me: boolean }[];
   /** THE TWO WAYS TO CLOSE: the route this sign-up is on, and the Full Setup link with how it has gone out. */
   close_route?: CloseRoute;
@@ -195,9 +203,6 @@ function PlanPicker({ chosen, busy, unavailable, onPick }: { chosen: PaymentPlan
   );
 }
 
-/** Inside the lead workspace, a Quick Close button goes to the CLOSE tab instead of opening a second window. */
-export const QuickCloseNav = createContext<{ openClose: (leadId: string) => void } | null>(null);
-
 /** The lead has no website on file: improving / refreshing / recreating one is not possible. */
 const NEEDS_CURRENT_SITE: ReadonlySet<string> = new Set(['improve', 'refresh', 'recreation']);
 
@@ -205,56 +210,51 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-full max-w-lg flex-col gap-0 overflow-hidden p-0 sm:h-auto sm:max-h-[92vh] sm:rounded-2xl">
-        <DialogTitle className="sr-only">Quick Close</DialogTitle>
-        <DialogDescription className="sr-only">Close this lead: the questions, the terms and the sign-up link</DialogDescription>
+        <DialogTitle className="sr-only">Close</DialogTitle>
+        <DialogDescription className="sr-only">Close this lead: the plan, the terms and the sign-up link</DialogDescription>
         <ClosePanel leadId={leadId} active={open} framed />
       </DialogContent>
     </Dialog>
   );
 }
 
-/** THE CLOSE — one UI. framed = inside the dialog (its own scroll area); otherwise it flows in the workspace tab. */
+/** THE CLOSE — the bottom of the prospect page (Paul, 2026-11-04). Pick the plan, then WhatsApp / Text / Email, one quick confirm, and the
+ *  right sign-up link goes out. framed = inside the dialog (its own scroll area, for screens outside the popup). */
 export function QuickClosePanel({ leadId, active = true, framed = false }: { leadId: string; active?: boolean; framed?: boolean }) {
   const { role } = useSubscription();
   const { toast } = useToast();
   const qc = useQueryClient();
   const q = useQuickClose(leadId, active);
-  const open = active;
   const v = q.data;
-  const [step, setStep] = useState<QcKey | 'review' | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [trade, setTrade] = useState('');
-  const [tradeTyped, setTradeTyped] = useState(false);
   const [script, setScript] = useState(quickCloseScript(null));
   const [copied, setCopied] = useState<string | null>(null);
   /* The old £99 × 12 plan is staff-only and hidden until asked for (paymentPlans.ts). */
   const [showOldPlan, setShowOldPlan] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [lastSaved, setLastSaved] = useState(false);
+  const [asking, setAsking] = useState<SendChannel | null>(null);
+  const [email, setEmail] = useState('');
+  const emailFocused = useRef(false);
+  const savedEmail = v?.share?.email ?? '';
+  useEffect(() => { if (!emailFocused.current) setEmail(savedEmail); }, [savedEmail]);
 
   const answers = v?.answers ?? {};
+  const plan = answers.payment_plan ?? null;
   /* The chosen plan cannot be sold yet (its Stripe price is missing): no link, and the reason (the checkout refuses it too). */
-  const planRefusal = answers.payment_plan ? v?.plans_unavailable?.[answers.payment_plan] ?? null : null;
+  const planRefusal = plan ? v?.plans_unavailable?.[plan] ?? null : null;
   const route = answers.route ?? null;
   /* v5: a plan no longer for sale (Optimise, stored before 2026-10-16) names no terms and makes no link here. */
   const sellRoute: ServiceRoute | null = route && isSaleableRoute(route) ? route : null;
   const declined = v?.state === 'declined';
   // The words follow the route: a new route resets them (the rep can still edit freely after).
-  useEffect(() => { setScript(quickCloseScript(sellRoute, answers.payment_plan)); }, [sellRoute, answers.payment_plan]);
-  const missing = useMemo(() => missingQuestions(answers), [answers]);
-  // A decision-maker "No" ends the questions (nothing after it can lead to payment).
-  const current: QcKey | null = step && step !== 'review' ? step : answers.decision_maker === 'no' ? null : (missing[0] ?? null);
-  /* v2: only the questions this approach needs, in order (closeFlow). */
-  const shownQs = closeFlow(answers).map((k) => QUICK_CLOSE_QUESTIONS.find((x) => x.key === k)!).filter(Boolean);
-  const hasSite = !!(v?.onboarding?.business_website || v?.lead.website);
-  useEffect(() => { if (!open) { setStep(null); setEditing(false); setCopied(null); } }, [open]);
+  useEffect(() => { setScript(quickCloseScript(sellRoute, plan)); }, [sellRoute, plan]);
 
   const run = async (label: string, body: Record<string, unknown>, quiet = false) => {
     setBusy(label);
     const answer = label.startsWith('a:');
     try {
-      /* A tapped answer (who runs the site, the agency contract, the plan) rides out a bad connection before it says it failed. */
+      /* A tapped plan rides out a bad connection before it says it failed. */
       const r = answer
         ? await withSaveRetry(() => invokeEdge<View>('quick-close', { lead_id: leadId, ...body }), (on) => setRetrying(on))
         : await invokeEdge<View>('quick-close', { lead_id: leadId, ...body });
@@ -268,144 +268,95 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
       return null;
     } finally { setBusy(null); }
   };
-  const answer = async (key: QcKey, value: string) => {
-    /* ROUTE INTEGRITY: a plan change (since v5 only ever a pre-v5 Optimise close moving to Build) changes the money — it is asked, never a stray tap.
-       The server also refuses it unless route_change is true, and refuses any save from a screen showing
-       a different route than the saved one (expect_route). */
-    let routeChange = false;
-    /* v2: the approach can move the route too (a new site → Build). */
-    const nextRoute = routeAfterAnswer(answers, key, value);
-    if (route && nextRoute && nextRoute !== route) {
-      if (!window.confirm(routeSwitchText(route, nextRoute, !!v?.link))) return;
-      routeChange = true;
-    }
-    const before = qc.getQueryData<View>(quickCloseKey(leadId));
-    if (before) qc.setQueryData<View>(quickCloseKey(leadId), { ...before, answers: { ...before.answers, [key]: value } });
-    setStep(null);
-    const r = await run(`a:${key}`, { mode: 'save', answers: { [key]: value }, expect_route: route, ...(routeChange ? { route_change: true } : {}) });
-    if (!r && before) qc.setQueryData(quickCloseKey(leadId), before);
-  };
-  /* The plan IS the route (Build): saved together, so no separate plan-confirmation question. A pre-v5 Optimise close asks first. */
+  /* The plan IS the route (Build): saved together. A pre-v5 Optimise close asks first. */
   const pickPlan = async (p: PaymentPlan) => {
     const switching = !!route && route !== 'build';
     if (switching && !window.confirm(routeSwitchText(route!, 'build', !!v?.link))) return;
     const before = qc.getQueryData<View>(quickCloseKey(leadId));
     if (before) qc.setQueryData<View>(quickCloseKey(leadId), { ...before, answers: { ...before.answers, route: 'build', payment_plan: p } });
-    setStep(null);
     const r = await run('a:payment_plan', { mode: 'save', answers: { route: 'build', payment_plan: p }, expect_route: route, ...(switching ? { route_change: true } : {}) });
     if (!r && before) qc.setQueryData(quickCloseKey(leadId), before);
   };
-  /* One detail, saved as they leave the field. A bad email is refused by the server: it says so, and the text stays for them to fix. */
-  const saveDetail = async (key: string, value: string) => {
-    try {
-      const r = await invokeEdge<View>('quick-close', { lead_id: leadId, mode: 'save', answers: {}, expect_route: route, corrections: { [key]: value } });
-      qc.setQueryData(quickCloseKey(leadId), r);
-    } catch (e) {
-      toast({ title: 'Not saved', description: edgeErrorMessage(e), variant: 'destructive' });
-      throw e;
-    }
+
+  /* THE LINK: made on the first send, reused after, remade when an answer changed or it ran out (the server decides which: linkStep). */
+  const linkReady = async (): Promise<View | null> => {
+    if (!v) return null;
+    const carry = callNotesToCarry(v.call, v.lead);
+    if (Object.keys(carry).length && !(await run('notes', { mode: 'save_call', call: carry }))) return null;
+    return v.link?.usable && !Object.keys(carry).length ? v : run('link', { mode: 'generate_link' });
   };
-  /* The trade saves as it is typed. The box stays open once typing starts (saving it fills lead.trade), and trade_prev lets each save replace only what this box itself saved. */
-  const tradeSaved = useRef('');
-  const tradeAuto = useAutosaveFields({
-    save: async (_k, val) => {
-      const t = val.trim();
-      if (!t) return;
-      const r = await invokeEdge<View>('quick-close', { lead_id: leadId, mode: 'save', answers: {}, expect_route: route, trade: t, ...(tradeSaved.current ? { trade_prev: tradeSaved.current } : {}) });
-      tradeSaved.current = t;
-      qc.setQueryData(quickCloseKey(leadId), r);
-    },
-    storageKey: `qc-trade:${leadId}`,
-    onRestore: (left) => { if (left.trade) { setTrade(left.trade); setTradeTyped(true); } },
-  });
-  const typeTrade = (val: string) => { setTrade(val); setTradeTyped(true); tradeAuto.set('trade', val); };
-  const generate = async () => {
-    if (!v?.lead.trade && !trade.trim()) { toast({ title: 'Add the trade first', description: 'It decides what the baseline measures.', variant: 'destructive' }); return; }
-    /* A link is about to be made from it: what is in the box goes first, even inside the typing pause. */
-    if (trade.trim() && trade.trim() !== v?.lead.trade) {
-      const ok = await run('fix', { mode: 'save', answers: {}, expect_route: route, trade: trade.trim(), ...(tradeSaved.current ? { trade_prev: tradeSaved.current } : {}) });
-      if (!ok) return;
-      tradeSaved.current = trade.trim();
-    }
-    await run('link', { mode: 'generate_link' });
+  const sentOn = (view: View | null | undefined, ch: SendChannel | 'copy') => {
+    const url = view?.link?.usable ? view.link.url : null;
+    if (!url) return null;
+    return (view?.link?.shared ?? []).filter((s) => s.channel === ch && s.status !== 'failed' && (!s.link || s.link === url)).slice(-1)[0] ?? null;
   };
-  /** Copy, then record it (as COPIED — the app cannot know where it was pasted). The record never blocks the copy. */
-  const doCopy = async (what: 'link' | 'message' | 'script', text: string) => {
-    if (await copy(text)) {
-      setCopied(what); window.setTimeout(() => setCopied(null), 2000);
-      toast({ title: what === 'link' ? 'Link copied' : 'Copied' });
-      if (what !== 'script') void run('share-copy', { mode: 'share_link', channel: 'copy' }, true);
-    } else toast({ title: 'Copy blocked by the browser', description: 'Select the text and copy it by hand.', variant: 'destructive' });
-  };
-  const sendEmail = async () => {
-    const r = await run('email', { mode: 'share_link', channel: 'email' });
-    if (r) toast({ title: 'Agreement & payment link emailed', description: v?.share?.email ? `To ${v.share.email}` : undefined });
-  };
-  /* ONE click (2026-10-07): the server picks the route — the approved findable_signup_link template, or a normal
-     message in a conversation they replied to inside 24 hours — and refuses a second send of the same link unless
-     this is a deliberate Resend. Sending… / Sent / failed come from the sender's own answer, never assumed. */
-  const sendWhatsApp = async (resend = false) => {
-    if (resend && !window.confirm('Send the sign-up link to them on WhatsApp again?')) return;
-    const r = await run('wa', { mode: 'share_link', channel: 'whatsapp', ...(resend ? { resend: true } : {}) });
+  /* Sending… / Sent / failed come from the sender's own answer, never assumed. A second send of the same link is a deliberate Resend. */
+  const send = async (ch: SendChannel) => {
+    setAsking(null);
+    const ready = await linkReady();
+    if (!ready) return;
+    const again = !!sentOn(ready, ch);
+    const r = await run(ch === 'whatsapp' ? 'wa' : ch, { mode: 'share_link', channel: ch, ...(again && ch !== 'email' ? { resend: true } : {}) });
     if (!r) return;
-    const last = r.link?.shared.filter((s) => s.channel === 'whatsapp').slice(-1)[0];
-    toast({ title: last?.status === 'simulated' ? 'Sent (test mode — not delivered)' : 'Sent on WhatsApp', description: last?.template ? 'As the findable_signup_link template.' : undefined });
+    const last = r.link?.shared.filter((s) => s.channel === ch).slice(-1)[0];
+    const test = last?.status === 'simulated';
+    if (ch === 'whatsapp') toast({ title: test ? 'Sent (test mode — not delivered)' : 'Sent on WhatsApp', description: last?.template ? 'As the approved findable_signup_link template.' : 'As a normal message: they replied in the last 24 hours.' });
+    else if (ch === 'sms') toast({ title: test ? 'Texted (test mode — not sent)' : 'Link texted', description: 'Delivery is confirmed once the network reports it.' });
+    else toast({ title: 'Link emailed', description: r.share?.email ? `To ${r.share.email}` : undefined });
   };
-
-  /* TEXT THE LINK (2026-10-09): the same agreement link, through the one guarded SMS sender (server: quick-close share_link / sms).
-     A text is recorded as queued, never as delivered — the carrier's receipt updates the status shown beside the button. */
-  const sendSmsLink = async (resend = false): Promise<boolean> => {
-    const r = await run('sms', { mode: 'share_link', channel: 'sms', ...(resend ? { resend: true } : {}) });
-    if (!r) return false;
-    const last = r.link?.shared.filter((s) => s.channel === 'sms').slice(-1)[0];
-    toast({ title: last?.status === 'simulated' ? 'Texted (test mode — not sent)' : 'Link texted', description: 'Delivery is confirmed once the network reports it.' });
-    return true;
+  /** The customer's email is saved to the lead itself (quick-close save_email); a typo is refused here, and the text stays to fix. */
+  const saveEmail = async (): Promise<boolean> => {
+    const c = cleanCloseEmail(email);
+    if (!c.ok) { toast({ title: 'Not saved', description: CLOSE_EMAIL_INVALID_TEXT, variant: 'destructive' }); return false; }
+    if (c.email === savedEmail) return true;
+    return !!(await run('email-save', { mode: 'save_email', email: c.email }));
   };
-
-  /* AUTOSAVE: one answer, one small write, and the cached view follows so a reopened dialog shows it (docs/commission-owed.md). */
+  const askToSend = async (ch: SendChannel) => {
+    if (ch === 'email' && email.trim() && !(await saveEmail())) return;
+    setAsking(ch);
+  };
+  const copyLink = async () => {
+    const ready = await linkReady();
+    const url = ready?.link?.usable ? ready.link.url : null;
+    if (!url) return;
+    if (await copy(url)) {
+      setCopied('link'); window.setTimeout(() => setCopied(null), 2000);
+      toast({ title: 'Link copied' });
+      void run('share-copy', { mode: 'share_link', channel: 'copy' }, true);
+    } else toast({ title: 'Copy blocked by the browser', description: 'Try again, or use WhatsApp, Text or Email.', variant: 'destructive' });
+  };
+  const copyScript = async () => {
+    if (await copy(script)) { setCopied('script'); window.setTimeout(() => setCopied(null), 2000); toast({ title: 'Copied' }); }
+    else toast({ title: 'Copy blocked by the browser', description: 'Select the text and copy it by hand.', variant: 'destructive' });
+  };
 
   const saveClientInfo = async (ci: Record<string, string>) => {
     const r = await run('client-info', { mode: 'save_client_info', client_info: ci }) as { refused?: string[] } | null;
     if (r) toast({ title: 'Client details saved for Paul', description: r.refused?.length ? r.refused.join(' ') : undefined });
     return !!r;
   };
-  const notesDone = phoneCloseNotesComplete(v?.call);
-  /* TWO OPTIONS: "what they offer / where they want to be found" is one more step, just before the plan. */
-  const totalSteps = shownQs.length + 1;
-  const answeredCount = shownQs.filter((x) => answers[x.key] && answers[x.key] !== 'not_applicable').length + (notesDone ? 1 : 0);
-  const known: [string, string | null | undefined][] = v ? [
-    ['Business', v.lead.business_name], ['Trade', v.lead.trade], ['Town', v.lead.town], ['Phone', v.onboarding?.confirmed_phone || v.lead.phone],
-    ['Email', v.onboarding?.contact_email || v.lead.email], ['Website', v.onboarding?.business_website || v.lead.website], ['Contact', v.onboarding?.contact_name || v.lead.contact_name],
-    ['Google', v.lead.rating ? `${v.lead.rating}★ (${v.lead.review_count ?? 0} reviews)` : null], ['Campaign', v.lead.campaign], ['Source', v.lead.lead_source ?? 'App search'], ['Salesperson', v.lead.salesperson],
-  ] : [];
-  /* A link that already stands is never hidden by the new step; a NEW link needs what they offer and where (server: call_notes_missing). */
-  const showNotes = !!v && v.canEdit && !notesDone && !step && answers.decision_maker !== 'no' && v.state !== 'link_generated' && v.state !== 'paid' && (current === 'route' || (current === null && !!route));
-  const closing = !!v && v.canEdit && !!sellRoute && (notesDone || v.state === 'link_generated') && (v.state === 'ready' || v.state === 'link_generated' || v.state === 'link_expired');
-  const usableUrl = v?.link?.usable ? v.link.url : null;
-  const greetName = v?.onboarding?.contact_name || v?.lead.contact_name || null;
-  const currentQ = current ? QUICK_CLOSE_QUESTIONS.find((x) => x.key === current)! : null;
+
+  const stillNeeded = v ? closeStillNeeded({ answers, call: v.call, lead: v.lead }) : [];
+  const stopped = !v || v.state === 'paid' || v.state === 'blocked' || declined || v.state === 'needs_review' || v.state === 'consents_needed';
+  const canSend = !!v && v.canEdit && !!plan && !!sellRoute && !stopped && !planRefusal && stillNeeded.length === 0;
+  const recipient: Record<SendChannel, string> = { whatsapp: v?.lead.phone ?? '', sms: v?.lead.phone ?? '', email: email.trim() };
 
   return (
     <div className={cn('flex min-h-0 flex-col', framed && 'h-full')} data-testid="quick-close-panel">
-        <div className={cn('shrink-0 text-left', framed ? 'border-b border-border/60 px-4 py-3.5' : 'pb-3')}>
-          <div className="flex min-w-0 items-start gap-3 pr-8">
-            <IconTile icon={BadgePoundSterling} tone="blue" />
-            <div className="min-w-0 flex-1">
-              <p className="flex min-w-0 items-baseline gap-1.5 text-base font-bold tracking-tight"><span className="shrink-0 whitespace-nowrap">Close</span><span className="min-w-0 truncate font-normal text-muted-foreground">· {v?.lead.business_name ?? '…'}</span></p>
-              <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                {v && <ToneChip tone={STATE_TONE[v.state]} dot className={v.state === 'paid' ? SUCCESS_CHIP : undefined}>{QUICK_CLOSE_STATE_LABEL[v.state]}</ToneChip>}
-                {v && route && <ToneChip tone="grey" icon={PoundSterling} testId="qc-route-chip">{closeChipText(route, answers.payment_plan)}</ToneChip>}
-                {v && <AutosaveIndicator status={busy?.startsWith('a:') ? (retrying ? 'retrying' : 'saving') : lastSaved ? 'saved' : 'idle'} className="min-w-0" />}
-                {v && v.state !== 'paid' && <span className="min-w-0">{answeredCount} of {totalSteps} answered</span>}
-              </div>
-            </div>
+        <div className={cn('shrink-0 text-left', framed ? 'border-b border-border/60 px-4 py-3.5 pr-12' : 'pb-2')}>
+          <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            {framed && <span className="mr-1 text-base font-bold tracking-tight text-foreground">Close</span>}
+            {v && <ToneChip tone={STATE_TONE[v.state]} dot className={v.state === 'paid' ? SUCCESS_CHIP : undefined}>{QUICK_CLOSE_STATE_LABEL[v.state]}</ToneChip>}
+            {v && route && <ToneChip tone="grey" icon={PoundSterling} testId="qc-route-chip">{closeChipText(route, plan)}</ToneChip>}
+            {v && <AutosaveIndicator status={busy?.startsWith('a:') ? (retrying ? 'retrying' : 'saving') : lastSaved ? 'saved' : 'idle'} className="min-w-0" />}
           </div>
-          {v && v.state !== 'paid' && <div className="mt-3 h-1 overflow-hidden rounded-full bg-muted" data-testid="qc-progress"><div className={cn('h-full rounded-full transition-[width] duration-500 motion-reduce:transition-none', TONE.blue.bar)} style={{ width: `${Math.round((answeredCount / Math.max(1, totalSteps)) * 100)}%` }} /></div>}
         </div>
 
         <div className={cn('space-y-4', framed && 'min-h-0 flex-1 overflow-y-auto px-4 py-4')}>
-          {q.isLoading && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading what we already know…</p>}
+          {q.isLoading && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading…</p>}
           {q.isError && <Callout tone="red" icon={AlertTriangle}>{edgeErrorMessage(q.error)}</Callout>}
+
+          {v?.prospect_only && <Callout tone="amber" icon={Lock} testId="qc-prospect-only" title="This lead can't be closed yet"><span className="text-muted-foreground">{PROSPECT_ONLY_DETAIL}</span></Callout>}
 
           {v && v.state === 'paid' && v.closed === 'client_closed' && (
             <Callout tone="grey" icon={Lock} testId="qc-client-closed" title="This client's engagement has ended.">
@@ -427,78 +378,13 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                 CLIENT INFO NEEDED
                 <span className="text-xs font-normal text-muted-foreground">{`asked ${new Date(v.info_request.reminded_at ?? v.info_request.requested_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' })}`}</span>
               </summary>
-              {(
-                <div className="mt-2 text-sm" data-testid="qc-info-request">
-                  <p>{v.lead.business_name ?? 'This client'} is missing:</p>
-                  <ul className="mt-1 list-disc pl-5">{v.info_request.items.map((i) => <li key={i.key}>{i.label}</li>)}</ul>
-                  <p className="mt-1 text-xs text-muted-foreground">Please add anything you collected during the sale. Saving tells Paul.</p>
-                </div>
-              )}
+              <div className="mt-2 text-sm" data-testid="qc-info-request">
+                <p>{v.lead.business_name ?? 'This client'} is missing:</p>
+                <ul className="mt-1 list-disc pl-5">{v.info_request.items.map((i) => <li key={i.key}>{i.label}</li>)}</ul>
+                <p className="mt-1 text-xs text-muted-foreground">Please add anything you collected during the sale. Saving tells Paul.</p>
+              </div>
               <div className="mt-3"><SellerClientInfoForm info={v.client_info} onSave={saveClientInfo} busy={busy === 'client-info'} /></div>
             </details>
-          )}
-
-          {/* ── THE CURRENT QUESTION (while answering) ── */}
-          {v && showNotes && <ServicesAreasStep key={leadId} leadId={leadId} call={v.call} busy={busy === 'notes'} total={totalSteps} number={Math.min(answeredCount + 1, totalSteps)}
-            onSave={async (jobs, areas) => !!(await run('notes', { mode: 'save_call', call: { jobs, areas } }))} />}
-
-          {v && v.canEdit && currentQ && !showNotes && (
-            <section aria-live="polite">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Question {Math.min(answeredCount + 1, totalSteps)} of {totalSteps}</p>
-              <p className="mt-1 text-lg font-semibold leading-snug">{currentQ.text}</p>
-              {currentQ.detail && current !== 'build_consents' && <p className="mt-1 text-sm text-muted-foreground" data-testid="qc-question-detail">{currentQ.detail.join(' ')}</p>}
-              {current === 'build_consents' && (
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground" data-testid="qc-build-consents">
-                  {(v.consents?.lines ?? currentQ.detail ?? []).map((d) => <li key={d}>{d}</li>)}
-                </ul>
-              )}
-              {/* THE PLAN, LAST — Findable Build (offerFit; v5: the one plan for sale). */}
-              {current === 'route' && route && !isSaleableRoute(route) && <p className={cn('mt-2 rounded-xl px-3 py-2 text-xs leading-snug ring-1 ring-inset', TONE.amber.tint, 'ring-amber-500/30')} data-testid="qc-route-withdrawn">{ROUTE_WITHDRAWN_TEXT} This close was started on it: confirm Findable Build with them, or stop here.</p>}
-              {current === 'route' && v.offer?.reason && (
-                <div className="mt-2 space-y-1.5" data-testid="qc-offer-fit-block">
-                  <p className={cn('rounded-xl px-3 py-2 text-xs leading-snug ring-1 ring-inset', v.offer.offered.build ? 'bg-muted/40 text-muted-foreground ring-border' : cn(TONE.amber.tint, 'ring-amber-500/30'))} data-testid="qc-offer-fit">{v.offer.reason}</p>
-                  {v.offer.warning && <p className={cn('flex items-start gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold leading-snug ring-1 ring-inset', TONE.amber.tint, 'ring-amber-500/30')} data-testid="qc-offer-warning"><AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />{v.offer.warning}</p>}
-                  {(v.offer.notes?.length ?? 0) > 0 && <ul className="space-y-0.5 px-1 text-xs text-muted-foreground" data-testid="qc-offer-notes">{v.offer.notes.map((n) => <li key={n}>• {n}</li>)}</ul>}
-                </div>
-              )}
-              {current === 'payment_plan' && <PlanPicker chosen={answers.payment_plan} busy={!!busy} unavailable={v.plans_unavailable} onPick={(p) => void pickPlan(p)} />}
-              {current === 'payment_plan' && showOldPlan && <button type="button" disabled={!!busy} onClick={() => void pickPlan('legacy_twelve')} className="mt-2 w-full rounded-xl border border-border/70 px-3 py-2 text-left text-sm" data-testid="qc-plan-legacy_twelve">{PAYMENT_PLAN_NAME.legacy_twelve}: {planShortLine('legacy_twelve')} (staff only)</button>}
-              {current !== 'payment_plan' && <div className={cn('mt-3 grid gap-2', current === 'route' || current === 'build_consents' || current === 'approach' || current === 'domain' || current === 'design_owner' || current === 'agency_contract' || current === 'manager' ? 'grid-cols-1' : 'grid-cols-2')}>
-                {/* v5: the plan question offers Findable Build only. */}
-                {[...currentQ.options]
-                  .sort((x, y) => (current === 'route' && v.offer?.recommended ? Number(y.value === v.offer.recommended) - Number(x.value === v.offer.recommended) : 0))
-                  /* A LEGACY answer stays readable but is never offered as a new choice (QcOption.legacy). */
-                  .filter((o) => !o.legacy || answers[current!] === o.value)
-                  /* ⛔ v5: a withdrawn plan is never a button, even when a pre-v5 close still carries it. */
-                  .filter((o) => current !== 'route' || isSaleableRoute(o.value))
-                  .filter((o) => !(current === 'authority' && o.value === 'not_applicable' && (answers.manager === 'agency' || answers.manager === 'freelancer' || answers.manager === 'third_party')))
-                  .map((o) => {
-                    const noSite = current === 'route' && !routeAvailable(answers, o.value as ServiceRoute);
-                    /* ⛔ v5 clause 1.6: still tied into their contract → nothing is offered, to anyone (Paul cannot release a decline). */
-                    const notOffered = current === 'route' && !noSite && v.offer ? !v.offer.offered[o.value as ServiceRoute] : false;
-                    /* A payment plan whose Stripe price is not set up is shown, switched off, with the reason (never charged). */
-                    const planOff: string | null = null;
-                    const off = noSite || notOffered || !!planOff
-                      || (current === 'approach' && !hasSite && NEEDS_CURRENT_SITE.has(o.value));
-                    const recommended = current === 'route' && v.offer?.recommended === o.value && !noSite;
-                    const planOf = current === 'approach' && o.value !== 'unsure' ? APPROACH_ROUTE[o.value as Exclude<QcApproach, 'unsure'>] : null;
-                    return (
-                      <button key={o.value} type="button" disabled={!!busy || off} onClick={() => void answer(current!, o.value)} data-testid={current === 'route' ? 'qc-route-' + o.value : undefined}
-                        className={cn('flex min-h-[56px] flex-col items-center justify-center rounded-xl border px-3 py-3 text-center text-base font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50',
-                          answers[current!] === o.value ? PICKED : recommended ? 'border-blue-500/50 bg-card hover:bg-muted/60' : 'border-border/70 bg-card hover:border-blue-500/40 hover:bg-muted/60')}>
-                        <span className="flex flex-wrap items-center justify-center gap-1.5">{o.label}{recommended && <span className="rounded-full bg-yellow-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yellow-600 ring-1 ring-inset ring-yellow-500/40 dark:text-yellow-300">Recommended</span>}</span>
-                        {current === 'route' && <span className="mt-0.5 text-xs font-normal text-muted-foreground">{noSite ? 'Not possible — they have no website' : notOffered ? 'Not offered — still tied into their contract' : `${SERVICE_ROUTE_NAME[o.value as ServiceRoute]} · ${routePaymentsShort(o.value as ServiceRoute)}`}</span>}
-                        {planOff && <span className="mt-0.5 text-xs font-normal text-muted-foreground" data-testid={'qc-plan-unavailable-' + o.value}>{planOff}</span>}
-                        {current === 'approach' && <span className="mt-0.5 text-xs font-normal text-muted-foreground">{off ? 'Not possible — no website on file' : planOf ? `${SERVICE_ROUTE_NAME[planOf]} · ${routePaymentsShort(planOf)}` : 'Pick the plan next'}</span>}
-                      </button>
-                    );
-                  })}
-              </div>}
-              {current === 'payment_plan' && !showOldPlan && answers.payment_plan !== 'legacy_twelve' && (
-                <button type="button" onClick={() => setShowOldPlan(true)} className="mt-2 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" data-testid="qc-show-old-plan">Show the old plan (£99 × 12, staff only)</button>
-              )}
-              {step && <button type="button" onClick={() => setStep(null)} className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3 w-3" />Back</button>}
-            </section>
           )}
 
           {v && v.state === 'blocked' && (
@@ -532,103 +418,56 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
               <p className="mt-1.5 text-xs text-muted-foreground">Never promise to take over a domain or copy someone else's design. Paul sorts this out with them.</p>
             </Callout>
           )}
-          {v && answers.approach && answers.approach !== 'unsure' && answers.approach !== 'improve' && v.state !== 'paid' && (
-            <p className="text-xs text-muted-foreground" data-testid="qc-approach-summary">Website approach: <span className="font-medium text-foreground">{APPROACH_LABEL[answers.approach]}</span>
-              {v.review.delivery_approach && v.review.delivery_approach !== answers.approach && <> · delivered as <span className="font-medium text-foreground">{APPROACH_LABEL[v.review.delivery_approach]}</span> unless Paul confirms the rights</>}</p>
+          {route && !isSaleableRoute(route) && v?.state !== 'paid' && <p className={cn('rounded-xl px-3 py-2 text-xs leading-snug ring-1 ring-inset', TONE.amber.tint, 'ring-amber-500/30')} data-testid="qc-route-withdrawn">{ROUTE_WITHDRAWN_TEXT} This close was started on it: pick a plan below with them, or stop here.</p>}
+
+          {/* ── 1 · THE PLAN ── */}
+          {v && v.canEdit && !declined && !v.prospect_only && (
+            <section data-testid="close-plan">
+              <p className="text-sm font-semibold">Which plan, and how do they want to pay?</p>
+              <PlanPicker chosen={plan} busy={!!busy} unavailable={v.plans_unavailable} onPick={(p) => void pickPlan(p)} />
+              {showOldPlan && <button type="button" disabled={!!busy} onClick={() => void pickPlan('legacy_twelve')} className="mt-2 w-full rounded-xl border border-border/70 px-3 py-2 text-left text-sm" data-testid="qc-plan-legacy_twelve">{PAYMENT_PLAN_NAME.legacy_twelve}: {planShortLine('legacy_twelve')} (staff only)</button>}
+              {!showOldPlan && plan !== 'legacy_twelve' && <button type="button" onClick={() => setShowOldPlan(true)} className="mt-2 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" data-testid="qc-show-old-plan">Show the old plan (£99 × 12, staff only)</button>}
+            </section>
           )}
 
-          {/* ── THE CLOSE: terms, then the link (first on screen once the route is chosen — M-013) ── */}
-          {v && sellRoute && v.state !== 'paid' && v.state !== 'blocked' && !declined && (
+          {/* ── 2 · THE TERMS THEY HEAR, THEN THE SEND ── */}
+          {v && sellRoute && plan && v.state !== 'paid' && v.state !== 'blocked' && !declined && !v.prospect_only && (
             <section aria-live="polite" className={cn('min-w-0', PANEL, EDGE.blue)} data-testid="qc-route-terms">
-              <p className="flex items-center gap-2 text-sm font-bold tracking-tight"><IconTile icon={PoundSterling} tone="blue" size="sm" />{SERVICE_ROUTE_NAME[sellRoute]}</p>
-              <ul className="mt-2 space-y-0.5 text-sm" data-testid="qc-terms" >{closeTermsLines(sellRoute, answers.payment_plan).map((l, i) => <li key={l} className={cn(i === 2 && 'font-semibold')}>{l}</li>)}</ul>
+              <p className="flex items-center gap-2 text-sm font-bold tracking-tight"><IconTile icon={PoundSterling} tone="blue" size="sm" />{planSendName(plan)}</p>
+              <ul className="mt-2 space-y-0.5 text-sm" data-testid="qc-terms" >{closeTermsLines(sellRoute, plan).map((l, i) => <li key={l} className={cn(i === 2 && 'font-semibold')}>{l}</li>)}</ul>
               <p className="mt-1.5 text-sm">{routeOwnershipLine(sellRoute)}</p>
               <div className="mt-2.5 rounded-xl bg-muted/30 p-2.5 text-sm ring-1 ring-inset ring-border/60" data-testid="qc-guarantee">
                 <p className="flex items-center gap-1.5 font-semibold"><ShieldCheck className={cn('h-4 w-4 shrink-0', EMPHASIS_TEXT)} />{QUICK_CLOSE_GUARANTEE_LINES[0]}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{guaranteeForPlan(answers.payment_plan ?? 'complete', QUICK_CLOSE_GUARANTEE_LINES[1])}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{guaranteeForPlan(plan, QUICK_CLOSE_GUARANTEE_LINES[1])}</p>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">{QUICK_CLOSE_AGREEMENT_LINE} They do not choose a plan again: the link is already this one.</p>
+              <p className="mt-2 text-xs text-muted-foreground">{QUICK_CLOSE_AGREEMENT_LINE} They do not choose a plan again: the link is already this one, and they pay {gbpWords(firstPaymentGbp(plan))} after signing.</p>
 
-              {closing && (
+              {v.canEdit && (
                 <div className="mt-3 space-y-2 border-t border-border/60 pt-3" data-testid="qc-link">
-                  {(!v.lead.trade || tradeTyped) && (
-                    <label className={cn('block rounded-xl p-2.5 text-sm font-medium', TONE.amber.tint)}>What is their trade? <span className="font-normal text-muted-foreground">(decides what the baseline measures)</span>
-                      <Input value={trade} onChange={(e) => typeTrade(e.target.value)} onBlur={() => tradeAuto.flush('trade')} placeholder="e.g. plumber" className="mt-1.5 h-11 text-base" />
-                      <AutosaveIndicator status={tradeAuto.status} className="mt-1" />
-                    </label>
-                  )}
-                  {!usableUrl ? (
-                    <>
-                      {v.state === 'link_expired' && (
-                        <p className={cn('flex items-start gap-1.5 rounded-xl px-2.5 py-2 text-xs', TONE.amber.tint, TONE.amber.text)} data-testid="qc-link-expired"><AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
-                          The link made {hhmm(v.link?.generated_at)} is no longer usable and must not be sent. Make a fresh agreement & payment link — any old payment page is closed.
-                        </p>
-                      )}
-                      {planRefusal && <p className={cn('flex items-start gap-1.5 rounded-xl px-2.5 py-2 text-xs', TONE.amber.tint, TONE.amber.text)} data-testid="qc-plan-unavailable"><AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />{planRefusal}</p>}
-                      <Button className={MONEY_CTA} onClick={() => void generate()} disabled={!!busy || !!planRefusal}>
-                        {busy === 'link' ? <Loader2 className="h-5 w-5 animate-spin" /> : v.state === 'link_expired' ? <RefreshCw className="h-5 w-5" /> : <PoundSterling className="h-5 w-5" />}
-                        {v.state === 'link_expired' ? 'Make a fresh agreement & payment link' : 'Create agreement & payment link'}
-                      </Button>
-                      <p className="text-center text-xs text-muted-foreground">One secure Findable link: they check a short summary, read and sign the Client Service Agreement, then pay {gbpWords(firstPaymentGbp(answers.payment_plan))}. Payment cannot open before they sign.</p>
-                    </>
-                  ) : (
-                    <>
-                      <p className={cn('flex flex-wrap items-center gap-x-1 text-xs font-semibold uppercase tracking-wide', OK_TEXT)}><CheckCircle2 className="h-3.5 w-3.5 shrink-0" />Agreement &amp; payment link ready · <span className="font-normal normal-case">{timeLeft(v.link?.usable_until ?? v.link?.expires_at)}</span></p>
-                      <Button className={MONEY_CTA} onClick={() => void doCopy('link', usableUrl)}>
-                        {copied === 'link' ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}{copied === 'link' ? 'Copied' : 'Copy link'}
-                      </Button>
-                      <p className="line-clamp-2 break-all rounded-lg bg-muted/40 px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground" title={usableUrl}>{usableUrl}</p>
-                      {/* ONE compliant send (Paul's rule, paymentLinkRoute.ts): WhatsApp only in a conversation they replied
-                          to inside 24 hours, or an APPROVED template; otherwise say so and copy / email — never "sent". */}
-                      {(() => {
-                        const lr = v.link_route;
-                        const canWa = lr?.route === 'whatsapp_reply' || lr?.route === 'whatsapp_template';
-                        const sentWa = (v.link?.shared ?? []).filter((s) => s.channel === 'whatsapp' && s.status !== 'failed' && (!s.link || s.link === usableUrl)).slice(-1)[0] ?? null;
-                        return (
-                          <>
-                            {sentWa ? (
-                              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-2 text-sm" data-testid="qc-whatsapp-sent">
-                                <span className={cn('flex items-center gap-1.5 font-semibold', OK_TEXT)}><CheckCircle2 className="h-4 w-4" />{sentWa.status === 'simulated' ? 'Sent on WhatsApp (test mode — not delivered)' : 'Sent on WhatsApp'} · {hhmm(sentWa.at)}</span>
-                                {canWa && <Button size="sm" variant="outline" className="h-9" onClick={() => void sendWhatsApp(true)} disabled={!!busy} data-testid="qc-resend-whatsapp">{busy === 'wa' ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1 h-4 w-4" />}Resend</Button>}
-                              </div>
-                            ) : canWa ? (
-                              <Button className="h-12 w-full gap-1.5 rounded-xl bg-blue-600 font-bold text-white hover:bg-blue-700" onClick={() => void sendWhatsApp(false)} disabled={!!busy} data-testid="qc-send-whatsapp">
-                                {busy === 'wa' ? <><Loader2 className="h-4 w-4 animate-spin" />Sending…</> : <><MessageCircle className="h-4 w-4" />Send agreement &amp; payment link</>}
-                              </Button>
-                            ) : (
-                              <div className={cn('rounded-xl px-3 py-2.5 text-sm', TONE.amber.tint)} data-testid="qc-link-fallback">
-                                <p className="font-semibold">{lr?.template && !lr.template.sendable && lr.template.status !== 'UNKNOWN' ? `WhatsApp signup template ${lr.template.label.toLowerCase()}` : LINK_READY_FALLBACK}</p>
-                                <p className="mt-0.5 text-xs text-muted-foreground">{lr?.say ?? 'WhatsApp is not available for this link.'} {LINK_READY_FALLBACK.replace('Link ready — ', 'Copy the sign-up link and ')}</p>
-                              </div>
-                            )}
-                            {lr?.route === 'whatsapp_template' && lr.reason === 'ok_unverified' && !sentWa && <p className="text-[11px] text-muted-foreground">{lr.template.say}</p>}
-                            <SmsLinkSend leadId={leadId} kind="agreement" otherSent={sentWa ? ['whatsapp'] : []} onSend={sendSmsLink} />
-                            {/* Email only when we already hold their address (from the website check); never asked for here. */}
-                            {v.share?.email && <Button variant="outline" className="h-12 w-full gap-1.5" onClick={() => void sendEmail()} disabled={!!busy} data-testid="qc-send-email">{busy === 'email' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}Email the link to {v.share.email}</Button>}
-                            <Button variant="outline" className="h-12 w-full gap-1.5" onClick={() => void doCopy('message', quickCloseMessage(greetName, usableUrl, sellRoute))}><ClipboardCopy className="h-4 w-4" />{copied === 'message' ? 'Copied' : 'Copy message'}</Button>
-                            <p className="text-xs text-muted-foreground" data-testid="qc-share-availability">
-                              {lr?.route === 'whatsapp_reply' ? 'WhatsApp: they replied to us in the last 24 hours.' : lr?.route === 'whatsapp_template' && lr.template.sendable ? 'WhatsApp: sends as the approved findable_signup_link template.' : ''}
-                            </p>
-                          </>
-                        );
-                      })()}
-                      {(v.link?.shared.length ?? 0) > 0 && (
-                        <ul className="space-y-0.5 text-xs text-muted-foreground" data-testid="qc-share-history">
-                          {v.link!.shared.slice().reverse().map((s) => (
-                            <li key={`${s.channel}-${s.at}`}>✓ {SHARE_WORDS[s.channel]}{s.channel === 'email' && s.to ? ` to ${s.to}` : ''}{s.status === 'simulated' ? ' (test mode — not delivered)' : ''}{s.channel === 'copy' ? ' (to send by hand)' : ''} · {hhmm(s.at)}</li>
-                          ))}
-                        </ul>
-                      )}
-                    </>
+                  {planRefusal && <p className={cn('flex items-start gap-1.5 rounded-xl px-2.5 py-2 text-xs', TONE.amber.tint, TONE.amber.text)} data-testid="qc-plan-unavailable"><AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />{planRefusal}</p>}
+                  {stillNeeded.length > 0 && <p className={cn('flex items-start gap-1.5 rounded-xl px-2.5 py-2 text-xs', TONE.amber.tint, TONE.amber.text)} data-testid="close-still-needed"><AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />Before you can send, answer: {stillNeeded.join(', ')}.</p>}
+                  <SendRow leadId={leadId} v={v} canSend={canSend} busy={busy} email={email} sentOn={(ch) => sentOn(v, ch)}
+                    onEmail={setEmail} onEmailFocus={(on) => { emailFocused.current = on; if (!on && email.trim() && cleanCloseEmail(email).ok) void saveEmail(); }} onAsk={(ch) => void askToSend(ch)} />
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <button type="button" disabled={!canSend || !!busy} onClick={() => void copyLink()} className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-50" data-testid="qc-copy-link">
+                      {copied === 'link' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}{copied === 'link' ? 'Copied' : 'Copy link instead'}
+                    </button>
+                  </div>
+                  {(v.link?.shared.length ?? 0) > 0 && (
+                    <ul className="space-y-0.5 text-xs text-muted-foreground" data-testid="qc-share-history">
+                      {v.link!.shared.slice().reverse().map((s) => (
+                        <li key={`${s.channel}-${s.at}`}>✓ {SHARE_WORDS[s.channel]}{s.channel === 'email' && s.to ? ` to ${s.to}` : ''}{s.status === 'simulated' ? ' (test mode — not delivered)' : ''}{s.channel === 'copy' ? ' (to send by hand)' : ''} · {hhmm(s.at)}</li>
+                      ))}
+                    </ul>
                   )}
                 </div>
               )}
             </section>
           )}
 
-          {v && sellRoute && v.state !== 'paid' && v.state !== 'blocked' && !declined && (
+          {v && sellRoute && plan && v.state !== 'paid' && v.state !== 'blocked' && !declined && !v.prospect_only && (
             <details className={FOLD}>
-              <summary className="flex min-h-[36px] cursor-pointer select-none items-center justify-between gap-2 text-sm font-semibold"><span className="flex items-center gap-2"><span className={cn('h-4 w-1 shrink-0 rounded-full', TONE.blue.bar)} aria-hidden />What to tell them</span><button type="button" onClick={(e) => { e.preventDefault(); void doCopy('script', script); }} className="inline-flex min-h-[36px] items-center rounded-lg px-2 text-xs font-medium text-primary hover:bg-muted hover:underline">{copied === 'script' ? 'Copied' : 'Copy'}</button></summary>
+              <summary className="flex min-h-[36px] cursor-pointer select-none items-center justify-between gap-2 text-sm font-semibold"><span className="flex items-center gap-2"><span className={cn('h-4 w-1 shrink-0 rounded-full', TONE.blue.bar)} aria-hidden />What to tell them</span><button type="button" onClick={(e) => { e.preventDefault(); void copyScript(); }} className="inline-flex min-h-[36px] items-center rounded-lg px-2 text-xs font-medium text-primary hover:bg-muted hover:underline">{copied === 'script' ? 'Copied' : 'Copy'}</button></summary>
               <Textarea value={script} onChange={(e) => setScript(e.target.value)} rows={6} className="mt-2 text-sm" aria-label="What to tell them (edit freely)" />
               <p className="mt-1 text-[11px] text-muted-foreground">Your words — change them however you like, but keep the price, the minimum term and the guarantee as written. Never promise a ranking, a recommendation or that AI will name them.</p>
             </details>
@@ -637,54 +476,97 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
           {v && v.gate.notes.length > 0 && v.state !== 'paid' && (
             <ul className="space-y-1 text-xs text-muted-foreground">{v.gate.notes.map((n) => <li key={n}>• {n} (Paul will pick this up)</li>)}</ul>
           )}
+        </div>
 
-          {v && Object.keys(answers).length > 0 && (
-            <ul className="space-y-1">
-              {shownQs.filter((x) => answers[x.key]).map((x) => (
-                <li key={x.key}>
-                  <button type="button" disabled={!v.canEdit} onClick={() => setStep(x.key)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-muted/60 disabled:hover:bg-transparent">
-                    <Check className={cn('h-4 w-4 shrink-0', OK_TEXT)} />
-                    <span className="min-w-0 flex-1 truncate text-muted-foreground">{x.text}</span>
-                    <span className="shrink-0 font-semibold">{x.options.find((o) => o.value === answers[x.key])?.label}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {v && (
-            <details className={FOLD} open={v.state === 'not_started'}>
-              <summary className="flex min-h-[36px] cursor-pointer select-none items-center justify-between gap-2 text-sm font-semibold"><span className="flex items-center gap-2"><span className={cn('h-4 w-1 shrink-0 rounded-full', TONE.grey.bar)} aria-hidden />What we already know</span><span className="text-xs font-normal text-muted-foreground">no need to ask</span></summary>
-              {!editing ? (
-                <>
-                  <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-                    {known.map(([k, val]) => <FragmentRow key={k} k={k} v={val} />)}
-                  </dl>
-                  {(v.call_lines?.length ?? 0) > 0 && (
-                    <div className="mt-3 border-t border-border/60 pt-2" data-testid="qc-call-answers">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">From the call</p>
-                      <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-                        {v.call_lines!.map((l) => <FragmentRow key={l.key} k={l.label} v={l.answer} />)}
-                      </dl>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <CorrectDetails leadId={leadId} initial={{ contact_name: v.onboarding?.contact_name ?? v.lead.contact_name ?? '', contact_email: v.onboarding?.contact_email ?? v.lead.email ?? '', confirmed_phone: v.onboarding?.confirmed_phone ?? v.lead.phone ?? '', business_website: v.onboarding?.business_website ?? v.lead.website ?? '' }} onSave={saveDetail} onDone={() => setEditing(false)} />
-              )}
-              {v.canEdit && !editing && <button type="button" onClick={() => setEditing(true)} className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"><Pencil className="h-3 w-3" />Correct a detail</button>}
-            </details>
-          )}
-
-          {v && (!v.lead.trade || tradeTyped) && v.canEdit && !closing && (
-            <label className={cn('block rounded-2xl p-3.5 text-sm font-medium', TONE.amber.tint)}>What is their trade? <span className="font-normal text-muted-foreground">(decides what the baseline measures)</span>
-              <Input value={trade} onChange={(e) => typeTrade(e.target.value)} onBlur={() => tradeAuto.flush('trade')} placeholder="e.g. plumber" className="mt-1.5 h-11 text-base" />
-              <AutosaveIndicator status={tradeAuto.status} className="mt-1" />
-            </label>
-          )}
-
-                  </div>
+        <AlertDialog open={!!asking} onOpenChange={(o) => { if (!o) setAsking(null); }}>
+          <AlertDialogContent data-testid="close-send-confirm">
+            <AlertDialogHeader>
+              <AlertDialogTitle>{asking && plan ? sendConfirmText(plan, recipient[asking], asking, !!sentOn(v, asking)) : ''}</AlertDialogTitle>
+              <AlertDialogDescription>It takes them to the agreement, then payment for this plan.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="close-send-cancel">Cancel</AlertDialogCancel>
+              <AlertDialogAction data-testid="close-send-yes" onClick={() => { if (asking) void send(asking); }}>Send</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
     </div>
+  );
+}
+
+/** WhatsApp, Text, Email. ⛔ Each only ASKS fn quick-close, which builds the link and sends through the one guarded sender of that channel;
+ *  the browser never types a link or chooses a number. Where a channel cannot be used it says why, and the others stay on. */
+function SendRow({ leadId, v, canSend, busy, email, sentOn, onEmail, onEmailFocus, onAsk }: {
+  leadId: string; v: View; canSend: boolean; busy: string | null; email: string;
+  sentOn: (ch: SendChannel) => QcLinkShare | null;
+  onEmail: (s: string) => void; onEmailFocus: (on: boolean) => void; onAsk: (ch: SendChannel) => void;
+}) {
+  const lr = v.link_route;
+  const canWa = lr?.route === 'whatsapp_reply' || lr?.route === 'whatsapp_template';
+  const waSent = sentOn('whatsapp');
+  const sms = useSmsLink(leadId, 'agreement', waSent ? ['whatsapp'] : []);
+  const emailOk = cleanCloseEmail(email).ok;
+  const button = (ch: SendChannel, on: boolean, Icon: typeof Mail, word: string, busyKey: string, testId: string) => {
+    const sent = !!sentOn(ch);
+    return (
+      <Button type="button" variant={sent ? 'outline' : 'default'} disabled={!canSend || !on || !!busy} onClick={() => onAsk(ch)} data-testid={testId}
+        className={cn('h-12 w-full gap-1.5 rounded-xl font-bold', !sent && 'bg-blue-600 text-white hover:bg-blue-700')}>
+        {busy === busyKey ? <Loader2 className="h-4 w-4 animate-spin" /> : sent ? <RefreshCw className="h-4 w-4" /> : <Icon className="h-4 w-4" />}{sent ? `${word} again` : word}
+      </Button>
+    );
+  };
+  return (
+    <div className="space-y-2" data-testid="close-send">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {button('whatsapp', canWa, MessageCircle, 'WhatsApp', 'wa', 'close-send-whatsapp')}
+        {button('sms', !!sms.option?.available, MessageSquareText, 'Text', 'sms', 'close-send-sms')}
+        {button('email', emailOk, Mail, 'Email', 'email', 'close-send-email')}
+      </div>
+      <label className="block text-xs font-medium text-muted-foreground">Their email
+        <Input type="email" inputMode="email" autoComplete="off" placeholder="name@example.com" value={email} onChange={(e) => onEmail(e.target.value)} onFocus={() => onEmailFocus(true)} onBlur={() => onEmailFocus(false)} disabled={!!busy && busy !== 'email-save'} className="mt-1 h-10 text-sm" data-testid="close-email" />
+      </label>
+      <div className="space-y-0.5 text-xs text-muted-foreground" data-testid="close-send-notes">
+        {!canWa && <p data-testid="close-whatsapp-off">WhatsApp isn’t available: {lr?.say ?? 'it can’t carry this link right now.'} Use Text or Email.</p>}
+        {canWa && !waSent && <p data-testid="close-whatsapp-how">{lr?.route === 'whatsapp_reply' ? 'WhatsApp goes as a normal message: they replied in the last 24 hours.' : lr?.reason === 'ok_unverified' ? lr.template.say : 'WhatsApp goes as the approved sign-up template.'}</p>}
+        {sms.option && !sms.option.available && <p data-testid="close-sms-off">Text: {sms.option.reason}</p>}
+        {sms.words && <p className={cn(sms.failed && 'text-destructive')} data-testid="close-sms-status">{sms.words}</p>}
+      </div>
+    </div>
+  );
+}
+
+/** "What we already know" and Correct a detail: at the foot of the questions, folded. */
+export function KnownDetails({ leadId, v }: { leadId: string; v: View }) {
+  const [editing, setEditing] = useState(false);
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  /* One detail, saved as they leave the field. A bad email is refused by the server: it says so, and the text stays for them to fix. */
+  const saveDetail = async (key: string, value: string) => {
+    try {
+      const r = await invokeEdge<View>('quick-close', { lead_id: leadId, mode: 'save', answers: {}, expect_route: v.answers?.route ?? null, corrections: { [key]: value } });
+      qc.setQueryData(quickCloseKey(leadId), r);
+    } catch (e) {
+      toast({ title: 'Not saved', description: edgeErrorMessage(e), variant: 'destructive' });
+      throw e;
+    }
+  };
+  const known: [string, string | null | undefined][] = [
+    ['Business', v.lead.business_name], ['Trade', v.lead.trade], ['Town', v.lead.town], ['Phone', v.onboarding?.confirmed_phone || v.lead.phone],
+    ['Email', v.onboarding?.contact_email || v.lead.email], ['Website', v.onboarding?.business_website || v.lead.website], ['Contact', v.onboarding?.contact_name || v.lead.contact_name],
+    ['Google', v.lead.rating ? `${v.lead.rating}★ (${v.lead.review_count ?? 0} reviews)` : null], ['Campaign', v.lead.campaign], ['Source', v.lead.lead_source ?? 'App search'], ['Salesperson', v.lead.salesperson],
+  ];
+  return (
+    <details className={FOLD} data-testid="known-details">
+      <summary className="flex min-h-[36px] cursor-pointer select-none items-center justify-between gap-2 text-sm font-semibold"><span className="flex items-center gap-2"><span className={cn('h-4 w-1 shrink-0 rounded-full', TONE.grey.bar)} aria-hidden />What we already know</span><span className="text-xs font-normal text-muted-foreground">no need to ask</span></summary>
+      {!editing ? (
+        <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+          {known.map(([k, val]) => <FragmentRow key={k} k={k} v={val} />)}
+        </dl>
+      ) : (
+        <CorrectDetails leadId={leadId} initial={{ contact_name: v.onboarding?.contact_name ?? v.lead.contact_name ?? '', contact_email: v.onboarding?.contact_email ?? v.lead.email ?? '', confirmed_phone: v.onboarding?.confirmed_phone ?? v.lead.phone ?? '', business_website: v.onboarding?.business_website ?? v.lead.website ?? '' }} onSave={saveDetail} onDone={() => setEditing(false)} />
+      )}
+      {v.canEdit && !editing && <button type="button" onClick={() => setEditing(true)} className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"><Pencil className="h-3 w-3" />Correct a detail</button>}
+    </details>
   );
 }
 
@@ -705,39 +587,6 @@ function CorrectDetails({ leadId, initial, onSave, onDone }: { leadId: string; i
       ))}
       <div className="flex items-center justify-between gap-2"><AutosaveIndicator status={auto.status} /><Button size="sm" variant="ghost" className="h-10" onClick={onDone}>Done</Button></div>
     </div>
-  );
-}
-
-function ServicesAreasStep({ leadId, call, busy, total, number, onSave }: { leadId: string; call: QcCallNotes | undefined; busy: boolean; total: number; number: number; onSave: (jobs: string, areas: string) => Promise<boolean> }) {
-  const [jobs, setJobs] = useState(call?.jobs ?? '');
-  const [areas, setAreas] = useState(call?.areas ?? '');
-  /* Autosave as they type. Continue only moves on. A reply never overwrites what is being typed (the server's value is taken when idle). */
-  const auto = useAutosaveFields({
-    save: async (k, v) => { await invokeEdge('quick-close', { lead_id: leadId, mode: 'save_call', quiet: true, call: { [k]: v.trim() } }); },
-    storageKey: `qc-call:${leadId}`,
-    onRestore: (left) => { if (typeof left.jobs === 'string') setJobs(left.jobs); if (typeof left.areas === 'string') setAreas(left.areas); },
-  });
-  useEffect(() => {
-    auto.baseline('jobs', call?.jobs ?? ''); auto.baseline('areas', call?.areas ?? '');
-    if (!auto.isDirty('jobs') && document.activeElement?.getAttribute('data-testid') !== 'qc-services') setJobs(call?.jobs ?? '');
-    if (!auto.isDirty('areas') && document.activeElement?.getAttribute('data-testid') !== 'qc-areas') setAreas(call?.areas ?? '');
-  }, [call?.jobs, call?.areas]); // eslint-disable-line react-hooks/exhaustive-deps
-  const ok = jobs.trim().length > 1 && areas.trim().length > 1;
-  return (
-    <section aria-live="polite" data-testid="qc-services-areas">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Question {number} of {total}</p>
-      <p className="mt-1 text-lg font-semibold leading-snug">What do they offer, and where do they want to be found?</p>
-      <label className="mt-3 block text-sm font-medium">What do they offer?
-        <Textarea value={jobs} onChange={(e) => { setJobs(e.target.value); auto.set('jobs', e.target.value); }} onBlur={() => auto.flush('jobs')} rows={2} maxLength={300} placeholder="e.g. emergency lockouts, lock changes, car keys" className="mt-1 text-base" data-testid="qc-services" />
-      </label>
-      <label className="mt-3 block text-sm font-medium">Where do they want to be found?
-        <Textarea value={areas} onChange={(e) => { setAreas(e.target.value); auto.set('areas', e.target.value); }} onBlur={() => auto.flush('areas')} rows={2} maxLength={300} placeholder="e.g. Canterbury, Whitstable, Herne Bay" className="mt-1 text-base" data-testid="qc-areas" />
-      </label>
-      <p className="mt-1 flex justify-end"><AutosaveIndicator status={auto.status} /></p>
-      <Button className="mt-2 h-12 w-full text-base font-bold" disabled={!ok || busy} onClick={() => { auto.flush(); void onSave(jobs.trim(), areas.trim()); }} data-testid="qc-services-continue">
-        {busy && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}Continue
-      </Button>
-    </section>
   );
 }
 
@@ -796,23 +645,7 @@ export function WebsiteApproachField({ leadId }: { leadId: string }) {
           );
         })}
       </div>
-      <p className="text-[11px] text-muted-foreground">{plan ? `Plan: ${SERVICE_ROUTE_NAME[plan]} · ${routePaymentsShort(plan)}. ` : ''}This decides which questions the Close tab asks.{v.canEdit ? '' : ' (Locked — this lead has paid or ended.)'}</p>
+      <p className="text-[11px] text-muted-foreground">{plan ? `Plan: ${SERVICE_ROUTE_NAME[plan]} · ${routePaymentsShort(plan)}. ` : ''}{v.canEdit ? '' : ' (Locked — this lead has paid or ended.)'}</p>
     </div>
-  );
-}
-
-/** The button that opens it (the lead workspace header, Focus Mode). */
-/** variant 'quiet' (the lead workspace header, 2026-10-01): an outline shortcut that does not compete with
- *  the Next Action — the same dialog, the same payment path. */
-export function QuickCloseButton({ leadId, className, size = 'sm', variant = 'solid' }: { leadId: string; className?: string; size?: 'sm' | 'lg'; variant?: 'solid' | 'quiet' }) {
-  const [open, setOpen] = useState(false);
-  const nav = useContext(QuickCloseNav);
-  return (
-    <>
-      <button type="button" onClick={() => (nav ? nav.openClose(leadId) : setOpen(true))} className={cn('inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary', variant === 'quiet' ? 'border border-blue-600/40 text-blue-700 hover:bg-blue-500/10 dark:text-blue-300' : 'bg-blue-600 text-white hover:bg-blue-700', size === 'lg' ? 'h-11 px-4 text-sm rounded-xl' : 'h-8 px-2.5 text-xs', className)} aria-label="Quick Close: take payment now">
-        <Zap className="h-3.5 w-3.5" />Quick Close
-      </button>
-      {open && !nav && <QuickCloseDialog leadId={leadId} open={open} onOpenChange={setOpen} />}
-    </>
   );
 }

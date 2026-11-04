@@ -161,7 +161,7 @@ console.log('── 4. AUDIT GATE — no valid completed audit, no script ──
 
   const inline = slice(play, 'export function ColdCallPlaybookInline', 'export function ColdCallPlaybookSheet');
   ok(/const gate = callScriptGate\(leadId, q\.data\);/.test(inline) && /\{gate\.show \? <>\s*<Warnings p=\{q\.data\} \/>\s*<Scripts p=\{q\.data\}/.test(inline) && /: <ScriptLocked gate=\{gate\} onShowCheck=\{onShowCheck\} \/>\}/.test(inline), 'the Call tab: script only when the gate says so, else the locked state');
-  ok(/\{onLogCall && <LogCallBar onLogCall=\{onLogCall\} leadId=\{leadId\} \/>\}/.test(inline), '…Log call and Quick Close stay either way');
+  ok(/\{onLogCall && <LogCallBar onLogCall=\{onLogCall\} \/>\}/.test(inline), '…Log call stays either way');
   const sheet = slice(play, 'export function ColdCallPlaybookSheet', 'export function ColdCallPlaybookButton');
   ok(/const gate = callScriptGate\(leadId, q\.data\);/.test(sheet) && /gate\.show \? <><Warnings p=\{q\.data\} \/><Scripts/.test(sheet), 'the Outreach / Inbox script sheet is gated the same way');
   ok((play.match(/<Scripts /g) ?? []).length === 2, 'no other place renders the script');
@@ -181,7 +181,7 @@ console.log('── 6. REGRESSION ──');
 {
   ok(/setWaDialogLead\(lead\);/.test(table) && /handleWhatsAppClick\(lead\)/.test(table), 'the green WhatsApp button opens the WhatsApp dialog (messaging is separate from calling)');
   ok(/whatsAppLinkForLead\(lead\.id\)/.test(dlg), 'the popup\'s WhatsApp link to the Inbox conversation is unchanged');
-  ok(/<QuickCloseButton leadId=\{leadId\}/.test(play) && /QuickCloseNav\.Provider/.test(dlg), 'Quick Close unchanged');
+  ok(!/<QuickCloseButton/.test(play) && !/QuickCloseNav/.test(dlg) && /goToClose/.test(dlg), 'no Quick Close button: the close is the foot of the page');
   ok(!/INDIA|India/.test(read('src/lib/callNumber.ts').replace(/\/\*[\s\S]*?\*\//g, '')), 'no India rule added for calling');
 }
 

@@ -46,7 +46,7 @@ ok(SAY_IT_LINE === "Say it may make it harder. Never say it's the reason.", 'the
 console.log('── What we offer ──');
 const offer = offerLines();
 ok(offer.length === 9 && offer[0].startsWith('Money-back guarantee') && offer[1] === '£99 a month, or £999 up front for the year (saves £189)' && offer[8] === 'We host the site. They own it after the final payment (up front: after the 12 months).', 'nine lines, the price read from the plan constants');
-ok(OFFER_UNDER_LINE === 'Price an issue? Offer paying up front (save £189). Still an issue? Essential, in Quick Close.', 'the Essential line under it');
+ok(OFFER_UNDER_LINE === 'Price an issue? Offer paying up front (save £189). Still an issue? Essential, in Close below.', 'the Essential line under it');
 
 console.log('── a website added to a lead that had none ──');
 ok(websiteWasAdded(null, 'smith.co.uk') && websiteWasAdded('', 'https://smith.co.uk') && websiteWasAdded('  ', 'smith.co.uk'), 'blank → a site is an add');
@@ -56,7 +56,7 @@ ok(!websiteWasAdded(null, 'https://www.facebook.com/smithplumbing'), 'a social /
 console.log('── the popup ──');
 const dlg = read('src/components/LeadDetailDialog.tsx');
 const tab = read('src/components/SimpleCallTab.tsx');
-ok(/<TabsTrigger value="call"[^>]*>Call<\/TabsTrigger>\s*<TabsTrigger value="close"[^>]*>Close<\/TabsTrigger>\s*<TabsTrigger value="history"[^>]*>History<\/TabsTrigger>/.test(dlg) && !/<TabsTrigger value="details"/.test(dlg), 'tabs: Call, Close, History — no Details');
+ok(/<TabsTrigger value="call"[^>]*>Call<\/TabsTrigger>\s*<TabsTrigger value="history"[^>]*>History<\/TabsTrigger>/.test(dlg) && !/<TabsTrigger value="details"/.test(dlg) && !/<TabsTrigger value="close"/.test(dlg), 'tabs: Call, History — no Details, no Close');
 ok(/\{showClientTab && <TabsTrigger value="client"/.test(dlg) && /const showClientTab = permsForTab\.clientDelivery && isPaidLead\(lead\);/.test(dlg), 'Client appears only once they have paid (and only for the admin)');
 ok(dlg.includes("if (t === 'prospect' || t === 'details') return 'history';"), 'an old link to Details opens History, where its content now sits');
 ok(/useCheckNewWebsite\(isDemoLead\(lead\.id\) \? '' : lead\.id, lead\.website\)/.test(dlg), 'the popup watches the website: blank → a site starts the existing check');
@@ -64,7 +64,7 @@ ok(/startFullLeadCrawl\(leadId, 'lead_detail'\)/.test(read('src/hooks/useCheckNe
 ok(/checkNewWebsite\(qc, leadId, w\)/.test(tab) && /useAddWebsite\(leadId\)/.test(tab), 'the "what\'s the address?" box saves through the profile write, then starts that check');
 ok(/data-testid="touched-before-tag"/.test(tab) && /<TouchedBeforeTag leadId=\{lead\.id\} \/>/.test(dlg) && !/been in touch/i.test(simpleScriptSpoken(none)), '"in touch before" is a small tag by the name, not script text');
 ok(tab.indexOf('<WhatWeFound') < tab.indexOf('<Script p=') && tab.indexOf('<Script p=') < tab.indexOf('<Offer />') && tab.indexOf('<Offer />') < tab.indexOf('<Objections') && tab.indexOf('<Objections') < tab.indexOf('<LogCallBar'), 'order: What we found → script → offer → objections → sticky Log / Quick Close');
-ok(/<Objections p=\{q\.data\} startOpen=\{false\} \/>/.test(tab), 'objections start collapsed');
+ok(/<Objections p=\{p\} startOpen=\{false\} \/>/.test(tab), 'objections start collapsed');
 ok(/const kind = useRef<ScriptKind \| null>\(null\);/.test(tab) && /kind\.current === null && q\.data/.test(tab), 'the script is chosen once, so adding the website mid-call does not swap it');
 ok(/VoiceNoteScriptBody/.test(tab) && /Voice note/.test(tab), 'the Voice note toggle is kept');
 ok(/<LeadHookPanel leadId=\{leadId\} variant="call" \/>/.test(tab) && /open=\{noResult\}/.test(tab), 'run / re-run and the full audit stay, folded (open when there is no result)');

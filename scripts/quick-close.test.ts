@@ -198,11 +198,11 @@ ok(/\[functions\.quick-close\]\nverify_jwt = true/.test(read("supabase/config.to
 
 console.log("\n── where it lives, and the phone ──");
 const dlg = read("src/components/QuickCloseDialog.tsx");
-ok(/<ClosePanel leadId=\{lead\.id\} active=\{tab === 'close'\} \/>/.test(read("src/components/LeadDetailDialog.tsx")) && /QuickCloseNav\.Provider value=\{\{ openClose: \(\) => goTab\('close'\) \}\}/.test(read("src/components/LeadDetailDialog.tsx")), "v2: in the lead workspace it IS the Close tab, and every Quick Close button there switches to it (one close UI)");
-ok(/min-h-\[56px\]/.test(dlg) && /h-\[100dvh\]/.test(dlg) && /answers\.decision_maker === 'no' \? null/.test(dlg), "phone: full screen, one question at a time, big targets; a 'No' ends the questions");
-ok(/mode: 'save', answers: \{ \[key\]: value \}/.test(dlg), "every tap is saved (a dropped call resumes)");
-ok(/v\.link_route/.test(dlg) && /functions\/v1\/send-whatsapp-message/.test(fn) && /Authorization: req\.headers\.get\("authorization"\)/.test(fn) && /decideLinkRoute\(await conversation\(\), \{ template: tplState \}\)/.test(fn), "WhatsApp send uses the canonical sender AS THE CALLER; the server picks the route (approved template, else a replied open conversation, else nothing)");
-ok(/Send full setup/.test(read("src/components/ClosePanel.tsx")) && /<OnboardingLinkCard lead=\{/.test(read("src/components/ClosePanel.tsx")) && /<ClosePanel leadId/.test(read("src/components/LeadDetailDialog.tsx")), "the self-service link remains — as SEND FULL SETUP, the second way to close, on the Close tab");
+ok(/<ClosePanel leadId=\{leadId\} active=\{seen\} \/>/.test(read("src/components/SimpleCallTab.tsx")) && !/QuickCloseNav/.test(read("src/components/LeadDetailDialog.tsx")) && /goToClose/.test(read("src/components/LeadDetailDialog.tsx")), "in the lead workspace it is the foot of the Call tab, and every way to it scrolls there (one close UI)");
+ok(/h-\[100dvh\]/.test(dlg) && /min-h-10/.test(read("src/components/ProspectQuestions.tsx")) && /v\.state === 'blocked'/.test(dlg), "phone: full screen, big targets; a 'No' to the decision maker stops the link");
+ok(/mode: 'save', answers: \{ \[key\]: value \}/.test(read("src/components/ColdCallPlaybook.tsx")) && /saveAnswer\('decision_maker'/.test(read("src/components/ProspectQuestions.tsx")), "every tap is saved (a dropped call resumes)");
+ok(/v\.link_route/.test(dlg) && /functions\/v1\/send-whatsapp-message/.test(fn) && /Authorization: req\.headers\.get\("authorization"\)/.test(fn) && /decideLinkRoute\(await conversation\(\), \{ template: tplState, freeTextInWindow: true \}\)/.test(fn), "WhatsApp send uses the canonical sender AS THE CALLER; the server picks the route (free text inside the 24 hours, else the approved template, else nothing)");
+ok(/Send full setup/.test(read("src/components/ClosePanel.tsx")) && /<OnboardingLinkCard lead=\{/.test(read("src/components/ClosePanel.tsx")) && /<ClosePanel leadId/.test(read("src/components/SimpleCallTab.tsx")), "the self-service link remains — as SEND FULL SETUP, folded under the Close section");
 
 if (f) { console.log(`\n${f} FAILURES`); process.exit(1); }
 console.log("\nALL PASS");

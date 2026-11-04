@@ -156,8 +156,8 @@ console.log('\n── PAYMENT LINK: Paul\'s rule and the template ──');
   ok(/if \(!res\.ok \|\| !out\.ok\) \{[\s\S]{0,300}"link_share_failed"[\s\S]{0,300}return json\(\{ ok: false/.test(share), 'a failed send is recorded as failed and never as sent');
   ok(/share\.status = out\.simulated \? "simulated"/.test(share), 'a test-mode send says so');
   const dlg = read('src/components/QuickCloseDialog.tsx');
-  ok(/Send agreement &amp; payment link/.test(dlg) && /Sending…/.test(dlg) && /data-testid="qc-whatsapp-sent"/.test(dlg) && /Resend/.test(dlg) && /Copy link/.test(dlg), 'Quick Close: one click, Sending…, Sent · time + Resend, Copy link always there');
-  ok(/WhatsApp signup template \$\{lr\.template\.label\.toLowerCase\(\)\}/.test(dlg), '…and "WhatsApp signup template awaiting approval" while in review');
+  ok(/'close-send-whatsapp'/.test(dlg) && /Sent on WhatsApp/.test(dlg) && /word\} again/.test(dlg) && /Copy link instead/.test(dlg), 'The close: one press + one confirm, Sent, Send again, Copy link always there');
+  ok(/data-testid="close-whatsapp-off"/.test(dlg) && /lr\?\.say/.test(dlg), '…and says why WhatsApp is off (the template in review, the window shut)');
 }
 
 console.log('\n── THE TWO META TEMPLATES ──');

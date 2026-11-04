@@ -377,7 +377,7 @@ Deno.serve(async (req) => {
       /* Meta's LIVE status of findable_signup_link (cached; never hard-coded) and Paul's link rule. */
       const signupTemplate = await templateAvailability(service, SIGNUP_LINK_TEMPLATE_NAME);
       const signupTemplateState = templateSendState(signupTemplate, "signup");
-      const linkRoute = decideLinkRoute(convo, { template: signupTemplateState });
+      const linkRoute = decideLinkRoute(convo, { template: signupTemplateState, freeTextInWindow: true });
       let setup: Obj | null = null;
       if (paidLead) {
         try {
@@ -433,7 +433,10 @@ Deno.serve(async (req) => {
           contact_name: lead.contact_name, rating: lead.rating, review_count: lead.review_count, google_maps_url: lead.google_maps_url,
           campaign: (camp as { data?: { name?: string } | null }).data?.name ?? null, lead_source: lead.lead_source ?? null,
           salesperson: (seller as { data?: { display_name?: string } | null }).data?.display_name ?? null,
+          /* What the lead already holds, so the prospect page shows it instead of asking again. */
+          services: (lead.services_included ?? []) as string[], service_areas: (lead.service_areas ?? []) as string[],
         },
+        prospect_only: prospectOnlyLead(lead as never),
         onboarding: row ? { id: row.id, status: row.status, contact_name: row.contact_name, contact_email: row.contact_email, confirmed_phone: row.confirmed_phone, business_website: row.business_website } : null,
         /* THE CLIENT'S OWN SIGN-UP (Full Setup) that chose Build on an agency-run site they may still be tied into is HELD for Paul by the
            same rule as a phone close; the Close tab shows the same stop and the same Release button (approve_review). */
@@ -630,7 +633,7 @@ Deno.serve(async (req) => {
        the Details tab, the setup checklist and the paid-client intake read, so nobody asks again. */
     if (mode === "save_call") {
       const raw = (body.call && typeof body.call === "object" ? body.call : {}) as Obj;
-      const sentKeys = (["jobs", "areas", "agency_monthly_gbp"] as const).filter((k) => k in raw);
+      const sentKeys = (["jobs", "areas", "agency_monthly_gbp", "contract_until", "decision_who"] as const).filter((k) => k in raw);
       if (!sentKeys.length) return json({ ok: false, error: "bad_request" }, 400);
       const incoming = cleanCallNotes(raw);
       const rowId: string = row?.id ?? (await service.rpc("quick_close_row", { _lead_id: leadId, _business_name: lead.business_name ?? null })).data;
@@ -958,7 +961,7 @@ Deno.serve(async (req) => {
         /* ⛔ THE ROUTE (paymentLinkRoute.ts): the APPROVED findable_signup_link template (Meta's live status), else a
            normal message only when we messaged them, they replied and the 24-hour window is open, else nothing. */
         const tplState = templateSendState(await templateAvailability(service, SIGNUP_LINK_TEMPLATE_NAME), "signup");
-        const lr = decideLinkRoute(await conversation(), { template: tplState });
+        const lr = decideLinkRoute(await conversation(), { template: tplState, freeTextInWindow: true });
         if (lr.route === "none") return json({ ok: false, error: lr.reason, detail: lr.say }, 409);
         /* THE CANONICAL SENDER, AS THE CALLER: its ownership, QA, suppression, phone (UK / AU / IN) and template rules
            decide. The template's link and greeting are resolved THERE from the lead's records — never sent from here. */
@@ -1071,7 +1074,7 @@ Deno.serve(async (req) => {
           return json({ ok: false, error: "already_sent", detail: "The full setup link was already sent to them on WhatsApp. Press Resend if you really mean to send it again." }, 409);
         }
         const tplState = templateSendState(await templateAvailability(service, SIGNUP_LINK_TEMPLATE_NAME), "signup");
-        const lr = decideLinkRoute(await conversation(), { template: tplState });
+        const lr = decideLinkRoute(await conversation(), { template: tplState, freeTextInWindow: true });
         if (lr.route === "none") return json({ ok: false, error: lr.reason, detail: lr.say }, 409);
         const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
         const greetName = row?.contact_name ?? lead.contact_name ?? null;

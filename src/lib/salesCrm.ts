@@ -459,7 +459,7 @@ export function activityDetail(
       const why = d.reason === 'dead' ? `Dead lead — ${d.outcome === 'wrong_number' ? 'Wrong number' : 'Not interested'}` : 'Done, no action needed';
       return `${why}${cleared}`;
     }
-    case 'sms_sent': return d.simulated ? 'Test mode - not sent' : d.link_kind ? 'With a link (sent through Quick Close)' : 'A text message';
+    case 'sms_sent': return d.simulated ? 'Test mode - not sent' : d.link_kind ? 'With a link (sent from Close)' : 'A text message';
     case 'call_made': {
       const secs = Number(d.duration_s);
       const how = d.answered ? 'Answered' : ({ 'no-answer': 'No answer', busy: 'Busy', failed: 'Failed', canceled: 'Cancelled' } as Record<string, string>)[String(d.status)] ?? 'Ended';

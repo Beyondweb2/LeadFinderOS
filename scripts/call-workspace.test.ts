@@ -139,7 +139,7 @@ console.log('── 2. THE OFFER, BOTH ROUTES, FROM THE CONSTANTS ──');
     && /data-testid="call-plan-tabs"/.test(ui) && /useState<PlanTab>\('complete'\)/.test(ui) && (ui.match(/data-testid="call-guarantee"/g) ?? []).length === 1,
     'the call screen renders the close block (2026-10-30): TWO plan tabs (Findable Complete recommended, Findable Essential), one open, the guarantee once');
   ok(/offerFit\(ans\.answers/.test(ui) && /<PlanTabs guarantee=/.test(ui) && /if \(fit\?\.declined\)/.test(ui) && !/role === 'admin'/.test(ui), 'v5: the offer follows the agency-contract rule — still tied in shows a decline and no plan tabs, to anyone');
-  ok((ui.match(/<QuickCloseButton /g) ?? []).length === 1 && /data-testid="log-this-call"[\s\S]{0,200}<QuickCloseButton leadId=\{leadId\}/.test(ui), '…and Quick Close once, in the sticky bar beside Log this call');
+  ok(!/<QuickCloseButton /.test(ui), '…and no Quick Close button beside Log this call');
 }
 
 console.log('── 3. NO FALSE GUARANTEE ──');
@@ -251,7 +251,7 @@ console.log('── 6. LOGGING THE CALL ROUTES NATURALLY ──');
   const crm = read('src/components/LeadCrmPanel.tsx');
   const flow = read('src/components/LeadCallFlow.tsx');
   const lc = flow.slice(flow.indexOf('export function LoggedLine('), flow.indexOf('type Step ='));
-  ok(/CLOSE_READY_OUTCOMES: ReadonlySet<string> = new Set\(\['interested', 'spoke_to_owner', 'meeting_booked'\]\)/.test(flow) && /data-testid="logged-quick-close"/.test(lc) && /<QuickCloseButton leadId=\{leadId\} \/>/.test(lc), 'Interested / Spoke to owner / Meeting booked → Quick Close right in the result line');
+  ok(/CLOSE_READY_OUTCOMES: ReadonlySet<string> = new Set\(\['interested', 'spoke_to_owner', 'meeting_booked'\]\)/.test(flow) && /data-testid="logged-quick-close"/.test(lc) && /data-testid="logged-go-to-close"/.test(lc), 'Interested / Spoke to owner / Meeting booked → Go to Close, right in the result line');
   ok(/r\.state\.state !== 'not_interested'/.test(lc), '…never on a lead that reads Not interested');
   ok(/data-testid="log-outcome-choices"/.test(flow) && /choicesFor\(channel, \{ paid \}\)/.test(flow) && /moreOutcomesFor\(channel\)/.test(flow), 'the Log window: a handful of what-happened buttons for the channel, the rest under More');
   const lo = crm.slice(crm.indexOf('const logOutcome = async'), crm.indexOf('const afterWrite'));
@@ -261,7 +261,7 @@ console.log('── 6. LOGGING THE CALL ROUTES NATURALLY ──');
   ok(outcomePlan('not_interested', lead).status === 'not_interested', 'Not interested sets the status (and clears the Next Action)');
   const dlg = read('src/components/ColdCallPlaybook.tsx');
   // 2026-10-06 (sales-team-today): the sticky bar (LogCallBar) restyled; asserted by structure, not class names.
-  ok(/function LogCallBar[\s\S]{0,400}sticky bottom-0[\s\S]{0,400}data-testid="log-this-call"[\s\S]{0,200}<QuickCloseButton leadId=\{leadId\}/.test(dlg), 'the call screen\'s sticky bar: Log this call + Quick Close, one tap each');
+  ok(/function LogCallBar[\s\S]{0,400}sticky bottom-0[\s\S]{0,400}data-testid="log-this-call"/.test(dlg) && !/<QuickCloseButton/.test(dlg), 'the call screen\'s sticky bar: Log this call');
 }
 
 console.log('── 7. DOUBLE SUBMIT IS ONE CALL ──');

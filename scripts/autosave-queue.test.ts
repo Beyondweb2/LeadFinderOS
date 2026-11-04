@@ -146,7 +146,7 @@ console.log('── 7. NO SUBMIT ──');
   ok(close.includes('cleanCloseEmail(val).ok) auto.set(k, val.trim())'), 'a half-typed email waits: it would only be refused');
   const qcFn = read('supabase/functions/quick-close/index.ts');
   ok(/trade && \(!tradeNow \|\| \(!!tradePrev && !lead\.category && tradeNow === tradePrev\)\)/.test(qcFn), 'the trade: a set one is never overwritten, except what this box itself just saved');
-  ok(/\(!v\.lead\.trade \|\| tradeTyped\)/.test(close), 'the trade box stays open while it is being typed');
+  ok(/\(!v\.lead\.trade \|\| tradeTyped\)/.test(read('src/components/ProspectQuestions.tsx')), 'the trade box stays open while it is being typed');
   ok(/function CorrectDetails/.test(close) && /<AutosaveIndicator status=\{auto\.status\} \/>/.test(close) && !/saveFixes/.test(close), 'Correct a detail saves itself, with the indicator');
   const fn = read('supabase/functions/quick-close/index.ts');
   const at = fn.indexOf('mode === "save_handoff_field"');
