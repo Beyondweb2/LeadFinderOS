@@ -351,7 +351,7 @@ Deno.serve(async (req) => {
                         reason kept on baseline_meta.partial_accepted; the next tick freezes it, and the
                         snapshot records it as partial. Never fabricates an answer.
        send_results   — the four-week results, through the SAME claim-first sender as the queue
-                        (remeasure-results.ts): still held while REMEASURE_RESULTS_COPY_APPROVED is false,
+                        (remeasure-results.ts): held if REMEASURE_RESULTS_COPY_APPROVED is ever false,
                         still refused for an ended client, never sent twice. */
     if (action === "retry_missing" || action === "accept_partial") {
       const target = body.target === "remeasure" ? "remeasure" : "baseline";

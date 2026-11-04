@@ -25,7 +25,7 @@ database win** — re-derive, then fix the doc.*
 - 🔴 **WhatsApp:** Move37's Meta setup is LIVE; the new fail-closed `whatsapp-status` is deliberately **NOT deployed** (live
   v114) until the Findable Meta app + exact App Secret exist. Never guess the secret. `07-…`.
 - 🔴 **Apify monthly cap is US$40** (should be ~US$150) — prospecting stops at 85%. Paul's manual action.
-- 🔴 **Results emails are HELD** (`REMEASURE_RESULTS_COPY_APPROVED = false`) until Paul approves the copy.
+- **Results emails are ON** (`REMEASURE_RESULTS_COPY_APPROVED = true`, Paul approved 2026-11-04): they send on their own when a re-measure finishes. Record: `docs/four-week-results-approved.md`.
 
 ## Live URLs
 

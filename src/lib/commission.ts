@@ -71,7 +71,7 @@
    🔴 PLAN RULES (Paul, 2026-11-02, docs/commission-owed.md; every number in commissionConfig.ts). A sale whose ledger row is
    payout_rule 'plan_v1' (every sale recorded since) follows these, and every older sale keeps the rules above and its numbers:
    - FIRST PAYMENT: the STAMPED rate on the amount collected. PENDING until commission_payable_on, the date the database writes once
-     the four-week results are sent (results + the client's refund window). NO BACKSTOP: no results, no date, still waiting. The six-week
+     the four-week results are sent (results + the client's refund window + 1 day). NO BACKSTOP: no results, no date, still waiting. The six-week
      fallback above is not used.
    - ANY refund or lost chargeback earns nothing. Not yet paid: the line is cancelled. Already paid: an offset, due straight away against
      that person's next commission. The "late goodwill refund changes nothing" rule above does not apply.
@@ -84,8 +84,8 @@
    - EACH of the customer's first payments (the plan's FIXED_COMMISSION count, the sign-up is number 1) earns the plan's fixed pounds, whatever
      the amount. Nothing after them. A failed payment is not a payment; one recovered later earns in its own place.
    - SALE 13+ of the UK month (the database's stamped place) adds BIG_MONTH_BONUS_GBP to its FIRST payment's line, paid with it and gone with it.
-   - COLLECTED ON OR BEFORE THE WINDOW'S LAST DAY (commission_payable_on, or no date yet): pending until that day, "waiting" with no date until
-     results are sent. COLLECTED AFTER: payable on the 1st of the next month.
+   - COLLECTED ON OR BEFORE THE WINDOW'S LAST DAY (before commission_payable_on, the day after the window, Paul 2026-11-04; or no date yet): pending
+     until commission_payable_on, "waiting" with no date until results are sent. COLLECTED AFTER: payable on the 1st of the next month.
    - A GUARANTEE CLAIM (commission_claim_at, or the first payment fully refunded or lost inside the window) means nothing on the sale is payable:
      every unpaid line is cancelled. A line already paid stays paid until the refund lands, which makes it an offset.
    - A salesperson who has left is still paid on these payments as they arrive. The first payment still has to be a sale they closed while engaged.
@@ -465,7 +465,7 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
       else if (rows.some((r) => {
         const tied = (r.stripe_payment_intent_id && r.stripe_payment_intent_id === saleRow.stripe_payment_intent_id) || (r.stripe_charge_id && r.stripe_charge_id === saleRow.stripe_charge_id);
         const gone = (r.kind === 'refund' && r.amount_gbp >= saleRow.amount_gbp) || (r.kind === 'chargeback' && DISPUTE_LOST.has(r.status));
-        return tied && gone && (!payableOn || londonDayOf(r.occurred_at) <= payableOn);
+        return tied && gone && (!payableOn || londonDayOf(r.occurred_at) < payableOn);
       })) claim = 'refunded';
     }
     /* Fixed rules: found to be a test before the window closed, the whole sale earns nothing. */
@@ -570,7 +570,7 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
         || (fixedRules && pastCount);
       const v3Initial = v3 && n === 1 && p.kind === 'initial' && !testSale;
       /* Waits for the guarantee window. Plan rules: the first payment. Fixed rules: any payment collected on or before the window's last day. */
-      const planInitial = fixedRules ? !testSale && (!payableOn || londonDayOf(p.occurred_at) <= payableOn) : planRules && n === 1 && p.kind === 'initial' && !testSale;
+      const planInitial = fixedRules ? !testSale && (!payableOn || londonDayOf(p.occurred_at) < payableOn) : planRules && n === 1 && p.kind === 'initial' && !testSale;
       const planExcludedNow = fixedRules ? fixedExcluded : planInitial && v3ExcludedBeforeApproval(input.exclusionsOf?.get(leadId) ?? null, payableNow && payableOn ? ukDayAtHourIso(payableOn, 0) : null);
       /* v3 initial: owed in the month of its Approval Date, paid on the first working day after it. */
       const day = notBeforeConfirmed(v3Initial && approvalDay ? approvalDay : planInitial && payableOn ? payableOn : londonDayOf(p.occurred_at));

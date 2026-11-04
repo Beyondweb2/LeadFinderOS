@@ -20,14 +20,14 @@
    any matched question has fewer than MIN_CELLS_FOR_QUESTION_CLAIM cells on either side. A document
    that starts a refund clock must not rest on a number the product itself marks unproven.
 
-   ⛔ THE WORDS ARE PAUL'S, AND THEY ARE GATED. `REMEASURE_RESULTS_COPY_APPROVED` is false until he
-   approves the draft below; while false the sender holds every result as a task instead of sending.
-   Flipping it is a deliberate commit and deploy, never a runtime switch.
+   ⛔ THE WORDS ARE PAUL'S, AND THEY ARE GATED. `REMEASURE_RESULTS_COPY_APPROVED` went true on 2026-11-04,
+   when he approved the wording below; false would hold every result as a task instead of sending.
+   Changing it is a deliberate commit and deploy, never a runtime switch.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { MIN_CELLS_FOR_QUESTION_CLAIM, type MeasurementComparison } from './measurementCompare.ts';
 import { guaranteeNumberWentUp, type ContinuingMode } from './clientTimeline.ts';
 import { afterTermSummaryWords } from './planTerms.ts';
-import { PAYMENT_PLAN_SPEC, V7_REFUND_WINDOW_DAYS, gbpWords, isPaymentPlan, planAfterWords, type PaymentPlan } from './paymentPlans.ts';
+import { PAYMENT_PLAN_SPEC, V6_GUARANTEE_HEADLINE, V7_REFUND_WINDOW_DAYS, gbpWords, isPaymentPlan, planAfterWords, planProduct, type PaymentPlan } from './paymentPlans.ts';
 import { FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, GUARANTEE_PAYMENT_TWO_SENTENCE, REMEASURE_CLAIM_SENTENCE, REMEASURE_WEEKS_STANDARD, serviceRouteForTotal, termMonthsFor, totalPaymentsFor } from './findableOffer.ts';
 import { defaultRemeasureDue, remeasureOffsetDays } from './deliveryCockpit.ts';
 
@@ -39,8 +39,8 @@ export function weeksWord(weeks: number | null | undefined): string {
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 import { parseAmountPaid } from './leadPayment.ts';
 
-/** ⛔ FALSE UNTIL PAUL APPROVES THE COPY. See the header. */
-export const REMEASURE_RESULTS_COPY_APPROVED = false;
+/** ⛔ TRUE SINCE PAUL APPROVED THE COPY (2026-11-04). See the header. */
+export const REMEASURE_RESULTS_COPY_APPROVED = true;
 
 /** The claim window, in days, counted from the moment the results were SENT (the stamp). Derived
  *  on read, never stored: the stamp is the fact, the close is arithmetic. */
@@ -253,7 +253,12 @@ export interface ResultsCopyInput {
   paymentPlan?: string | null;
   /** v7 (2026-10-30): the client's Refund Window in days, from the terms they signed (v7 7, v3 to v6 14). Absent = 14. */
   refundWindowDays?: number | null;
+  /** The send date as a person reads it, for the page ("24 November 2026"). Absent = the email's "the date of this email". */
+  sentOnWords?: string | null;
 }
+
+/** What the email and the page both read about THIS client's terms, so the two cannot say different things. */
+export type ResultsTermsCopy = Pick<ResultsCopyInput, 'monthlyStartsOn' | 'totalPayments' | 'v3Terms' | 'continuingMode' | 'paymentPlan' | 'refundWindowDays' | 'sentOnWords'>;
 
 /* ⛔ THE CLAIM PARAGRAPH — ONE SENTENCE OF OURS IN FRONT OF ONE SENTENCE THAT IS LOCKED.
    Paul asked for "That means the guarantee applies. Email us within 14 days and we'll refund your
@@ -268,11 +273,22 @@ export interface ResultsCopyInput {
 /* 🔴 PAYMENT 2 (Paul, 2026-09-23): the claim paragraph also says what a valid claim does to the
    monthly — refunded if already taken, never taken otherwise (GUARANTEE_PAYMENT_TWO_SENTENCE, locked
    to findable-site). */
-export function resultsClaimParagraph(paymentPlan?: string | null, refundWindowDays: number | null = null): string {
+export function resultsClaimParagraph(paymentPlan?: string | null, refundWindowDays: number | null = null, sentOnWords: string | null = null): string {
   /* v6 / v7 (5.4, 5.5): the refund is everything the client has paid, and a valid claim ends the plan. v7's window is 7 days. */
-  /* v7 (2026-10-30): the 7 days run from the date we send these results (this email), said as findable.live says it. */
-  if (isV6Plan(paymentPlan)) return `That means the guarantee applies. If that number has not gone up, email us within ${windowDays(refundWindowDays)} days of ${windowDays(refundWindowDays) === V7_REFUND_WINDOW_DAYS ? 'the date we send your four-week audit results (the date of this email)' : 'your results'} and we'll refund everything you have paid us. A valid claim also ends your plan: no further payments are taken.`;
+  /* v7 (2026-10-30): the 7 days run from the date we send these results, said as findable.live says it. The email says "the date of this email"; the page names the date. */
+  if (isV6Plan(paymentPlan)) return `Email us within ${windowDays(refundWindowDays)} days of ${windowDays(refundWindowDays) === V7_REFUND_WINDOW_DAYS ? `the date we send your four-week audit results (${sentOnWords || 'the date of this email'})` : 'your results'} and we'll refund everything you have paid us. A valid claim also ends your plan: no further payments are taken.`;
   return `That means the guarantee applies. ${REMEASURE_CLAIM_SENTENCE} ${GUARANTEE_PAYMENT_TWO_SENTENCE}`;
+}
+/** The verdict and the claim, for the email and the page alike (Paul, 2026-11-04). v6 and v7 carry the exact guarantee line; v5's claim is byte-locked and stays as it is. */
+function notUpParagraphs(i: ResultsCopyInput, v5Verdict: string): string[] {
+  const claim = resultsClaimParagraph(i.paymentPlan, i.refundWindowDays ?? null, i.sentOnWords ?? null);
+  return isV6Plan(i.paymentPlan)
+    ? [`Your number has not gone up, so the guarantee applies: ${V6_GUARANTEE_HEADLINE}`, claim]
+    : [v5Verdict, claim];
+}
+/** Essential includes only the baseline and four-week audits (agreement v7 Schedule 1), so it is never told we "keep measuring". */
+function keepWords(paymentPlan: string | null | undefined): string {
+  return isV6Plan(paymentPlan) && planProduct(paymentPlan) === 'essential' ? 'We keep the work live.' : 'We keep the work live and keep measuring.';
 }
 const isV6Plan = (p: unknown): p is PaymentPlan => isPaymentPlan(p) && p !== 'legacy_twelve';
 /** The window a client signed for: v7's 7 days when passed, otherwise 14 (v3 to v6). */
@@ -298,13 +314,29 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
     /* ⛔ NO CAUSAL CLAIM (2026-10-04, Session C C-28). This used to say "The pages and listings we built
        are what the engines are now reading" — the data shows the number rose, not why. The sentence
        says what was measured and what we keep doing, nothing more. */
-    out.push(`Your number has gone up: on the same questions and the same AI tools, you were named in more answers than ${weeksWord(i.weeks)} weeks ago. We keep the work live and keep measuring.`);
+    out.push(`Your number has gone up: on the same questions and the same AI tools, you were named in more answers than ${weeksWord(i.weeks)} weeks ago. ${keepWords(i.paymentPlan)}`);
   } else {
     /* ⛔ THE ORDER IS PAUL'S, 2026-09-13: the verdict, then the entitlement, then the mechanism.
        It used to read as an apology followed by an offer. "That means the guarantee applies" is
        ours to write; the sentence after it is NOT — see the note above resultsClaimParagraph. */
-    out.push(`Your number has not gone up.`, resultsClaimParagraph(i.paymentPlan, i.refundWindowDays ?? null));
+    out.push(...notUpParagraphs(i, 'Your number has not gone up.'));
   }
+  const payment = resultsPaymentParagraph(i);
+  if (payment) out.push(payment);
+  out.push(RESULTS_SIGN_OFF);
+  return out;
+}
+
+/** Paul's sign-off, exactly (2026-10-05). */
+export const RESULTS_SIGN_OFF = 'Paul, Findable';
+
+/** The payment paragraph, or null when no monthly date applies. Said on both verdicts, in the email and on the page. */
+function resultsPaymentParagraph(i: ResultsCopyInput): string | null {
+  const text = paymentParagraphWords(i);
+  /* 🔴 PAUL, 2026-11-04 (replaces his 2026-10-05 rule of naming no payment here): a client who does not claim is still charged, so the not-gone-up version says when. */
+  return text && !i.wentUp ? text.replace(/^Your first/, "If you don't claim, your first") : text;
+}
+function paymentParagraphWords(i: ResultsCopyInput): string | null {
   /* ⛔ THIS EMAIL IS THE EARLY BILLING NOTICE. Stripe's own trial-ending event fires three days out
      and nothing can move it, so the date and the amount are named here too.
      🔴 NOT "THAT SAME DAY" (2026-09-23). It used to say the monthly started the day the claim window
@@ -312,31 +344,22 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
      (resultsBillingStartIso) and the sentence counts the payments the way the offer does:
      the sign-up £99 is payment 1, this is payment 2, and nothing follows the last. */
   /* 🔴 PER ROUTE (2026-09-29): the count is the client's own contract (Build 12, Optimise 6). */
-  /* ⛔ ONLY WHEN THE NUMBER WENT UP (Paul, 2026-10-05). The not-gone-up email has just said a valid
-     claim stops the monthly; a "your first monthly payment is on…" paragraph straight after it reads
-     as taking that back. That version names no upcoming payment. */
-  if (i.wentUp && i.monthlyStartsOn && isV6Plan(i.paymentPlan)) {
+  if (!i.monthlyStartsOn) return null;
+  if (isV6Plan(i.paymentPlan)) {
     /* v6 (2026-10-29): the plan's own monthly and count; pay in full has no monthly (no subscription, so no date). */
     const s = PAYMENT_PLAN_SPEC[i.paymentPlan];
-    if (s.monthlyGbp > 0) out.push(`Your first monthly payment of ${gbpWords(s.monthlyGbp)} is on ${i.monthlyStartsOn}, the day after your ${windowDays(i.refundWindowDays)}-day refund window closes. It is payment 2 of ${s.totalPayments}, counting the ${gbpWords(s.firstGbp)} you paid at sign-up. ${planAfterWords(i.paymentPlan)}`);
-  } else if (i.wentUp && i.monthlyStartsOn && i.v3Terms) {
+    return s.monthlyGbp > 0 ? `Your first monthly payment of ${gbpWords(s.monthlyGbp)} is on ${i.monthlyStartsOn}, the day after your ${windowDays(i.refundWindowDays)}-day refund window closes. It is payment 2 of ${s.totalPayments}, counting the ${gbpWords(s.firstGbp)} you paid at sign-up. ${planAfterWords(i.paymentPlan)}` : null;
+  }
+  const route = serviceRouteForTotal(i.totalPayments);
+  if (i.v3Terms) {
     /* v3: the date is the Payment Start Date (the day after the 14-day Refund Window); after the minimum
        term the Continuing Service follows (9A) — never "nothing is charged after". */
-    const route = serviceRouteForTotal(i.totalPayments);
-    out.push(`Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}, the day after your 14-day refund window closes. The monthly covers ${monthlyCoversPhrase(route)}${route ? `, for the rest of your ${termMonthsFor(route)}-month minimum term (${totalPaymentsFor(route)} payments, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up)` : ''}. ${endOfTermSentence(i, route)}`);
-  } else if (i.wentUp && i.monthlyStartsOn) {
-    const route = serviceRouteForTotal(i.totalPayments);
-    out.push(route
-      ? `Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}. The monthly covers ${monthlyCoversPhrase(route)}, for the rest of your ${termMonthsFor(route)}-month minimum term. That first monthly payment is payment 2 of ${totalPaymentsFor(route)}, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, and nothing is charged after the ${totalPaymentsFor(route)}th.`
-      : `Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}. The monthly covers ${monthlyCoversPhrase(null)}. That first monthly payment is payment 2, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, and nothing is charged after your last agreed payment.`,
-    );
+    return `Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}, the day after your 14-day refund window closes. The monthly covers ${monthlyCoversPhrase(route)}${route ? `, for the rest of your ${termMonthsFor(route)}-month minimum term (${totalPaymentsFor(route)} payments, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up)` : ''}. ${endOfTermSentence(i, route)}`;
   }
-  out.push(RESULTS_SIGN_OFF);
-  return out;
+  return route
+    ? `Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}. The monthly covers ${monthlyCoversPhrase(route)}, for the rest of your ${termMonthsFor(route)}-month minimum term. That first monthly payment is payment 2 of ${totalPaymentsFor(route)}, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, and nothing is charged after the ${totalPaymentsFor(route)}th.`
+    : `Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}. The monthly covers ${monthlyCoversPhrase(null)}. That first monthly payment is payment 2, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, and nothing is charged after your last agreed payment.`;
 }
-
-/** Paul's sign-off, exactly (2026-10-05). */
-export const RESULTS_SIGN_OFF = 'Paul, Findable';
 
 /* ⛔ WHAT THE MONTHLY PAYS FOR — THE ACTUAL SERVICE, NEVER "EVERY WEEK" (Paul, 2026-10-02 / 2026-10-05).
    A new page each month, a monthly check of AI visibility ("check", never "audit": /terms says the
@@ -352,14 +375,17 @@ export function monthlyCoversPhrase(route: 'build' | 'optimise' | null): string 
 
 /** The document's "what this means" paragraphs, same rule, same sentence. */
 export function resultsDocumentMeaning(i: ResultsCopyInput): string[] {
+  const payment = resultsPaymentParagraph(i);
+  const pay = payment ? [payment] : [];
   if (i.wentUp) {
     return [
       `${i.businessName} is named more often than it was ${weeksWord(i.weeks)} weeks ago, on the same questions and the same engines.`,
       /* No causal claim (C-28): the measurement shows the rise, not its cause. */
-      `We keep the work live and keep measuring.`,
+      keepWords(i.paymentPlan),
+      ...pay,
     ];
   }
-  return [`The number has not gone up.`, resultsClaimParagraph(i.paymentPlan)];
+  return [...notUpParagraphs(i, 'The number has not gone up.'), ...pay];
 }
 
 /** What the results email says about the end of the plan, by what THIS client signed (clientTimeline.continuingModeFor).

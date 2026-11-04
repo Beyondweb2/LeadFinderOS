@@ -352,7 +352,7 @@ Deployed: `notify-onboarding-submit` v35, `stripe-webhook` v87, `process-ai-audi
     failed, Resend refused. A hold = `client_error_reports` `remeasure_results_held` (once per lead
     per hour) + an operator email; the Deliver card reads a finalised replay with no stamp as
     **"results held — needs you"**.
-  - 🔴 **THE WORDS ARE GATED: `REMEASURE_RESULTS_COPY_APPROVED = false`** (`src/lib/remeasureResults.ts`).
+  - **THE WORDS ARE GATED: `REMEASURE_RESULTS_COPY_APPROVED` (`src/lib/remeasureResults.ts`), true since Paul approved them on 2026-11-04** (`docs/four-week-results-approved.md`).
     Every finished replay holds as a task until Paul approves the draft (email paragraphs +
     document "what this means" live in that file, one source for both). Flipping it is a commit and
     a deploy of `process-ai-audit-queue`, never a runtime switch. **RG is due 2026-10-06** — approve

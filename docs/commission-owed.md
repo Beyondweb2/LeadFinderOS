@@ -15,7 +15,7 @@
 
 - **Big-month bonus:** the database still numbers each sale in its UK month when the first payment lands (`stamp_monthly_commission_for`). Sale 13+ adds £25 to that sale's first payment line, so it is paid with it and goes with it. Not backdated. Resets on the 1st. As before, a sale fully refunded or lost before the next one lands no longer counts towards the next number.
 - **Nothing on** payments after the first 6, hosting, renewals or upsells.
-- **Payable:** collected on or before the window's last day (or with no date yet) waits for `commission_payable_on` (results sent + the client's own window: 7 days on v7, 14 on older agreements). Collected after: the 1st of the next month. No backstop. On the window's last day the client can still claim until midnight, as before.
+- **Payable:** collected on or before the window's last day (or with no date yet) waits for `commission_payable_on`, the day AFTER the client's own window closes (results sent + 7 days + 1 on v7, + 14 + 1 on older agreements; Paul, 2026-11-04, migration `20261208090000`). Collected after: the 1st of the next month. No backstop. On the window's last day the client can still claim until midnight, as before.
 - **A claim:** a guarantee claim is an email, so Paul records it: "Client claimed" on the sale under Commission owed (fn `sales-earnings` `set_claim`, `payment_ledger.commission_claim_at`, admin only, can be undone). It refunds nobody. The first payment fully refunded or lost inside the window counts as a claim by itself. Either way every unpaid line on the sale is cancelled. A line already paid stays paid until its refund lands, which then makes it an offset.
 - **Refunds, disputes:** kept. An open dispute holds that line. A refund cancels the line, or the same share of its pounds if partial, or is an offset after payout. A refunded monthly still used its place in the first 6.
 - **Non-payment:** a failed payment is not a payment. A recovered one earns in its place, payable the 1st after it landed.
@@ -24,7 +24,7 @@
 - **Screens:** Commission owed: per person, Owed now, Paid so far, Mark as paid, their next payments with a countdown; open a person for their sales ("Complete monthly · 2 of 6 paid · £50 of £150", "+£25 big-month bonus"). The Sales page's Your payments shows the same for one person, no buttons. The month card counts to the bonus. The rate column is gone from the tables.
 - ⚠️ **What's New keeps its old entries** that mention percentages, as dated history.
 - ⚠️ **The sales contractor agreement (draft v2)** still describes percentages and trailing payments. Paul is updating it to match, the leaver rule included.
-- ⚠️ **Until `REMEASURE_RESULTS_COPY_APPROVED` is on**, no results go, so everything collected stays in Waiting with no date. Now that includes monthlies, not just first payments.
+- **`REMEASURE_RESULTS_COPY_APPROVED` is on since 2026-11-04.** Until a client's results go, everything collected stays in Waiting with no date, monthlies included.
 
 **Proof:** `scripts/commission-fixed-amounts.test.ts` (totals to the penny, every case Paul listed). `supabase/tests/commission-fixed-amounts.sql` passed with the migration in a rolled-back transaction on the live database; read back, nothing stayed.
 
@@ -52,7 +52,7 @@ Paul's own at £0 commission, so no real person's commission moves.
 | | Plan rules (`plan_v1`) |
 |---|---|
 | First payment | The stamped 30/40/50% on the amount collected |
-| Payable | `commission_payable_on` = UK day results sent + the client's refund window. 7 days on v7, 14 on older agreements. No backstop |
+| Payable | `commission_payable_on` = UK day results sent + the client's refund window + 1 (Paul, 2026-11-04). Window 7 days on v7, 14 on older agreements. No backstop |
 | Trailing | 20% of the next 6 monthly payments the plan has, any amount. Payable on the 1st of the next month. Pay in full: none. Hosting after the plan: none |
 | Refund or lost chargeback | Earns nothing, at any time. Not yet paid: cancelled, or a partial comes off the line. Already paid: an offset, due at once |
 | Open dispute | Held, in the quiet list |
@@ -117,11 +117,9 @@ The webhook writes each payment, refund (cumulative, per charge) and dispute thr
 
 ## Open
 
-- ⚠️ `REMEASURE_RESULTS_COPY_APPROVED` is false, and no client has ever been sent four-week results. Until Paul approves that copy, every
-  first-payment commission stays in Waiting, with no date.
 - ⚠️ A client whose results never go (guarantee ceased, service ended early) keeps the seller waiting forever. No backstop, by Paul's decision.
 - ⚠️ The sales contractor agreement (draft v2) says 5 trailing payments and an Approval Date. Paul's rules now say 6 and no fallback. It needs updating.
-- On the last day of a window, a line is due while the client can still claim until midnight. A claim after paying becomes an offset.
+- A claim after paying becomes an offset.
 - A guarantee claim is an email; there is no claim record. Nothing cancels the line until the refund lands in Stripe, so check for an open claim before paying.
 
 ## Proof

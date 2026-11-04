@@ -83,6 +83,24 @@ ok(isLinePaidRule('fixed_v1') && isLinePaidRule('plan_v1') && !isLinePaidRule('l
   ok(sp.progress === 'Complete monthly · 2 of 6 paid · £50 of £150', `the words: ${sp.progress}`);
 }
 
+/* ── The payable date is the day AFTER the window (Paul, 2026-11-04). commission_payable_on 10 Dec = the window's last day was 9 Dec. ── */
+{
+  const s = sale({ commission_payable_on: '2026-12-10' });
+  const lastDay = monthly(s, '2026-12-09T10:00:00Z');
+  const dayAfter = monthly(s, '2026-12-10T10:00:00Z');
+  const p = pays(run([s, lastDay, dayAfter], '2027-02-01T12:00:00Z').lines);
+  ok(p[1].payoutDate === '2026-12-10', 'collected on the window\'s last day: payable the day after it');
+  ok(p[2].payoutDate === '2027-01-01', 'collected the day after the window: the 1st of the next month, as before');
+  ok(owed([s], '2026-12-09T23:00:00Z').totalOwedNow === 0, 'nothing owed on the window\'s last day, while the client can still claim');
+  ok(owed([s], '2026-12-10T00:30:00Z').totalOwedNow === 25, 'owed the day after');
+  const onLast = sale({ commission_payable_on: '2026-12-10' });
+  ok(pays(run([onLast, back(onLast, 'refund', '2026-12-09T22:00:00Z')], '2026-12-20T12:00:00Z').lines)[0].claim === 'refunded', 'refunded on the window\'s last day: a claim');
+  const onAfter = sale({ commission_payable_on: '2026-12-10' });
+  ok(!pays(run([onAfter, back(onAfter, 'refund', '2026-12-10T10:00:00Z')], '2026-12-20T12:00:00Z').lines)[0].claim, 'refunded the day after the window: not a claim');
+  const mig = read('supabase/migrations/20261208090000_commission_payable_day_after_window.sql');
+  ok(/commission_payable_days\([\s\S]*\+ 1/.test(mig), 'the database writes the day after the window');
+}
+
 /* ── Up front, in full, plans ── */
 {
   const up = sale({ amount_gbp: 999, sale_plan: 'complete_upfront', commission_payable_on: '2026-12-10' });

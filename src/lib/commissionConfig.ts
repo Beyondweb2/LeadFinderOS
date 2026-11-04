@@ -66,8 +66,8 @@ export const payoutRuleForPaymentAt = (occurredAtIso: string): string =>
 /** The two rule sets paid line by line, each with a payable date. */
 export const isLinePaidRule = (rule: unknown): boolean => rule === PAYOUT_RULE_PLAN_V1 || rule === PAYOUT_RULE_FIXED_V1;
 
-/** Commission waiting on the guarantee becomes payable this many days after the four-week results are sent: the client's own refund
- *  window, so nobody is paid while the client can still claim. There is NO backstop date.
+/** The client's own refund window, in days after the four-week results are sent. Commission waiting on the guarantee becomes payable
+ *  the day AFTER it (Paul, 2026-11-04), so nobody is paid while the client can still claim. There is NO backstop date.
  *  ⛔ MIRRORED by public.commission_payable_days(). v7 is 7 days (agreement v7 5.4); every older agreement is 14. */
 export const COMMISSION_PAYABLE_DAYS_V7 = 7;
 export const COMMISSION_PAYABLE_DAYS_OLDER = 14;

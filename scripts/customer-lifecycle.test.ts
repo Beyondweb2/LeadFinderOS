@@ -85,10 +85,9 @@ console.log('── 6, 7. THE FOUR-WEEK RESULTS EMAIL NAMES STRIPE\'S DATE, OR N
     ok(!p.some((x) => /same day/i.test(x)), 'wentUp=true: no "that same day" — billing is not tied to the claim window');
   }
   {
-    /* Paul, 2026-10-05: the not-gone-up email has just said a valid claim stops the monthly, so it names
-       no upcoming payment after that — even when a trialing subscription has a date. */
+    /* Paul, 2026-11-04 (replaces 2026-10-05): a client who does not claim is still charged, so the not-gone-up email says when, worded that way. */
     const p = resultsEmailParagraphs({ ...base, wentUp: false, monthlyStartsOn: pretty(billing!), totalPayments: 12 });
-    ok(!p.some((x) => x.includes('4 November 2026') || /first monthly payment/i.test(x)), 'wentUp=false: no upcoming monthly payment paragraph after the guarantee');
+    ok(p.some((x) => x.startsWith("If you don't claim, your first monthly payment")) && !p.some((x) => x.startsWith('Your first monthly payment')), 'wentUp=false: the payment is worded as if you do not claim');
     ok(!p.some((x) => /same day/i.test(x)), 'wentUp=false: no "that same day"');
   }
   /* A client like MCLocksmiths: card saved, no subscription (signed up the day before sign-up subscriptions). */
@@ -107,7 +106,7 @@ console.log('── 6, 7. THE FOUR-WEEK RESULTS EMAIL NAMES STRIPE\'S DATE, OR N
   ok(!/monthlyStartIso/.test(sender), 'the sender never calls monthlyStartIso');
   /* (Matched on the import's own list, not a regex naming the module path — check-import-graph reads
      such a pattern as an import and fails the gate.) */
-  ok(/currentTermsVerdict, resultsBillingStartIso, type CurrentTermsVerdict,\s*\}/.test(read('supabase/functions/_shared/remeasure-results.ts')), 'resultsBillingStartIso is IMPORTED by the sender');
+  ok(/currentTermsVerdict, resultsBillingStartIso, type CurrentTermsVerdict, type ResultsTermsCopy,\s*\}/.test(read('supabase/functions/_shared/remeasure-results.ts')), 'resultsBillingStartIso is IMPORTED by the sender');
   const built = sender.indexOf('resultsEmailParagraphs(copy)');
   const claim = sender.indexOf('.is("remeasure_results_sent_at", null)');
   ok(built > 0 && claim > 0 && built < claim, 'the email words are built before the once-only claim');
