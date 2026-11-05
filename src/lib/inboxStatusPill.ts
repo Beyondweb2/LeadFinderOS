@@ -7,8 +7,8 @@
        3. the attention kind (src/lib/inboxAttention.ts: needs approval / needs you / send failed / auditing / waiting / queued).
    Priority, first match wins:
        closed outcomes (Opted out, Not interested, Refunded) → money/delivery stages (Won, Paid, In delivery, Completed)
-       → Send failed → Reply needed (needs you, needs approval, or they replied and nothing answered)
-       → Follow-up due → Call booked → Auditing → Queued → Waiting on them → the stored stage's own words.
+       → Send failed → Queued (a message of ours is waiting to go) → Reply needed (needs you, needs approval, or they replied and nothing answered)
+       → Follow-up due → Call booked → Auditing → Waiting on them → the stored stage's own words.
    The pill is still the control that sets the stored stage by hand (PipelineStatusSelect); this only changes what it SAYS.
    Pure: no React, no DOM. An absent input never reads as a real state: with nothing known the pill says what the stored
    stage says (New when there is none). */
@@ -43,6 +43,8 @@ export interface StatusPillInput {
   followUpDue: boolean;
   /** salesStateOf(...).state === 'meeting_booked'. */
   meetingBooked: boolean;
+  /** A message of ours is queued and not yet sent (a scheduled Inbox send, or the lead sits in the drip queue) AND none is held for a person. */
+  queuedSend?: boolean;
 }
 
 /** The fixed words, one place, so the screens and the test read the same list. */
@@ -84,6 +86,10 @@ export function statusPillFor(i: StatusPillInput): StatusPill {
   /* Closed and money stages outrank whose turn it is: an opted-out or paid lead is never "Reply needed". */
   if (stageKey) return pill(stageKey, `${stageWords} (stored stage). Click to change it.`);
   if (i.failed || i.attentionKind === 'send_failed') return pill('send_failed', i.attentionTitle ?? 'Our last message failed to send.');
+  /* 2026-11-05: a queued message IS the answer to a reply, so Queued outranks Reply needed / Approve draft / Follow-up due (GB Electrical showed
+     Reply needed with its reply already queued). It is derived, so cancelling the queued message puts the old status straight back, and
+     once it sends the conversation falls through to Waiting on them. A HELD message needs a person, so it is not passed as queuedSend. */
+  if (i.queuedSend) return pill('queued', i.attentionKind === 'queued' ? (i.attentionTitle ?? 'A message is queued to send.') : 'A message is queued to send. Edit or cancel it in the thread.');
   if (i.attentionKind === 'needs_you') return pill('reply_needed', i.attentionTitle ?? 'A person should answer this one.');
   if (i.attentionKind === 'needs_approval') return pill('approve_draft', i.attentionTitle ?? 'An AI draft is waiting in the thread. Nothing is sent until someone approves it.');
   if (i.waitingOnUs) return pill('reply_needed', i.attentionTitle ?? 'They replied and nothing has answered yet.');

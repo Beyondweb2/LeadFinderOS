@@ -1,7 +1,8 @@
 import { memo } from 'react';
 import { AlertTriangle, CheckCheck, Clock, Loader2, MessageCircleReply, Timer, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { pipelineStatusClass } from '@/components/PipelineStatusBadge';
+import { PipelineStatusBadge } from '@/components/PipelineStatusBadge';
+import type { PipelineStatus } from '@/types/outreach';
 import type { AttentionKind } from '@/lib/inboxAttention';
 import type { StatusPillKey, StatusPillTone } from '@/lib/inboxStatusPill';
 import type { LeadAuditScore } from '@/lib/auditScore';
@@ -34,10 +35,10 @@ export const AttentionPill = memo(function AttentionPill({ kind, label, title, c
   );
 });
 
-/* ⛔ THE ONE STATUS PILL (src/lib/inboxStatusPill.ts decides the words). The SOLID pipeline-pill style again (Paul, 2026-11-03: the
-   see-through tint of 2026-10-31, commit 5d7f6fbe, is gone): bright fill, dark text, rounded, ONE small size for every status.
-   A plain stage and the closed / money stages wear the colour the stored status always had (pipelineStatusClass, the Outreach
-   table's own); the derived "needs you" states get one solid colour each. Fixed height, one line, never wraps or grows. */
+/* ⛔ THE ONE STATUS PILL (src/lib/inboxStatusPill.ts decides the words). It IS the Outreach pill: the same PipelineStatusBadge
+   (same size, padding, font, rounded-full, solid colour, centred text) inside the same PipelineStatusSelect trigger with the
+   same small chevron (Paul, 2026-11-05: the small restyled copy is gone, nothing here restyles the badge). A plain stage
+   and the closed / money stages wear the colour the stored status always had; the derived states get one solid colour each. */
 const DERIVED_CLASS: Partial<Record<StatusPillKey, string>> = {
   reply_needed: 'bg-[hsl(var(--badge-orange))] text-[hsl(var(--badge-orange-fg))]',
   approve_draft: 'bg-[hsl(var(--badge-orange))] text-[hsl(var(--badge-orange-fg))]',
@@ -45,7 +46,7 @@ const DERIVED_CLASS: Partial<Record<StatusPillKey, string>> = {
   send_failed: 'bg-red-700 text-white',
   call_booked: 'bg-emerald-600 text-white',
   auditing: 'bg-[hsl(var(--badge-sky))] text-[hsl(var(--badge-sky-fg))]',
-  queued: 'bg-[hsl(var(--badge-sky))] text-[hsl(var(--badge-sky-fg))]',
+  queued: 'bg-indigo-500 text-white',
   waiting_on_them: 'bg-[hsl(var(--badge-gray))] text-[hsl(var(--badge-gray-fg))]',
 };
 /** The stored status each closed / money pill key stands for (its colour is that status's own). */
@@ -53,19 +54,11 @@ const KEY_STATUS: Partial<Record<StatusPillKey, string>> = {
   won: 'won_pending_onboarding', paid: 'payment_received', in_delivery: 'in_delivery', completed: 'completed',
   refunded: 'refunded', not_interested: 'not_interested', opted_out: 'opted_out',
 };
-/** Statuses the pipeline pill draws as a faint tint: in the Inbox they are solid too (one bright colour per status). */
-const SOLID_STATUS: Record<string, string> = {
-  payment_received: 'bg-green-600 text-white', in_delivery: 'bg-green-600 text-white', refunded: 'bg-rose-700 text-white', opted_out: 'bg-red-900 text-white',
-  second_attempt: 'bg-amber-500 text-black', awaiting_reply: 'bg-violet-500 text-white', site_sent: 'bg-emerald-500 text-black',
-  report_sent: 'bg-sky-500 text-black', already_visible: 'bg-teal-500 text-black', price_given: 'bg-indigo-500 text-white',
-};
-export const StatusPill = memo(function StatusPill({ pillKey, label, tone, title, stage, compact: _compact = false }: { pillKey: StatusPillKey; label: string; tone: StatusPillTone; title: string; stage?: string | null; compact?: boolean }) {
-  const status = KEY_STATUS[pillKey] ?? stage;
-  const colour = DERIVED_CLASS[pillKey] ?? (status ? SOLID_STATUS[status] : undefined) ?? pipelineStatusClass(status);
+export const StatusPill = memo(function StatusPill({ pillKey, label, tone, title, stage }: { pillKey: StatusPillKey; label: string; tone: StatusPillTone; title: string; stage?: string | null; compact?: boolean }) {
+  const status = KEY_STATUS[pillKey] ?? (pillKey === 'stage' ? stage : undefined);
   return (
-    <span data-testid="status-pill" data-kind={pillKey} data-tone={tone} title={title}
-      className={cn('inline-flex h-[18px] max-w-[11rem] shrink-0 items-center whitespace-nowrap rounded-md border border-transparent px-1.5 text-[10px] font-semibold leading-none', colour)}>
-      <span className="truncate">{label}</span>
+    <span data-testid="status-pill" data-kind={pillKey} data-tone={tone} title={title} className="inline-flex items-center">
+      <PipelineStatusBadge status={(status as PipelineStatus | null | undefined) ?? undefined} label={label} colorClass={DERIVED_CLASS[pillKey]} />
     </span>
   );
 });
