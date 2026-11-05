@@ -39,7 +39,9 @@ ok(parseAioRetryMode('on').kind === 'on', 'B: on');
 const sm = parseAioRetryMode('sample:20@2026-10-27T10:00:00Z');
 ok(sm.kind === 'sample' && sm.limit === 20 && sm.since === '2026-10-27T10:00:00Z', 'B: sample parses');
 
-const base = { stamp: 'not_shown', hasFirst: false, sampleUsed: 0, tickRunning: true };
+/* 2026-11-05: the retry follows the BASELINE's method, and every dash says why. */
+import { aioRetryAppliesTo, aioReasonFor, AIO_RETRY_SINCE } from '../supabase/functions/_shared/enrichment/google-ai-retry.ts';
+const base = { stamp: 'not_shown', hasFirst: false, sampleUsed: 0, tickRunning: true, methodAllows: true };
 ok(!shouldRetryAio({ ...base, mode: { kind: 'off' } }), 'C: off never retries');
 ok(shouldRetryAio({ ...base, mode: { kind: 'on' } }), 'C: on retries a not_shown');
 for (const s of ['shown', null, undefined, 'failed']) ok(!shouldRetryAio({ ...base, mode: { kind: 'on' }, stamp: s as string | null | undefined }), `C: stamp ${String(s)} never retries`);
@@ -58,6 +60,16 @@ ok(noGain._aio_retry === 'no_gain' && noGain._ai_overview === 'not_shown' && noG
 const kept = keepFirstAfterRetry(first, 'failed');
 ok(kept._aio_retry === 'failed' && kept.chatgpt === first.chatgpt && kept._ai_overview === 'not_shown', 'D: a failed retry keeps the first result');
 
+/* F: the retry belongs to the BASELINE's method. */
+ok(aioRetryAppliesTo('2026-11-05T06:00:00Z') && aioRetryAppliesTo('2026-12-01T00:00:00Z'), 'F: a baseline from the switch-on date has the retry');
+ok(!aioRetryAppliesTo('2026-11-05T05:59:59Z') && !aioRetryAppliesTo('2026-08-11T00:00:00Z'), 'F: a baseline taken before the switch-on date never has it (its re-measure runs without it)');
+ok(!aioRetryAppliesTo(null) && !aioRetryAppliesTo(undefined) && !aioRetryAppliesTo('garbage'), 'F: no date (failed lookup) = no retry');
+ok(!shouldRetryAio({ ...base, mode: { kind: 'on' }, methodAllows: false }) && !shouldRetryAio({ stamp: 'not_shown', hasFirst: false, sampleUsed: 0, tickRunning: true, mode: { kind: 'on' } }), 'F: methodAllows false or absent blocks the retry in every mode');
+ok(AIO_RETRY_SINCE === '2026-11-05T06:00:00Z', 'F: the date is the one named in the report');
+ok(aioReasonFor([], null) === 'no_items' && aioReasonFor([{ x: 1 }], null) === 'no_results_page' && aioReasonFor([{ organicResults: [] }], 'not_shown') === null, 'F: a missing stamp always gets a reason; a stamped question none');
+const qq = readFileSync(new URL('../supabase/functions/process-ai-audit-queue/index.ts', import.meta.url), 'utf8');
+ok(/remeasure_audit_id", auditId/.test(qq) && /methodAllows: audit.retryOk/.test(qq), 'F: the queue judges a re-measure by its baseline and passes the verdict to the retry');
+ok(qq.includes('result[AIO_REASON_META_KEY] = aioReason') && qq.includes('[AIO_REASON_META_KEY]: `run_'), 'F: the queue stores a reason on a no-stamp row and on a given-up run');
 const q = readFileSync(new URL('../supabase/functions/process-ai-audit-queue/index.ts', import.meta.url), 'utf8');
 ok(/Deno\.env\.get\(GOOGLE_AI_RETRY_SECRET\)/.test(q) && /parseAioRetryMode/.test(q), 'E: the queue reads the switch');
 ok(/result\[SCRAPE_META_KEY\] = scrapeEvidence\(/.test(q), 'E: the queue records the scrape evidence on every question');
