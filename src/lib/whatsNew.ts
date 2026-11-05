@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-05-inbox-status-pills', date: '2026-11-05', title: 'Inbox status pills match Outreach, and Queued is a status', audience: 'all',
+    body: 'The Inbox status pill now looks exactly like the Outreach one. A conversation with a message waiting to send shows Queued instead of Reply needed.',
+    report: {
+      added: ['A Queued status: when our latest message is queued and not yet sent, the pill says Queued. When it sends it moves to Waiting on them. If you cancel it, the old status comes back.'],
+      changed: ['The Inbox pill is the same pill as Outreach: same size, shape, colours and small arrow.', 'A reply that is already queued no longer shows Reply needed.'],
+      removed: ['The smaller, squarer pill the Inbox used for a few days.'],
+      effect: 'The Inbox now tells you the truth at a glance: Reply needed means nobody has answered yet, Queued means an answer is on its way.',
+    } },
   { id: '2026-11-04-prospect-one-page', date: '2026-11-04', title: 'The prospect popup is now one page', audience: 'all',
     body: 'Facts, script, questions, then close and send the link at the bottom. Everything you type saves itself. A browser call now keeps going whatever you do on the page.',
     report: {
