@@ -16,6 +16,25 @@
  */
 
 export const GOOGLE_AI_RETRY_SECRET = "GOOGLE_AI_RETRY";
+
+/* ⛔ THE RETRY IS PART OF A MEASUREMENT'S METHOD (Paul, 2026-11-05). A client's four-week re-measure must use the same
+   Google AI method as its baseline, so the retry is decided by the BASELINE's created_at, never the re-measure's own: an
+   audit (or a re-measure of a baseline) created on or after AIO_RETRY_SINCE may retry; one measured against an older
+   baseline never does. Derived, never stored (like scoringMethodFor). Four paid clients had baselines before this date. */
+export const AIO_RETRY_SINCE = "2026-11-05T06:00:00Z";
+/** Fail closed: no date (lookup failed, absent) never retries. */
+export function aioRetryAppliesTo(methodCreatedAt: string | null | undefined): boolean {
+  const t = Date.parse(String(methodCreatedAt ?? ""));
+  return Number.isFinite(t) && t >= Date.parse(AIO_RETRY_SINCE);
+}
+/** Why a finished question has no Google AI stamp (the dash). A failed row keeps its reason in result.error. */
+export const AIO_REASON_META_KEY = "_aio_reason";
+export function aioReasonFor(items: unknown[], stamp: string | null | undefined): string | null {
+  if (stamp) return null;
+  const first = Array.isArray(items) ? items[0] : items;
+  if (!first || typeof first !== "object") return "no_items";
+  return "no_results_page";
+}
 /** Leading-underscore meta keys, like `_google_serp`: nothing that walks the engine keys trips on them. */
 export const SCRAPE_META_KEY = "_scrape";
 export const AIO_RETRY_META_KEY = "_aio_retry";
@@ -82,7 +101,10 @@ export function shouldRetryAio(i: {
   sampleUsed: number;
   /** The paid-action control is "running" (not all_stop / prospecting_paused). */
   tickRunning: boolean;
+  /** aioRetryAppliesTo(the measurement's BASELINE created_at). Absent = no retry. */
+  methodAllows?: boolean;
 }): boolean {
+  if (i.methodAllows !== true) return false;
   if (i.hasFirst || !i.tickRunning || i.stamp !== "not_shown") return false;
   if (i.mode.kind === "on") return true;
   if (i.mode.kind === "sample") return i.sampleUsed < i.mode.limit;

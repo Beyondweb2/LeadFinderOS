@@ -5,7 +5,7 @@ import { runEnrichSource, recordCostCorrection } from "../_shared/enrichment/run
 import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, captureGoogleSerp, toCountryCode, aiOverviewStamp, AI_OVERVIEW_META_KEY, type AiSearchResult } from "../_shared/enrichment/ai-search.ts";
 import { abortApifyRun } from "../_shared/enrichment/apify.ts";
 import {
-  AIO_FIRST_META_KEY, AIO_RETRY_META_KEY, GOOGLE_AI_RETRY_SECRET, SCRAPE_META_KEY,
+  AIO_FIRST_META_KEY, AIO_REASON_META_KEY, AIO_RETRY_META_KEY, GOOGLE_AI_RETRY_SECRET, aioReasonFor, aioRetryAppliesTo, SCRAPE_META_KEY,
   keepFirstAfterRetry, mergeAioRetry, parseAioRetryMode, scrapeEvidence, shouldRetryAio,
 } from "../_shared/enrichment/google-ai-retry.ts";
 import {
@@ -296,8 +296,20 @@ Deno.serve(async (req) => {
     async function getAudit(auditId: string) {
       if (auditCache.has(auditId)) return auditCache.get(auditId)!;
       const { data: a } = await service
-        .from("ai_audits").select("business_name, business_type, location_text, country, user_id, audit_purpose").eq("id", auditId).maybeSingle();
+        .from("ai_audits").select("business_name, business_type, location_text, country, user_id, audit_purpose, created_at").eq("id", auditId).maybeSingle();
+      /* The date the Google AI retry rule is judged on: this audit's own created_at, EXCEPT a client's day-28 re-measure,
+         which follows its BASELINE's (same method before and after). A failed lookup leaves it null = no retry. */
+      let methodCreatedAt: string | null = a?.created_at ?? null;
+      try {
+        const { data: lead, error: leadErr } = await service.from("outreach_leads").select("baseline_audit_id").eq("remeasure_audit_id", auditId).maybeSingle();
+        if (leadErr) methodCreatedAt = null;
+        else if (lead?.baseline_audit_id) {
+          const { data: b, error: bErr } = await service.from("ai_audits").select("created_at").eq("id", lead.baseline_audit_id).maybeSingle();
+          methodCreatedAt = bErr ? null : (b?.created_at ?? null);
+        }
+      } catch { methodCreatedAt = null; }
       const v = {
+        retryOk: aioRetryAppliesTo(methodCreatedAt),
         businessName: a?.business_name ?? "",
         businessType: a?.business_type ?? "",
         locationText: a?.location_text ?? "",
@@ -404,7 +416,7 @@ Deno.serve(async (req) => {
         const giveUp = attempts >= MAX_ATTEMPTS;
         await service.from("ai_audit_queue").update({
           status: giveUp ? "failed" : "pending",
-          result: giveUp ? { error: reason } : null, // null clears _apify → re-claimable + re-started
+          result: giveUp ? { error: reason, [AIO_REASON_META_KEY]: `run_${reason}` } : null, // null clears _apify → re-claimable + re-started
         }).eq("id", row.id);
       };
       try {
@@ -428,6 +440,9 @@ Deno.serve(async (req) => {
              questions carry the stamp, so an old audit is never re-read as "no overview shown". */
           const aio = aiOverviewStamp(items, result as AiSearchResult);
           if (aio) result[AI_OVERVIEW_META_KEY] = aio;
+          /* A question with no Google AI stamp (the dash) always says why. */
+          const aioReason = aioReasonFor(items, aio);
+          if (aioReason) result[AIO_REASON_META_KEY] = aioReason;
           /* What the scraper RETURNED for this question (results page? AI Overview block? text?) so "Google
              showed none" can be told from "the scraper missed it". Recording only — nothing reads it for a score. */
           result[SCRAPE_META_KEY] = scrapeEvidence(items, result as AiSearchResult);
@@ -456,7 +471,7 @@ Deno.serve(async (req) => {
             await service.from("ai_audit_queue").update({ status: "done", result: mergeAioRetry(firstRun as Record<string, unknown>, result) }).eq("id", row.id);
             return;
           }
-          if (shouldRetryAio({ mode: retryMode, stamp: aio, hasFirst: false, sampleUsed: sampleBase + retriesThisTick, tickRunning: tickMode === "running" })) {
+          if (shouldRetryAio({ mode: retryMode, stamp: aio, hasFirst: false, sampleUsed: sampleBase + retriesThisTick, tickRunning: tickMode === "running", methodAllows: audit.retryOk })) {
             retriesThisTick++;
             if (await startAioRetry(row, audit, result)) return; // row stays 'running' until the retry finishes
             result[AIO_RETRY_META_KEY] = "not_started";
