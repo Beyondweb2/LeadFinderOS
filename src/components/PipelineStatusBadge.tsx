@@ -5,6 +5,10 @@ import type { PipelineStatus } from '@/types/outreach';
 interface PipelineStatusBadgeProps {
   status: PipelineStatus | null | undefined;
   compact?: boolean;
+  /** The Inbox's derived words ("Reply needed") in this SAME badge. Absent = the status's own words. */
+  label?: string;
+  /** The Inbox's derived colour for a state that has no stored status. Absent = the status's own colour. */
+  colorClass?: string;
 }
 
 const statusConfig: Record<string, { label: string; shortLabel: string; className: string }> = {
@@ -203,7 +207,7 @@ export function pipelineStatusClass(status: string | null | undefined): string {
   return (status ? statusConfig[status]?.className : null) ?? defaultConfig.className;
 }
 
-export function PipelineStatusBadge({ status, compact }: PipelineStatusBadgeProps) {
+export function PipelineStatusBadge({ status, compact, label, colorClass }: PipelineStatusBadgeProps) {
   /* No status → New. A status this map does not know shows AS ITSELF, never as "New" — an unknown value
      read as the empty one is the absent-falls-through trap. */
   const unknown = status && !statusConfig[status]
@@ -215,12 +219,12 @@ export function PipelineStatusBadge({ status, compact }: PipelineStatusBadgeProp
   return (
     <Badge
       variant="outline"
-      className={`${config.className} ${compact ? 'text-[10px] px-1.5 py-0 rounded-md' : ''} ${isInterested ? 'gap-1' : ''}`}
+      className={`${colorClass ? `${colorClass} border-transparent font-semibold` : config.className} ${compact ? 'text-[10px] px-1.5 py-0 rounded-md' : ''} ${isInterested ? 'gap-1' : ''}`}
     >
       {isInterested && (
         <Star className={`${compact ? 'h-2.5 w-2.5' : 'h-3 w-3'} text-[hsl(var(--badge-interested-fg))] fill-[hsl(var(--badge-interested-fg))]`} />
       )}
-      {compact ? config.shortLabel : config.label}
+      {label ?? (compact ? config.shortLabel : config.label)}
     </Badge>
   );
 }

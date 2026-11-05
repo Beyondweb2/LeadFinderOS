@@ -97,7 +97,7 @@ import { conversationState, messageErrorParts, INBOX_QUICK_FILTERS, londonToday,
 import { SendErrorNote } from '@/components/SendErrorNote';
 import { AiDraftBubble, AiDraftButton, AiDraftPanel } from '@/components/AiDraftPanel';
 import { StatusPill, ScoreLine, VisibleTag } from '@/components/InboxAttention';
-import { attentionFor, INBOUND_LABEL_TITLES, type AttentionKind } from '@/lib/inboxAttention';
+import { attentionFor, attentionsFor, INBOUND_LABEL_TITLES, type AttentionKind } from '@/lib/inboxAttention';
 import type { LeadAuditScore } from '@/lib/auditScore';
 import type { ScheduledSendRow } from '@/lib/inboxSendWindow';
 import { useAiReplyDrafts } from '@/hooks/useAiReplyDrafts';
@@ -1905,14 +1905,17 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   const rowAttention = (c: WaConversation): { statusKey: StatusPillKey; statusLabel: string; statusTone: StatusPillTone; statusTitle: string; statusStage: string | null; inboundTitle: string | null } => {
     const last = c.lastMessage;
     const label = last?.direction === 'inbound' ? inboundLabel(last.body, last.message_type) : null;
-    const at = attentionFor({
+    const attInput = {
       ai: aiOn ? ai.forPhone(c.phone) : null,
       state: stateByKey.get(c.key),
       auditing: !!c.leadId && (auditRunningLeadIds.has(c.leadId) || firedAudits.has(c.leadId)),
       scheduled: sched.forPhone(c.phone) as readonly ScheduledSendRow[],
       inboundLabel: label,
       channel,
-    });
+    };
+    const at = attentionFor(attInput);
+    /* A message of ours is waiting to go, and none is held for a person (a held one is Reply needed, not Queued). */
+    const queuedSend = attentionsFor(attInput).some((a) => a.kind === 'queued') && !attInput.scheduled.some((r) => r.status === 'held');
     /* ⛔ ONE STATUS PILL: the stored stage (as the pill already reads it) + whose turn it is + the attention state, one set of words. */
     const stage = listStageOf(c.leadId);
     const stageStatus = pillStatusOf(c.leadStatus, stage);
@@ -1926,6 +1929,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       failed: !!stateByKey.get(c.key)?.failed,
       followUpDue: !!stateByKey.get(c.key)?.followUpDue,
       meetingBooked: stage?.state === 'meeting_booked',
+      queuedSend,
     });
     return { statusKey: sp.key, statusLabel: sp.label, statusTone: sp.tone, statusTitle: sp.title, statusStage: (stageStatus as string | null) ?? null, inboundTitle: label ? INBOUND_LABEL_TITLES[label] : null };
   };
