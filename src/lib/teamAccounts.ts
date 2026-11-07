@@ -9,28 +9,30 @@
  * ⛔ The first-login flag lives in app_metadata (only the service role can write it); the user clears it by
  * choosing a new password, which stamps user_metadata.password_set_at AFTER the temporary one was set. */
 
-/** One password rule for a temporary password AND a password a person chooses for themselves. */
-export const PASSWORD_MIN_LENGTH = 12;
+/** One password rule for a temporary password AND a password a person chooses for themselves.
+ *  2026-11-07 (Paul): at least 8 characters, no complexity rule (no forced numbers, symbols or capitals); very common
+ *  and easily guessed passwords are still refused. Generated temporary passwords stay 16 characters. */
+export const PASSWORD_MIN_LENGTH = 8;
 /** The auth provider hashes with bcrypt, which ignores everything after 72 bytes. */
 export const PASSWORD_MAX_LENGTH = 72;
 
-export type PasswordProblem = 'too_short' | 'too_long' | 'needs_letter_and_number' | 'too_simple' | 'contains_email';
+export type PasswordProblem = 'too_short' | 'too_long' | 'too_simple' | 'contains_email';
 
 export const PASSWORD_PROBLEM_WORDS: Record<PasswordProblem, string> = {
   too_short: `Use at least ${PASSWORD_MIN_LENGTH} characters.`,
   too_long: `Use at most ${PASSWORD_MAX_LENGTH} characters.`,
-  needs_letter_and_number: 'Use at least one letter and one number.',
-  too_simple: 'That password is too easy to guess. Avoid repeated characters and simple runs like 123456 or abcdef.',
+  too_simple: 'That password is too common or too easy to guess. Avoid common words, repeated characters and runs like 123456 or abcdef.',
   contains_email: 'Do not use their email address in the password.',
 };
 
-const COMMON = ['password', 'qwerty', 'letmein', 'welcome', 'findable', 'leadfinder', 'admin', 'iloveyou'];
+/** Words that make a short password guessable: the commonest breached-password roots plus our own names. */
+const COMMON = ['password', 'passw0rd', 'qwerty', 'letmein', 'welcome', 'findable', 'leadfinder', 'admin', 'iloveyou', 'football', 'baseball',
+  'sunshine', 'princess', 'monkey', 'dragon', 'master', 'trustno1', 'superman', 'liverpool', 'arsenal', 'chelsea', 'computer', 'starwars'];
 
 /** Why a password is not acceptable — null means it is fine. Never returns or quotes the password. */
 export function passwordProblem(pw: unknown, opts: { email?: string | null } = {}): PasswordProblem | null {
   if (typeof pw !== 'string' || pw.length < PASSWORD_MIN_LENGTH) return 'too_short';
   if (new TextEncoder().encode(pw).length > PASSWORD_MAX_LENGTH) return 'too_long';
-  if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) return 'needs_letter_and_number';
   const lower = pw.toLowerCase();
   if (new Set(lower).size < 5) return 'too_simple';
   if (/(.)\1{3,}/.test(lower)) return 'too_simple';

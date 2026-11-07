@@ -52,9 +52,12 @@ const body = (o: Record<string, unknown> = {}) => ({ name: 'Trial Rep', email: '
 (async () => {
   /* ── Password rule ── */
   ok(passwordProblem('short1') === 'too_short' && passwordProblem(undefined) === 'too_short', 'P1. under the minimum is refused');
-  ok(PASSWORD_MIN_LENGTH >= 12, 'P2. the minimum is at least 12 characters');
-  ok(passwordProblem('abcdefghijklmnop') === 'needs_letter_and_number' && passwordProblem('1234567890123') === 'needs_letter_and_number', 'P3. needs a letter and a number');
+  /* 2026-11-07 (Paul): 8 characters, no complexity rule. */
+  ok(PASSWORD_MIN_LENGTH === 8, 'P2. the minimum is 8 characters');
+  ok(passwordProblem('kitebrom') === null && passwordProblem('kitebro') === 'too_short', 'P2b. an ordinary 8-character password passes; 7 characters is refused');
+  ok(passwordProblem('blueriverhat') === null && passwordProblem('94716283') === null && passwordProblem('Tq#mz!wr') === null, 'P3. no complexity rule: letters only, digits only, or symbols are all fine');
   ok(passwordProblem('aaaaaaaaaaaa1') === 'too_simple' && passwordProblem('Password2026!') === 'too_simple' && passwordProblem('abcd1234abcd') === 'too_simple', 'P4. repeats, common words and simple runs are refused');
+  ok(['password', '12345678', 'qwerty12', 'football', 'liverpool1', 'iloveyou', 'aaaaaaaa', 'abcdefgh'].every((p) => passwordProblem(p) === 'too_simple'), 'P4b. very common 8-character passwords are still refused');
   ok(passwordProblem('jamie2026xyzqw', { email: 'jamie@example.com' }) === 'contains_email', 'P5. the email name inside the password is refused');
   ok(passwordProblem(PW) === null && passwordProblem('correct horse battery staple 9') === null, 'P6. a good password passes');
   ok(passwordProblem('x1'.repeat(40)) === 'too_long', 'P7. over 72 bytes is refused (bcrypt would silently cut it)');

@@ -120,7 +120,7 @@ export default function SetPassword() {
         </div>
         <Input type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="New password" />
         <Input type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} placeholder="Repeat it" />
-        <p className="text-xs text-muted-foreground">{PASSWORD_PROBLEM_WORDS.too_short} {PASSWORD_PROBLEM_WORDS.needs_letter_and_number}</p>
+        <p className="text-xs text-muted-foreground">{PASSWORD_PROBLEM_WORDS.too_short} Any characters you like; very common passwords are refused.</p>
         {err && <Callout tone="red" icon={AlertTriangle}>{err}</Callout>}
         <Button className="w-full" disabled={busy} onClick={() => void save()}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save password'}</Button>
       </div>

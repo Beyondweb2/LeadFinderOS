@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-07-password-length', date: '2026-11-07', title: 'Passwords: 8 characters, no complexity rule', audience: 'all',
+    body: 'A password now needs at least 8 characters. You no longer have to include a number or a letter. Very common passwords are still refused.',
+    report: {
+      added: [],
+      changed: ['Choosing, resetting or changing a password needs 8 characters instead of 12.', 'Very common or easily guessed passwords (like 12345678 or password1) are still refused.'],
+      removed: ['The rule that a password must contain both a letter and a number.'],
+      effect: 'Passwords are easier to pick. Your current password keeps working.',
+    } },
   { id: '2026-11-07-hide-earnings', date: '2026-11-07', title: 'Hide earnings for a salesperson', audience: 'admin',
     body: 'Team now has a Hide earnings switch on each salesperson. Switched on, they see no commission, earnings or payouts anywhere. Their records are kept.',
     report: {

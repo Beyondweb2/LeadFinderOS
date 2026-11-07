@@ -128,7 +128,7 @@ export function AddTeamMember({ call, onDone, inviteLinkBox }: {
             </div>
             <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={() => { setPassword(generateTempPassword()); setShow(true); }}><Wand2 className="h-4 w-4" />Generate</Button>
           </div>
-          <p className="text-xs text-muted-foreground">{problem ? PASSWORD_PROBLEM_WORDS[problem] : `${PASSWORD_PROBLEM_WORDS.too_short} ${PASSWORD_PROBLEM_WORDS.needs_letter_and_number}`}</p>
+          <p className="text-xs text-muted-foreground">{problem ? PASSWORD_PROBLEM_WORDS[problem] : `${PASSWORD_PROBLEM_WORDS.too_short} Any characters you like; very common passwords are refused.`}</p>
           <label className="flex items-start gap-2 text-sm">
             <Checkbox checked={mustChange} onCheckedChange={(v) => setMustChange(v === true)} className="mt-0.5" data-testid="must-change" />
             <span>Ask them to choose their own password the first time they sign in <span className="text-muted-foreground">(recommended)</span></span>

@@ -57,7 +57,7 @@ export function UserMenu() {
   const handleSignOut = async () => { await signOut(); };
 
   const handleChangePassword = async () => {
-    /* The ONE password rule (teamAccounts.ts): 12+ characters, a letter and a number — the same as /set-password. */
+    /* The ONE password rule (teamAccounts.ts): 8+ characters, no complexity rule, very common passwords refused — the same as /set-password. */
     const problem = passwordProblem(newPassword, { email: user?.email });
     if (problem) {
       toast({ title: t('userMenu.passwordTooShort'), description: PASSWORD_PROBLEM_WORDS[problem], variant: 'destructive' });
