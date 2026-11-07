@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-07-stale-page-reload', date: '2026-11-07', title: 'The app reloads itself after an update', audience: 'all',
+    body: 'If the app was open during an update and a page will not open ("error loading dynamically imported module"), it now reloads itself once and carries on.',
+    report: {
+      added: ['If the reload does not fix it, a short screen says a new version is out, with a Reload button.'],
+      changed: ['Opening the app always picks up the newest version.'],
+      removed: ['The error screen after an update.'],
+      effect: 'You should no longer get stuck on an error page after we ship a change.',
+    } },
   { id: '2026-11-07-first-password-loop', date: '2026-11-07', title: 'Choosing your first password works first time', audience: 'all',
     body: 'After saving a new password you go straight into the app. Before, you could be sent back to the password page, and saving again was refused as the same password.',
     report: {
