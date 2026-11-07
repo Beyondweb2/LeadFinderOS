@@ -9,6 +9,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { useNotifications, type AppNotification } from '@/hooks/useNotifications';
+import { useEarningsHidden } from '@/hooks/useEarningsHidden';
+import { EARNINGS_NOTIFICATION_KINDS } from '@/lib/teamAccounts';
 import { useWhatsAppUnreadCounts } from '@/hooks/useWhatsAppUnread';
 import { useAiReplyDrafts, SHELL_DRAFTS_POLL_MS } from '@/hooks/useAiReplyDrafts';
 import { needsYou } from '@/lib/aiReplyDraft';
@@ -128,10 +130,14 @@ export function NotificationCenter({ variant }: { variant: 'desktop' | 'mobile' 
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   // Desktop alerts and the tab-title count belong to ONE instance (the desktop bell), never twice.
-  const n = useNotifications(variant === 'mobile' ? undefined : (x) => {
+  /* HIDE EARNINGS (2026-11-07): an unpaid salesperson's bell never shows a commission notification (src/lib/teamAccounts.ts). */
+  const hideMoney = useEarningsHidden();
+  const all = useNotifications(variant === 'mobile' ? undefined : (x) => {
+    if (hideMoney && EARNINGS_NOTIFICATION_KINDS.has(x.kind)) return;
     if (x.priority < 2 || !readAlerts() || typeof document === 'undefined' || !document.hidden) return;
     try { if (Notification.permission === 'granted') { const w = new Notification(x.title, { body: x.body ?? undefined, tag: x.id }); w.onclick = () => { window.focus(); if (x.link) navigate(x.link); }; } } catch { /* not supported */ }
   }, { passive: variant === 'mobile' });
+  const n = hideMoney ? { ...all, rows: all.rows.filter((r) => !EARNINGS_NOTIFICATION_KINDS.has(r.kind)) } : all;
   const go = (x: AppNotification) => { if (!x.read_at) void n.markRead([x.id]); setOpen(false); if (x.link) navigate(x.link); };
   /* The grouped reply card, from the Inbox's own unread state — it falls as conversations are opened. */
   const wa = useWhatsAppUnreadCounts();

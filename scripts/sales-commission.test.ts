@@ -154,7 +154,7 @@ console.log("\n── the one-time celebration ──");
   /* 2026-10-01: Earnings is part of the Sales page (one page, one celebration, one earnings read). */
   const dash = read("src/pages/SalesDashboard.tsx");
   ok(/<EarnedCelebration lines=\{e\?\.lines\} enabled=\{viewingSelf && !!e\?\.commissionable\} \/>/.test(dash) && (dash.match(/<EarnedCelebration/g) ?? []).length === 1, "once, and only on your own numbers (never the admin viewing a rep)");
-  ok(/useEarnings\(isAdmin \? person : 'me'\)/.test(dash) && (dash.match(/useEarnings\(/g) ?? []).length === 1, "the page's commission comes from one earnings read (one function, one rule)");
+  ok(/useEarnings\(isAdmin \? person : 'me', !moneyHidden\)/.test(dash) && (dash.match(/useEarnings\(/g) ?? []).length === 1, "the page's commission comes from one earnings read (one function, one rule)");
   ok(/<Route path="\/earnings" element=\{<Navigate to="\/sales-dashboard" replace \/>\} \/>/.test(read("src/App.tsx")), "/earnings (old links, notifications) opens the Sales page");
 }
 

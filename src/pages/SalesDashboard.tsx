@@ -8,6 +8,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { useEarnings } from '@/hooks/useEarnings';
+import { useEarningsHidden } from '@/hooks/useEarningsHidden';
 import { EarnedCelebration } from '@/components/salesDash/EarnedCelebration';
 import { NotReadyToSellBanner } from '@/components/NotReadyToSellBanner';
 import { MonthlyLadder } from '@/components/salesDash/MonthlyLadder';
@@ -76,8 +77,10 @@ export default function SalesDashboard() {
   });
   const d = q.data;
   const w = d?.workspace;
-  const earn = useEarnings(isAdmin ? person : 'me');
-  const e = earn.data;
+  /* HIDE EARNINGS (2026-11-07): a salesperson Paul has switched to unpaid never asks for, nor sees, any money (src/lib/teamAccounts.ts). */
+  const moneyHidden = useEarningsHidden();
+  const earn = useEarnings(isAdmin ? person : 'me', !moneyHidden);
+  const e = moneyHidden ? undefined : earn.data;
   const prefs = useDashboardPrefs();
   const campaigns = d ? visibleRows<CampaignRow>(d.campaigns, prefs.hidden.campaigns, campaignKey) : [];
   const templates = d ? visibleRows<TemplateRow>(d.templates, prefs.hidden.templates, templateKey) : [];
@@ -115,7 +118,7 @@ export default function SalesDashboard() {
       <PageHeader
         eyebrow={`${greeting()}${personName ? `, ${personName}` : ''}`}
         title="Sales dashboard"
-        subtitle={isAdmin ? <>Showing <span className="font-semibold text-foreground">{scopeLabel}</span> · this month, UK time</> : 'Your month, your money and what to do next.'}
+        subtitle={isAdmin ? <>Showing <span className="font-semibold text-foreground">{scopeLabel}</span> · this month, UK time</> : moneyHidden ? 'Your month and what to do next.' : 'Your month, your money and what to do next.'}
         actions={<>
           {isAdmin && (
             <Select value={person} onValueChange={setPerson}>
@@ -136,7 +139,7 @@ export default function SalesDashboard() {
       />
 
 
-      {(q.isError || earn.isError) && (
+      {(q.isError || (!moneyHidden && earn.isError)) && (
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 p-3 text-sm">
           <AlertTriangle className="h-4 w-4 text-destructive" />Could not load {q.isError ? 'your numbers' : 'your earnings'}: {edgeErrorMessage(q.error ?? earn.error)}
           <Button size="sm" variant="outline" className="rounded-full" onClick={() => { void q.refetch(); void earn.refetch(); }}>Try again</Button>
@@ -146,7 +149,7 @@ export default function SalesDashboard() {
       {todoFirst && todo}
 
       {/* ── 1. The month: the ladder (sales, the progress line, the rates) with the three money figures beside it ── */}
-      {earn.isLoading && <div className="h-72 animate-pulse rounded-[1.25rem] bg-muted/50 motion-reduce:animate-none" aria-busy="true" />}
+      {!moneyHidden && earn.isLoading && <div className="h-72 animate-pulse rounded-[1.25rem] bg-muted/50 motion-reduce:animate-none" aria-busy="true" />}
       {e && oneSeller && e.commissionable && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="min-w-0 lg:col-span-2"><MonthlyLadder lines={e.lines} clients={e.clients} sales={e.sales} /></div>
@@ -190,7 +193,7 @@ export default function SalesDashboard() {
       {/* ── 5. The detail, folded: the commission rules, every payment, everyone's commission, the outreach numbers ── */}
       {e && oneSeller && e.commissionable && <CommissionExplainer />}
       {e && isAdmin && person === 'all' && <BySellerTable rows={e.bySeller} nameOf={(id) => nameOf.get(id) ?? 'Salesperson'} />}
-      {e && <PaymentsTable lines={e.lines} bizOf={bizOf} sellerOf={isAdmin ? (id) => (id ? nameOf.get(id) ?? 'Former member' : '—') : undefined} />}
+      {e && !moneyHidden && <PaymentsTable lines={e.lines} bizOf={bizOf} sellerOf={isAdmin ? (id) => (id ? nameOf.get(id) ?? 'Former member' : '—') : undefined} />}
       {d && (
         <Panel collapseKey="sales.more" defaultOpen={false} title="More numbers" icon={Layers} tone="grey" hint="This month: campaigns, WhatsApp messages, channels and where leads came from.">
           <div className="space-y-5">

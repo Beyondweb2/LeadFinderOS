@@ -6,8 +6,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createTeamUser, type CreateUserDeps } from '../supabase/functions/_shared/team-create-user.ts';
 import {
-  CREATE_USER_ERRORS, generateTempPassword, isTrialMember, linkErrorFromUrl, mustChangePassword, PASSWORD_MIN_LENGTH,
-  PASSWORD_PROBLEM_WORDS, passwordProblem, readLinkParams, redactSecret, scannerSafeLink, trialOnboardingView, validateCreateUser,
+  CREATE_USER_ERRORS, earningsHidden, generateTempPassword, isTrialMember, linkErrorFromUrl, mustChangePassword, PASSWORD_MIN_LENGTH,
+  PASSWORD_PROBLEM_WORDS, passwordProblem, readLinkParams, redactSecret, scannerSafeLink, trialOnboardingView, validateCreateUser, viewerEarningsHidden,
 } from '../src/lib/teamAccounts.ts';
 import { EXPIRED_LINK_COPY } from '../src/lib/teamActivation.ts';
 import { canOpenRoute } from '../src/lib/access.ts';
@@ -176,6 +176,21 @@ const body = (o: Record<string, unknown> = {}) => ({ name: 'Trial Rep', email: '
   ok(/team_set_trial/.test(team) && /aria-label="Trial team member"/.test(team), 'T9. each salesperson row has the Trial team member switch');
   const missingSql = read('supabase/migrations/20261012120000_selling_gate_account_only.sql');
   ok(!/trial/i.test(missingSql), 'T10. the selling gate is unchanged (the checklist still never blocks selling)');
+
+  /* ── Hide earnings (2026-11-07): an unpaid salesperson sees no money; display only ── */
+  ok(earningsHidden({ hide_earnings: true }) && !earningsHidden({ hide_earnings: 'yes' }) && !earningsHidden({}) && !earningsHidden(null), 'H1. only an explicit true hides earnings');
+  ok(!viewerEarningsHidden('admin', { hide_earnings: true }) && !viewerEarningsHidden('admin', null), 'H2. the admin is never hidden');
+  ok(viewerEarningsHidden('sales', null) && viewerEarningsHidden('sales', { hide_earnings: true }) && !viewerEarningsHidden('sales', {}), 'H3. a salesperson is hidden while unread (absent = hidden) and when switched; otherwise shown');
+  const hideAt = fn.indexOf("action === 'team_set_hide_earnings'");
+  const hideBlock = fn.slice(hideAt, fn.indexOf("action === 'team_new_link'"));
+  ok(hideAt > gate, 'H4. the action sits AFTER the admin role check');
+  ok(/app_metadata: \{ hide_earnings: body\.hide \}/.test(hideBlock) && /typeof body\.hide !== 'boolean'/.test(hideBlock) && /is_book_owner \|\| isAdminRow/.test(hideBlock), 'H5. one app_metadata key, a real boolean, salespeople only');
+  ok(!/payment_ledger|commission_line|team_engagement|\.update\(|\.delete\(/.test(hideBlock), 'H6. the switch never touches the ledger, commission or engagement rows');
+  ok(/team_set_hide_earnings/.test(team) && /aria-label="Hide earnings"/.test(team), 'H7. each salesperson row has the Hide earnings switch');
+  const dash = strip(read('src/pages/SalesDashboard.tsx'));
+  ok(/useEarnings\(isAdmin \? person : 'me', !moneyHidden\)/.test(dash) && /const e = moneyHidden \? undefined : earn\.data/.test(dash), 'H8. the Sales dashboard neither asks for nor draws earnings when hidden');
+  const bell = strip(read('src/components/NotificationCenter.tsx'));
+  ok(/EARNINGS_NOTIFICATION_KINDS\.has\(x\.kind\)\) return/.test(bell) && /rows: all\.rows\.filter\(\(r\) => !EARNINGS_NOTIFICATION_KINDS\.has\(r\.kind\)\)/.test(bell), 'H9. the bell drops commission notifications (list, count and desktop alert)');
 
   /* ── Existing Team actions unchanged ── */
   for (const a of ['team_password_reset', 'team_new_link', 'team_suspend', 'team_unsuspend', 'team_disable', 'team_reactivate', 'team_invite', 'team_reassign_all']) {
