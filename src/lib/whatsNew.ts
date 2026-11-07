@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-07-hide-earnings', date: '2026-11-07', title: 'Hide earnings for a salesperson', audience: 'admin',
+    body: 'Team now has a Hide earnings switch on each salesperson. Switched on, they see no commission, earnings or payouts anywhere. Their records are kept.',
+    report: {
+      added: ['A Hide earnings switch on each salesperson row on Team, beside Trial team member.'],
+      changed: ['A salesperson with it on sees their Sales dashboard without the money parts (the ladder, earnings, forecast, payments, commission rules) and gets no commission notifications.'],
+      removed: [],
+      effect: 'You can bring someone on unpaid without them seeing commission figures. Switch it off and everything shows again exactly as recorded; nothing about commission itself changed.',
+    } },
   { id: '2026-11-05-inbox-status-pills', date: '2026-11-05', title: 'Inbox status pills match Outreach, and Queued is a status', audience: 'all',
     body: 'The Inbox status pill now looks exactly like the Outreach one. A conversation with a message waiting to send shows Queued instead of Reply needed.',
     report: {

@@ -11,6 +11,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useAvatar } from '@/hooks/useAvatar';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useEarningsHidden } from '@/hooks/useEarningsHidden';
 import { canOpenRoute, orderNavForRole, SALES_SECONDARY_NAV } from '@/lib/access';
 import { useAllInboxUnread } from '@/hooks/useSms';
 import {
@@ -29,6 +30,7 @@ export function AppSidebar() {
   const { avatarUrl } = useAvatar();
   const { user } = useAuth();
   const { role } = useSubscription();
+  const moneyHidden = useEarningsHidden();
   /* The unread badge (per person, fn my_whatsapp_unread): the one number the dashboard's Today strip
      and the Inbox's Unread filter also read. */
   const unread = useAllInboxUnread();
@@ -43,7 +45,7 @@ export function AppSidebar() {
     { title: 'Inbox', url: '/inbox', icon: role === 'sales' ? MessageCircle : Inbox, description: role === 'sales' ? 'Your WhatsApp and text conversations' : 'WhatsApp and text conversations' },
     /* Sales + Earnings are one page (2026-10-01); Focus Mode is retired (its parts are in the lead popup).
        2026-10-02: named "Sales dashboard" everywhere, beside the "Admin dashboard" — two dashboards, one product. */
-    { title: 'Sales dashboard', url: '/sales-dashboard', icon: BarChart3, description: role === 'sales' ? 'Your month, commission and next steps' : "Each salesperson's month and commission" },
+    { title: 'Sales dashboard', url: '/sales-dashboard', icon: BarChart3, description: role === 'sales' ? (moneyHidden ? 'Your month and next steps' : 'Your month, commission and next steps') : "Each salesperson's month and commission" },
     { title: 'Paid clients', url: '/paid-clients', icon: UsersRound, description: 'Client hubs, pages and review replies' },
     { title: 'AI Audit', url: '/ai-audit', icon: Sparkles, description: 'AI visibility audit' },
     /* 2026-10-06 (Paul): Review replies, Page generator and Page plan are no longer menu items — they live

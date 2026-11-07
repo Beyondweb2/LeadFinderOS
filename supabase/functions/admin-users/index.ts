@@ -4,7 +4,7 @@ import { checkRateLimit, rateLimitHeaders } from '../_shared/rate-limiter.ts';
 import { recordDenial } from '../_shared/protection.ts';
 import { issuePasswordReset, reissueActivation, type ActivationDeps } from '../_shared/team-activation.ts';
 import { createTeamUser, type CreateUserDeps } from '../_shared/team-create-user.ts';
-import { isTrialMember, mustChangePassword, scannerSafeLink, type LinkType } from '../../../src/lib/teamAccounts.ts';
+import { earningsHidden, isTrialMember, mustChangePassword, scannerSafeLink, type LinkType } from '../../../src/lib/teamAccounts.ts';
 import { OPERATOR_APP_URL } from '../../../src/config/operatorApp.ts';
 import { validateNewDocument, validateOnboardingPatch, type DocumentVersion, type OnboardingRecord } from '../../../src/lib/salespersonOnboarding.ts';
 
@@ -443,6 +443,8 @@ serve(async (req) => {
           assigned_leads: assigned ?? 0,
           /* 2026-10-14: the Trial switch and the first-login change, both from app_metadata (service role only). */
           trial: isTrialMember(u?.app_metadata),
+          /* 2026-11-07: Hide earnings (an unpaid salesperson), app_metadata too. */
+          hide_earnings: earningsHidden(u?.app_metadata),
           must_change_password: mustChangePassword(u),
           temp_password: typeof u?.app_metadata?.temp_password_set_at === 'string',
         };
@@ -533,6 +535,27 @@ serve(async (req) => {
       });
       if (eErr) console.error(JSON.stringify({ level: 'error', action, target: uid, event_error: eErr.message }));
       return jsonResponse({ ok: true, trial: body.trial }, 200, corsHeaders, rlHeaders);
+    }
+
+    /* HIDE EARNINGS (2026-11-07, src/lib/teamAccounts.ts earningsHidden): display only — an unpaid salesperson's screens show
+       no commission, earnings or payouts. app_metadata.hide_earnings, written the same way as the Trial switch (service role
+       only, merged by the provider, no table change). The ledger and every commission rule are untouched. */
+    if (action === 'team_set_hide_earnings') {
+      const uid = body.user_id;
+      if (!uuidOk(uid)) return jsonResponse({ ok: false, error: 'bad_user' }, 400, corsHeaders, rlHeaders);
+      if (typeof body.hide !== 'boolean') return jsonResponse({ ok: false, error: 'bad_hide' }, 400, corsHeaders, rlHeaders);
+      const { data: m } = await serviceClient.from('team_members').select('user_id, is_book_owner').eq('user_id', uid).maybeSingle();
+      if (!m) return jsonResponse({ ok: false, error: 'not_a_member' }, 404, corsHeaders, rlHeaders);
+      const { data: isAdminRow } = await serviceClient.from('user_roles').select('role').eq('user_id', uid).eq('role', 'admin').maybeSingle();
+      if (m.is_book_owner || isAdminRow) return jsonResponse({ ok: false, error: 'not_a_salesperson' }, 400, corsHeaders, rlHeaders);
+      const { error: uErr } = await serviceClient.auth.admin.updateUserById(uid, { app_metadata: { hide_earnings: body.hide } });
+      if (uErr) return jsonResponse({ ok: false, error: 'write_failed', detail: uErr.message }, 500, corsHeaders, rlHeaders);
+      const { error: eErr } = await serviceClient.from('security_events').insert({
+        actor_user_id: adminUserId, actor_role: 'admin', kind: body.hide ? 'hide_earnings_on' : 'hide_earnings_off', severity: 'info',
+        detail: { target_user_id: uid },
+      });
+      if (eErr) console.error(JSON.stringify({ level: 'error', action, target: uid, event_error: eErr.message }));
+      return jsonResponse({ ok: true, hide_earnings: body.hide }, 200, corsHeaders, rlHeaders);
     }
 
     /* RESEND ACTIVATION / SEND PASSWORD RESET (2026-10-08): a fresh link for an EXISTING salesperson —

@@ -154,6 +154,27 @@ export function trialOnboardingView(trial: boolean, readyToSell: boolean, inacti
   return { showChecklist: false, label: `Trial · ${inactiveReason ?? 'cannot sell right now'}`, tone: 'red' };
 }
 
+/* ───────────────────────── Hide earnings (2026-11-07) ───────────────────────── */
+
+/** Paul's per-person switch for a salesperson who works unpaid: their screens show no commission, earnings,
+ *  payout or money figures. Stored in app_metadata.hide_earnings (only the service role writes it, the same way
+ *  as the Trial switch; no table change). Display only: the ledger, the stamps and every commission rule are
+ *  unchanged, so switching it off shows exactly what was always there. */
+export function earningsHidden(app: Meta): boolean {
+  return app?.hide_earnings === true;
+}
+
+/** Should THIS viewer's screens hide money? Only a salesperson can be hidden. ⛔ Not read yet (null) = hidden
+ *  for a salesperson, so an unpaid rep never sees a flash of commission; a paid rep waits a moment. */
+export function viewerEarningsHidden(role: string | null | undefined, app: Meta | null): boolean {
+  if (role !== 'sales') return false;
+  if (app === null) return true;
+  return earningsHidden(app);
+}
+
+/** Notification kinds that carry commission money (hidden with the earnings). */
+export const EARNINGS_NOTIFICATION_KINDS: ReadonlySet<string> = new Set(['commission_earned', 'commission_reversed']);
+
 /* ───────────────────────── Scanner-safe links ───────────────────────── */
 
 export type LinkType = 'invite' | 'magiclink' | 'recovery';

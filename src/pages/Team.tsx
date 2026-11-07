@@ -40,6 +40,8 @@ interface Member {
   disabled_at?: string | null;
   /** 2026-10-14 (app_metadata): Trial team member (hides the onboarding checklist), the first-login change still owed, made with a temporary password. */
   trial?: boolean; must_change_password?: boolean; temp_password?: boolean;
+  /** 2026-11-07 (app_metadata): Hide earnings — an unpaid salesperson sees no commission, earnings or payouts. */
+  hide_earnings?: boolean;
 }
 
 async function call(action: string, body: Record<string, unknown> = {}) {
@@ -210,6 +212,18 @@ export default function Team() {
                           void refresh();
                         }} />
                         Trial team member
+                      </label>
+                    )}
+                    {/* HIDE EARNINGS (2026-11-07): display only, for an unpaid salesperson. Their commission data is kept. */}
+                    {m.role === 'sales' && (
+                      <label className="inline-flex min-h-[32px] items-center gap-2 rounded-lg border border-border/60 px-2 text-xs font-medium">
+                        <Switch checked={m.hide_earnings === true} aria-label="Hide earnings" data-testid="hide-earnings-switch" onCheckedChange={async (v) => {
+                          const r = await call('team_set_hide_earnings', { user_id: m.user_id, hide: v });
+                          if (!r.ok) { fail(r); return; }
+                          toast({ title: v ? `Earnings hidden for ${m.display_name}` : `Earnings shown to ${m.display_name}`, description: v ? 'They no longer see commission, earnings or payouts. Nothing was deleted.' : 'They see their commission and earnings again, exactly as recorded.' });
+                          void refresh();
+                        }} />
+                        Hide earnings
                       </label>
                     )}
                     {m.status === 'active' && m.role === 'sales' && (activationPending(m.password_set) || m.password_set === true) && (() => {
