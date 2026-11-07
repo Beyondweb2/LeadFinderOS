@@ -133,6 +133,19 @@ export function mustChangePassword(user: UserLike | null | undefined): boolean {
   return chosenAt <= tempAt;
 }
 
+/** The password_set_at stamp to save with a newly chosen password. The temporary stamp is the SERVER's clock and this
+ *  one the browser's: a phone a few minutes slow would stamp "before" the temporary password and the person would be
+ *  sent back to choose again. So the stamp is never earlier than one second after the temporary one. */
+export function passwordSetStamp(app: Meta, now: Date): string {
+  const tempAt = typeof app?.temp_password_set_at === 'string' ? Date.parse(app.temp_password_set_at) : NaN;
+  const at = Number.isNaN(tempAt) ? now.getTime() : Math.max(now.getTime(), tempAt + 1000);
+  return new Date(at).toISOString();
+}
+
+/** What to say when the auth provider refuses a new password because it is IDENTICAL to the account's current one
+ *  (its only comparison; we never keep the temporary password, so nothing else is compared). */
+export const SAME_PASSWORD_WORDS = 'That is exactly the password this account already has, so nothing changed. If it is your temporary password, choose a different one. If you have just saved it, it is already set: reload the page to carry on.';
+
 /** app_metadata written when an admin creates the account. Never contains the password. */
 export function createdUserAppMetadata(input: Pick<CreateUserInput, 'mustChangePassword'>, actor: string, now: Date): Record<string, unknown> {
   return { must_change_password: input.mustChangePassword, temp_password_set_at: now.toISOString(), created_by_admin: actor };

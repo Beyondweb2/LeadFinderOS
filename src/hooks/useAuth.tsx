@@ -40,7 +40,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         currentUserIdRef.current = newUserId;
         setSession(newSession);
 
-        if (userChanged || event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+        /* USER_UPDATED (2026-11-07): a changed password / metadata must reach the app at once. Without it the first-login
+           check kept reading the old user, sent a person who had just chosen a password back to /set-password, and their
+           second try was refused as "the same password". */
+        if (userChanged || event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
           setUser(newSession?.user ?? null);
         }
 

@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-07-first-password-loop', date: '2026-11-07', title: 'Choosing your first password works first time', audience: 'all',
+    body: 'After saving a new password you go straight into the app. Before, you could be sent back to the password page, and saving again was refused as the same password.',
+    report: {
+      added: [],
+      changed: ['Saving your first password takes you straight in.', 'A new password is refused only if it is exactly the password the account already has, and the message now says so.'],
+      removed: ['The confusing "different from the temporary one" message after a password had already been saved.'],
+      effect: 'New team members can set their own password without getting stuck.',
+    } },
   { id: '2026-11-07-password-length', date: '2026-11-07', title: 'Passwords: 8 characters, no complexity rule', audience: 'all',
     body: 'A password now needs at least 8 characters. You no longer have to include a number or a letter. Very common passwords are still refused.',
     report: {
