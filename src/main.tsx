@@ -3,6 +3,10 @@ import { HelmetProvider } from "react-helmet-async";
 import App from "./App.tsx";
 import "./index.css";
 import "./i18n";
+import { installStaleChunkRecovery } from "./lib/staleChunk";
+
+/* A page opened before a deploy asks for chunk files the deploy removed: reload ONCE (src/lib/staleChunk.ts). */
+installStaleChunkRecovery();
 
 createRoot(document.getElementById("root")!).render(
   <HelmetProvider>

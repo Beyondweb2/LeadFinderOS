@@ -1,5 +1,14 @@
 # The operator app is private: every route but /auth and /set-password is behind sign-in.
 # Nothing here should ever be listed by a search engine, on any host (app.leadfinderos.com
 # or the legacy pages.dev address). See src/components/SEOHead.tsx.
+#
+# CACHING (2026-11-07, src/lib/staleChunk.ts): every page (index.html, served for every route) and sw.js is no-cache,
+# so a deploy is picked up on the next load. The hashed files under /assets never change once built, so they keep a
+# long cache ("! Cache-Control" drops the no-cache from the rule above before setting their own).
 /*
   X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-cache
+
+/assets/*
+  ! Cache-Control
+  Cache-Control: public, max-age=31536000, immutable

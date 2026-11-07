@@ -5,6 +5,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { installLeadSync } from "@/lib/leadSync";
+import { isStaleChunkError, reloadOnceForStaleChunk, sessionStore } from "@/lib/staleChunk";
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { FocusRedirect } from "./components/FocusRedirect";
 import { AuthProvider } from "@/hooks/useAuth";
@@ -83,20 +84,31 @@ installLeadSync(queryClient);
  * React Error Boundary — catches render crashes and shows a fallback
  * instead of a blank screen or infinite refresh loop.
  */
-class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; reason: string }> {
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; reason: string; stale: boolean }> {
   constructor(props: { children: ReactNode }) {
     super(props);
-    this.state = { hasError: false, reason: '' };
+    this.state = { hasError: false, reason: '', stale: false };
   }
   static getDerivedStateFromError(error: unknown) {
     /* A short readable reason under the message (2026-10-21): the first line of the error, never a stack. */
     const reason = String((error as { message?: string } | null)?.message ?? error ?? '').split(/\r?\n/)[0].slice(0, 160);
-    return { hasError: true, reason };
+    return { hasError: true, reason, stale: isStaleChunkError(error) };
   }
   componentDidCatch(error: Error, info: React.ErrorInfo) {
+    /* A lazy page from an older deploy (src/lib/staleChunk.ts): reload ONCE; a second failure shows the screen below. */
+    if (isStaleChunkError(error) && reloadOnceForStaleChunk(sessionStore(), Date.now(), () => window.location.reload())) return;
     console.error('[ErrorBoundary] Render crash caught:', error, info.componentStack);
   }
   render() {
+    if (this.state.hasError && this.state.stale) {
+      return (
+        <div data-testid="stale-chunk" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'system-ui', gap: 12 }}>
+          <p style={{ fontSize: 16, color: '#888' }}>A new version of the app is out.</p>
+          <p style={{ fontSize: 13, color: '#aaa', maxWidth: 480, textAlign: 'center' }}>Reload the page to carry on. Anything already saved is kept.</p>
+          <button onClick={() => window.location.reload()} style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #ccc', cursor: 'pointer' }}>Reload</button>
+        </div>
+      );
+    }
     if (this.state.hasError) {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'system-ui', gap: 12 }}>
@@ -125,22 +137,8 @@ function useGlobalErrorGuard() {
     };
 
     const handleError = (event: ErrorEvent) => {
-      // ChunkLoadError = Vite HMR / lazy chunk failure — only reload once to avoid loops
-      if (event.message?.includes('ChunkLoadError') || event.message?.includes('Failed to fetch dynamically imported module')) {
-        const lastReload = sessionStorage.getItem('chunk_reload_at');
-        const now = Date.now();
-        // Only reload if we haven't reloaded in the last 30 seconds
-        if (!lastReload || now - parseInt(lastReload, 10) > 30000) {
-          console.warn('[Global] Chunk load error — reloading page (once)');
-          sessionStorage.setItem('chunk_reload_at', now.toString());
-          window.location.reload();
-          return;
-        }
-        // Already reloaded recently — suppress instead of infinite loop
-        console.warn('[Global] Chunk load error suppressed (already reloaded recently)');
-        event.preventDefault();
-        return;
-      }
+      /* A stale chunk is handled by installStaleChunkRecovery (src/main.tsx, src/lib/staleChunk.ts): one reload, then stop. */
+      if (isStaleChunkError(event.error ?? event.message)) { event.preventDefault(); return; }
       console.error('[Global] Uncaught error:', event.error);
       // Prevent the default browser behaviour (which can cause page crashes)
       event.preventDefault();
