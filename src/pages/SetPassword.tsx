@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Callout, IconTile, LoadState, SURFACE } from '@/components/operator/ui';
 import { cn } from '@/lib/utils';
 import { EXPIRED_LINK_COPY } from '@/lib/teamActivation';
-import { linkErrorFromUrl, mustChangePassword, PASSWORD_PROBLEM_WORDS, passwordProblem, readLinkParams } from '@/lib/teamAccounts';
+import { linkErrorFromUrl, mustChangePassword, PASSWORD_PROBLEM_WORDS, passwordProblem, passwordSetStamp, readLinkParams, SAME_PASSWORD_WORDS } from '@/lib/teamAccounts';
 
 /* SET YOUR PASSWORD — where an invite, a fresh link from the Team page, a Forgot password email, or a
  * first sign-in with a temporary password lands (multi-user, 2026-09-27; 2026-10-14).
@@ -93,10 +93,10 @@ export default function SetPassword() {
     if (pw !== pw2) { setErr('The two passwords do not match.'); return; }
     setBusy(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password: pw, data: { password_set_at: new Date().toISOString() } });
+      const { error } = await supabase.auth.updateUser({ password: pw, data: { password_set_at: passwordSetStamp(user.app_metadata, new Date()) } });
       if (error) {
         setErr(/different from the old|same_password/i.test(`${error.message} ${(error as { code?: string }).code ?? ''}`)
-          ? 'Choose a password that is different from the temporary one.'
+          ? SAME_PASSWORD_WORDS
           : error.message);
         return;
       }

@@ -7,7 +7,7 @@ import path from 'node:path';
 import { createTeamUser, type CreateUserDeps } from '../supabase/functions/_shared/team-create-user.ts';
 import {
   CREATE_USER_ERRORS, earningsHidden, generateTempPassword, isTrialMember, linkErrorFromUrl, mustChangePassword, PASSWORD_MIN_LENGTH,
-  PASSWORD_PROBLEM_WORDS, passwordProblem, readLinkParams, redactSecret, scannerSafeLink, trialOnboardingView, validateCreateUser, viewerEarningsHidden,
+  PASSWORD_PROBLEM_WORDS, passwordProblem, passwordSetStamp, readLinkParams, SAME_PASSWORD_WORDS, redactSecret, scannerSafeLink, trialOnboardingView, validateCreateUser, viewerEarningsHidden,
 } from '../src/lib/teamAccounts.ts';
 import { EXPIRED_LINK_COPY } from '../src/lib/teamActivation.ts';
 import { canOpenRoute } from '../src/lib/access.ts';
@@ -125,7 +125,15 @@ const body = (o: Record<string, unknown> = {}) => ({ name: 'Trial Rep', email: '
   ok(setPwRoute > 0 && shell > 0 && setPwRoute < shell, 'F7. /set-password sits outside ProtectedRoute (no redirect loop)');
   const sp = strip(read('src/pages/SetPassword.tsx'));
   ok(/mustChangePassword\(user\)/.test(sp) && /password_set_at/.test(sp) && /passwordProblem\(pw/.test(sp), 'F8. the set-password page knows first login, stamps password_set_at and uses the ONE password rule');
-  ok(/different from the temporary one/.test(sp), 'F9. re-using the temporary password gets a plain message');
+  ok(/same_password/.test(sp) && /SAME_PASSWORD_WORDS/.test(sp) && /choose a different one/.test(SAME_PASSWORD_WORDS) && /already set/.test(SAME_PASSWORD_WORDS), 'F9. an identical password gets a plain message that says exactly what happened');
+  /* 2026-11-07, live: a rep was sent back to /set-password after saving, and the second save was refused as the same password. */
+  const auth = strip(read('src/hooks/useAuth.tsx'));
+  ok(/event === 'USER_UPDATED'/.test(auth), 'F10. a password / metadata change reaches the app at once (no loop back to /set-password)');
+  ok(/passwordSetStamp\(user\.app_metadata, new Date\(\)\)/.test(sp), 'F11. the stamp is saved through passwordSetStamp');
+  const slowPhone = passwordSetStamp({ temp_password_set_at: '2026-11-07T10:00:00.000Z' }, new Date('2026-11-07T09:55:00.000Z'));
+  ok(!mustChangePassword({ app_metadata: { must_change_password: true, temp_password_set_at: '2026-11-07T10:00:00.000Z' }, user_metadata: { password_set_at: slowPhone } }), 'F12. a phone clock five minutes slow still clears the first-login change');
+  ok(passwordSetStamp({}, new Date('2026-11-07T10:00:00.000Z')) === '2026-11-07T10:00:00.000Z', 'F13. without a temporary stamp the browser time is used');
+  ok(!/similar|levenshtein|shared characters/i.test(strip(read('src/lib/teamAccounts.ts'))), 'F14. no "too similar" check against any other password');
 
   /* ── Links ── */
   const link = scannerSafeLink('https://app.leadfinderos.com/set-password', 'abcDEF123_-xyz789', 'recovery');
