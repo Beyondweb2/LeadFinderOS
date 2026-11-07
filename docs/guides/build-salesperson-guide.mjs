@@ -167,25 +167,28 @@ pages.push(step(4, 'Outreach: check your campaign', 'Outreach is your working li
 pages.push(step('5A', 'Route A: message first, then answer replies', 'A short WhatsApp goes out first. You talk to the people who reply.',
   list([
     'On Outreach, press <b>Select this page</b> (or tick some rows). Press <b>Queue WhatsApp</b>.',
-    'Choose the opener. <b>Initial contact \u2014 original opener</b> sends: <i>\u201CHi, is this [business name]? Cheers\u201D</i>. Press <b>Queue</b>.',
+    'Choose the opener. <b>Initial contact — original opener</b> sends: <i>“Hi, is this [business name]? Cheers”</i>. Press <b>Queue</b>.',
     'The messages go out during the day (7am to 9:30pm UK time). Only businesses you have never contacted are queued.',
-    'When someone replies, open <b>Inbox</b>. Their reply and the whole chat are there. If the AI has written a suggested reply, read it. Press <b>Approve &amp; send</b> if it is right, <b>Regenerate</b> for another go, or <b>Edit</b> to change it.',
+    'When someone replies, open <b>Inbox</b>. Their reply and the whole chat are there.',
+    'Within 24 hours of their reply you can send a normal free-hand message, a file or a voice note. After 24 hours you need an approved template.',
   ]) + `<div style="display:flex;justify-content:center">${shot('s5a-queue', D, 1000, [500, 300, 590, 400], { width: '62%', cap: 'Choose the opener, then Queue.' })}</div>` +
-  shot('s5a-inbox', D, 900, [256, 160, 1184, 520], { cap: 'Inbox: read the reply, check the AI draft, then Approve & send.' }) +
-  tip('You approve every message the AI writes. Nothing the AI drafts is sent until you press the button. If the AI has not written a draft, press <b>Draft reply</b>, or type your own.')));
+  shot('s5a-inbox', D, 900, [600, 756, 808, 66], { cap: 'Inbox reply box: type a message, attach a file, or record a voice note.' }) +
+  tip('There is also an <b>AI draft reply</b> button that writes a suggested reply for you to check. It is still in beta, so treat it as optional.')));
 
 /* ── 5B ── */
-pages.push(step('5B', 'Route B: check the business, then call', 'The app researches a business for you, so you can open with something real.',
+pages.push(step('5B', 'Route B: run audits, then call', 'The app researches your businesses for you, so you can open with something real.',
   list([
     'On Outreach, tick several businesses (up to 20 at a time). Press <b>Check before calling</b>.',
-    'It asks ChatGPT, Gemini and Google AI who they recommend, and it reads the business\u2019s website to find problems. This takes a few minutes. You can keep working.',
-    'The bar at the top shows progress: how many are ready, checking or waiting. You have <b>50 checks a day</b>, and the bar shows how many are left.',
-    'Each finished row shows scores like <b>ChatGPT 1/3</b>. Press <b>Open next ready</b>, or click any row, to open the prospect page.',
-  ]) + shot('s5b-checks', D, 1000, [256, 0, 1184, 790], { cap: 'Progress bar at the top, a score on every finished row.' }) +
+    'It runs an AI audit on every one at once: it asks ChatGPT, Gemini and Google AI who they recommend, and it reads each website to find problems. This takes a few minutes. Keep working.',
+    'The bar at the top shows it loading, with counts of how many are ready, checking or waiting. You have <b>50 checks a day</b>; the bar shows how many are left.',
+    'Each finished row shows scores like <b>ChatGPT 1/3</b>. <b>Click a business row</b> to open its prospect page.',
+    '<b>Ring a business only after its audit has finished</b>, so you have the findings in front of you.',
+  ]) + `<div style="display:flex;justify-content:center">${shot('s5b-checks', D, 1000, [295, 330, 385, 48], { width: '70%', cap: 'The bar at the top while the audits run.' })}</div>` +
+  shot('s5b-checks', D, 1000, [340, 620, 1060, 290], { cap: 'Finished rows show their scores. Click a row to open the prospect page.' }) +
   tip('A check never sends anything to the business and never changes their status. Results from the last two weeks are reused, so they do not use up your daily checks.')));
 
 /* ── 6 prospect page ── */
-pages.push(step(6, 'The prospect page', 'This is the screen you use on the call. Open it from a row, or with Open next ready. Scroll down: each section has a job.',
+pages.push(step(6, 'The prospect page', 'This is the screen you use on the call. Click a business row to open it. Scroll down: each section has a job.',
   `<div class="row"><div style="flex:0 0 94mm">${shot('s6a-call-top', D, 1300, [336, 78, 768, 880], { cap: 'The top of the prospect page.' })}</div>
   <div style="flex:1">
   <table class="sec side">
@@ -245,7 +248,7 @@ pages.push(`
 <section class="page step cheat">
   <header class="sh"><span class="num">8</span><div><h2>Daily routine: cheat sheet</h2><p class="why">Keep this page open on your phone.</p></div></header>
   <ol>
-    <li><div><b>Inbox first.</b><span>Answer anyone who replied. Read each AI draft, then approve, edit or reject it.</span></div></li>
+    <li><div><b>Inbox first.</b><span>Answer anyone who replied: a free-hand message, file or voice note works within 24 hours of their reply.</span></div></li>
     <li><div><b>Open Outreach and check the campaign.</b><span>Pick the niche you are working today. See what is due.</span></div></li>
     <li><div><b>Top up your list.</b><span>Running low? Coverage \u2192 pick towns \u2192 Find leads \u2192 Select \u2192 Add to CRM.</span></div></li>
     <li><div><b>Send openers.</b><span>Select new businesses \u2192 Queue WhatsApp \u2192 choose the opener \u2192 Queue.</span></div></li>
