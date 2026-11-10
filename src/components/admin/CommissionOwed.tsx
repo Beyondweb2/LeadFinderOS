@@ -12,6 +12,7 @@ import { SALE_PLAN_FLAG_WORDS, isSalePlanFlag } from '@/lib/salePlan';
 import { stripeCheckWords, type StripeCheckRow } from '@/lib/commissionReconcile';
 import { agreementWords, type PaidClientRecord } from '@/lib/paidClientRecord';
 import { splitArchived } from '@/lib/paidClientArchive';
+import { FIRST_PAYMENT_LADDER, LATER_PAYMENT_RATE, ONE_PAYMENT_COMMISSION } from '@/lib/commissionConfig';
 import { usePaidClientArchive } from '@/hooks/usePaidClientArchive';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -224,6 +225,10 @@ export function CommissionOwedSection() {
       <Panel title="You owe right now" icon={BadgePoundSterling} tone="green" hint="Money due to pay today or overdue. You pay it yourself by bank transfer, then mark it here."
         action={<Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Refresh" onClick={() => void q.refetch()}><RefreshCw className={cn('h-4 w-4', q.isFetching && 'animate-spin')} /></Button>}>
         <p className="text-4xl font-bold tracking-tight tabular-nums" data-testid="owed-total">{gbp(d.totalOwedNow)}</p>
+        {/* The rate card, from the constants that pay it (commissionConfig.ts; the signed contract, Paul 2026-11-10). */}
+        <p className="mt-1 text-xs text-muted-foreground" data-testid="owed-rate-card">
+          What a sale earns: first payment {FIRST_PAYMENT_LADDER.map((s) => `£${s.pounds}`).join(' / ')} by that person’s sales in the month ({FIRST_PAYMENT_LADDER.map((s, i) => { const from = i === 0 ? 1 : FIRST_PAYMENT_LADDER[i - 1].upTo + 1; return Number.isFinite(s.upTo) ? `${from}–${s.upTo}` : `${from}+`; }).join(' / ')}), then {Math.round(LATER_PAYMENT_RATE * 100)}% of each later plan payment. Complete up front £{ONE_PAYMENT_COMMISSION.complete_upfront}, Essential in full £{ONE_PAYMENT_COMMISSION.full}. Nothing on hosting after the plan.
+        </p>
         <StripeCheckLine check={d.stripe_check} />
 
         {lastPaid && (

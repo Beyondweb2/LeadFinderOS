@@ -63,13 +63,14 @@ ok(/sale 13 of October 2026/.test(initLine(lm, month[12].lead_id!).label), 'the 
 
 console.log('── 3. THE LADDER AND ITS WORDS ──');
 const tr = (k: number) => monthlyTracker(linesOf(month.slice(0, k)), TODAY);
-const words: [number, boolean, string][] = [
-  [0, false, '12 more sales, then every sale earns +£25'], [9, false, '3 more sales, then every sale earns +£25'], [11, false, '1 more sale, then every sale earns +£25'],
-  [12, true, 'Every sale this month earns +£25'], [13, true, 'Every sale this month earns +£25'], [25, true, 'Every sale this month earns +£25'],
+/* 2026-11-10: the words are the contract's ladder (commissionConfig FIRST_PAYMENT_LADDER): what the NEXT sale's first payment earns. */
+const words: [number, number, string][] = [
+  [0, 30, '12 more sales at £30, then a first payment earns £40'], [9, 30, '3 more sales at £30, then a first payment earns £40'], [11, 30, '1 more sale at £30, then a first payment earns £40'],
+  [12, 40, '12 more sales at £40, then a first payment earns £50'], [13, 40, '11 more sales at £40, then a first payment earns £50'], [25, 50, 'Every new sale’s first payment earns £50'],
 ];
-for (const [k, on, line] of words) {
+for (const [k, pounds, line] of words) {
   const x = k === 0 ? monthlyTracker([], TODAY) : tr(k);
-  ok(x.counted === k && x.bonusOn === on && x.nextSaleNumber === k + 1 && monthlyTrackerNextLine(x) === line, `${k} sales: "${line}"`);
+  ok(x.counted === k && x.nextFirstPounds === pounds && x.nextSaleNumber === k + 1 && monthlyTrackerNextLine(x) === line, `${k} sales: "${line}"`);
 }
 ok(tr(9).earned === Math.round(9 * 29.7 * 100) / 100 && tr(13).sales.length === 13, 'the ladder counts the same lines the payments table lists');
 
@@ -111,8 +112,8 @@ ok(/commission_rule, commission_month_start, commission_month_seq, commission_ra
 ok(/commission_rule, commission_month_start, commission_month_seq, commission_rate/.test(read('supabase/functions/_shared/payment-ledger.ts')), 'the earned notification reads them too');
 const page = read('src/pages/SalesDashboard.tsx');
 const ladder = read('src/components/salesDash/MonthlyLadder.tsx');
-ok((page.match(/<MonthlyLadder /g) ?? []).length === 1 && /monthlyTracker\(lines, todayIso\)/.test(ladder) && /BIG_MONTH_BONUS_FROM_SALE/.test(ladder), 'one month card, built from the same lines and the one bonus constant');
-ok(/lg:grid-cols-\[12fr_7fr\]/.test(ladder) && !/grid-cols-\[12fr/.test(ladder.replace(/lg:grid-cols-\[12fr_7fr\]/, '')), 'the steps sit side by side from lg and stack on a phone (no squeezed line)');
+ok((page.match(/<MonthlyLadder /g) ?? []).length === 1 && /monthlyTracker\(lines, todayIso\)/.test(ladder) && /FIRST_PAYMENT_LADDER/.test(ladder), 'one month card, built from the same lines and the one ladder constant');
+ok(/lg:grid-cols-\[12fr_12fr_6fr\]/.test(ladder) && !/grid-cols-\[12fr/.test(ladder.replace(/lg:grid-cols-\[12fr_12fr_6fr\]/, '')), 'the steps sit side by side from lg and stack on a phone (no squeezed line)');
 ok(/data-testid="ladder-sale"/.test(ladder) && /PopoverContent/.test(ladder) && /client\?\.package/.test(ladder) && /remainingPotential/.test(ladder), 'each sale dot opens the client, date, package, commission and what monthly payments may still earn');
 const labels = [...page.matchAll(/<KpiCard label="([^"]+)"/g)].map((m) => m[1]);
 ok(JSON.stringify(labels) === JSON.stringify(['Calls made', 'People reached', 'Contacted → sale']), `three work numbers, none repeating the ladder (got ${labels.join(', ')})`);

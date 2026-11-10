@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { MessageSquarePlus, Sparkles } from 'lucide-react';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useEarningsHidden } from '@/hooks/useEarningsHidden';
 import { cn } from '@/lib/utils';
 
 /* ══ THE SMALL, ALWAYS-LOADED HALF OF FEEDBACK + WHAT'S NEW (2026-10-22, perf audit) ═══════════════
@@ -31,14 +32,16 @@ export function FeedbackAndNewsHost() {
 /** The two menu entries (sidebar footer). The dot shows until the newest What's New entry is seen. */
 export function FeedbackNewsButtons({ className }: { className?: string }) {
   const { role } = useSubscription();
+  /* The same list the drawer shows: a salesperson with Hide earnings on has no commission entries, so no dot for one. */
+  const hideMoney = useEarningsHidden();
   const [seen, setSeen] = useState(seenId);
   const [newest, setNewest] = useState<string | undefined>(undefined);
   useEffect(() => { const f = () => setSeen(seenId()); window.addEventListener('whats-new-seen', f); return () => window.removeEventListener('whats-new-seen', f); }, []);
   useEffect(() => {
     let on = true;
-    void import('@/lib/whatsNew').then((m) => { if (on) setNewest(m.whatsNewFor(role)[0]?.id); }).catch(() => { /* no dot */ });
+    void import('@/lib/whatsNew').then((m) => { if (on) setNewest(m.whatsNewFor(role, { hideMoney })[0]?.id); }).catch(() => { /* no dot */ });
     return () => { on = false; };
-  }, [role]);
+  }, [role, hideMoney]);
   return (
     <div className={cn('grid grid-cols-2 gap-1.5', className)}>
       <button type="button" onClick={() => window.dispatchEvent(new Event(OPEN_FEEDBACK_EVENT))} className="flex items-center justify-center gap-1.5 rounded-lg border border-border/60 px-2 py-1.5 text-xs font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent/60"><MessageSquarePlus className="h-3.5 w-3.5" />Feedback</button>

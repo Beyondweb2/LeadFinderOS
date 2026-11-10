@@ -99,3 +99,11 @@ agreement, Stripe session, payment, Paul's notifications, New paid clients, Paid
 
 `scripts/salesperson-journey-audit.test.ts`, plus additions to `twilio-comms.test.ts`, `stale-chunk.test.ts` and
 `paid-client-automation.test.ts`. Screens checked in headless Edge at 1440 and 390 wide against fixture data, no sideways scroll.
+
+## Decisions built on 2026-11-10 (second pass)
+
+- Commission follows the signed contract: first payment 30 / 40 / 50 pounds by the seller's sale number in the month, then 20% of each later plan payment, 300 for Complete up front, 150 for Essential in full, nothing on hosting. Numbers live in `src/lib/commissionConfig.ts`; record in `docs/commission-owed.md`; tests `scripts/commission-contract-rules.test.ts`. No stored commission rows needed rewriting (lines are derived; no payouts were recorded).
+- The three "ZZ QA fixed commission test" leads are in `metric_exclusions` and archived (ledger rows kept).
+- Sign-in provider minimum password length is 8.
+- A salesperson can add a mobile to a landline lead from the close screen: `lead_add_mobile` (migration `20261210100000`), original kept in `outreach_leads.phone_original`, logged in `lead_activity`. Rule words in `src/lib/leadAddMobile.ts`.
+- What's New entries about money are hidden from a salesperson with Hide earnings on (`whatsNewFor(role, { hideMoney })`).

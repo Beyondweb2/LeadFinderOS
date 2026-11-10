@@ -429,7 +429,7 @@ Deno.serve(async (req) => {
         close_route: closeRouteOf(cur),
         full_setup: { url: setupLinkUrl(leadId), shared: setupShares },
         lead: {
-          id: lead.id, business_name: lead.business_name, phone: lead.phone, email: lead.email, website: lead.website, address: lead.address,
+          id: lead.id, business_name: lead.business_name, phone: lead.phone, country: lead.country ?? null, email: lead.email, website: lead.website, address: lead.address,
           town: lead.derived_town || lead.search_location || null, trade: (lead.category || lead.search_keyword || "").trim() || null,
           contact_name: lead.contact_name, rating: lead.rating, review_count: lead.review_count, google_maps_url: lead.google_maps_url,
           campaign: (camp as { data?: { name?: string } | null }).data?.name ?? null, lead_source: lead.lead_source ?? null,

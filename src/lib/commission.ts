@@ -79,11 +79,14 @@
      the amount (£49.99 on the 12-month plan earns too), payable on the 1st of the month after it is collected. Pay in full has none. A
      payment past the plan's own count is opt-in hosting and earns nothing.
    - PAID comes from commission_line_payments, line by line (input.paidByLine). The monthly commission_payouts still mark old sales paid.
-   🔴 FIXED RULES (Paul, 2026-11-04, docs/commission-owed.md; every pound in commissionConfig.ts). A sale whose ledger row is payout_rule
-   'fixed_v1' (every sale recorded since) follows these. No percentage touches it, and the older rules above stay only for rows already on them:
-   - EACH of the customer's first payments (the plan's FIXED_COMMISSION count, the sign-up is number 1) earns the plan's fixed pounds, whatever
-     the amount. Nothing after them. A failed payment is not a payment; one recovered later earns in its own place.
-   - SALE 13+ of the UK month (the database's stamped place) adds BIG_MONTH_BONUS_GBP to its FIRST payment's line, paid with it and gone with it.
+   🔴 THE CONTRACT RULES (Paul, 2026-11-10, docs/commission-owed.md; every number in commissionConfig.ts). A sale whose ledger row is
+   payout_rule 'fixed_v1' (every sale recorded since 2026-11-04) follows these. They replaced the fixed pounds of 2026-11-04 under the same
+   stored rule name; the older rules above stay only for rows already on them:
+   - THE FIRST PAYMENT earns pounds by the sale's stamped NUMBER in the seller's UK month (FIRST_PAYMENT_LADDER: £30 / £40 / £50). A plan
+     paid in ONE payment earns its own fixed pounds instead (ONE_PAYMENT_COMMISSION), whatever its number.
+   - EVERY LATER PLAN PAYMENT collected earns LATER_PAYMENT_RATE of it in whole pounds (laterPaymentPounds), to the plan's last payment.
+     A payment past the plan's own count is hosting and earns nothing. A failed payment is not a payment; one recovered later earns in
+     its own place.
    - COLLECTED ON OR BEFORE THE WINDOW'S LAST DAY (before commission_payable_on, the day after the window, Paul 2026-11-04; or no date yet): pending
      until commission_payable_on, "waiting" with no date until results are sent. COLLECTED AFTER: payable on the 1st of the next month.
    - A GUARANTEE CLAIM (commission_claim_at, or the first payment fully refunded or lost inside the window) means nothing on the sale is payable:
@@ -96,7 +99,7 @@
 import { isOptionBTerms, ukDayAtHourIso } from './clientTimeline.ts';
 import { FINDABLE_MONTHLY_GBP } from './findableOffer.ts';
 import { isAttributionHeld } from './saleAttribution.ts';
-import { BIG_MONTH_BONUS_FROM_SALE, bigMonthBonusFor, commissionFixedRateForPlan, COMMISSION_INITIAL_RATE, COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_COUNT_V3, COMMISSION_RECURRING_RATE, BLANK_PLAN_COMMISSION, FIXED_COMMISSION, MONTHLY_TIERS, PAYOUT_RULE_FIXED_V1, isLinePaidRule } from './commissionConfig.ts';
+import { commissionFixedRateForPlan, COMMISSION_INITIAL_RATE, COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_COUNT_V3, COMMISSION_RECURRING_RATE, FIRST_PAYMENT_LADDER, MONTHLY_TIERS, ONE_PAYMENT_COMMISSION, PAYOUT_RULE_FIXED_V1, PLAN_COMMISSION_MAX_PAYMENTS, firstPaymentPoundsFor, isLinePaidRule, laterPaymentPounds, saleCommissionMax } from './commissionConfig.ts';
 import { PAYMENT_PLAN_SPEC, isPaymentPlan } from './paymentPlans.ts';
 export { COMMISSION_INITIAL_RATE, COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_COUNT_V3, COMMISSION_RECURRING_RATE, MONTHLY_TIERS };
 
@@ -204,14 +207,15 @@ export interface CommissionLine {
   reversesLineId?: string;
   /** What has already been paid on this line (commission_line_payments). Only ever part of it after a refund grew. */
   paidAmount?: number;
-  /** The sale is on the fixed rules: `commission` is pounds from the config, `rate` is 0 and means nothing. */
+  /** The sale is on the contract rules (payout_rule 'fixed_v1'): `commission` is whole pounds from the config, `rate` is 0 and means nothing. */
   fixedRules?: boolean;
-  /** Fixed rules: how many of the customer's payments earn on this plan, and the pounds on each. */
+  /** Contract rules: how many of the customer's payments earn on this plan (the first, then every later plan payment). */
   fixedCount?: number;
+  /** Contract rules: what each LATER plan payment earns at the plan's own monthly price (0 on a one-payment plan). */
   fixedPerPayment?: number;
-  /** Fixed rules: the big-month bonus inside `commission` on the first payment's line. */
-  bonus?: number;
-  /** Fixed rules: a guarantee claim stopped this sale. 'marked' = Paul recorded it, 'refunded' = the first payment went back inside the window. */
+  /** Contract rules: the most this sale can earn (its first payment's pounds, then every later plan payment). */
+  fixedMax?: number;
+  /** Contract rules: a guarantee claim stopped this sale. 'marked' = Paul recorded it, 'refunded' = the first payment went back inside the window. */
   claim?: 'marked' | 'refunded';
 }
 
@@ -378,7 +382,8 @@ export interface ClientEarnings {
   engagementEnded?: boolean;
   /** The CLIENT's engagement is over (ended or refunded): nothing more is projected. */
   clientClosed?: boolean;
-  /** Fixed rules: what each payment still to come earns. Absent = an old sale, worked out from its monthly amount. */
+  /** Contract rules: what each plan payment still to come earns, at the plan's own monthly price. Absent = an old sale, worked out
+   *  from its monthly amount. */
   fixedPerPayment?: number;
 }
 
@@ -429,7 +434,14 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
     const salePlanId = isPaymentPlan(saleRow?.sale_plan) ? saleRow.sale_plan : 'legacy_twelve';
     const planSpec = PAYMENT_PLAN_SPEC[salePlanId];
     const planMonthlyCount = Math.max(0, planSpec.totalPayments - 1);
-    const fixed = isPaymentPlan(saleRow?.sale_plan) ? FIXED_COMMISSION[saleRow.sale_plan] : BLANK_PLAN_COMMISSION;
+    /* 🔴 CONTRACT RULES: what this sale's payments earn. A one-payment plan has its own pounds; every other plan takes the ladder step
+       of its stamped number, then the share of each later plan payment. A sale with no plan recorded is the old £99 × 12 schedule. */
+    const oneOffPounds = planSpec.totalPayments === 1 && typeof ONE_PAYMENT_COMMISSION[salePlanId] === 'number' ? ONE_PAYMENT_COMMISSION[salePlanId] : null;
+    const saleNumber = saleRow && saleRow.commission_rule === MONTHLY_TIER_RULE && typeof saleRow.commission_month_seq === 'number' ? saleRow.commission_month_seq : null;
+    const firstPounds = oneOffPounds ?? firstPaymentPoundsFor(saleNumber);
+    const laterCount = Math.min(planMonthlyCount, PLAN_COMMISSION_MAX_PAYMENTS - 1);
+    const laterEach = laterCount > 0 ? laterPaymentPounds(planSpec.monthlyGbp) : 0;
+    const fixed = { payments: 1 + laterCount, perPayment: laterEach, max: saleCommissionMax({ firstPounds, laterPayments: laterCount, monthlyGbp: planSpec.monthlyGbp }) };
     const payableOn = planRules && saleRow?.commission_payable_on ? String(saleRow.commission_payable_on).slice(0, 10) : null;
     const payableNow = !!payableOn && todayDay >= payableOn;
     const paidOf = (lineId: string) => input.paidByLine?.get(lineId) ?? 0;
@@ -438,8 +450,8 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
     /* The instant the initial commission is approved: 00:00 UK on the Approval Date. */
     const approvalIso = approvalDay ? ukDayAtHourIso(approvalDay, 0) : null;
     const approvedNow = !!approvalDay && todayDay >= approvalDay;
-    /* Fixed rules: the sign-up payment is the first that earns, so the monthlies that earn are the rest of the plan's count. */
-    const trailingCount = fixedRules ? Math.min(fixed.payments - 1, planMonthlyCount) : planRules ? Math.min(COMMISSION_RECURRING_COUNT, planMonthlyCount) : v3 ? COMMISSION_RECURRING_COUNT_V3 : COMMISSION_RECURRING_COUNT;
+    /* Contract rules: every later payment the plan has earns, to its last one. */
+    const trailingCount = fixedRules ? laterCount : planRules ? Math.min(COMMISSION_RECURRING_COUNT, planMonthlyCount) : v3 ? COMMISSION_RECURRING_COUNT_V3 : COMMISSION_RECURRING_COUNT;
     rows.sort((a, b) => a.occurred_at.localeCompare(b.occurred_at) || a.id.localeCompare(b.id));
     const payments = rows.filter((r) => (r.kind === 'initial' || r.kind === 'recurring') && r.status === 'succeeded' && r.amount_gbp > 0);
     /* ⛔ THE ATTRIBUTION HOLD, read explicitly: a held sale has no seller for commission, whatever a row says. */
@@ -474,8 +486,8 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
     for (const p of payments) {
       let n: number; let rate: number; let label: string;
       let monthStart: string | null = null; let monthSeq: number | null = null; let testSale = false; let afterEnd = false; let afterClientEnd = false;
-      /* Fixed rules: the pounds on this line (a line past the plan's count has none), and the bonus inside them. */
-      let fixedPounds: number | null = null; let bonus = 0; let pastCount = false;
+      /* Contract rules: the pounds on this line (a line past the plan's count has none). */
+      let fixedPounds: number | null = null; let pastCount = false;
       if (fixedRules && p.kind === 'initial' && !initialSeen) {
         initialSeen = true; n = 1; rate = 0;
         testSale = p.commission_rule === TEST_EXCLUDED_RULE;
@@ -484,8 +496,7 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
         if (fixedExcluded) monthSeq = null;
         const closedOk = !earns || testSale || !seller || engagedAt(events, p.occurred_at) || closedWhileEngaged(input.closings?.get(leadId), seller, events, p.occurred_at);
         if (!closedOk) afterEnd = true;
-        bonus = testSale || fixedExcluded || afterEnd ? 0 : bigMonthBonusFor(monthSeq);
-        fixedPounds = testSale || fixedExcluded || afterEnd ? 0 : fixed.perPayment + bonus;
+        fixedPounds = testSale || fixedExcluded || afterEnd ? 0 : firstPounds;
         label = testSale ? 'First payment · test sale (not counted)' : fixedExcluded ? 'First payment · not a qualifying sale' : afterEnd ? 'First payment · after the engagement ended, not closed before it' : monthSeq && monthStart ? `First payment · sale ${monthSeq} of ${monthName(monthStart)}` : 'First payment';
         if (attHeld) label += att!.status === 'not_credited' ? ' · not credited to a salesperson (attribution review)' : ' · held: attribution review open';
         else if (confirmedDay) label += ` · seller confirmed after review ${confirmedDay}`;
@@ -499,7 +510,8 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
         afterClientEnd = !!clientState?.endedAt && (!Number.isFinite(clientEndMs) || !(Date.parse(p.occurred_at) < clientEndMs));
         testSale = testLead;
         pastCount = recurringSeen > trailingCount;
-        fixedPounds = pastCount || afterClientEnd || testSale || fixedExcluded ? 0 : fixed.perPayment;
+        /* The share of what was ACTUALLY collected, in whole pounds (laterPaymentPounds). */
+        fixedPounds = pastCount || afterClientEnd || testSale || fixedExcluded ? 0 : laterPaymentPounds(p.amount_gbp);
         label = afterClientEnd ? `Payment ${n} · after the client's service ended` : testSale ? `Payment ${n} · test sale (not counted)` : pastCount ? `Payment ${n} · no commission` : `Payment ${n} of ${fixed.payments}`;
       }
       else if (p.kind === 'initial' && !initialSeen) {
@@ -562,7 +574,7 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
           : afterEnd ? `Month ${recurringSeen} · after the engagement ended` : `Month ${recurringSeen}`;
       }
       else { n = 1; rate = 0; label = 'Additional one-off payment'; }
-      if (!earns) { rate = 0; if (fixedPounds !== null) { fixedPounds = 0; bonus = 0; } }
+      if (!earns) { rate = 0; if (fixedPounds !== null) fixedPounds = 0; }
       const lineCommission = fixedPounds ?? commissionOn(p.amount_gbp, rate);
       rateOf.set(p.id, { rate, n, commission: lineCommission });
       const continuing = (v3 && p.kind === 'recurring' && p.amount_gbp < FINDABLE_MONTHLY_GBP - 0.005)
@@ -587,8 +599,7 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
           : (v3Initial && baseStatus === 'due' && !approvedNow) || (planInitial && baseStatus === 'due' && !payableNow) ? 'pending' : baseStatus,
         ...(paidOf(lineId) !== 0 ? { paidAmount: round2(paidOf(lineId)) } : {}),
         ...(planRules ? { planRules: true } : {}),
-        ...(fixedRules ? { fixedRules: true, fixedCount: fixed.payments, fixedPerPayment: fixed.perPayment } : {}),
-        ...(bonus > 0 ? { bonus } : {}),
+        ...(fixedRules ? { fixedRules: true, fixedCount: fixed.payments, fixedPerPayment: fixed.perPayment, fixedMax: fixed.max } : {}),
         ...(claim ? { claim } : {}),
         ...(planInitial && !payableOn ? { waitingForResults: true } : {}),
         ...(planInitial ? { approvalDay: payableOn } : {}),
@@ -689,7 +700,7 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
     const contractTotal = input.contractTotalOf?.get(leadId) ?? null;
     const contractRecurringLeft = typeof contractTotal === 'number' && contractTotal > 0 ? Math.max(0, contractTotal - 1 - recurringSeen) : Infinity;
     /* Ended NOW: every payment still to come lands while not engaged, so none is projected. */
-    /* Fixed rules: a salesperson who has left is still paid as the payments arrive, so ending projects nothing away. */
+    /* Contract rules: a salesperson who has left is still paid as the payments arrive, so ending projects nothing away. */
     const ended = !fixedRules && engagementEndedNow(events);
     /* The CLIENT closed (ended / refunded) or a test lead: no future revenue is expected from it. */
     const clientClosed = !!clientState && (!!clientState.endedAt || clientState.refunded);
@@ -726,7 +737,7 @@ export interface EarningsTotals {
   projected: number;
 }
 
-/** fixedPerPayment: a fixed-rules sale's pounds per payment. Absent = an old sale, worked out from its monthly amount. */
+/** fixedPerPayment: on the contract rules, what each plan payment still to come earns. Absent = an old sale, worked out from its monthly amount. */
 export interface ProjectionInput { leadId: string; paymentsLeft: number; monthlyGbp: number | null; active: boolean; fixedPerPayment?: number }
 
 export function earningsTotals(lines: CommissionLine[], payouts: PayoutRow[], projections: ProjectionInput[], todayIso: string): EarningsTotals {
@@ -779,10 +790,12 @@ export interface MonthlyTracker {
   earned: number;
   /** The number the NEXT sale this month will take. */
   nextSaleNumber: number;
-  /** Does the next sale earn the big-month bonus? */
-  bonusOn: boolean;
-  /** Sales still to make before the bonus is on (0 once it is). */
-  salesToBonus: number;
+  /** What the next sale's first payment earns (FIRST_PAYMENT_LADDER), for a plan paid over time. */
+  nextFirstPounds: number;
+  /** Sales still to make on this step before the next one starts. Null on the top step. */
+  salesToNextStep: number | null;
+  /** What a first payment earns on the next step. Null on the top step. */
+  nextStepPounds: number | null;
 }
 
 export function monthlyTracker(lines: CommissionLine[], todayIso: string): MonthlyTracker {
@@ -798,20 +811,23 @@ export function monthlyTracker(lines: CommissionLine[], todayIso: string): Month
   }).sort((a, b) => a.seq - b.seq || a.occurredAt.localeCompare(b.occurredAt));
   const counted = sales.filter((s) => s.counted).length;
   const nextSaleNumber = counted + 1;
-  const bonusOn = nextSaleNumber >= BIG_MONTH_BONUS_FROM_SALE;
+  const stepAt = FIRST_PAYMENT_LADDER.findIndex((s) => nextSaleNumber <= s.upTo);
+  const step = FIRST_PAYMENT_LADDER[stepAt === -1 ? FIRST_PAYMENT_LADDER.length - 1 : stepAt];
+  const nextStep = stepAt === -1 ? null : FIRST_PAYMENT_LADDER[stepAt + 1] ?? null;
   return {
     monthStart, sales, counted,
     earned: round2(sales.reduce((s, x) => s + x.commission, 0)),
-    nextSaleNumber, bonusOn,
-    salesToBonus: bonusOn ? 0 : BIG_MONTH_BONUS_FROM_SALE - nextSaleNumber,
+    nextSaleNumber, nextFirstPounds: firstPaymentPoundsFor(nextSaleNumber),
+    /* The next sale takes nextSaleNumber; this step's last number is step.upTo. */
+    salesToNextStep: nextStep ? step.upTo - counted : null,
+    nextStepPounds: nextStep ? nextStep.pounds : null,
   };
 }
 
-/** The month card's one line of words: "3 more sales, then every sale earns +£25" → "Every sale this month earns +£25". */
+/** The month card's one line of words: "3 more sales, then a first payment earns £40" → "Every new sale's first payment earns £50". */
 export function monthlyTrackerNextLine(t: MonthlyTracker): string {
-  const bonus = `+£${bigMonthBonusFor(BIG_MONTH_BONUS_FROM_SALE)}`;
-  if (t.bonusOn) return `Every sale this month earns ${bonus}`;
-  return `${t.salesToBonus} more sale${t.salesToBonus === 1 ? '' : 's'}, then every sale earns ${bonus}`;
+  if (t.salesToNextStep === null || t.nextStepPounds === null) return `Every new sale’s first payment earns £${t.nextFirstPounds}`;
+  return `${t.salesToNextStep} more sale${t.salesToNextStep === 1 ? '' : 's'} at £${t.nextFirstPounds}, then a first payment earns £${t.nextStepPounds}`;
 }
 /* ══ THE NEXT SIX MONTHS (Paul, 2026-10-02) ═════════════════════════════════════════════════════════
    Commission from clients ALREADY sold, by London calendar month: this month and the next five.

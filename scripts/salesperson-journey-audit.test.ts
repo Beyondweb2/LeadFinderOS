@@ -10,6 +10,7 @@ import { closeSaleName, quickCloseEmail, quickCloseMessage, quickCloseScript } f
 import { agreementWords, paidClientRecord } from '../src/lib/paidClientRecord.ts';
 import { CLIENT_PAYMENT_PLANS, PAYMENT_PLAN_SPEC } from '../src/lib/paymentPlans.ts';
 import { configuredPriceId, planPriceExpectations, priceProblem } from '../src/lib/planPriceCheck.ts';
+import { ADD_MOBILE_REFUSAL_WORDS, addMobileRefusalWords, leadHasMobile, offerAddMobile, typedMobileProblem } from '../src/lib/leadAddMobile.ts';
 
 let f = 0;
 const ok = (c: unknown, m: string) => { if (c) console.log('PASS', m); else { f++; console.log('FAIL', m); } };
@@ -160,6 +161,30 @@ console.log('8. first login: could not check is not no access; a waiting name te
   ok(/create trigger trg_profiles_message_name_pending_notice\s+after insert or update on public\.profiles/.test(mig) && /on conflict \(user_id, dedupe_key\) do nothing/.test(mig), 'F5. a name that starts waiting notifies the book owner once');
   ok(/'team_update'/.test(mig) && /'\/team'/.test(mig) && !/update public\.profiles|message_name\s*=/.test(mig.replace(/--.*$/gm, '')), 'F6. the notice is a bell that opens the Team page; the migration approves and changes no name');
   ok(/exception when others then/.test(mig), 'F7. a failed notice can never stop someone saving their name');
+}
+
+console.log('9. a salesperson can add a mobile to a lead that has none');
+{
+  ok(!leadHasMobile('0113 496 0000', 'UK') && !leadHasMobile(null, 'UK') && !leadHasMobile('', null), 'M1. a landline, or no number, is not a mobile');
+  ok(leadHasMobile('07700 900123', 'UK') && leadHasMobile('+44 7700 900123', null) && leadHasMobile('+60123456789', 'UK'), 'M2. a UK mobile is, written either way; a number with its own country code is read as that country');
+  ok(offerAddMobile('0113 496 0000', 'UK') && offerAddMobile(null, 'UK') && !offerAddMobile('07700 900123', 'UK'), 'M3. the box is offered only where the lead has no mobile');
+  ok(typedMobileProblem('', 'UK') !== null && typedMobileProblem('0113 496 0000', 'UK') === ADD_MOBILE_REFUSAL_WORDS.not_a_mobile && typedMobileProblem(' 07700 900123 ', 'UK') === null, 'M4. a landline typed into the box is caught before the server is asked');
+  ok(/another lead \(Stefan\)/.test(addMobileRefusalWords('duplicate', 'Stefan')) && addMobileRefusalWords('already_mobile') === ADD_MOBILE_REFUSAL_WORDS.already_mobile && /could not be added/.test(addMobileRefusalWords('something_new')), 'M5. each refusal has words; a duplicate names who has it; an unknown code still says it failed');
+  const mig = read('supabase/migrations/20261210100000_lead_add_mobile.sql');
+  const body = mig.slice(mig.indexOf('create or replace function public.lead_add_mobile'));
+  ok(/add column if not exists phone_original text;/.test(mig) && !/default/i.test(mig.slice(mig.indexOf('add column'), mig.indexOf('comment on column'))), 'M6. the original number has its own plain column: no default, no table rewrite');
+  ok(body.indexOf('perform public._require_work(_lead_id);') > 0 && body.indexOf('perform public._require_work(_lead_id);') < body.indexOf('from public.outreach_leads where id = _lead_id for update'), 'M7. the role and ownership check runs first, then the row is locked');
+  ok(/public\.mobile_market\(v_country, v_pk\) is null[\s\S]{0,80}'not_a_mobile'/.test(body), 'M8. only a mobile for this lead\'s market is accepted (the rule every sender asks)');
+  ok(/mobile_market\(v_country, public\.phone_key\(v_phone\)\) is not null and v_role is distinct from 'admin'[\s\S]{0,80}'already_mobile'/.test(body), 'M9. a salesperson cannot replace a number that is already a mobile');
+  ok(/from public\.contact_suppressions s where s\.phone_e164 = v_new[\s\S]{0,60}'suppressed'/.test(body), 'M10. a number on the do-not-contact list is refused');
+  ok(/pg_advisory_xact_lock\(hashtext\('lead_add_mobile:' \|\| v_pk\)\)/.test(body) && /o\.id <> _lead_id and public\.phone_key\(o\.phone\) = v_pk[\s\S]{0,200}'duplicate'/.test(body), 'M11. a number another lead holds is refused, one writer per number at a time');
+  ok(/phone_original = coalesce\(phone_original, nullif\(btrim\(coalesce\(phone, ''\)\), ''\)\)/.test(body), 'M12. the FIRST number is kept, and never overwritten by a later change');
+  ok(/insert into public\.lead_activity[\s\S]{0,160}'details_set'[\s\S]{0,160}'mobile_added', v_new, 'original_number'/.test(body), 'M13. History records who added which mobile, and the number it replaced');
+  ok(/revoke all on function public\.lead_add_mobile\(uuid, text\) from public, anon;/.test(mig) && /grant execute on function public\.lead_add_mobile\(uuid, text\) to authenticated;/.test(mig), 'M14. signed-in people only');
+  ok(/whatsapp_delivery_status = null, whatsapp_ever_delivered = false, sms_delivery_status = null/.test(body), 'M15. what was known about the old number (No mobile, No SMS) does not carry over to the new one');
+  const ui = read('src/components/QuickCloseDialog.tsx');
+  ok(/noMobile && v\.canEdit && <AddMobileBox/.test(ui) && /leadRpc\('lead_add_mobile', \{ _lead_id: leadId, _mobile: typed\.trim\(\) \}\)/.test(ui) && !/from\('outreach_leads'\)\.update/.test(ui), 'M16. the Close section asks the function; it never writes the lead itself');
+  ok(/country: lead\.country \?\? null/.test(read('supabase/functions/quick-close/index.ts')), 'M17. the Close view carries the lead\'s country, so the screen and the server read the number the same way');
 }
 
 console.log(f ? `\n${f} FAILURE(S)` : '\nALL PASS');

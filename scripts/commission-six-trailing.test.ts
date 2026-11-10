@@ -50,15 +50,16 @@ ok([1, 12].every((s) => monthlyTierRate(s) === 0.30) && [13, 24].every((s) => mo
   ok(oct.slice(0, 12).every((s) => first(s.lead_id!).rate === 0.3), 'NOT retroactive: sales 1–12 stay stamped at 30% after sale 13 and 25 land');
   const t11 = monthlyTracker(run(oct.slice(0, 11)).lines, '2026-10-20');
   const t12 = monthlyTracker(run(oct.slice(0, 12)).lines, '2026-10-20');
-  ok(t11.counted === 11 && monthlyTrackerNextLine(t11) === '1 more sale, then every sale earns +£25', '11 sales this month: "1 more sale, then every sale earns +£25"');
-  ok(t12.bonusOn && monthlyTrackerNextLine(t12) === 'Every sale this month earns +£25', 'at 12 sales: "Every sale this month earns +£25"');
+  /* 2026-11-10: the month card speaks the contract's ladder (£30 / £40 / £50 on a new sale's first payment). */
+  ok(t11.counted === 11 && monthlyTrackerNextLine(t11) === '1 more sale at £30, then a first payment earns £40', '11 sales this month: one more at £30, then £40');
+  ok(t12.nextFirstPounds === 40 && monthlyTrackerNextLine(t12) === '12 more sales at £40, then a first payment earns £50', 'at 12 sales the next one is on the £40 step');
 }
 ok(londonMonthStart('2026-10-31T23:30:00Z') === '2026-10-01' && londonMonthStart('2026-11-01T00:30:00Z') === '2026-11-01', 'GMT: 31 Oct 23:30 UTC is October, 1 Nov 00:30 UTC is November');
 ok(londonMonthStart('2026-09-30T23:30:00Z') === '2026-10-01' && londonMonthStart('2026-03-31T23:30:00Z') === '2026-04-01', 'BST: 23:30 UTC on the last day is already the 1st in London');
 {
   const lines = run([sale('m1', '2026-10-30T10:00:00Z', 12), sale('m2', '2026-11-01T00:30:00Z', 1)]).lines;
   const nov = monthlyTracker(lines, '2026-11-05');
-  ok(nov.counted === 1 && nov.nextSaleNumber === 2 && !nov.bonusOn, 'the count starts again on the 1st (UK time)');
+  ok(nov.counted === 1 && nov.nextSaleNumber === 2 && nov.nextFirstPounds === 30, 'the count starts again on the 1st (UK time)');
 }
 
 console.log('── 2. TRAILING: 20% OF THE NEXT SIX SUCCESSFUL MONTHLY PAYMENTS ──');
@@ -264,9 +265,9 @@ console.log('── 6. THE SALES PAGE ──');
   ok(/forecast-engagement-ended/.test(card), 'an ended engagement says what it means');
   /* 2026-10-02 redesign: the ladder is a solid green hero; the progress line is its biggest line of words. */
   ok(/className="mt-3 text-xl font-bold leading-snug text-amber-200" data-testid="ladder-next-line"/.test(ladder), 'the progress line is the headline of the ladder');
-  ok(/data-testid="ladder-scheme"/.test(ladder) && /BIG_MONTH_BONUS_FROM_SALE/.test(ladder) && /BIG_MONTH_BONUS_GBP/.test(ladder), 'the bonus in one line, from the constants');
-  /* Paul, 2026-11-04 (docs/commission-owed.md): the explainer is in pounds, from the config. Old sales keep their numbers. */
-  ok(/FIXED_COMMISSION/.test(parts) && /fixedCommissionMax/.test(parts) && !/next 3|next three/i.test(parts + ladder + card), 'the explainer states the pounds from the config; nothing still says three');
+  ok(/data-testid="ladder-scheme"/.test(ladder) && /FIRST_PAYMENT_LADDER/.test(ladder) && /LATER_PAYMENT_RATE/.test(ladder), 'the whole scheme in one line, from the constants');
+  /* Paul, 2026-11-10 (docs/commission-owed.md): the explainer states the contract's rules from the config. Old sales keep their numbers. */
+  ok(/FIRST_PAYMENT_LADDER/.test(parts) && /saleCommissionMax/.test(parts) && !/next 3|next three/i.test(parts + ladder + card), 'the explainer states the pounds from the config; nothing still says three');
   const wn = read('src/lib/whatsNew.ts');
   ok(/id: '2026-10-02-commission-six-forecast'/.test(wn), "a What's New entry for this release");
 }

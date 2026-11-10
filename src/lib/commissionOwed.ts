@@ -10,7 +10,7 @@
    against that person's next commission and never paid out as a negative: an offset bigger than what is due carries forward.
    Pure. ⚠️ Edge-reachable: relative imports, explicit .ts. */
 import type { CommissionLine } from './commission.ts';
-import { BIG_MONTH_BONUS_GBP } from './commissionConfig.ts';
+import { FIRST_PAYMENT_LADDER } from './commissionConfig.ts';
 import { commissionPlanWords, salePlanParts } from './salePlan.ts';
 
 export type OwedBucket = 'now' | 'soon' | 'waiting' | 'held';
@@ -80,11 +80,11 @@ export interface OwedSale {
   leadId: string;
   sellerId: string;
   business: string;
-  /** "Complete monthly · 2 of 6 paid · £50 of £150", "Complete up front · £300", "Complete monthly · client claimed · nothing payable". */
+  /** "Complete monthly · 2 of 12 paid · £50 of £250", "Complete up front · £300", "Complete monthly · client claimed · nothing payable". */
   progress: string;
-  /** "+£25 big-month bonus", or null. */
+  /** "Sale 14 of the month: £40 first payment" when the first payment was above the ladder's first step, or null. (The field kept its old name.) */
   bonusWords: string | null;
-  /** Earned so far, net of refunds and bonus included. Zero once a claim stops the sale. */
+  /** Earned so far, net of refunds. Zero once a claim stops the sale. */
   earned: number;
   /** A guarantee claim: 'marked' by Paul (he can undo it), 'refunded' by Stripe. */
   claim: 'marked' | 'refunded' | null;
@@ -125,12 +125,11 @@ export function countdownWords(payableOn: string | null, today: string): string 
 /** "£50" for whole pounds, "£7.58" otherwise. */
 export const poundWords = (n: number): string => (Number.isInteger(round2(n)) ? `£${round2(n)}` : `£${round2(n).toFixed(2)}`);
 
-export const BONUS_WORDS = `+£${BIG_MONTH_BONUS_GBP} big-month bonus`;
-
 function whatItIs(l: CommissionLine): string {
   if (l.fixedRules) {
-    if (l.fixedCount === 1) return l.bonus ? `One payment, ${BONUS_WORDS}` : 'One payment';
-    return `Payment ${l.paymentNumber} of ${l.fixedCount}${l.bonus ? `, ${BONUS_WORDS}` : ''}`;
+    if (l.fixedCount === 1) return 'One payment';
+    /* The first payment says which sale of the month it is: that number is what set its pounds. */
+    return `Payment ${l.paymentNumber} of ${l.fixedCount}${l.paymentNumber === 1 && l.monthSeq ? `, sale ${l.monthSeq} of the month` : ''}`;
   }
   if (l.paymentNumber === 1) return 'First payment';
   return `Monthly payment ${l.paymentNumber - 1}`;
@@ -150,26 +149,24 @@ export function saleProgress(input: { lines: readonly CommissionLine[]; business
     if (!first?.sellerId || first.testSale || pays.every((l) => l.status === 'not_commissionable')) continue;
     const plan = input.planOf(leadId);
     /* What the engine paid on, so the words can never disagree with the money. */
-    const fixed = { perPayment: first.fixedPerPayment ?? 0, payments: first.fixedCount ?? 0 };
+    const fixed = { payments: first.fixedCount ?? 0, max: first.fixedMax ?? 0 };
     const name = commissionPlanWords(plan);
     const claim = first.claim ?? null;
     const taken = (id: string) => lines.filter((r) => r.kind === 'reversal' && r.reversesLineId === id && !r.held && r.status !== 'not_commissionable').reduce((s, r) => s + r.commission, 0);
     const live = pays.filter((l) => l.commission > 0 && l.status !== 'cancelled' && l.status !== 'reversed' && l.status !== 'not_commissionable');
     const net = live.map((l) => round2(l.commission + taken(l.id))).filter((n) => n > 0);
     const earned = round2(net.reduce((s, n) => s + n, 0));
-    const bonusKept = live.some((l) => (l.bonus ?? 0) > 0);
-    const base = bonusKept ? round2(earned - BIG_MONTH_BONUS_GBP) : earned;
     const heldLines = lines.filter((r) => r.kind === 'reversal' && r.held && r.status !== 'cancelled' && r.status !== 'not_commissionable');
     const held = round2(heldLines.reduce((s, r) => s - r.commission, 0));
-    const max = fixed.perPayment * fixed.payments;
     const progress = claim ? `${name} · client claimed · nothing payable`
       : earned <= 0 && !live.length ? `${name} · nothing payable`
-      : fixed.payments === 1 ? `${name} · ${poundWords(base)}`
-      : `${name} · ${net.length} of ${fixed.payments} paid · ${poundWords(base)} of ${poundWords(max)}`;
+      : fixed.payments === 1 ? `${name} · ${poundWords(earned)}`
+      : `${name} · ${net.length} of ${fixed.payments} paid · ${poundWords(earned)} of ${poundWords(fixed.max)}`;
     out.push({
       leadId, sellerId: first.sellerId, business: input.businessOf(leadId),
       progress: held > 0 ? `${progress} · ${poundWords(held)} held` : progress,
-      bonusWords: bonusKept && !claim ? BONUS_WORDS : null,
+      /* The first payment's step, when it was above the first: "Sale 14 of the month: £40 first payment". */
+      bonusWords: !claim && first.fixedCount !== 1 && first.monthSeq && first.commission > FIRST_PAYMENT_LADDER[0].pounds ? `Sale ${first.monthSeq} of the month: £${first.commission} first payment` : null,
       earned, claim, windowOpen: first.status === 'pending' || (claim === 'marked' && !first.paidAmount),
       at: first.occurredAt,
     });

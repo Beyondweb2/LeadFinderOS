@@ -16,12 +16,38 @@ export interface WhatsNewReport {
   /** What this actually means for you, in one or two sentences. */
   effect: string;
 }
-export interface WhatsNewEntry { id: string; date: string; title: string; body: string; audience: 'all' | 'sales' | 'admin'; report?: WhatsNewReport }
+export interface WhatsNewEntry { id: string; date: string; title: string; body: string; audience: 'all' | 'sales' | 'admin'; report?: WhatsNewReport;
+  /** About what a salesperson is paid: left out for a salesperson whose earnings are hidden (whatsNewFor hideMoney). */
+  money?: boolean }
 
 /** Entries dated on/after this must carry a report (older ones were written before the rule). */
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-10-commission-contract-admin', date: '2026-11-10', title: 'Commission now matches the signed contract', audience: 'admin', money: true,
+    body: 'Every sale since 4 November is worked out on the contract’s rules: £30 / £40 / £50 on the first payment by that person’s sales in the month, then 20% of each later plan payment. The fixed £25 and £15 amounts and the +£25 bonus are gone.',
+    report: {
+      added: ['A rate card line on Commission owed.', 'Sales team performance shows what each person’s next sale earns and how many sales to the next step.', 'Each sale on Commission owed reads like Complete monthly · 2 of 12 paid · £50 of £250, and says when its first payment was on a higher step.'],
+      changed: ['First payment: £30 for a person’s sales 1 to 12 in a UK calendar month, £40 for 13 to 24, £50 from 25. Not backdated.', 'Every later plan payment earns 20% of it in whole pounds (£20 on £99, £10 on £49.99) until the plan is fully paid, at most 12 payments.', 'Complete up front still pays £300 and Essential in full £150, whatever the sale’s number.', 'Existing sales were recalculated. None had been paid out, and no real sale was on the old amounts.', 'A salesperson with Hide earnings on no longer sees commission entries in What’s New.'],
+      removed: ['£25 on each of the first 6 payments, £15 on Essential plans, and the +£25 big-month bonus.'],
+      effect: 'What you owe now follows the contract: about £250 on a Complete monthly sale over its 12 payments instead of £150. Later payments are rounded to whole pounds (£20, not £19.80). Say if the contract means pence.',
+    } },
+  { id: '2026-11-10-commission-contract-sales', date: '2026-11-10', title: 'Your commission follows your contract', audience: 'sales', money: true,
+    body: 'A sale’s first payment earns £30, £40 or £50 depending on how many sales you have made that month. Then you earn 20% of every later plan payment until the plan is paid.',
+    report: {
+      added: ['The month card shows the three steps (sales 1 to 12, 13 to 24, 25 and above) and what your next sale’s first payment earns.'],
+      changed: ['First payment: £30 for your sales 1 to 12 in a UK calendar month, £40 for 13 to 24, £50 from 25. Earlier sales keep their step.', 'Every later plan payment earns 20% of it: £20 on a £99 payment, £10 on a £49.99 payment, to the end of the plan.', 'Complete paid up front earns £300 and Essential paid in full £150, once.', 'When it is payable has not changed.'],
+      removed: ['The fixed £25 and £15 per payment, the six-payment limit, and the +£25 big-month bonus.'],
+      effect: 'A Complete monthly sale can now earn up to £250 over its 12 payments, and more once you pass 12 sales in a month.',
+    } },
+  { id: '2026-11-10-add-mobile', date: '2026-11-10', title: 'Add a mobile to a landline lead', audience: 'all',
+    body: 'If a lead only has a landline, the Close section now has an Add mobile box. Type the mobile they give you and the sign-up link can go by WhatsApp or Text.',
+    report: {
+      added: ['An Add mobile box in the Close section, shown only when the lead has no mobile number.'],
+      changed: ['The lead’s number becomes the mobile. The old number is kept, and History records who changed it and when.'],
+      removed: [],
+      effect: 'You no longer have to fall back to email or copying the link by hand when the owner gives you their mobile on the call. A number on the do-not-contact list, or one already on another lead, is refused.',
+    } },
   { id: '2026-11-10-paid-clients-archive', date: '2026-11-10', title: 'Archive a paid client, and more on each new sale', audience: 'admin',
     body: 'New paid clients and Paid Clients each have an Archive button and Show archived. A new sale now shows the signed agreement, the trade and the town. The new-client email names the plan that was actually sold.',
     report: {
@@ -3274,5 +3300,15 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
     body: 'WhatsApp is now its own menu item with an unread count, filters for Unread and Waiting on us, and a timer on every reply that is waiting for an answer.' },
 ];
 
-export const whatsNewFor = (role: string | null | undefined) =>
-  WHATS_NEW.filter((e) => e.audience === 'all' || e.audience === role);
+/** Entries that are about what a salesperson is PAID (rates, payout dates, the commission screens). A salesperson Paul has
+ *  switched to Hide earnings (Team page) must not read a rate card here either (2026-11-10): What's New was the one screen
+ *  that still showed them commission. Give a new money entry `money: true`; these older ones are listed by id. */
+export const MONEY_ENTRY_IDS: ReadonlySet<string> = new Set([
+  '2026-11-04-commission-day-after-window', '2026-11-04-commission-fixed-sales', '2026-11-03-commission-stripe-no-handover',
+  '2026-11-03-sales-page-wording', '2026-11-02-commission-owed-sales', '2026-10-02-commission-six-forecast',
+  '2026-10-01-sales-page-monthly', '2026-09-28-earnings',
+]);
+export const isMoneyEntry = (e: WhatsNewEntry): boolean => e.money === true || MONEY_ENTRY_IDS.has(e.id);
+
+export const whatsNewFor = (role: string | null | undefined, opts: { hideMoney?: boolean } = {}) =>
+  WHATS_NEW.filter((e) => e.audience === 'all' || e.audience === role).filter((e) => !(opts.hideMoney === true && isMoneyEntry(e)));
