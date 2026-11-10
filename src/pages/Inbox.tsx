@@ -51,6 +51,7 @@ import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { DialogHero, EmptyState, ErrorState, IconTile, LoadState, SubSection } from '@/components/operator/ui';
 import { Card } from '@/components/ui/card';
 import { CampaignPicker } from '@/components/CampaignPicker';
+import { useSharedCampaign } from '@/hooks/useSharedCampaign';
 import { PipelineStatusSelect } from '@/components/PipelineStatusSelect';
 import { updateLeadStatus } from '@/lib/leadStatus';
 import { PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, type PipelineStatus } from '@/types/outreach';
@@ -497,7 +498,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   // when a specific campaign is selected — that's where mis-routed / unknown-sender
   // replies land and must never be hidden.
   // Persisted per-user (sessionStorage) so the filter survives navigating away and back.
-  const [campaignFilter, setCampaignFilter] = usePersistedState<string | null>(pk('inbox-campaign-filter'), null, { tier: 'session', scope: user?.id });
+  const [campaignFilter, setCampaignFilter] = useSharedCampaign(); // one campaign for every page
   // Status filter (null = all statuses). Composes with the campaign filter (AND).
   // Unassigned stays visible regardless (never hidden by a filter).
   const [statusFilter, setStatusFilter] = usePersistedState<string | null>(pk('inbox-status-filter'), null, { tier: 'session', scope: user?.id });

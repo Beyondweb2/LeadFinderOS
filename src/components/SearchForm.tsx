@@ -54,6 +54,8 @@ interface SearchFormProps {
    * results.
    */
   autoSubmit?: boolean;
+  /** Coverage's "Find leads in these N towns": run the many-towns search once on arrival (same guard as autoSubmit). */
+  autoSubmitMany?: boolean;
   /* ══ MANY TOWNS (2026-10-16, V2's "Many towns" mode; src/lib/manyTowns.ts) ══════════════════════════════════
      Present = the form offers "One town | Many towns". In Many towns the location box becomes a town list; the press
      hands the page the SAME trade / country / radius the one-town search sends, with "this town only" on (each town
@@ -82,6 +84,7 @@ export function SearchForm({
   initialCountry,
   initialDepth,
   autoSubmit = null,
+  autoSubmitMany = false,
   many = false,
   onManyChange,
   pickedTowns = [],
@@ -211,6 +214,19 @@ export function SearchForm({
     autoSubmitted.current = true;
     runSearch();
   }, [autoSubmit, keyword, location, initialKeyword, initialLocation, initialCountry, selectedCountry, runSearch]);
+
+  /* THE SAME ARRIVAL RUN FOR MANY TOWNS (Paul, 2026-11-10): ticking towns on Coverage and pressing its button used to land
+     here and need a second press. Same guard: only once the form holds the trade and country the URL asked for, and
+     only with towns picked; the per-press town cap still applies inside the search. */
+  const autoSubmittedMany = useRef(false);
+  useEffect(() => {
+    if (!autoSubmitMany || autoSubmittedMany.current || !seeded.current || !many) return;
+    if (initialKeyword && keyword.trim() !== initialKeyword.trim()) return;
+    if (initialCountry && selectedCountry !== initialCountry) return;
+    if (!keyword.trim() || !pickedTowns.length) return;
+    autoSubmittedMany.current = true;
+    runMany();
+  }, [autoSubmitMany, many, keyword, pickedTowns.length, initialKeyword, initialCountry, selectedCountry, runMany]);
 
   return (
     <Card className="border-border/50 bg-card shadow-sm">

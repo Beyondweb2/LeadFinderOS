@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle2, X } from 'lucide-react';
 import { isDemoLead } from '@/lib/demoLeads';
 import { readCampaignFilter, writeCampaignFilter } from '@/lib/outreachPrefs';
+import { useSharedCampaign } from '@/hooks/useSharedCampaign';
 import type { ContactMethod, PipelineStatus } from '@/types/outreach';
 import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -118,6 +119,12 @@ const Outreach = () => {
     setCampaignFilter(next);
     writeCampaignFilter(user?.id, next);
   }, [user?.id]);
+
+  // The campaign picked on another page (Find Leads / Inbox) arrives here live; a launch's temporary All view is left alone.
+  const [sharedCampaign] = useSharedCampaign();
+  useEffect(() => {
+    if (restoredRef.current) setCampaignFilter(sharedCampaign);
+  }, [sharedCampaign]);
 
   // Launch-pad intent carried from the Manage page via router state. Consumed once
   // (cleared from history so a refresh/back won't reopen the composer).

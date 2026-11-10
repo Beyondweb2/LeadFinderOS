@@ -58,7 +58,7 @@ function findLeadsNotReadyToast(r: Pick<MyReadiness, 'loading' | 'failed' | 'mis
 }
 import type { OwnershipInfo } from '@/components/FindLeadsOwnership';
 
-const ACTIVE_CAMPAIGN_KEY = 'leadfinder_active_campaign';
+import { useSharedCampaign } from '@/hooks/useSharedCampaign';
 const ASK_CAMPAIGN_KEY = 'lf_ask_campaign_each_time';
 
 const Index = () => {
@@ -138,6 +138,8 @@ const Index = () => {
      which; the market view is gone (2026-09-09) and there is only one thing a Coverage row can
      ask for. */
   const runLeadSearchOnArrival = useRef(searchParams.get('run') === 'search').current;
+  /* Coverage's many-towns button: mode=many with towns in the URL means "search them now". One-shot, like run=search. */
+  const runManyOnArrival = useRef(searchParams.get('mode') === MANY_MODE_VALUE && parseTownList(searchParams.get(MANY_TOWNS_PARAM)).length > 0).current;
   const urlKeyword = (searchParams.get('keyword') ?? '').trim();
   const urlLocation = (searchParams.get('location') ?? '').trim();
   /* Coverage's Find leads names the country (2026-10-14); an unknown value is ignored, never used as a bias. */
@@ -168,16 +170,8 @@ const Index = () => {
 
   // Active campaign — new leads added from search are tagged with it.
   // Persisted so it survives navigation/reload.
-  const [activeCampaign, setActiveCampaign] = useState<string | null>(() => {
-    try { return localStorage.getItem(ACTIVE_CAMPAIGN_KEY) || null; } catch { return null; }
-  });
-  const handleCampaignChange = useCallback((id: string | null) => {
-    setActiveCampaign(id);
-    try {
-      if (id) localStorage.setItem(ACTIVE_CAMPAIGN_KEY, id);
-      else localStorage.removeItem(ACTIVE_CAMPAIGN_KEY);
-    } catch {}
-  }, []);
+  // Shared with Outreach and Inbox (useSharedCampaign): one selection for every page.
+  const [activeCampaign, handleCampaignChange] = useSharedCampaign();
 
   // "Ask which campaign each time" toggle — when ON, an Add-to-CRM action prompts
   // for a campaign instead of silently using activeCampaign. Persisted like the
@@ -624,6 +618,7 @@ const Index = () => {
           initialCountry={urlCountry}
           /* Runs the search once, on arrival, when Coverage asked for it. */
           autoSubmit={runLeadSearchOnArrival}
+          autoSubmitMany={runManyOnArrival}
           /* Many towns (V2's mode): the town list, and the press that searches up to ten of them. */
           many={many}
           onManyChange={switchMany}

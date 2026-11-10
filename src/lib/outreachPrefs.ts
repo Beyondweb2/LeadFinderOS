@@ -22,8 +22,25 @@ export function readCampaignFilter(userId?: string | null): string | null {
   }
 }
 
+/* ONE SELECTED CAMPAIGN FOR THE WHOLE APP (Paul, 2026-11-10). Find Leads, Outreach and Inbox all read and write this
+   one value, and every mounted page hears a change at once (useSharedCampaign), so one page can never hold a campaign
+   while another shows none. */
+const listeners = new Set<() => void>();
+export function subscribeCampaignFilter(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => { listeners.delete(fn); };
+}
+
 /** Persist the selected campaign filter. Pass null to clear (back to "All"). */
 export function writeCampaignFilter(userId: string | null | undefined, value: string | null): void {
+  try {
+    writeStored(userId, value);
+  } finally {
+    listeners.forEach((fn) => fn());
+  }
+}
+
+function writeStored(userId: string | null | undefined, value: string | null): void {
   try {
     const k = campaignKey(userId);
     if (value) {

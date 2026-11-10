@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-10-one-campaign-and-auto-search', date: '2026-11-10', title: 'One campaign everywhere, and Coverage searches for you', audience: 'all',
+    body: 'The campaign you pick now stays the same on Find Leads, Outreach and Inbox. Ticking towns on Coverage and pressing Find leads now runs the search straight away.',
+    report: {
+      added: [],
+      changed: ['Find Leads, Outreach and Inbox share one selected campaign.', 'Coverage’s “Find leads in these towns” runs the search on arrival.'],
+      removed: ['The second press of Find leads after arriving from Coverage with ticked towns.'],
+      effect: 'No page can show a campaign while another shows none. The search costs the same as before, with the same towns-per-press cap.',
+    } },
   { id: '2026-11-10-commission-contract-admin', date: '2026-11-10', title: 'Commission now matches the signed contract', audience: 'admin', money: true,
     body: 'Every sale since 4 November is worked out on the contract’s rules: £30 / £40 / £50 on the first payment by that person’s sales in the month, then 20% of each later plan payment. The fixed £25 and £15 amounts and the +£25 bonus are gone.',
     report: {
