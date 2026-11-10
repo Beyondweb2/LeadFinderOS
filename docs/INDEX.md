@@ -4,6 +4,8 @@
 
 ⛔ **The rule that keeps CLAUDE.md short:** a session record goes in one of these files (or a new one, added to this index); CLAUDE.md gets a rule or a pointer, never the story.
 
+**2026-11-10:** CLAUDE.md was cut to a short index. Its rule sections moved word for word to `docs/rules/` (engineering, business, sales-and-access, messaging, reports-build-state, setup-and-paul); the exact previous text is `docs/archive/claude-md-2026-11-10.md`. The table below is the OLDER (2026-09-16) split.
+
 | Old § | Heading | Now in |
 |---|---|---|
 | §0 | 🔴 0. READ THIS BEFORE ANY SECTION BELOW — 2026-09-09 DELETED A LOT OF WHAT THEY DESCRIBE | `docs/state-of-play-2026-09-09.md` |

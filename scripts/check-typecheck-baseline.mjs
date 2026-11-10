@@ -49,9 +49,18 @@ function normalise(line) {
    been reported as a regression against nothing.
    ⚠️ A GREEN-LOOKING GATE THAT NEVER EXECUTES IS THE WORST OF THE THREE STATES here: red is
    informative, an error is informative, "0 errors" is a lie with a suggestion attached. */
-const res = spawnSync('npx', ['tsc', '--noEmit'], {
-  cwd: ROOT, encoding: 'utf8', shell: process.platform === 'win32',
-});
+/* 2026-11-10 (docs/gate-speed.md): the LOCAL tsc, run directly, with --incremental. tsc re-reports every error of unchanged files
+   from its cache, so the error LIST is the same as a cold run; only repeated work is skipped. Cache: node_modules/.cache (never
+   committed). No local tsc → the old npx path. tsc that dies without printing a TS error is a failure, never "0 errors". */
+const LOCAL_TSC = path.join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
+const TSC_ARGS = ['--noEmit', '--incremental', '--tsBuildInfoFile', path.join(ROOT, 'node_modules', '.cache', 'tsc-app.tsbuildinfo')];
+const res = existsSync(LOCAL_TSC)
+  ? spawnSync(process.execPath, [LOCAL_TSC, ...TSC_ARGS], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+  : spawnSync('npx', ['tsc', ...TSC_ARGS], { cwd: ROOT, encoding: 'utf8', shell: process.platform === 'win32', maxBuffer: 64 * 1024 * 1024 });
+if (res.error || (res.status !== 0 && !/error TS/.test(`${res.stdout ?? ''}${res.stderr ?? ''}`))) {
+  console.error(`typecheck: tsc did not run cleanly (${res.error ?? `exit ${res.status}`}) — this is NOT a pass.\n${res.stdout ?? ''}${res.stderr ?? ''}`);
+  process.exit(1);
+}
 const output = `${res.stdout ?? ''}${res.stderr ?? ''}`;
 const actual = output.split('\n').filter((l) => l.includes('error TS')).map(normalise).sort();
 

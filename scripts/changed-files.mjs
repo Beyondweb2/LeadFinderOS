@@ -29,7 +29,7 @@ export const FULL_GATE_PATHS = [
   [/(whatsapp|twilio|sms|instantly|send-|queue|inbound|first-reply|auto-reply|outreach-send|notify)/i, 'messaging / sending'],
   [/(stripe|checkout|payment|commission|billing|findableOffer|offer-price|delayed-subscription|webhook)/i, 'payments / money'],
   [/(secret|credential|token|\.env)/i, 'secrets handling'],
-  [/^scripts\/(run-tests|check-[a-z-]+)\.mjs$|^package\.json$/, 'the gate itself'],
+  [/^scripts\/(run-tests|gate|test-changed|check-[a-z-]+)\.mjs$|^package\.json$/, 'the gate itself'],
 ];
 
 export function fullGateReasons(files) {

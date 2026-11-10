@@ -4,6 +4,8 @@ Moved verbatim from CLAUDE.md §10 on 2026-10-15. Add a row here when you write 
 
 | Touching… | Read first |
 |---|---|
+| ⛔ ANY area — the binding RULES (moved out of CLAUDE.md word for word on 2026-11-10). Read the area's rules file before its records below | `docs/rules/engineering.md` (code, gate, deploy, edge, SQL) · `docs/rules/business.md` (offer, money, measurement) · `docs/rules/sales-and-access.md` (auth, RLS, Sales) · `docs/rules/messaging.md` (WhatsApp, SMS, Inbox) · `docs/rules/reports-build-state.md` (reports, build, UI state) · `docs/rules/setup-and-paul.md` (checkouts, SQL, QA) |
+| How long the full gate takes, why, the parallel gate / tsx / incremental typecheck, TEST_CONCURRENCY | `docs/gate-speed.md` |
 | The prospect popup's questions or Close section, sending the sign-up link from it, the browser call or the End call button | `docs/prospect-one-page-close.md` |
 | Sending from the Inbox outside the lead's send hours: the queue (inbox_scheduled_sends), its drain, the holds (they replied since / 24h expired), the reply-hours setting | `docs/inbox-send-window.md` |
 | Closing items on the Sales dashboard (What to do next / Follow-ups): lead_close_work, the closed-until-they-reply rule (isClosedItem), Done vs Dead lead | `docs/close-dashboard-items.md` |

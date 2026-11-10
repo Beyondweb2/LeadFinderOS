@@ -1,0 +1,21 @@
+# Reports, Website Build, site score, client facts, UI state, data hygiene, code map
+
+> **Rules, not history.** Moved word for word from CLAUDE.md on 2026-11-10 so they load only when relevant.
+> **Read this file before:** touching reports, the website build, site score, client facts, navigation/persisted state, Outreach/Find Leads loading, cron, or looking for where code lives.
+> Older full wording of each rule: `docs/archive/claude-md-full-2026-10-22.md` (indexed by `docs/rules-ledger.md`).
+
+
+**Reports, Website Build, state**
+- ⛔ We never publish content written in a business's name: yoursites.uk `/r/` retired (410); never delete `business_reports` rows. Every report renders live from `render-audit-report` (short code `findable.live/r/<code>`, UUID and legacy slug resolve forever); weekly-check and market audits are refused; client-facing copy is scanned by `client-copy-claims.test.ts`; operator copy contains competitors — never send it. Quick report = chat view (`renderQuickCheckReport`).
+- Website Build: simple screen flow (`simpleBuild.ts`), Preview Ready = technical AND perceived quality (`previewReadyProblems`), build standard, Site Quality Gate, old pages/redirects (`oldPages.ts`), MCL template pinned commit, one intent-ownership rule, source-site facts approved by default but PRICES stay Paul's, a site page answers only what the client confirmed (`siteServiceTruth.ts`). Redeploy `paid-client-hub` BEFORE the SPA when the `website_build` shape changes. Records: `docs/website-build-*.md`.
+- ⛔ Site score (`siteScore.ts`, `docs/site-score.md`) is TEAM-ONLY and weighs the one website check (deep checks only; can't-read / quick = own states, never 0); never reaches a sender, template or report (`site-score.test.ts` import fence).
+- Client facts: one ranked resolver `clientFacts.ts` (never hides the loser; lists never merged); the rebuild prompt is generated at click time, never stored.
+- State/navigation: URL for WHAT you look at, `usePersistedState` for HOW it's configured — never persist an open dialog. Leaving the lead workspace goes through ONE guard (`UnsavedDraftGuard`). The lead workspace header draws each fact once. `useOutreach` is the one hook not on React Query; Outreach loads progressively (gate whole-list actions on `datasetComplete`, call `needsFullList()`). The shell mounts once; its palette, feedback/What's New dialogs and review tab load on demand (`CommandPaletteHost`, `FeedbackNewsButtons`). Coverage niche reads `result_niche`; Coverage town strictness `inTown.ts`. Find Leads adds are ONE batch (`findLeadsBulkAdd.ts`); every business addable, duplicate the only skip.
+- Data hygiene: paginate every read; guards that decide from the DB fail closed; `no_whatsapp_needs_sms` is the landline marker ("No mobile"); `generated_sites` purge only barber rows as service_role; `enrichment_usage` is the audit engine's spend cap, not contact discovery. Dead and not to be built on: barber/salon product, Instantly, the OLD Twilio SMS drip, the Feedback page; Twilio is BACK as two-way texting + browser calling (`docs/twilio-comms.md`). Deep clean Phase 3 steps 4–10 owed (`docs/deep-clean-phase3-plan.md` — Paul's standing decisions are not re-asked).
+
+## 6. Where the code lives, cron, open problems
+
+- `docs/code-map.md` is the long form (older rows: `docs/archive/claude-md-moved-2026-10-15.md`). Inbox/SMS `docs/twilio-comms.md`; auth/RLS `docs/multi-user.md`; admin dashboard `docs/admin-control-centre.md`; speed work `docs/lighter-outreach-inbox.md`, `docs/lighter-shell-and-lists.md`.
+- **Cron jobs live only in the DB** (`cron.job`; re-read before quoting; a rebuild from migrations loses them). The `bulk_jobs.job_type` CHECK is DB-only too.
+- **Open problems:** `docs/open-problems.md` (long), `docs/handover/12-…` (live list). Standing ones: the Apify cap (docs/rules/engineering.md, "Constants"); `classifySource` grades any `.org` as authority; a 3-run measurement repeats only 20 questions when the set is longer; `run_number` has no unique index; nothing sends the four-week results by WhatsApp (email only); TPS/CTPS screening postponed by Paul (not a blocker).
+- The ARCHIVED checkout's `CLAUDE.md` and `HANDOFF.md` / `ONBOARDING.md` / `HANDOVER_NEXT.md` are stale (`HANDOVER_MOCKUP.md` is the live mockup record).

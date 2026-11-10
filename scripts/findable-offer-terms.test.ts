@@ -145,9 +145,11 @@ const ACTIVE = [
 ];
 /* 2026-10-05: £29.99 exists in code exactly ONCE — the Continuing Service constant (clause 9A). Everything else names it. */
 for (const p of ACTIVE) ok(!/29\.99/.test(code(p).replace('export const FINDABLE_CONTINUING_GBP = 29.99;', '')), p + ': no £29.99 in code (beyond the one constant)');
-for (const p of [...ACTIVE, 'CLAUDE.md', 'docs/business-and-offer.md']) ok(!/not a binding term/i.test(read(p)), p + ': no "not a binding term"');
+for (const p of [...ACTIVE, 'CLAUDE.md', 'docs/rules/business.md', 'docs/business-and-offer.md']) ok(!/not a binding term/i.test(read(p)), p + ': no "not a binding term"');
+/* 2026-11-10: CLAUDE.md is a short index now (the offer rules live in docs/rules/business.md, which may NAME £29.99 in a "never say"
+   rule). The old check sliced "## 1."…"## 2." — headings that no longer exist, so it would have passed on an empty string. */
 const rules = read('CLAUDE.md');
-ok(!/29\.99/.test(rules.slice(rules.indexOf('## 1.'), rules.indexOf('## 2.'))), 'CLAUDE.md §1 (the offer rules) carries no £29.99');
+ok(rules.length > 2000 && !/29\.99/.test(rules), 'CLAUDE.md (read by every session) carries no £29.99');
 
 console.log('── 6. THE STALE META TEMPLATES ARE BLOCKED ──');
 for (const t of ['explain_offer', 'explain_offer_v2']) {
