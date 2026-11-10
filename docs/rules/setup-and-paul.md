@@ -1,0 +1,25 @@
+# Setup and how Paul works — full wording
+
+> **Rules, not history.** Moved word for word from CLAUDE.md on 2026-11-10 so they load only when relevant.
+> **Read this file before:** setting up a checkout or worktree, running SQL, live QA tests, or anything where you are unsure what Paul has authorised.
+> Older full wording of each rule: `docs/archive/claude-md-full-2026-10-22.md` (indexed by `docs/rules-ledger.md`).
+
+
+## 0. Where things are
+
+- **Product:** Findable — AI visibility for local UK businesses. **Operator app = `https://app.leadfinderos.com`** (production; `OPERATOR_APP_URL` in `src/config/operatorApp.ts`, written once, a test fails on a second copy). `leadfinderos-next.pages.dev` is the same build, legacy/fallback, never used to build a link, do not redirect until Paul says. ⛔ **Never verify against `leadfinderos.pages.dev`** (stale legacy project). Public site `https://findable.live` (separate repo `findable-site`, Astro, `npm run deploy`; it has NO CI — if `findable-site.pages.dev` is stale, nothing deployed). Supabase ref `ruusxpkkmwtljxxulhbq`.
+- **Checkouts:** PRIMARY `C:/Users/paulj/LeadFinderOS-current` (clean, on `main`). Parallel work: `git fetch origin`, then `git -C C:/Users/paulj/LeadFinderOS-current worktree add -b <branch> C:/Users/paulj/LeadFinderOS-wt/<task> origin/main`. ARCHIVE `C:/Users/paulj/LeadFinderOS` is stale — no new work, never delete (older worktrees hang off its `.git` / `node_modules`). Junction `node_modules` only if the primary's is non-empty, else `npm ci` in your own worktree (`.npmrc` keeps `legacy-peer-deps`). Cross-repo suites read findable-site through `scripts/findable-site-dir.mjs` (`C:/Users/paulj/findable-site-current`; refresh with `git -C … pull --ff-only`).
+- **Windows host** (PowerShell primary, Git Bash available; tree CRLF, repo LF — match on LF-normalised text). No Deno: the deploy is the only real gate for an edge function.
+- **Deploy model:** `main` auto-deploys the SPA to Cloudflare Pages (`leadfinderos-next`) on push. **Edge functions deploy by hand** (`npx supabase functions deploy <name>`) and keep old code until you do. Neither Pages project is visible to wrangler here — prove a deploy by the live BUNDLE (§3).
+- **Parallel sessions:** a parallel branch is pushed but NOT merged or deployed until an integration session (or Paul) does it. Never switch branches in the primary checkout; never touch another session's branch or worktree.
+
+## 1. How Paul works
+
+- Non-technical; does ideation, scoping, review, product judgement. You write and run all code; **he never runs terminal commands**. Types fast with typos — interpret intent. **Plain English, lead with the answer, questions at the end, short reports.**
+- **Plan first, then stop** for a new piece of work; once approved, build the whole thing. ✅ **Deploy live by default:** tests → commit → push `main` → deploy (SQL first, edge by hand) → verify on `app.leadfinderos.com` — unless he says not to, planning-only, or unsafe.
+- **Hard stop and ask** before anything irreversible or outward-facing not already authorised: destructive SQL, deletions, money / Stripe, Meta / WhatsApp credentials, access changes, real messages to real people, historical client rows. **Never send real messages to prospects. Never print or commit secrets.**
+- When he asks for a change, give a fresh ready-to-paste prompt and say where to run it. Re-derive any approved plan's numbers from the live DB in the session that builds it.
+- ✅ **You can run SQL yourself.** `POST https://api.supabase.com/v1/projects/ruusxpkkmwtljxxulhbq/database/query` `{"query": "…"}` with the token from Windows Credential Manager (`cmdkey /list` → `Supabase CLI:supabase`, read with a PowerShell `CredRead` P/Invoke into the scratchpad; NOT `~/.supabase/access-token`; never echo or commit). Additive/idempotent DDL and read-only SELECTs: run. **Anything destructive: show him first.** Verify by reading the schema back. Service-role DATA writes use PostgREST with the legacy `service_role` JWT (`npx supabase projects api-keys --output json`).
+- Screenshots need him; use `read_page` / `get_page_text` and say nobody has *seen* it. An authed page can't load locally — use a throwaway read-only Vite harness, deleted before commit.
+- **Live tests use `ZZ QA` fixture leads** (no contact details, a `metric_exclusions` row each, ARCHIVED at the end; check query in `docs/qa-fixtures.md`). Payment success in a test = `scripts/qa-simulate-payment.ts`, never a real card. A QA lead is explicit, never a name: a `metric_exclusions` row, a 07700 900xxx number, paul@move37.fun; every sender asks `qaSendHold` (`_shared/qa-guard.ts`); client emails for QA leads go only to paul@move37.fun.
+- **Report faithfully:** failing tests → say so with output; skipped → say that; done and verified → state it. Don't just agree — if a request would harm product, security or business, say so and recommend better. **End reports with "What matters", "What to ignore", "Decision needed from you (or none)".**

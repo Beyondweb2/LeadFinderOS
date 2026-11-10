@@ -48,13 +48,14 @@ const names = [...selected.keys()].sort();
 for (const n of names) console.log(`  ${n}  ← ${[...new Set(selected.get(n))].slice(0, 3).join(', ')}${new Set(selected.get(n)).size > 3 ? ', …' : ''}`);
 if (listOnly) process.exit(0);
 
-let failed = 0;
+/* 2026-11-10: ONE run of the runner with the exact list (in parallel), not one runner per suite in series — same grading, same
+   Deno retry, same findable-site banner; the runner prints each failure's tail and the pass count. */
 const t0 = Date.now();
-for (const n of names) {
-  const r = spawnSync('node', ['scripts/run-tests.mjs', n], { cwd: ROOT, encoding: 'utf8', shell: process.platform === 'win32' });
-  const ok = r.status === 0;
-  if (!ok) { failed++; console.log(`✗ ${n}\n${((r.stdout ?? '') + (r.stderr ?? '')).split('\n').slice(-30).join('\n')}`); }
-}
+const r = spawnSync(process.execPath, ['scripts/run-tests.mjs', '--exact', ...names], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+const out = (r.stdout ?? '') + (r.stderr ?? '');
+const failedLines = out.split('\n').filter((l) => /FAIL\S*\s+\S+\.(test\.ts|mjs)/.test(l) && !/^\s*FAILED/.test(l.replace(/\x1b\[[0-9;]*m/g, '')));
+if (r.status !== 0) console.log(out.split('\n').filter((l) => !/PASS/.test(l)).join('\n'));
+const failed = r.status === 0 ? 0 : Math.max(1, failedLines.length);
 console.log(`\n${failed ? `✗ ${failed} of ${names.length} suites FAILED` : `✓ ${names.length} suite${names.length === 1 ? '' : 's'} passed`} (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
 printFullGateWarning(files);
-process.exit(failed ? 1 : 0);
+process.exit(r.status === 0 ? 0 : 1);

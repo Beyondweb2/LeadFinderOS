@@ -12,10 +12,11 @@
     "typecheck:baseline": "node scripts/check-typecheck-baseline.mjs",
     "check:quick": "node scripts/quick-check.mjs",
     "test:changed": "node scripts/test-changed.mjs",
-    "check": "npm run typecheck:baseline && node scripts/check-edge-syntax.mjs && node scripts/check-edge-undefined.mjs && node scripts/check-import-graph.mjs && npm run build && npm test",
+    "check": "node scripts/gate.mjs",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:serial": "npm run typecheck:baseline && node scripts/check-edge-syntax.mjs && node scripts/check-edge-undefined.mjs && node scripts/check-import-graph.mjs && npm run build && npm test"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.14",
@@ -73,6 +74,7 @@
     "globals": "^15.15.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
+    "tsx": "4.23.15",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
     "vite": "^5.4.19"

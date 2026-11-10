@@ -59,8 +59,9 @@ Map: `13-REPOSITORIES-AND-FILE-MAP.md`.
 12. `10-HISTORICAL-CLIENTS-AND-EXCEPTIONS.md` — Ronnie, MCL, RG, SC, BS4: do not touch.
 13. `12-OPEN-ACTIONS-AND-NEXT-PRIORITIES.md` — what is outstanding now.
 14. `13-REPOSITORIES-AND-FILE-MAP.md` — where the code for each area lives.
-15. Then **`CLAUDE.md`** in full (always from `origin/main`: `git show origin/main:CLAUDE.md`) — the rulebook, ~1,200 lines
-    of hard-won rules. `docs/INDEX.md` maps the topic records.
+15. Then **`CLAUDE.md`** (always from `origin/main`: `git show origin/main:CLAUDE.md`) — the short index loaded into every
+    session, with the every-session safety rules — and the six **`docs/rules/*.md`** files it points at (the binding rules
+    per area, moved there word for word on 2026-11-10). `docs/INDEX.md` maps the topic records.
 
 (`14-NEW-CLAUDE-BOOTSTRAP-PROMPT.md` and `15-ACCOUNT-MIGRATION-CHECKLIST.md` are for Paul.)
 
