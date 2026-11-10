@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-10-paid-clients-archive', date: '2026-11-10', title: 'Archive a paid client, and more on each new sale', audience: 'admin',
+    body: 'New paid clients and Paid Clients each have an Archive button and Show archived. A new sale now shows the signed agreement, the trade and the town. The new-client email names the plan that was actually sold.',
+    report: {
+      added: ['Archive on every row of New paid clients and every card on Paid Clients, with Show archived and Restore. It puts a test or finished client away. Nothing is deleted: the client, payments and commission are untouched.', 'On each new sale: who signed the agreement, in what role, which version and when, with a link to the signed copy. Or a warning when there is no signed agreement.', 'Trade and town in Everything from the sale, and a line when the client corrected something on their sign-up page.', 'A bell notification when a team member\'s message name is waiting for your approval.'],
+      changed: ['The new-client email gives the plan\'s own price and payment count. Before, every sale read "£99 today, then £99/month (12 payments)", including £499 and £999 sales.', 'That email is tried three times if the email provider does not take it.', 'A sale held for your attribution review says so, instead of "Self-service".', 'Hide earnings now holds on the server too: a salesperson with it on is sent no commission figures at all.', 'The contact name falls back to the name they signed the agreement in.'],
+      removed: [],
+      effect: 'You can clear test and finished clients out of your lists, and a new sale tells you what was bought and that the agreement is signed without opening anything.',
+    } },
+  { id: '2026-11-10-calls-and-close', date: '2026-11-10', title: 'Calls stay up, and sending the link is smoother', audience: 'all',
+    body: 'A browser call can no longer be cut off by its five-minute pass running out, or by an app update. If they picked up a browser call, you can text the sign-up link straight away. The link message names the plan they bought.',
+    report: {
+      added: ['If the app was updated while you are on a call and a page will not open, a short screen offers Go back so you can carry on. The app reloads on the next page you open after the call.', 'A clear message if the plan cannot be changed because they have already signed the agreement for another one.', 'A "We could not check your access" screen with Try again, for when the connection drops as the app loads.'],
+      changed: ['The pass a call runs on now lasts an hour instead of five minutes, and running out no longer ends the call.', 'End call while it says Getting ready now really cancels the call. Before, it could still dial.', 'Text is switched on in the Close section once they have answered a browser call. You no longer have to log the call first.', 'The sign-up link message and email say Findable Complete or Findable Essential, whichever they bought.', 'The Close section says why Email is off, and says when a corrected phone number is not where the link will go.'],
+      removed: ['The automatic reload during a call.', 'The "No access, ask the admin" screen appearing because of a dropped connection.'],
+      effect: 'You can stay on the phone, move around the app and send the link without the call dropping or having to stop and log it first.',
+    } },
   { id: '2026-11-07-stale-page-reload', date: '2026-11-07', title: 'The app reloads itself after an update', audience: 'all',
     body: 'If the app was open during an update and a page will not open ("error loading dynamically imported module"), it now reloads itself once and carries on.',
     report: {

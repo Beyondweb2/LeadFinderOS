@@ -4,6 +4,7 @@ import { startPaidBaseline } from "../_shared/audit-baseline.ts";
 import { createDelayedSubscription, resolvePaidRoute, subscriptionEndedByTerm, subscriptionRoute, subscriptionTotalPayments, type DelayedSubscriptionLead } from "../_shared/delayed-subscription.ts";
 import { establishLeadPayment, markOnboardingPaid, stampFirstContactOwed } from "../_shared/payment-state.ts";
 import { PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, paymentPlanFromMeta, planAfterWords, planTransfersAtPayment, type PaymentPlan } from "../../../src/lib/paymentPlans.ts";
+import { planPaymentCountLine, planSoldLine } from "../../../src/lib/newClientEmailWords.ts";
 import { clientClosed, maySetSubscriptionStatus, paymentDayOf, type ClosedReason, type PaymentStateLead } from "../../../src/lib/paymentState.ts";
 import { firstContactDueDay, firstContactDueLabel } from "../../../src/lib/firstContact.ts";
 import { effectiveQuestionnaireServices, questionnaireComplete } from "../../../src/lib/questionnaireComplete.ts";
@@ -93,6 +94,22 @@ async function postResend(payload: Record<string, unknown>): Promise<{ ok: boole
   let id: string | null = null;
   try { id = (JSON.parse(body) as { id?: string }).id ?? null; } catch { /* id stays null */ }
   return { ok: true, status: res.status, id, error: null };
+}
+
+/** The new-client email is the one Paul acts on, and this handler answers Stripe 200 whatever the email did, so Stripe
+ *  never redelivers for it: a single failed post used to be the end of it (2026-11-10). Three tries, only where the
+ *  provider did not take the email (no answer, rate limited, its own 5xx). A refusal (4xx) is not retried. */
+const RESEND_RETRY_WAITS_MS = [1500, 4000];
+async function postResendRetrying(payload: Record<string, unknown>): Promise<{ ok: boolean; status: number; id: string | null; error: string | null; attempts: number }> {
+  let last = { ok: false, status: 0, id: null as string | null, error: "not attempted" as string | null };
+  for (let attempt = 0; attempt <= RESEND_RETRY_WAITS_MS.length; attempt++) {
+    try { last = await postResend(payload); }
+    catch (e) { last = { ok: false, status: 0, id: null, error: (e as Error).message }; }
+    const retryable = !last.ok && last.error !== "RESEND_API_KEY not set" && (last.status === 0 || last.status === 429 || last.status >= 500);
+    if (!retryable || attempt === RESEND_RETRY_WAITS_MS.length) return { ...last, attempts: attempt + 1 };
+    await new Promise((r) => setTimeout(r, RESEND_RETRY_WAITS_MS[attempt]));
+  }
+  return { ...last, attempts: RESEND_RETRY_WAITS_MS.length + 1 };
 }
 
 /** Resolve a REAL inbox for the barber: the owner's auth email, unless it's a synthetic
@@ -330,7 +347,7 @@ async function notifyOfFindablePayment(opts: {
       (opts.quickClose?.length ? `<div style="margin:12px 0 0;padding:8px 10px;background:#eff6ff;border-left:3px solid #1d4ed8">${opts.quickClose.map((l, i) => `<p style="margin:0 0 2px${i === 0 ? ";font-weight:700" : ""}${/DOMAIN \/ AGENCY ISSUE/.test(l) ? ";color:#b91c1c;font-weight:700" : ""}">${esc(l.trim())}</p>`).join("")}</div>` : "") +
       `<p style="margin:10px 0 0;color:#475569">Setup is promised within two working days.</p>` +
       `</div>`;
-    const out = await postResend({
+    const out = await postResendRetrying({
       from: FROM_OPERATOR,
       to: [ADMIN_EMAIL],
       /* Only the genuinely unattributed payment earns a tag: it is the one that needs a hand.
@@ -343,7 +360,7 @@ async function notifyOfFindablePayment(opts: {
       console.log(`[stripe-webhook] findable payment email sent for ${name} (${out.id ?? "no id"})`);
       await trace("payment_email_sent", { to: ADMIN_EMAIL, subject: `PAID ${amount} — ${name}`, provider_message_id: out.id });
     } else {
-      await trace("payment_email_failed", { to: ADMIN_EMAIL, http_status: out.status, error: out.error });
+      await trace("payment_email_failed", { to: ADMIN_EMAIL, http_status: out.status, error: out.error, attempts: out.attempts });
     }
     return out.ok;
   } catch (e) {
@@ -1473,8 +1490,15 @@ Deno.serve(async (req) => {
               });
             }
             if (claimedEmail) {
+              /* ⛔ THE PLAN'S OWN PRICE AND COUNT (2026-11-10). Both lines below used the route's count and the £99
+                 constants for every sale, so a £499 pay-in-full, a £999 up-front, a 6-month or a £49.99 12-month sale
+                 all read "£99 today, then £99/month (12 payments in total) · this one is payment 1". Only the old
+                 staff plan (and a session from before plans) is described by its route. */
+              const soldOnPlan = paidPlan !== "legacy_twelve";
               const handoff = await paymentHandoff(service, findableLeadId || null, onboardingId || null, amountGbp,
-                paid.route ? `${SERVICE_ROUTE_NAME[paid.route]} · £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP}/month (${totalPaymentsFor(paid.route)} payments in total)` : null);
+                !paid.route ? null
+                  : soldOnPlan ? planSoldLine(paidPlan)
+                  : `${SERVICE_ROUTE_NAME[paid.route]} · £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP}/month (${totalPaymentsFor(paid.route)} payments in total)`);
               const sent = await notifyOfFindablePayment({
                 onboardingId, leadId: findableLeadId || null, record: recordPaymentFailure,
                 ...handoff,
@@ -1484,7 +1508,9 @@ Deno.serve(async (req) => {
                 amountGbp,
                 paidFor: paidForLabel,
                 job: [
-                  paid.route ? `${SERVICE_ROUTE_NAME[paid.route].toUpperCase()} — ${totalPaymentsFor(paid.route)} payments in total (this one is payment 1).` : null,
+                  !paid.route ? null
+                    : soldOnPlan ? planPaymentCountLine(paidPlan)
+                    : `${SERVICE_ROUTE_NAME[paid.route].toUpperCase()} — ${totalPaymentsFor(paid.route)} payments in total (this one is payment 1).`,
                   jobLine,
                   billingProblem ? `NO MONTHLY SCHEDULE WAS CREATED — ${billingProblem} Set it up by hand in Stripe once the route is confirmed.` : null,
                 ].filter(Boolean).join(" "),

@@ -148,13 +148,21 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
 
   // 5. the conversation gate
   const isCold = isColdSmsTemplate(a.template);
-  const [{ data: block }, { data: inSms }, { data: inWa }, { data: priorOut }, { data: waAny }] = await Promise.all([
+  const [{ data: block }, { data: inSms }, { data: inWa }, { data: priorOut }, { data: waAny }, { data: answeredCalls }] = await Promise.all([
     service.rpc("opener_contact_block", { _lead_id: lead.id }),
     service.from("sms_messages").select("id").eq("phone", digits).eq("direction", "inbound").limit(1),
     service.from("whatsapp_messages").select("id").eq("lead_id", lead.id).eq("direction", "inbound").limit(1),
     service.from("sms_messages").select("id").eq("phone", digits).eq("direction", "outbound").not("status", "in", "(failed,undelivered,simulated)").limit(1),
     service.from("whatsapp_messages").select("id").eq("phone", digits).or("status.is.null,status.not.in.(failed,failed_temporary,simulated)").limit(1),
+    /* ⛔ A BROWSER CALL THEY ANSWERED IS A CONVERSATION (2026-11-10). twilio-webhook stamps answered_at from Twilio's own
+       "in-progress" event, the moment they pick up, so it is true while the salesperson is still on the phone. Until
+       this, the sign-up link could not be texted from the Close section on a first call: the gate wanted the call
+       LOGGED first, and Log this call comes after the close. Twilio's fact, never a click: a simulated call, a call
+       nobody answered and a call from the rep's own phone stamp nothing here and still need the log. An unreadable
+       answer is "no call" (the gate stays shut). */
+    service.from("call_logs").select("id").eq("lead_id", lead.id).not("answered_at", "is", null).limit(1),
   ]);
+  const answeredCall = Array.isArray(answeredCalls) && answeredCalls.length > 0;
   /* ⛔ A COLD TEXT (the two WhatsApp openers) is the one text that needs no conversation — and so it has the WhatsApp cold rule instead:
      never to a number we have already texted, never into a WhatsApp conversation, never after a logged conversation. It is
      the same check for the Outreach row button and for the queue. */
@@ -164,7 +172,7 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
     if (typeof block === "string" && block.length > 0) return fail("contacted_logged", "You have already spoken to them, so a cold text is not sent.");
   }
   const gate = isCold || smsGateOpen({
-    loggedConversation: typeof block === "string" && block.length > 0,
+    loggedConversation: (typeof block === "string" && block.length > 0) || answeredCall,
     inboundSms: Array.isArray(inSms) && inSms.length > 0,
     inboundWhatsapp: Array.isArray(inWa) && inWa.length > 0,
     isAdmin: a.actor.role === "admin",

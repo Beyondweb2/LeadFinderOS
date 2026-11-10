@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, BadgePoundSterling, Check, ChevronDown, Clock, Loader2, Mail, Phone, RefreshCw, Sparkles, Undo2 } from 'lucide-react';
+import { AlertTriangle, Archive, BadgePoundSterling, Check, ChevronDown, Clock, FileCheck2, Loader2, Mail, Phone, RefreshCw, Sparkles, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Panel, SectionHeading, TONE, gbp } from '@/components/salesDash/ui';
@@ -10,7 +10,9 @@ import { clientHubLink } from '@/lib/salesLinks';
 import type { LinePaymentRow, OwedItem, OwedSale, OwedView } from '@/lib/commissionOwed';
 import { SALE_PLAN_FLAG_WORDS, isSalePlanFlag } from '@/lib/salePlan';
 import { stripeCheckWords, type StripeCheckRow } from '@/lib/commissionReconcile';
-import type { PaidClientRecord } from '@/lib/paidClientRecord';
+import { agreementWords, type PaidClientRecord } from '@/lib/paidClientRecord';
+import { splitArchived } from '@/lib/paidClientArchive';
+import { usePaidClientArchive } from '@/hooks/usePaidClientArchive';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -22,6 +24,8 @@ import { useToast } from '@/hooks/use-toast';
 
 export interface NewPaidClient {
   lead_id: string; business: string; plan: string | null; plan_words: string; amount_paid: number; seller_id: string | null;
+  /** The seller is held for Paul's attribution review (or decided as nobody's): never shown as "Self-service". */
+  seller_pending?: 'awaiting_attribution' | 'not_credited' | null;
   paid_at: string | null; missing: string[]; flag: string | null; test: boolean; refunded: boolean; record: PaidClientRecord;
 }
 type History = (LinePaymentRow & { planWords: string })[];
@@ -291,28 +295,37 @@ export function CommissionOwedSection() {
   );
 }
 
-/** One new client: who to ring, and everything the sale recorded. There is no form behind this: it is what was typed as it was typed. */
-function PaidClientRow({ c, sellerName }: { c: NewPaidClient; sellerName: string }) {
+/** One new client: who to ring, and everything the sale recorded. There is no form behind this: it is what was typed as it was typed.
+ *  Archive puts the row away (a mark, src/lib/paidClientArchive.ts): the client, the payment and the commission are untouched. */
+function PaidClientRow({ c, sellerName, archived, busy, onArchive, onRestore }: { c: NewPaidClient; sellerName: string; archived: boolean; busy: boolean; onArchive: () => void; onRestore: () => void }) {
   const [open, setOpen] = useState(false);
   const r = c.record;
   const hasMore = r.lines.length > 0 || r.notes.length > 0;
   return (
-    <li className="border-t border-border/50 py-2.5 first:border-t-0" data-testid="new-paid-client">
+    <li className={cn('border-t border-border/50 py-2.5 first:border-t-0', archived && 'opacity-70')} data-testid="new-paid-client" data-archived={archived ? 'true' : 'false'}>
       <div className="flex flex-wrap items-start gap-x-4 gap-y-1">
         <div className="min-w-0 flex-1 basis-52">
           <Link to={clientHubLink(c.lead_id)} className="font-medium hover:underline">{c.business}</Link>
           {c.test && <span className={cn('ml-1.5 rounded px-1 text-[10px] font-semibold', TONE.grey.soft, TONE.grey.text)}>test</span>}
           {c.refunded && <span className={cn('ml-1.5 rounded px-1 text-[10px] font-semibold', TONE.red.soft, TONE.red.text)}>refunded</span>}
+          {archived && <span className={cn('ml-1.5 rounded px-1 text-[10px] font-semibold', TONE.grey.soft, TONE.grey.text)}>archived</span>}
           <span className="block text-xs text-muted-foreground">{c.plan_words} · {sellerName} · {dayWords(c.paid_at)}</span>
           <FlagNote flag={c.flag} />
         </div>
         <span className="w-20 text-right font-semibold tabular-nums">{gbp(c.amount_paid)}</span>
+        {archived
+          ? <Button size="sm" variant="outline" className="h-9 gap-1" disabled={busy} onClick={onRestore} data-testid="new-paid-restore"><Undo2 className="h-3.5 w-3.5" />Restore</Button>
+          : <Button size="sm" variant="ghost" className="h-9 gap-1 text-muted-foreground hover:text-foreground" disabled={busy} onClick={onArchive} aria-label={`Archive ${c.business}`} title="Put this client away. Nothing is deleted: Show archived brings it back." data-testid="new-paid-archive"><Archive className="h-3.5 w-3.5" />Archive</Button>}
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm" data-testid="new-paid-contact">
         {r.contactName && <span className="font-medium">{r.contactName}</span>}
         {r.phone ? <a href={`tel:${r.phone}`} className="inline-flex items-center gap-1 text-primary hover:underline"><Phone className="h-3.5 w-3.5" />{r.phone}</a> : <span className={cn('text-xs', TONE.amber.text)}>No phone</span>}
         {r.email ? <a href={`mailto:${r.email}`} className="inline-flex min-w-0 items-center gap-1 break-all text-primary hover:underline"><Mail className="h-3.5 w-3.5 shrink-0" />{r.email}</a> : <span className={cn('text-xs', TONE.amber.text)}>No email</span>}
       </div>
+      {/* The signed agreement, on the row (2026-11-10): who signed, which version, when. The PDF is on the client's page. */}
+      {r.agreement
+        ? <p className="mt-1 text-xs text-muted-foreground" data-testid="new-paid-agreement"><FileCheck2 className={cn('mr-1.5 inline h-3.5 w-3.5 align-text-bottom', TONE.green.text)} />{agreementWords(r.agreement)} · {dayWords(r.agreement.at)} · <Link to={clientHubLink(c.lead_id)} className="font-medium text-primary hover:underline">signed copy</Link></p>
+        : r.agreement === null && <p className={cn('mt-1 flex items-center gap-1.5 text-xs', TONE.amber.text)} data-testid="new-paid-agreement-none"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />No signed agreement on record</p>}
       {c.missing.length > 0 && <p className={cn('mt-1 text-xs', TONE.amber.text)} data-testid="new-paid-missing">Not recorded: {c.missing.join(', ')}</p>}
       {hasMore && (
         <button type="button" className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground" aria-expanded={open} onClick={() => setOpen(!open)} data-testid="new-paid-more">
@@ -332,18 +345,33 @@ function PaidClientRow({ c, sellerName }: { c: NewPaidClient; sellerName: string
 
 export function NewPaidClientsSection() {
   const q = useCommissionOwed();
+  const arc = usePaidClientArchive();
+  const { toast } = useToast();
   const [showAll, setShowAll] = useState(false);
-  const rows = q.data?.new_paid_clients ?? [];
-  const nameOf = (id: string | null) => (id ? q.data?.names[id] ?? 'Former member' : 'Self-service');
+  const [showArchived, setShowArchived] = useState(false);
+  const all = q.data?.new_paid_clients;
+  const { live, archived } = useMemo(() => splitArchived(all ?? [], (c) => c.lead_id, arc.archived), [all, arc.archived]);
+  const sellerOf = (c: NewPaidClient) => (c.seller_pending === 'awaiting_attribution' ? 'Seller awaiting your review' : c.seller_pending === 'not_credited' ? 'Not credited to a salesperson'
+    : c.seller_id ? q.data?.names[c.seller_id] ?? 'Former member' : 'Self-service');
+  const busy = arc.archive.isPending || arc.restore.isPending;
+  const failed = (what: string) => (e: unknown) => toast({ title: `Could not ${what}`, description: e instanceof Error ? e.message : 'Try again.', variant: 'destructive' });
+  const archive = (c: NewPaidClient) => arc.archive.mutate(c.lead_id, { onSuccess: () => toast({ title: `${c.business} archived`, description: 'Nothing was deleted. Show archived brings it back.' }), onError: failed('archive it') });
+  const restore = (c: NewPaidClient) => arc.restore.mutate(c.lead_id, { onError: failed('restore it') });
   if (q.isLoading || q.isError) return null;
+  const row = (c: NewPaidClient, isArchived: boolean) => <PaidClientRow key={c.lead_id} c={c} sellerName={sellerOf(c)} archived={isArchived} busy={busy} onArchive={() => archive(c)} onRestore={() => restore(c)} />;
   return (
     <section className="space-y-3" data-testid="new-paid-clients">
       <SectionHeading title="New paid clients" tone="blue" />
-      <Panel title="Newest first" icon={Sparkles} tone="blue" hint="Who to ring, and everything the salesperson typed. Click a name to open the client.">
-        {rows.length === 0 ? <p className="text-sm text-muted-foreground">No paid clients yet.</p> : (
-          <ul>{(showAll ? rows : rows.slice(0, 8)).map((c) => <PaidClientRow key={c.lead_id} c={c} sellerName={nameOf(c.seller_id)} />)}</ul>
+      <Panel title="Newest first" icon={Sparkles} tone="blue" hint="Who to ring, and everything the salesperson typed. Click a name to open the client. Archive puts a test or finished client away; nothing is deleted.">
+        {arc.isError && <p className={cn('mb-2 flex items-center gap-1.5 text-xs', TONE.amber.text)} data-testid="new-paid-archive-error"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />Could not read which clients you archived, so all of them are shown.</p>}
+        {live.length === 0 ? <p className="text-sm text-muted-foreground">{archived.length === 0 ? 'No paid clients yet.' : 'Every paid client here is archived.'}</p> : (
+          <ul>{(showAll ? live : live.slice(0, 8)).map((c) => row(c, false))}</ul>
         )}
-        {rows.length > 8 && <Button size="sm" variant="ghost" className="mt-1 h-8" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show fewer' : `Show all ${rows.length}`}</Button>}
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          {live.length > 8 && <Button size="sm" variant="ghost" className="h-9" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show fewer' : `Show all ${live.length}`}</Button>}
+          {archived.length > 0 && <Button size="sm" variant="ghost" className="h-9 gap-1" aria-expanded={showArchived} onClick={() => setShowArchived(!showArchived)} data-testid="new-paid-show-archived"><Archive className="h-3.5 w-3.5" />{showArchived ? 'Hide archived' : `Show archived (${archived.length})`}</Button>}
+        </div>
+        {showArchived && archived.length > 0 && <ul className="mt-1 border-t border-border/50" data-testid="new-paid-archived-list">{archived.map((c) => row(c, true))}</ul>}
       </Panel>
     </section>
   );

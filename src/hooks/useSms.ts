@@ -20,6 +20,7 @@ import { COLD_TEXT_REASON_MARK, decideContactRoute, type RouteChannel, type Rout
 import { useCountrySettings } from '@/hooks/useCountrySettings';
 import { marketsOn } from '@/lib/outreachMarkets';
 import { smsDeliveryState } from '@/lib/smsMessages';
+import { useAnsweredCallLead } from '@/components/LiveCall';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -178,6 +179,7 @@ export function useContactDecision(leadId: string, purpose: RoutePurpose, extra?
   const comms = useCommsStatus();
   const sms = useSmsThread(leadId);
   const { settings: countrySettings } = useCountrySettings();
+  const answeredLead = useAnsweredCallLead();
   const row = useQuery({
     queryKey: smsKeys.facts(leadId),
     enabled: !!leadId,
@@ -201,7 +203,12 @@ export function useContactDecision(leadId: string, purpose: RoutePurpose, extra?
     if (!r) return null;
     const lastIn = (wa.data ?? []).find((m) => m.direction === 'inbound')?.created_at ?? null;
     const inboundSms = (sms.data ?? []).some((m) => m.direction === 'inbound');
-    const reached = reachedInConversation(activity.data ?? []) !== null;
+    /* ⛔ A BROWSER CALL THEY ANSWERED IS A CONVERSATION (2026-11-10; the server's rule is _shared/twilio-sms.ts, from
+       call_logs.answered_at). Here: they picked up in this session (LiveCall.tsx), or History already holds the finished
+       call as answered (twilio-webhook's call_made line). So the Text button in the Close section works while the
+       salesperson is still on the phone, before the call is logged. A simulated call never counts, as on the server. */
+    const answeredCall = answeredLead === leadId || (activity.data ?? []).some((a) => a.kind === 'call_made' && (a.data as { answered?: unknown } | null | undefined)?.answered === true);
+    const reached = reachedInConversation(activity.data ?? []) !== null || answeredCall;
     const smsState = smsDeliveryState(sms.data ?? []);
     const failed: RouteChannel[] = [...(extra?.failed ?? []), ...(smsState === 'failed' ? ['sms' as const] : [])];
     /* The cold intro text may go only to a lead we have never texted (a real one), never WhatsApped, and never spoken to. */
@@ -220,7 +227,7 @@ export function useContactDecision(leadId: string, purpose: RoutePurpose, extra?
       failed, alreadySent: extra?.alreadySent,
       markets: { whatsapp: marketsOn(countrySettings, 'whatsapp'), sms: marketsOn(countrySettings, 'sms'), call: marketsOn(countrySettings, 'call') },
     }, purpose);
-  }, [row.data, wa.data, sms.data, activity.data, wrong.data, comms.data, role, purpose, extra?.failed, extra?.alreadySent, countrySettings]);
+  }, [row.data, wa.data, sms.data, activity.data, wrong.data, comms.data, role, purpose, extra?.failed, extra?.alreadySent, countrySettings, answeredLead, leadId]);
   const rowsNow = sms.data ?? [];
   /* What the composer may do: free text needs the conversation gate; the intro text needs the cold rules. */
   const freeTextOpen = (decision?.options.find((o) => o.channel === 'sms')?.available ?? false) && !(decision?.options.find((o) => o.channel === 'sms')?.reason ?? '').includes(COLD_TEXT_REASON_MARK);

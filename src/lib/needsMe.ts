@@ -18,6 +18,7 @@ import { nextActionViewOf } from './nextActionView';
 import { prospectOnlyLead } from './prospectOnly';
 import { questionnaireStep, questionnaireRowKey, type QuestionnaireFacts } from './questionnaireStop';
 import type { NeedsTemplateKey } from './needsMeTemplates';
+import { paidClientArchiveKey } from './paidClientArchive';
 
 export type NeedsKind = 'questionnaire' | 'payment' | 'interested' | 'follow_up' | 'new_client' | 'client_step' | 'other';
 export type NeedsGroup = 'urgent' | 'today' | 'waiting';
@@ -86,7 +87,10 @@ const first = (name: string | null | undefined) => (name ?? '').trim().split(/\s
 
 /** Is this row hidden by a mark right now? */
 export function hiddenByMark(row: Pick<NeedsRow, 'key' | 'sinceIso'>, marks: readonly NeedsMark[], nowMs: number): NeedsMark | null {
+  /* A paid client Paul archived from his client lists (paidClientArchive.ts) is archived here too: one press, not two. */
+  const clientArchive = row.key.startsWith('client:') ? paidClientArchiveKey(row.key.slice('client:'.length)) : null;
   for (const m of marks) {
+    if (clientArchive && m.item_key === clientArchive && m.action === 'archive') return m;
     if (m.item_key !== row.key) continue;
     if (m.action === 'archive') return m;
     if (m.action === 'snooze' && m.until && Date.parse(m.until) > nowMs) return m;

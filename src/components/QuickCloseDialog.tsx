@@ -116,7 +116,7 @@ const FOLD = 'rounded-xl border border-border/60 bg-muted/20 p-3';
 /** A chosen answer: blue edge and text, a faint blue fill. */
 const PICKED = 'border-blue-500/70 bg-blue-500/10 text-blue-700 ring-1 ring-inset ring-blue-500/30 dark:text-blue-300';
 /** Server refusals that mean "what you are looking at is out of date" — the screen re-reads itself. */
-const REFRESH_ON: ReadonlySet<string> = new Set(['stale_route', 'answer_not_kept', 'already_paid', 'client_closed','answers_changed', 'link_expired', 'busy', 'route_locked']);
+const REFRESH_ON: ReadonlySet<string> = new Set(['stale_route', 'answer_not_kept', 'already_paid', 'client_closed','answers_changed', 'link_expired', 'busy', 'route_locked', 'plan_locked']);
 
 export function useQuickClose(leadId: string | null | undefined, enabled = true) {
   return useQuery({
@@ -506,6 +506,11 @@ function SendRow({ leadId, v, canSend, busy, email, sentOn, onEmail, onEmailFocu
   const waSent = sentOn('whatsapp');
   const sms = useSmsLink(leadId, 'agreement', waSent ? ['whatsapp'] : []);
   const emailOk = cleanCloseEmail(email).ok;
+  /* "Correct a detail → Phone" is saved for Paul on the sign-up; WhatsApp and Text only ever go to the lead's own number
+     (the sender refuses any other). Say so, or the rep believes the link went to the number they just typed (2026-11-10). */
+  const digitsOf = (s: string | null | undefined) => (s ?? '').replace(/\D/g, '').replace(/^(44|0)/, '');
+  const corrected = (v.onboarding?.confirmed_phone ?? '').trim();
+  const otherNumber = !!corrected && digitsOf(corrected) !== digitsOf(v.lead.phone);
   const button = (ch: SendChannel, on: boolean, Icon: typeof Mail, word: string, busyKey: string, testId: string) => {
     const sent = !!sentOn(ch);
     return (
@@ -529,6 +534,8 @@ function SendRow({ leadId, v, canSend, busy, email, sentOn, onEmail, onEmailFocu
         {!canWa && <p data-testid="close-whatsapp-off">WhatsApp isn’t available: {lr?.say ?? 'it can’t carry this link right now.'} Use Text or Email.</p>}
         {canWa && !waSent && <p data-testid="close-whatsapp-how">{lr?.route === 'whatsapp_reply' ? 'WhatsApp goes as a normal message: they replied in the last 24 hours.' : lr?.reason === 'ok_unverified' ? lr.template.say : 'WhatsApp goes as the approved sign-up template.'}</p>}
         {sms.option && !sms.option.available && <p data-testid="close-sms-off">Text: {sms.option.reason}</p>}
+        {!emailOk && <p data-testid="close-email-off">Email: type their email address below to switch it on.</p>}
+        {otherNumber && <p data-testid="close-other-number">WhatsApp and Text go to the number on the lead{v.lead.phone ? ` (${v.lead.phone})` : ''}, not to {corrected}. That number is saved for Paul. To reach them on it now, use Email or Copy link.</p>}
         {sms.words && <p className={cn(sms.failed && 'text-destructive')} data-testid="close-sms-status">{sms.words}</p>}
       </div>
     </div>

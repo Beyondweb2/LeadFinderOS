@@ -5,7 +5,9 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { installLeadSync } from "@/lib/leadSync";
-import { isStaleChunkError, reloadOnceForStaleChunk, sessionStore } from "@/lib/staleChunk";
+import { autoReloadBlocked, isStaleChunkError, reloadOnceForStaleChunk, sessionStore } from "@/lib/staleChunk";
+import { callIsLive } from "@/lib/liveCallFlag";
+import { StaleChunkScreen } from "@/components/StaleChunkScreen";
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { FocusRedirect } from "./components/FocusRedirect";
 import { AuthProvider } from "@/hooks/useAuth";
@@ -84,8 +86,8 @@ installLeadSync(queryClient);
  * React Error Boundary — catches render crashes and shows a fallback
  * instead of a blank screen or infinite refresh loop.
  */
-class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; reason: string; stale: boolean }> {
-  constructor(props: { children: ReactNode }) {
+class ErrorBoundary extends Component<{ children: ReactNode; resetKey?: string }, { hasError: boolean; reason: string; stale: boolean }> {
+  constructor(props: { children: ReactNode; resetKey?: string }) {
     super(props);
     this.state = { hasError: false, reason: '', stale: false };
   }
@@ -95,20 +97,17 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
     return { hasError: true, reason, stale: isStaleChunkError(error) };
   }
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    /* A lazy page from an older deploy (src/lib/staleChunk.ts): reload ONCE; a second failure shows the screen below. */
-    if (isStaleChunkError(error) && reloadOnceForStaleChunk(sessionStore(), Date.now(), () => window.location.reload())) return;
+    /* A lazy page from an older deploy (src/lib/staleChunk.ts): reload ONCE; a second failure shows the screen below.
+       ⛔ Never while a call is live: the reload would hang up on the prospect (src/lib/liveCallFlag.ts). */
+    if (isStaleChunkError(error) && reloadOnceForStaleChunk(sessionStore(), Date.now(), () => window.location.reload(), autoReloadBlocked())) return;
     console.error('[ErrorBoundary] Render crash caught:', error, info.componentStack);
   }
+  componentDidUpdate(prev: { resetKey?: string }) {
+    /* Going to another page clears the screen below (Go back, the sidebar, a link). */
+    if (this.state.hasError && prev.resetKey !== this.props.resetKey) this.setState({ hasError: false, reason: '', stale: false });
+  }
   render() {
-    if (this.state.hasError && this.state.stale) {
-      return (
-        <div data-testid="stale-chunk" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'system-ui', gap: 12 }}>
-          <p style={{ fontSize: 16, color: '#888' }}>A new version of the app is out.</p>
-          <p style={{ fontSize: 13, color: '#aaa', maxWidth: 480, textAlign: 'center' }}>Reload the page to carry on. Anything already saved is kept.</p>
-          <button onClick={() => window.location.reload()} style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #ccc', cursor: 'pointer' }}>Reload</button>
-        </div>
-      );
-    }
+    if (this.state.hasError && this.state.stale) return <StaleChunkScreen onCall={callIsLive()} />;
     if (this.state.hasError) {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'system-ui', gap: 12 }}>
@@ -153,6 +152,15 @@ function useGlobalErrorGuard() {
   }, []);
 }
 
+/* ⛔ THE PAGE'S OWN ERROR SCREEN SITS INSIDE THE CALL (2026-11-10). The only boundary used to be the root one, ABOVE
+   LiveCallProvider: any page that crashed, or a lazy page from an older deploy, replaced the whole tree, unmounted the
+   provider and hung up on the prospect. This one wraps the routes only, so the call (and its red End call button) stays
+   up while the screen says what happened. It clears itself when the address changes. */
+function PageErrorBoundary({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
+  return <ErrorBoundary resetKey={pathname}>{children}</ErrorBoundary>;
+}
+
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -186,8 +194,10 @@ const App = () => {
            <LeadSearchProvider>
             <BrowserRouter>
               <ScrollToTop />
-              {/* ⛔ The one browser call lives above every route: no page, popup or reload can end it (LiveCall.tsx). */}
+              {/* ⛔ The one browser call lives above every route AND above the page error screen: no page, popup, page
+                  crash or stale-bundle reload can end it (LiveCall.tsx, PageErrorBoundary, src/lib/liveCallFlag.ts). */}
               <LiveCallProvider>
+              <PageErrorBoundary>
               <Suspense fallback={<FullPageLoader />}>
           <Routes>
             <Route path="/auth" element={<Auth />} />
@@ -290,6 +300,7 @@ const App = () => {
             <Route path="*" element={<NotFound />} />
           </Routes>
               </Suspense>
+              </PageErrorBoundary>
               </LiveCallProvider>
             </BrowserRouter>
           </LeadSearchProvider>

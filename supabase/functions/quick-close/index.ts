@@ -31,7 +31,8 @@ import { sendSmsToLead } from "../_shared/twilio-sms.ts";
 import { qaEmailHold } from "../_shared/qa-guard.ts";
 import { answerClientInfoRequest, openRequestFor, CLIENT_INFO_REQUEST_COLUMNS } from "../_shared/client-info-request.ts";
 import { cleanSellerClientInfo, MISSING_INFO_LABEL } from "../../../src/lib/clientMissingInfo.ts";
-import { unavailablePlans } from "../../../src/lib/paymentPlans.ts";
+import { isPaymentPlan, unavailablePlans } from "../../../src/lib/paymentPlans.ts";
+import { signedPlanLock } from "../../../src/lib/signedPlanLock.ts";
 
 // quick-close — QUICK CLOSE (Sales Experience, 2026-09-29; docs/sales-experience.md §9;
 // fixes 2026-10-04: docs/pre-sales-certification/fixes-02-quick-close.md).
@@ -732,6 +733,20 @@ Deno.serve(async (req) => {
             }
             routeLockChecked = true;
           }
+        }
+        /* ⛔ THE PLAN LOCK (2026-11-10): a signature is for ONE plan. Changing the plan after the client signed used to
+           save quietly here, and their link then told them "Your chosen service changed after you signed… Paul will
+           send you a fresh link": they could neither pay nor sign again (one signature per sign-up and version), and
+           nobody at our end was told. Now the change is refused with the reason, so the rep hears it while still on
+           the phone. Going BACK to the signed plan is always allowed. A plan on the other agreement version is a new
+           signature, never this one, so it is not locked. Fails closed. */
+        if (changed.includes("payment_plan") && isPaymentPlan(answers.payment_plan)) {
+          const { data: sig, error: sigErr } = await service.from("client_agreement_acceptances")
+            .select("agreement_version, payment_plan").eq("lead_id", leadId).eq("onboarding_id", rowId)
+            .order("accepted_at", { ascending: false }).limit(5);
+          if (sigErr) return json({ ok: false, error: "plan_lock_unreadable", detail: "Could not check the agreement record, so the plan was not changed. Try again in a moment." }, 503);
+          const refusal = signedPlanLock((sig ?? []) as { agreement_version: string | null; payment_plan: string | null }[], answers.payment_plan);
+          if (refusal) return json({ ok: false, error: "plan_locked", detail: refusal }, 409);
         }
         const gate = quickCloseGate(answers);
         const patch: Obj = { ...plan.cols, ...cols, updated_at: now };
