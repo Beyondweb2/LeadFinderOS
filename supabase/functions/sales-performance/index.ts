@@ -10,6 +10,7 @@ import { londonDayOf } from "../../../src/lib/commission.ts";
 import { quickCloseState } from "../../../src/lib/quickClose.ts";
 import { isExcludedUser } from "../../../src/lib/metricExclusions.ts";
 import { loadQaExclusions } from "../_shared/qa-guard.ts";
+import { salesEarningsHidden } from "../_shared/earnings-hidden.ts";
 
 // sales-performance — the Sales Dashboard's numbers (2026-09-28, docs/sales-readiness.md).
 //
@@ -158,7 +159,10 @@ Deno.serve(async (req) => {
     /* Commission from the payment ledger (the ONE path, _shared/earnings.ts). A failure leaves the
        commission parts blank, never zero: the rest of the dashboard still loads. */
     let commission: { at: string; amount: number; leadId: string; label: string; business: string }[] | null = null;
-    try {
+    /* ⛔ HIDE EARNINGS (2026-11-10, _shared/earnings-hidden.ts): a salesperson switched to unpaid is sent no commission
+       line and no earned total. The work numbers and lists are untouched. */
+    const moneyHidden = await salesEarningsHidden(service, actor);
+    if (!moneyHidden) try {
       const e = await loadEarnings(service, personId, londonDayOf(new Date().toISOString()));
       const names = new Map(e.clients.map((c) => [c.leadId, c.business]));
       if (e.commissionable) commission = e.lines.filter((l) => l.status !== "not_commissionable").map((l) => ({ at: l.occurredAt, amount: l.commission, leadId: l.leadId, label: l.label, business: names.get(l.leadId) ?? "Client" }));

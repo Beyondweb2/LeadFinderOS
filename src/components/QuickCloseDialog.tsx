@@ -15,6 +15,8 @@ import { invokeEdge, edgeErrorMessage, EdgeFunctionError } from '@/lib/edgeInvok
 import { AutosaveIndicator, useAutosaveFields } from '@/hooks/useAutosaveFields';
 import { withSaveRetry } from '@/lib/autosaveQueue';
 import { notifyLeadChanged } from '@/lib/leadSync';
+import { leadRpc } from '@/lib/leadRpc';
+import { addMobileRefusalWords, leadHasMobile, offerAddMobile, typedMobileProblem } from '@/lib/leadAddMobile';
 import {
   APPROACH_LABEL, APPROACH_ROUTE, QC_REVIEW_HEADING, ROUTE_WITHDRAWN_TEXT, TIED_IN_DECLINE_HEADING, TIED_IN_DECLINE_REASON, QUICK_CLOSE_AGREEMENT_LINE, QUICK_CLOSE_GUARANTEE_LINES, QUICK_CLOSE_STATE_LABEL,
   linkTimeLeftWords, quickCloseScript, routeAfterAnswer, routeSwitchText, routeOwnershipLine, routePaymentsShort, closeTermsLines, closeChipText, firstPaymentGbp,
@@ -58,7 +60,7 @@ export interface View {
   ok: true; canEdit: boolean;
   /** Set when the lead is already a client (already_paid) or its engagement ended / was refunded (client_closed). */
   closed?: 'already_paid' | 'client_closed' | null;
-  lead: { id: string; business_name: string | null; phone: string | null; email: string | null; website: string | null; address: string | null; town: string | null; trade: string | null; contact_name: string | null; rating: number | null; review_count: number | null; campaign: string | null; lead_source: string | null; salesperson: string | null; services?: string[]; service_areas?: string[] };
+  lead: { id: string; business_name: string | null; phone: string | null; country?: string | null; email: string | null; website: string | null; address: string | null; town: string | null; trade: string | null; contact_name: string | null; rating: number | null; review_count: number | null; campaign: string | null; lead_source: string | null; salesperson: string | null; services?: string[]; service_areas?: string[] };
   onboarding: { id: string; status: string; contact_name: string | null; contact_email: string | null; confirmed_phone: string | null; business_website: string | null } | null;
   answers: QuickCloseAnswers; state: QuickCloseState; gate: QuickCloseGate;
   consents?: { lines: string[]; wording: string; confirmed: { wording: string; at: string } | null };
@@ -116,7 +118,7 @@ const FOLD = 'rounded-xl border border-border/60 bg-muted/20 p-3';
 /** A chosen answer: blue edge and text, a faint blue fill. */
 const PICKED = 'border-blue-500/70 bg-blue-500/10 text-blue-700 ring-1 ring-inset ring-blue-500/30 dark:text-blue-300';
 /** Server refusals that mean "what you are looking at is out of date" — the screen re-reads itself. */
-const REFRESH_ON: ReadonlySet<string> = new Set(['stale_route', 'answer_not_kept', 'already_paid', 'client_closed','answers_changed', 'link_expired', 'busy', 'route_locked']);
+const REFRESH_ON: ReadonlySet<string> = new Set(['stale_route', 'answer_not_kept', 'already_paid', 'client_closed','answers_changed', 'link_expired', 'busy', 'route_locked', 'plan_locked']);
 
 export function useQuickClose(leadId: string | null | undefined, enabled = true) {
   return useQuery({
@@ -506,6 +508,13 @@ function SendRow({ leadId, v, canSend, busy, email, sentOn, onEmail, onEmailFocu
   const waSent = sentOn('whatsapp');
   const sms = useSmsLink(leadId, 'agreement', waSent ? ['whatsapp'] : []);
   const emailOk = cleanCloseEmail(email).ok;
+  /* "Correct a detail → Phone" is saved for Paul on the sign-up; WhatsApp and Text only ever go to the lead's own number
+     (the sender refuses any other). Say so, or the rep believes the link went to the number they just typed (2026-11-10). */
+  const digitsOf = (s: string | null | undefined) => (s ?? '').replace(/\D/g, '').replace(/^(44|0)/, '');
+  const corrected = (v.onboarding?.confirmed_phone ?? '').trim();
+  const otherNumber = !!corrected && digitsOf(corrected) !== digitsOf(v.lead.phone);
+  /* The lead has no mobile (a landline, or no number): offer to add the one they give on the call (src/lib/leadAddMobile.ts). */
+  const noMobile = offerAddMobile(v.lead.phone, v.lead.country ?? null);
   const button = (ch: SendChannel, on: boolean, Icon: typeof Mail, word: string, busyKey: string, testId: string) => {
     const sent = !!sentOn(ch);
     return (
@@ -529,8 +538,46 @@ function SendRow({ leadId, v, canSend, busy, email, sentOn, onEmail, onEmailFocu
         {!canWa && <p data-testid="close-whatsapp-off">WhatsApp isn’t available: {lr?.say ?? 'it can’t carry this link right now.'} Use Text or Email.</p>}
         {canWa && !waSent && <p data-testid="close-whatsapp-how">{lr?.route === 'whatsapp_reply' ? 'WhatsApp goes as a normal message: they replied in the last 24 hours.' : lr?.reason === 'ok_unverified' ? lr.template.say : 'WhatsApp goes as the approved sign-up template.'}</p>}
         {sms.option && !sms.option.available && <p data-testid="close-sms-off">Text: {sms.option.reason}</p>}
+        {!emailOk && <p data-testid="close-email-off">Email: type their email address below to switch it on.</p>}
+        {otherNumber && <p data-testid="close-other-number">WhatsApp and Text go to the number on the lead{v.lead.phone ? ` (${v.lead.phone})` : ''}, not to {corrected}. That number is saved for Paul.{noMobile ? ' Add their mobile below to send to it.' : ' To reach them on it now, use Email or Copy link.'}</p>}
         {sms.words && <p className={cn(sms.failed && 'text-destructive')} data-testid="close-sms-status">{sms.words}</p>}
       </div>
+      {noMobile && v.canEdit && <AddMobileBox leadId={leadId} country={v.lead.country ?? null} currentPhone={v.lead.phone ?? null} suggested={otherNumber && leadHasMobile(corrected, v.lead.country ?? null) ? corrected : ''} busy={!!busy} />}
+    </div>
+  );
+}
+
+/** ADD THEIR MOBILE (Paul, 2026-11-10; src/lib/leadAddMobile.ts, SQL lead_add_mobile). Shown only where the lead has no mobile.
+ *  The lead's number becomes the mobile, the old number is kept and History records it. ⛔ The server decides; this only asks. */
+function AddMobileBox({ leadId, country, currentPhone, suggested, busy }: { leadId: string; country: string | null; currentPhone: string | null; suggested: string; busy: boolean }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [typed, setTyped] = useState(suggested);
+  const [saving, setSaving] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const save = async () => {
+    const p = typedMobileProblem(typed, country);
+    if (p) { setProblem(p); return; }
+    setSaving(true); setProblem(null);
+    try {
+      const r = await leadRpc('lead_add_mobile', { _lead_id: leadId, _mobile: typed.trim() });
+      if (!r.ok) { setProblem(addMobileRefusalWords(r.error, (r.owner_name as string | undefined) ?? null)); return; }
+      toast({ title: 'Mobile added', description: currentPhone ? `The old number (${currentPhone}) is kept on the lead’s History.` : undefined });
+      notifyLeadChanged(leadId);
+      /* The Close view (the number the link goes to, the WhatsApp route) and the Text button's facts both re-read. */
+      await Promise.all([qc.invalidateQueries({ queryKey: quickCloseKey(leadId) }), qc.invalidateQueries({ queryKey: ['sms'] })]);
+    } finally { setSaving(false); }
+  };
+  return (
+    <div className="rounded-xl bg-muted/30 p-2.5 ring-1 ring-inset ring-border/60" data-testid="close-add-mobile">
+      <label className="block text-xs font-medium text-muted-foreground">{currentPhone ? 'This lead has no mobile. Add the one they give you, so the link can go by WhatsApp or Text.' : 'This lead has no number. Add their mobile, so the link can go by WhatsApp or Text.'}
+        <span className="mt-1 flex gap-2">
+          <Input type="tel" inputMode="tel" autoComplete="off" placeholder="07…" value={typed} onChange={(e) => { setTyped(e.target.value); setProblem(null); }} disabled={saving || busy} className="h-10 min-w-0 flex-1 text-sm" data-testid="close-add-mobile-input" />
+          <Button type="button" variant="outline" className="h-10 shrink-0" disabled={saving || busy || !typed.trim()} onClick={() => void save()} data-testid="close-add-mobile-save">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add mobile'}</Button>
+        </span>
+      </label>
+      {problem && <p className="mt-1 text-xs text-destructive" data-testid="close-add-mobile-problem">{problem}</p>}
+      {currentPhone && <p className="mt-1 text-[11px] text-muted-foreground">The number on the lead now ({currentPhone}) is kept, and the change is recorded.</p>}
     </div>
   );
 }

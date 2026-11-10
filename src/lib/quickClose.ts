@@ -73,7 +73,7 @@ import {
 } from './findableOffer.ts';
 import { afterTermClientWords, afterTermRepLine } from './planTerms.ts';
 import { agencyContractOutcome } from './agencyContractRule.ts';
-import { CLIENT_PAYMENT_PLANS, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, guaranteeForPlan, isPaymentPlan, planFullName, planShortLine, planTermsLines, type PaymentPlan } from './paymentPlans.ts';
+import { CLIENT_PAYMENT_PLANS, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, PLAN_PRODUCT_NAME, guaranteeForPlan, isPaymentPlan, planFullName, planProduct, planShortLine, planTermsLines, type PaymentPlan } from './paymentPlans.ts';
 
 export type QcDecisionMaker = 'yes' | 'no';
 /** 'agency' (v2): an agency / provider controls it — a handoff, not a refusal. */
@@ -975,11 +975,19 @@ const ownershipToClient = (route: ServiceRoute) => route === 'build'
   : 'You keep your own website — it stays yours, and we work on it.';
 const AFTER_PAYMENT_SENTENCE = "Once it's paid, Paul will be in touch within two working days to take over the setup — website, domain and access — and we take your baseline AI visibility measurement once we have the access we need.";
 
+/** THE NAME OF WHAT THEY ARE BUYING, in the link message, its email subject and the script (2026-11-10). A Complete or
+ *  Essential sale is named as that plan: the message used to open "here's your Findable Build sign-up link" and then go on
+ *  "Findable Complete: £99 today…", two product names for one sale. Only the old staff plan, or a sale with no plan, is
+ *  still named by its route. */
+export function closeSaleName(route: ServiceRoute, plan?: PaymentPlan | null): string {
+  return plan && plan !== 'legacy_twelve' ? PLAN_PRODUCT_NAME[planProduct(plan)] : SERVICE_ROUTE_NAME[route];
+}
+
 /** What the rep says once the route is chosen. ⛔ Not shown before a route exists (it would name no terms). */
 export function quickCloseScript(route: ServiceRoute | null | undefined, plan?: PaymentPlan | null): string {
   if (!route) return '';
   if (route === 'build' && !plan) return '';
-  return `I'll send you your sign-up link now. It's ${SERVICE_ROUTE_NAME[route]}: ${ownershipToClient(route)} ` +
+  return `I'll send you your sign-up link now. It's ${closeSaleName(route, plan)}: ${ownershipToClient(route)} ` +
     `It's ${priceSentence(route, plan)} ${QUICK_CLOSE_PROMISE} ${closeGuarantee(plan)} ` +
     `${SIGNUP_LINK_SENTENCE} ${AFTER_PAYMENT_SENTENCE} You don't need to sort any of that out today.`;
 }
@@ -993,7 +1001,7 @@ export function quickCloseGreeting(contactName: string | null | undefined): stri
 /** The message that carries the link (WhatsApp, copy, email body). `greetName` is the contact's name. */
 export function quickCloseMessage(greetName: string | null | undefined, url: string, route: ServiceRoute, plan?: PaymentPlan | null): string {
   return [
-    `${quickCloseGreeting(greetName)}, here's your ${SERVICE_ROUTE_NAME[route]} sign-up link:`,
+    `${quickCloseGreeting(greetName)}, here's your ${closeSaleName(route, plan)} sign-up link:`,
     url,
     '',
     `What you're signing up to: ${priceSentence(route, plan)} ${ownershipToClient(route)}`,
@@ -1011,7 +1019,7 @@ export function quickCloseEmail(i: { greetName: string | null | undefined; busin
   const biz = String(i.businessName ?? '').trim();
   const sender = String(i.senderName ?? '').trim();
   return {
-    subject: `Your ${SERVICE_ROUTE_NAME[i.route]} sign-up link${biz ? ` - ${biz}` : ''}`,
+    subject: `Your ${closeSaleName(i.route, i.plan)} sign-up link${biz ? ` - ${biz}` : ''}`,
     text: `${quickCloseMessage(i.greetName, i.url, i.route, i.plan)}\n\nAny questions, just reply to this email.\n\n${sender ? `${sender}\n` : ''}Findable`,
   };
 }

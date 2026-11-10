@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { AlertCircle, Plus, Loader2, RefreshCw, UsersRound, Layers, FileCode2, MessageSquareQuote, CalendarClock, BellRing, ChevronRight, Search, Send } from 'lucide-react';
+import { AlertCircle, Archive, Plus, Loader2, RefreshCw, UsersRound, Layers, FileCode2, MessageSquareQuote, CalendarClock, BellRing, ChevronRight, Search, Send, Undo2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { usePaidClientArchive } from '@/hooks/usePaidClientArchive';
+import { splitArchived } from '@/lib/paidClientArchive';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -73,16 +76,21 @@ function paymentLine(c: Client): string {
   return paid + (c.remeasure_due_date ? ' · remeasure ' + remeasureStatus(c.remeasure_due_date, Date.now()).label : '');
 }
 
-function ClientCard({ c }: { c: Client }) {
+/* Archive (Paul, 2026-11-10, src/lib/paidClientArchive.ts): a test or finished client is put away from this list with one
+   press and brought back from Show archived. A mark only: the client, payments, commission and every job are untouched.
+   The button sits BESIDE the card's link, never inside it, so pressing it cannot also open the client. */
+function ClientCard({ c, archived, busy, onArchive, onRestore }: { c: Client; archived: boolean; busy: boolean; onArchive: () => void; onRestore: () => void }) {
   const s = c.handoff;
   const tone: Tone = s ? STATE_EDGE[s.state] : 'grey';
   const pkg = c.contract?.name ? c.contract.name + ' · ' + c.contract.paymentsMade + ' of ' + c.contract.totalPayments + ' paid' : 'Term not recorded';
   const na = nextActionViewOf(c.next_action, c.next_action_date, null, undefined, c.next_action_time);
   return (
-    <Link to={'/paid-clients/' + c.id} className="group block min-w-0 rounded-[1.25rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+    <div className={cn('relative min-w-0 md:flex md:items-center md:gap-1', archived && 'opacity-75')} data-testid="paid-client-card" data-archived={archived ? 'true' : 'false'}>
+    <Link to={'/paid-clients/' + c.id} className="group block min-w-0 rounded-[1.25rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:flex-1">
       <div className={cn(SURFACE, EDGE[tone], 'grid min-w-0 gap-3 p-4 text-sm transition group-hover:border-primary/50 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.4fr)_auto] md:items-center')}>
         <div className="min-w-0">
-          <div className="truncate text-base font-bold tracking-tight">{c.business_name}</div>
+          {/* Phone: the Archive button sits over the card's top-right corner, so the name keeps clear of it. */}
+          <div className="truncate pr-24 text-base font-bold tracking-tight md:pr-0">{c.business_name}</div>
           <div className="truncate text-muted-foreground">{c.derived_town || c.search_location || c.address || 'Location needed'}</div>
           <div className={cn('text-xs font-medium', !c.contract?.name && 'text-amber-600 dark:text-amber-300')} data-testid="paid-client-contract">{pkg}</div>
           {c.seller_pending ? <div className="text-xs text-amber-700 dark:text-amber-400">{c.seller_pending === 'awaiting_attribution' ? 'Seller awaiting attribution review' : 'Not credited to a salesperson'}</div>
@@ -104,6 +112,10 @@ function ClientCard({ c }: { c: Client }) {
         <ChevronRight className="hidden h-5 w-5 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground md:block" aria-hidden />
       </div>
     </Link>
+    {archived
+      ? <Button size="sm" variant="outline" className="absolute right-2 top-2 h-9 gap-1 bg-card md:static md:shrink-0" disabled={busy} onClick={onRestore} data-testid="paid-client-restore"><Undo2 className="h-3.5 w-3.5" />Restore</Button>
+      : <Button size="sm" variant="ghost" className="absolute right-2 top-2 h-9 gap-1 text-muted-foreground hover:text-foreground md:static md:shrink-0" disabled={busy} onClick={onArchive} aria-label={`Archive ${c.business_name}`} title="Put this client away. Nothing is deleted: Show archived brings it back." data-testid="paid-client-archive"><Archive className="h-3.5 w-3.5" />Archive</Button>}
+    </div>
   );
 }
 
@@ -157,7 +169,16 @@ export default function PaidClients() {
   }, [user?.id]);
   useEffect(() => { if (!authLoading && user?.id) void load(); }, [authLoading, user?.id, load]);
   const showSpinner = authLoading || loading;
-  const shown = (clients ?? []).filter((c) => filter === 'all' || (c.handoff && matchesFilter(c.handoff, filter)));
+  /* Archived clients (a mark, paidClientArchive.ts) leave every list and count here; Show archived brings them back. */
+  const arc = usePaidClientArchive(!!user?.id);
+  const { toast } = useToast();
+  const [showArchived, setShowArchived] = useState(false);
+  const { live, archived } = splitArchived(clients ?? [], (c) => c.id, arc.archived);
+  const arcBusy = arc.archive.isPending || arc.restore.isPending;
+  const arcFailed = (what: string) => (e: unknown) => toast({ title: `Could not ${what}`, description: e instanceof Error ? e.message : 'Try again.', variant: 'destructive' });
+  const archiveClient = (c: Client) => arc.archive.mutate(c.id, { onSuccess: () => toast({ title: `${c.business_name} archived`, description: 'Nothing was deleted. Show archived brings it back.' }), onError: arcFailed('archive it') });
+  const restoreClient = (c: Client) => arc.restore.mutate(c.id, { onError: arcFailed('restore it') });
+  const shown = live.filter((c) => filter === 'all' || (c.handoff && matchesFilter(c.handoff, filter)));
   type View = 'clients' | PaidClientTool;
   const view: View = tool ?? 'clients';
   return <div className="mx-auto max-w-7xl space-y-5 py-6">
@@ -165,7 +186,7 @@ export default function PaidClients() {
       actions={<Dialog><DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4"/>Add Client Manually</Button></DialogTrigger><ManualClient done={(id) => navigate(`/paid-clients/${id}`)} /></Dialog>} />
     <Segmented<View> label="Paid clients view" value={view} onChange={(k) => openTool(k === 'clients' ? null : k)} wrapOnPhone
       options={[
-        { key: 'clients', label: <span className="flex items-center gap-1.5"><UsersRound className="h-3.5 w-3.5" />Clients</span>, count: clients?.length, tone: 'green' },
+        { key: 'clients', label: <span className="flex items-center gap-1.5"><UsersRound className="h-3.5 w-3.5" />Clients</span>, count: clients ? live.length : undefined, tone: 'green' },
         ...(['page-plan', 'page-generator', 'review-replies'] as const).map((t) => { const M = TOOL_META[t]; return { key: t, label: <span className="flex items-center gap-1.5"><M.icon className="h-3.5 w-3.5" />{PAID_CLIENT_TOOL_LABEL[t]}</span>, tone: M.tone }; }),
       ]} />
 
@@ -183,10 +204,16 @@ export default function PaidClients() {
       {!showSpinner && !error && clients && <div className="space-y-3">
         <AwaitingPayment items={awaiting} highlight={handoffParam} />
         <Segmented<ClientFilter> label="Filter clients" value={filter} onChange={setFilter} wrapOnPhone
-          options={FILTERS.map((x) => ({ key: x.value, label: x.label, tone: x.tone, count: x.value === 'all' ? clients.length : clients.filter((c) => c.handoff && matchesFilter(c.handoff, x.value)).length }))} />
-        <div className="grid gap-3">{shown.map((c) => <ClientCard key={c.id} c={c} />)}</div>
+          options={FILTERS.map((x) => ({ key: x.value, label: x.label, tone: x.tone, count: x.value === 'all' ? live.length : live.filter((c) => c.handoff && matchesFilter(c.handoff, x.value)).length }))} />
+        {arc.isError && <Callout tone="amber" icon={AlertCircle}>Could not read which clients you archived, so all of them are shown.</Callout>}
+        <div className="grid gap-3">{shown.map((c) => <ClientCard key={c.id} c={c} archived={false} busy={arcBusy} onArchive={() => archiveClient(c)} onRestore={() => restoreClient(c)} />)}</div>
         {clients.length === 0 && <Empty icon={UsersRound}>No paid clients yet.</Empty>}
-        {clients.length > 0 && shown.length === 0 && <Empty icon={UsersRound}>Nothing in this list — every client is in another one.</Empty>}
+        {clients.length > 0 && live.length === 0 && <Empty icon={UsersRound}>Every paid client is archived.</Empty>}
+        {live.length > 0 && shown.length === 0 && <Empty icon={UsersRound}>Nothing in this list — every client is in another one.</Empty>}
+        {archived.length > 0 && <div className="space-y-3" data-testid="paid-clients-archived">
+          <Button size="sm" variant="ghost" className="h-9 gap-1.5" aria-expanded={showArchived} onClick={() => setShowArchived(!showArchived)} data-testid="paid-clients-show-archived"><Archive className="h-4 w-4" />{showArchived ? 'Hide archived' : `Show archived (${archived.length})`}</Button>
+          {showArchived && <div className="grid gap-3">{archived.map((c) => <ClientCard key={c.id} c={c} archived busy={arcBusy} onArchive={() => archiveClient(c)} onRestore={() => restoreClient(c)} />)}</div>}
+        </div>}
       </div>}
     </>}
   </div>;

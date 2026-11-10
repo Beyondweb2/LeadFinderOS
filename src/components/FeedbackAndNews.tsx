@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useEarningsHidden } from '@/hooks/useEarningsHidden';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Gift, Loader2, MessageSquarePlus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -37,7 +38,9 @@ export function FeedbackAndNews({ initial }: { initial?: 'feedback' | 'news' } =
   const [kind, setKind] = useState<FeedbackKind>('feature');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
-  const news = whatsNewFor(role);
+  /* HIDE EARNINGS (2026-11-10): a salesperson switched to unpaid reads no commission entry here either. */
+  const hideMoney = useEarningsHidden();
+  const news = useMemo(() => whatsNewFor(role, { hideMoney }), [role, hideMoney]);
   const [seen, setSeen] = useState(seenId);
   useEffect(() => {
     const f = () => setFbOpen(true); const n = () => setNewsOpen(true);

@@ -6,7 +6,6 @@ import { Rate } from '@/components/admin/controlCentre';
 import type { AdminOverviewResponse } from '@/hooks/useAdminOverview';
 import type { TeamRow } from '@/lib/adminMetrics';
 import { monthlyTracker, type CommissionLine } from '@/lib/commission';
-import { BIG_MONTH_BONUS_GBP } from '@/lib/commissionConfig';
 import { activityStatus, handoffClients, handoffNext, type ActivityStatus, type HandoffClient } from '@/lib/adminControl';
 
 /* ══ THE ADMIN CONTROL CENTRE'S NEW SECTIONS (2026-10-02, docs/dashboards-redesign.md) ══════════════
@@ -163,9 +162,9 @@ export function TeamPerformanceTable({ o, rows, lines, lastActivity, hidden, onO
                       {seller && m ? (
                         <span className="flex items-center gap-2">
                           <span className="text-base font-extrabold">{m.counted}</span>
-                          {m.bonusOn
-                            ? <span className="rounded-full bg-amber-400/90 px-1.5 py-0.5 text-[10px] font-extrabold text-amber-950">+£{BIG_MONTH_BONUS_GBP} bonus on</span>
-                            : <span className="text-[11px] text-muted-foreground">{m.salesToBonus} to +£{BIG_MONTH_BONUS_GBP} bonus</span>}
+                          {/* The ladder (commissionConfig FIRST_PAYMENT_LADDER): what their next sale's first payment earns, and how far the next step is. */}
+                          <span className="rounded-full bg-amber-400/90 px-1.5 py-0.5 text-[10px] font-extrabold text-amber-950" data-testid="team-next-first">next sale £{m.nextFirstPounds}</span>
+                          {m.salesToNextStep !== null && m.nextStepPounds !== null && <span className="text-[11px] text-muted-foreground">{m.salesToNextStep} to £{m.nextStepPounds}</span>}
                         </span>
                       ) : <span className="text-muted-foreground">—</span>}
                     </Td>

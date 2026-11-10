@@ -3,29 +3,44 @@
    ⛔ The database cannot read this file. public.monthly_tier_rate() and public.commission_payable_days() MIRROR the two tables
    marked below; scripts/commission-owed.test.ts and scripts/monthly-commission-tiers.test.ts fail when they drift. */
 
-/* ══ THE RULES FOR EVERY NEW SALE: FIXED POUNDS (Paul, 2026-11-04, docs/commission-owed.md) ═══════════════════════════════════════ */
+/* ══ THE RULES FOR EVERY NEW SALE: THE SIGNED CONTRACT (Paul, 2026-11-10, docs/commission-owed.md) ═══════════════════════════════
+   They replace the fixed pounds of 2026-11-04 (£25 × 6, £15 × 6, a +£25 big-month bonus), which never paid a real sale: those did not
+   match the contract the salespeople signed. A sale on payout_rule 'fixed_v1' (every payment since PAYOUT_RULE_FIXED_V1_FROM) is on
+   THESE rules. The stored rule name is unchanged on purpose: commission is worked out from the ledger each time, so every such sale
+   was recalculated the moment this file changed, and no row had to be rewritten.
+     · FIRST PAYMENT of a plan paid over time: pounds by the sale's NUMBER in that salesperson's UK calendar month
+       (FIRST_PAYMENT_LADDER). The number is the place the database stamps when the first payment lands. Not backdated; resets on the 1st.
+     · A plan paid in ONE payment earns its own fixed pounds instead (ONE_PAYMENT_COMMISSION), whatever its number. It still takes
+       its place in the month, so it counts toward the number of that person's other sales.
+     · EVERY LATER PLAN PAYMENT actually collected earns LATER_PAYMENT_RATE of it, in whole pounds (laterPaymentPounds: £20 on £99,
+       £10 on £49.99), until the plan's last payment. No plan runs past PLAN_COMMISSION_MAX_PAYMENTS.
+     · Hosting after the plan, renewals and upsells earn nothing.
+   ⚠️ Paul's words were "20% of each later plan payment (e.g. £20 per £99, £10 per £49.99)". Both examples are whole pounds, as the
+      first-payment figures are, so the 20% is rounded to the nearest pound. If the contract means pence (£19.80), change
+      laterPaymentPounds and nothing else. */
 
-/** What each plan earns: this many pounds on each of the customer's first `payments` Successfully Collected payments. The sign-up payment
- *  counts as the first. Nothing on any payment after them. legacy_twelve is the old £99 × 12 and earns as Complete monthly (Paul, 2026-11-04).
- *  ⛔ A sale with no plan recorded earns BLANK_PLAN_COMMISSION, not legacy_twelve's figure, though paymentPlans.ts treats its schedule as that offer. */
-export const FIXED_COMMISSION: Readonly<Record<string, { perPayment: number; payments: number }>> = {
-  complete: { perPayment: 25, payments: 6 },
-  complete_upfront: { perPayment: 300, payments: 1 },
-  full: { perPayment: 150, payments: 1 },
-  six: { perPayment: 15, payments: 6 },
-  twelve: { perPayment: 15, payments: 6 },
-  legacy_twelve: { perPayment: 25, payments: 6 },
+/** First payment, by the sale's number in the month. `upTo` is the last sale number on that step. */
+export const FIRST_PAYMENT_LADDER: readonly { upTo: number; pounds: number }[] = [
+  { upTo: 12, pounds: 30 },
+  { upTo: 24, pounds: 40 },
+  { upTo: Infinity, pounds: 50 },
+];
+/** The first payment's pounds for sale number N of the month. ⛔ No number recorded = the FIRST step, never a higher one. */
+export const firstPaymentPoundsFor = (saleNumber: number | null | undefined): number => {
+  const n = typeof saleNumber === 'number' && saleNumber >= 1 ? saleNumber : 1;
+  return (FIRST_PAYMENT_LADDER.find((t) => n <= t.upTo) ?? FIRST_PAYMENT_LADDER[FIRST_PAYMENT_LADDER.length - 1]).pounds;
 };
-export const BLANK_PLAN_COMMISSION: Readonly<{ perPayment: number; payments: number }> = { perPayment: 15, payments: 6 };
-/** The most a plan can earn, before any bonus. */
-export const fixedCommissionMax = (plan: string): number => FIXED_COMMISSION[plan].perPayment * FIXED_COMMISSION[plan].payments;
-
-/** The big-month bonus: sale number BIG_MONTH_BONUS_FROM_SALE or above in a UK calendar month earns this once, on top of its first commission,
- *  and is paid with it. The number is the place the database stamps when the first payment lands. Not backdated; resets on the 1st. */
-export const BIG_MONTH_BONUS_GBP = 25;
-export const BIG_MONTH_BONUS_FROM_SALE = 13;
-export const bigMonthBonusFor = (saleNumber: number | null | undefined): number =>
-  typeof saleNumber === 'number' && saleNumber >= BIG_MONTH_BONUS_FROM_SALE ? BIG_MONTH_BONUS_GBP : 0;
+/** Plans paid in one payment: fixed pounds, once, instead of the ladder. */
+export const ONE_PAYMENT_COMMISSION: Readonly<Record<string, number>> = { complete_upfront: 300, full: 150 };
+/** The share of each later plan payment. */
+export const LATER_PAYMENT_RATE = 0.20;
+/** What one later plan payment of this amount earns: the share, to the nearest whole pound. */
+export const laterPaymentPounds = (amountGbp: number): number => (amountGbp > 0 ? Math.round(amountGbp * LATER_PAYMENT_RATE + 1e-9) : 0);
+/** No plan earns past this many payments in all (the sign-up payment is the first). */
+export const PLAN_COMMISSION_MAX_PAYMENTS = 12;
+/** The most a sale can earn: its first payment's pounds, then every later plan payment at the plan's monthly price. */
+export const saleCommissionMax = (x: { firstPounds: number; laterPayments: number; monthlyGbp: number }): number =>
+  x.firstPounds + Math.max(0, x.laterPayments) * laterPaymentPounds(x.monthlyGbp);
 
 /* ══ OLD SALES ONLY. A sale recorded before the fixed rules keeps its numbers; nothing below is ever shown to anyone. ═══════════════ */
 

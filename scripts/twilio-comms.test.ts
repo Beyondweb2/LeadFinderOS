@@ -7,7 +7,8 @@
    ═══════════════════════════════════════════════════════════ */
 import { readFileSync } from 'node:fs';
 import { createHmac } from 'node:crypto';
-import { twilioSignature, validTwilioSignature, voiceAccessToken, VOICE_TOKEN_MAX_TTL_S } from '../src/lib/twilioAuth.ts';
+import { twilioSignature, validTwilioSignature, voiceAccessToken, VOICE_TOKEN_CALL_TTL_S, VOICE_TOKEN_MAX_TTL_S } from '../src/lib/twilioAuth.ts';
+import { callErrorEndsCall, callIsLive, deviceErrorEndsCall, setCallState } from '../src/lib/liveCallFlag.ts';
 import { decideContactRoute, smsGateOpen, type RoutingFacts } from '../src/lib/contactRouting.ts';
 import { smsSize, smsCostGbp, costWords, CHANNEL_COST_GBP } from '../src/lib/channelCosts.ts';
 import { isApprovedSmsLink, advanceSmsStatus, mapTwilioStatus, smsDeliveryState, isStopMessage, SMS_TEMPLATE_NAMES, SMS_COLD_TEMPLATES, smsTextFromWhatsAppBody } from '../src/lib/smsMessages.ts';
@@ -166,7 +167,7 @@ console.log('8. voice token + webhook');
   ok(/UK_CALLABLE\.test\(digits\)/.test(tk) && /\[1237\]/.test(tk), 'token: UK numbers only, no premium ranges');
   ok(/checkSuppressed\(/.test(tk) && /suppression_unreadable/.test(tk), 'token: opt-out / wrong number refuse, unreadable refuses');
   ok(/guardAction\(service, who\.actor\.id, "voice_call"/.test(tk), 'token: rate limit');
-  ok(/ttlSeconds: 300/.test(tk), 'token: 5 minutes');
+  ok(/ttlSeconds: VOICE_TOKEN_CALL_TTL_S/.test(tk) && VOICE_TOKEN_CALL_TTL_S >= 3600 && VOICE_TOKEN_CALL_TTL_S <= VOICE_TOKEN_MAX_TTL_S, 'token: lasts as long as a sales call (it was 5 minutes: Twilio reports an expired token mid-call)');
   ok(/simulated\) return json\(\{ ok: true, simulated: true/.test(tk) && tk.indexOf('simulated) return json') < tk.indexOf('voiceAccessToken({'), 'token: a simulated call never receives a real token');
   ok(!/lead_activity|outreach_leads"\)\s*\.update|status:\s*"initial_contact"/.test(tk), 'token: writes no lead state — opening the workspace is not contact');
   const wh = code(read('supabase/functions/twilio-webhook/index.ts'));
@@ -248,7 +249,20 @@ console.log('12. UI: one inbox, WhatsApp preserved, honest call states');
   ok(/const ConversationInbox = \(\{ channel \}/.test(inbox) && /<ConversationInbox key=\{channel\} channel=\{channel\} \/>/.test(inbox) && /return 'whatsapp'/.test(read('src/components/InboxChannelSwitch.tsx')), '/inbox is the WhatsApp channel by default; ?channel=sms is the SAME component on the SMS channel');
   ok(/<InboxChannelSwitch current=\{channel\} \/>/.test(inbox), 'a WhatsApp / SMS switch on the same page');
   const call = code(read('src/hooks/useTwilioCall.ts'));
-  ok(/call\.on\('accept', \(\) => \{ set\('connected'\)/.test(call) && /call\.on\('ringing'/.test(call), '"connected" is the SDK\'s accept event, "ringing" its ringing event');
+  ok(/call\.on\('accept', \(\) => \{ if \(stale\(\)\) return; set\('connected'\)/.test(call) && /call\.on\('ringing'/.test(call), '"connected" is the SDK\'s accept event, "ringing" its ringing event');
+  /* 2026-11-10: only the call's own end ends a call. */
+  ok(!deviceErrorEndsCall('connected', true) && !deviceErrorEndsCall('ringing', true), 'a Device error (an expired token, a signalling blip) never hangs up a ringing or answered call');
+  ok(deviceErrorEndsCall('connecting', false) && deviceErrorEndsCall('connecting', true) && deviceErrorEndsCall('connected', false), '…and still fails an attempt whose line does not exist yet');
+  ok(!callErrorEndsCall('connected') && callErrorEndsCall('ringing') && callErrorEndsCall('connecting'), 'a Call error ends it only before it is answered; after that Twilio\'s disconnect decides');
+  ok(/device\.on\('error'[\s\S]{0,400}!deviceErrorEndsCall\(stateRef\.current, !!callRef\.current\)[\s\S]{0,200}return;/.test(call) && /call\.on\('error'[\s\S]{0,400}!callErrorEndsCall\(stateRef\.current\)[\s\S]{0,200}return;/.test(call), 'the hook asks that one rule in both error handlers');
+  ok(/call\.on\('disconnect', \(\) => \{ if \(!stale\(\) && stateRef\.current !== 'failed'\) ended\(\); \}\)/.test(call), 'the call\'s own disconnect ends it');
+  /* End call during "Getting ready" must not dial. */
+  ok((call.match(/if \(stale\(\)\) return;/g) ?? []).length >= 4 && /const run = \+\+runRef\.current;/.test(call), 'start() checks it is still the current attempt after the token, the SDK, the microphone and the connect');
+  ok(/const hangup = useCallback\(\(\) => \{\s*runRef\.current\+\+;/.test(call), 'End call makes any start() still in flight stale');
+  ok(/if \(stale\(\)\) \{\s*try \{ call\.disconnect\(\); \}/.test(call), 'a connect that lands after End call is hung up at once');
+  setCallState('connected'); const liveA = callIsLive(); setCallState('preparing'); const liveB = callIsLive(); setCallState('ended'); const liveC = callIsLive(); setCallState('idle');
+  ok(liveA && liveB && !liveC && !callIsLive(), 'the live-call flag is on from Getting ready until the call has ended');
+  ok(/setCallState\(s\)/.test(call), 'the hook keeps that flag on every state change');
   ok(/mic_denied/.test(call) && /unsupported/.test(call) && /getUserMedia/.test(call), 'microphone permission and unsupported browsers are handled');
   ok(!/outreach_leads|lead_log_contact|updateLead|status:/.test(call), 'the call hook writes no lead data');
   ok(/pagehide/.test(call), 'closing the page ends the call');

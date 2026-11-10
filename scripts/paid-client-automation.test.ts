@@ -67,7 +67,10 @@ console.log("── PAYMENT ──");
   ok(/\.update\(\{ new_client_email_at: new Date\(\)\.toISOString\(\) \}\)\s*\.eq\("id", findableLeadId\)\.is\("new_client_email_at", null\)\.select\("id"\)/.test(checkout), "2/6. the new-client email is a CLAIM only one delivery can win");
   ok(/let claimedEmail = !paidEmailAlreadySent(?: &&[^;]*)?;/.test(checkout), "6. …and a client emailed before the claim existed (trace) is never emailed again");
   ok(/if \(!sent && findableLeadId\) \{\s*await service\.from\("outreach_leads"\)\.update\(\{ new_client_email_at: null \}\)/.test(checkout), "6. a send Resend refused releases the claim (never silent for ever)");
-  ok(/paymentHandoff\(service, findableLeadId \|\| null, onboardingId \|\| null, amountGbp,\s*paid\.route \? `\$\{SERVICE_ROUTE_NAME\[paid\.route\]\}/.test(checkout), "3. the package named is the route the SESSION was paid on");
+  /* 2026-11-10: a Complete or Essential sale is named by the PLAN the session was paid on (its own price and count); only the
+     old staff plan is still named by the session's route. Both come from the session (paid.route, paidPlan), never the row. */
+  ok(/paymentHandoff\(service, findableLeadId \|\| null, onboardingId \|\| null, amountGbp,\s*!paid\.route \? null\s*: soldOnPlan \? planSoldLine\(paidPlan\)\s*: `\$\{SERVICE_ROUTE_NAME\[paid\.route\]\}/.test(checkout)
+    && /const paidPlan: PaymentPlan = paymentPlanFromMeta\(s\.metadata \?\? null\) \?\? "legacy_twelve";/.test(HOOK), "3. the package named is the plan, or the route, the SESSION was paid on");
   ok(/const seller = setup\.sellerId;/.test(HOOK) && /\(l\.sold_by_user_id \?\? l\.assigned_to_user_id\)/.test(SETUP), "4. the salesperson is sold_by_user_id (stamped at payment), the owner only for older rows");
   ok(!/notifyOfFindablePayment|newClientSubject|recordLeadEvent/.test(invoice), "7. a recurring invoice sends no new-client email and writes no History");
   ok(!/preparePaidBaselineQuestions/.test(strip(HOOK)), "25. payment drafts NO baseline questions (they come after Discovery)");

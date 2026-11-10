@@ -54,12 +54,17 @@ export interface VoiceTokenInput {
   twimlAppSid: string;
   /** Who the token is for: the rep's user id. Becomes the `client:` identity the TwiML webhook checks. */
   identity: string;
-  /** Seconds the token lives. Short on purpose — it is minted fresh for every call. */
+  /** Seconds the token lives. It is minted fresh for every call and must outlive the call: Twilio reports an expired
+   *  token on the Device mid-call (2026-11-10 — it was 5 minutes, shorter than a sales call). */
   ttlSeconds?: number;
   nowMs?: number;
 }
 
-export const VOICE_TOKEN_MAX_TTL_S = 900;
+/** One hour. The token only lets its own rep connect to OUR TwiML app, which dials the number stored on a call row that
+ *  twilio-voice-token wrote after its access checks — never a number the browser supplies. */
+export const VOICE_TOKEN_MAX_TTL_S = 3600;
+/** What twilio-voice-token asks for: the longest a sales call is expected to run. */
+export const VOICE_TOKEN_CALL_TTL_S = 3600;
 
 export async function voiceAccessToken(i: VoiceTokenInput): Promise<string> {
   const now = Math.floor((i.nowMs ?? Date.now()) / 1000);

@@ -21,6 +21,15 @@ interface LiveCallActions {
 }
 const CallContext = createContext<TwilioCall | null>(null);
 const ActionsContext = createContext<LiveCallActions | null>(null);
+/* The lead whose REAL call was picked up in this session, or null. A plain string on its own context: it changes when
+   they pick up and when the call is cleared, never every second, so a page may read it without redrawing with the timer. */
+const AnsweredContext = createContext<string | null>(null);
+
+/** Did they pick up a browser call to this lead just now? (src/hooks/useSms.ts: a call they answered opens the Text button.)
+ *  null outside the provider (a test harness): nothing is assumed. */
+export function useAnsweredCallLead(): string | null {
+  return useContext(AnsweredContext);
+}
 
 export function useLiveCall(): TwilioCall {
   const c = useContext(CallContext);
@@ -68,12 +77,15 @@ export function LiveCallProvider({ children }: { children: ReactNode }) {
   const call = useTwilioCall();
   const [panelLead, setPanelLead] = useState<string | null>(null);
   const actions = useMemo<LiveCallActions>(() => ({ start: call.start, setPanelLead }), [call.start]);
+  const answeredLead = call.answered && !call.simulated ? call.leadId : null;
   return (
     <ActionsContext.Provider value={actions}>
-      <CallContext.Provider value={call}>
-        {children}
-        <EndCallOverlay call={call} panelLead={panelLead} />
-      </CallContext.Provider>
+      <AnsweredContext.Provider value={answeredLead}>
+        <CallContext.Provider value={call}>
+          {children}
+          <EndCallOverlay call={call} panelLead={panelLead} />
+        </CallContext.Provider>
+      </AnsweredContext.Provider>
     </ActionsContext.Provider>
   );
 }

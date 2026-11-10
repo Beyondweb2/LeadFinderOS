@@ -1,7 +1,8 @@
 /* STALE BUNDLE AFTER A DEPLOY (2026-11-07): a failed lazy page reloads ONCE, never in a loop; index.html is no-cache. */
 import fs from 'node:fs';
 import path from 'node:path';
-import { isStaleChunkError, reloadOnceForStaleChunk, RELOAD_GUARD_MS, STALE_CHUNK_RELOAD_KEY } from '../src/lib/staleChunk.ts';
+import { autoReloadBlocked, isStaleChunkError, reloadOnceForStaleChunk, RELOAD_GUARD_MS, STALE_CHUNK_RELOAD_KEY } from '../src/lib/staleChunk.ts';
+import { setCallState } from '../src/lib/liveCallFlag.ts';
 
 let f = 0;
 const ok = (c: unknown, m: string) => { if (c) console.log('PASS', m); else { f++; console.log('FAIL', m); } };
@@ -24,12 +25,24 @@ ok(!reloadOnceForStaleChunk(null, 1, reload) && reloads === 2, 'R4. storage bloc
 const broken = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
 ok(!reloadOnceForStaleChunk(broken, 1, reload) && reloads === 2, 'R5. storage throwing: never reload');
 
+/* Never while a call is live (2026-11-10): a reload hangs up on the prospect */
+const s2 = mem(); let r2 = 0;
+ok(!reloadOnceForStaleChunk(s2, 5_000_000, () => { r2++; }, true) && r2 === 0 && s2.m.size === 0, 'C1. a call is live: no reload, and the guard time is not stamped');
+ok(reloadOnceForStaleChunk(s2, 5_000_001, () => { r2++; }, false) && r2 === 1, 'C2. the call is over: the next failure reloads once');
+
 /* Wiring */
 const main = read('src/main.tsx'), lib = read('src/lib/staleChunk.ts'), app = read('src/App.tsx');
 ok(/installStaleChunkRecovery\(\);[\s\S]*createRoot\(/.test(main), 'X1. recovery is installed before React mounts');
 ok(/'vite:preloadError'/.test(lib) && /'unhandledrejection'/.test(lib) && /addEventListener\('error'/.test(lib), 'X2. Vite preload errors, rejected imports and error events are all caught');
-ok(/isStaleChunkError\(error\) && reloadOnceForStaleChunk\(/.test(app) && /data-testid="stale-chunk"/.test(app), 'X3. the error boundary reloads once, then shows a Reload screen');
+ok(/isStaleChunkError\(error\) && reloadOnceForStaleChunk\(/.test(app) && /<StaleChunkScreen /.test(app) && /data-testid="stale-chunk"/.test(read('src/components/StaleChunkScreen.tsx')), 'X3. the error boundary reloads once, then shows a Reload screen');
 ok(!/chunk_reload_at/.test(app), 'X4. the old 30-second handler (Chrome wording only) is gone: ONE rule');
+ok(/reloadOnceForStaleChunk\(sessionStore\(\), Date\.now\(\), \(\) => win\.location\.reload\(\), autoReloadBlocked\(\)\)/.test(lib) && /reloadOnceForStaleChunk\(sessionStore\(\), Date\.now\(\), \(\) => window\.location\.reload\(\), autoReloadBlocked\(\)\)/.test(app), 'X5. both automatic reloads ask whether a reload must wait');
+setCallState('connected'); const blockedOnCall = autoReloadBlocked(true); setCallState('idle');
+ok(blockedOnCall && autoReloadBlocked(false) && !autoReloadBlocked(true) && !autoReloadBlocked(undefined), 'X5b. a reload waits while a call is live or the browser is offline; online (or unknown) and no call does not wait');
+const iProv = app.indexOf('<LiveCallProvider>'), iPage = app.indexOf('<PageErrorBoundary>'), iRoutes = app.indexOf('<Routes>');
+ok(iProv > 0 && iProv < iPage && iPage < iRoutes && /<ErrorBoundary resetKey=\{pathname\}>/.test(app), 'X6. the page error screen sits INSIDE the call provider, so a crashed or stale page cannot unmount the call');
+const screen = read('src/components/StaleChunkScreen.tsx');
+ok(/<StaleChunkScreen onCall=\{callIsLive\(\)\} \/>/.test(app) && /data-testid="stale-chunk-on-call"/.test(screen) && /data-testid="stale-chunk-back"/.test(screen) && /Reload and end the call/.test(screen), 'X7. on a call the screen offers Go back, and the reload button says what it costs');
 
 /* Caching */
 const headers = read('public/_headers');

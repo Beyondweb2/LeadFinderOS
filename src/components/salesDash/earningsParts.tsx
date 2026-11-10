@@ -11,7 +11,8 @@ import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { cn } from '@/lib/utils';
 import { Empty, Panel, TONE, gbp, type Tone } from '@/components/salesDash/ui';
 import { londonDayOf, type CommissionLine } from '@/lib/commission';
-import { BIG_MONTH_BONUS_FROM_SALE, BIG_MONTH_BONUS_GBP, FIXED_COMMISSION, fixedCommissionMax } from '@/lib/commissionConfig';
+import { FIRST_PAYMENT_LADDER, LATER_PAYMENT_RATE, ONE_PAYMENT_COMMISSION, laterPaymentPounds, saleCommissionMax } from '@/lib/commissionConfig';
+import { PAYMENT_PLAN_SPEC } from '@/lib/paymentPlans';
 import { salePlanWordsOr } from '@/lib/salePlan';
 import type { EarningsResponse } from '@/hooks/useEarnings';
 
@@ -76,16 +77,21 @@ export function RecentWins({ lines, clients, sales, todayIso = new Date().toISOS
 /** How commission works, in plain words and pounds, from the same constants that pay it. ⛔ REMOVED 2026-10-02 (Paul): "This month, week
  *  by week" — a bar per week of a month already counted on the month card, which told a salesperson nothing they could act on. */
 export function CommissionExplainer() {
-  const f = FIXED_COMMISSION;
+  const ladder = FIRST_PAYMENT_LADDER;
+  const stepWords = ladder.map((s, i) => { const from = i === 0 ? 1 : ladder[i - 1].upTo + 1; return `£${s.pounds} for ${Number.isFinite(s.upTo) ? `sales ${from} to ${s.upTo}` : `sale ${from} onward`}`; }).join(', ');
+  const share = `${Math.round(LATER_PAYMENT_RATE * 100)}%`;
+  const m = PAYMENT_PLAN_SPEC.complete.monthlyGbp, r = PAYMENT_PLAN_SPEC.twelve.monthlyGbp;
+  /* What each plan can earn on the ladder's first step, from the same constants that pay it. */
+  const most = (plan: 'complete' | 'six' | 'twelve') => saleCommissionMax({ firstPounds: ladder[0].pounds, laterPayments: PAYMENT_PLAN_SPEC[plan].totalPayments - 1, monthlyGbp: PAYMENT_PLAN_SPEC[plan].monthlyGbp });
   const rules: { icon: typeof Info; text: ReactNode }[] = [
-    { icon: Repeat, text: <>Complete monthly: £{f.complete.perPayment} on each of the customer’s first {f.complete.payments} payments, the sign-up payment included (up to £{fixedCommissionMax('complete')}). Complete paid up front: £{f.complete_upfront.perPayment}, once. Essential paid in full: £{f.full.perPayment}, once. Essential payment plans: £{f.six.perPayment} on each of the first {f.six.payments} payments (up to £{fixedCommissionMax('six')}). Nothing on payments after those, hosting, renewals or upsells.</> },
-    { icon: Sparkles, text: <>Big-month bonus: sale {BIG_MONTH_BONUS_FROM_SALE} and above in a UK calendar month earns +£{BIG_MONTH_BONUS_GBP} once, paid with that sale’s first commission. Sales are numbered when the first payment is collected. Never backdated, and the count starts again on the 1st. A refunded sale stops counting.</> },
-    { icon: ShieldCheck, text: <>Anything collected before the client’s guarantee window closes, and any bonus, becomes payable the day after it closes. It closes {COMMISSION_PAYABLE_DAYS_V7} days after their four-week audit is sent. Until it is sent it shows as waiting for the four-week audit. If the client claims, nothing on that sale is payable.</> },
+    { icon: Sparkles, text: <>The first payment of a sale earns {stepWords}, counted per UK calendar month. Sales are numbered when the first payment is collected. Never backdated, and the count starts again on the 1st. A refunded sale stops counting.</> },
+    { icon: Repeat, text: <>Then {share} of each later plan payment the client makes, in whole pounds: £{laterPaymentPounds(m)} on each £{m} payment, £{laterPaymentPounds(r)} on each £{r} payment, until the plan is fully paid. On the first step that is up to £{most('complete')} on Complete monthly, £{most('six')} on Essential over 6 months and £{most('twelve')} on Essential over 12 months. Complete paid up front earns £{ONE_PAYMENT_COMMISSION.complete_upfront}, once. Essential paid in full earns £{ONE_PAYMENT_COMMISSION.full}, once. Nothing on hosting after the plan, renewals or upsells.</> },
+    { icon: ShieldCheck, text: <>Anything collected before the client’s guarantee window closes becomes payable the day after it closes. It closes {COMMISSION_PAYABLE_DAYS_V7} days after their four-week audit is sent. Until it is sent it shows as waiting for the four-week audit. If the client claims, nothing on that sale is payable.</> },
     { icon: CalendarCheck2, text: <>Anything collected after the window closes is payable on the 1st of the following month. A payment that never arrives earns nothing; if a missed payment is recovered later, it earns as normal. A refund or chargeback earns nothing, and one after you were paid comes off your next commission. While a dispute is open that money is held.</> },
-    { icon: UserRoundX, text: <>Only money the client actually paid counts. If you leave, you are still paid on those first payments as they arrive.</> },
+    { icon: UserRoundX, text: <>Only money the client actually paid counts. If you leave, you are still paid on the plan’s payments as they arrive.</> },
   ];
   return (
-    <Panel collapseKey="sales.commission-rules" defaultOpen={false} title="How your commission works" icon={Info} tone="blue" hint="The rules behind every number on this page." summary={`£${f.complete.perPayment} × ${f.complete.payments} on Complete monthly, £${f.complete_upfront.perPayment} up front, £${f.full.perPayment} Essential in full, £${f.six.perPayment} × ${f.six.payments} on Essential plans. Open for the rules.`}>
+    <Panel collapseKey="sales.commission-rules" defaultOpen={false} title="How your commission works" icon={Info} tone="blue" hint="The rules behind every number on this page." summary={`First payment ${ladder.map((s) => `£${s.pounds}`).join(' / ')} by your sales in the month, then ${share} of each later plan payment. £${ONE_PAYMENT_COMMISSION.complete_upfront} up front, £${ONE_PAYMENT_COMMISSION.full} Essential in full. Open for the rules.`}>
       <ul className="space-y-2.5" data-testid="commission-explainer">
         {rules.map((r, i) => (
           <li key={i} className="flex items-start gap-3 text-[13px] leading-relaxed">

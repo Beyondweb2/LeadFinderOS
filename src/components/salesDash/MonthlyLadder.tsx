@@ -3,21 +3,24 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { SURFACE, gbp } from '@/components/salesDash/ui';
 import { monthName, monthlyTracker, monthlyTrackerNextLine, type CommissionLine, type LadderSale } from '@/lib/commission';
-import { BIG_MONTH_BONUS_FROM_SALE, BIG_MONTH_BONUS_GBP } from '@/lib/commissionConfig';
+import { FIRST_PAYMENT_LADDER, LATER_PAYMENT_RATE, ONE_PAYMENT_COMMISSION, laterPaymentPounds } from '@/lib/commissionConfig';
+import { PAYMENT_PLAN_SPEC } from '@/lib/paymentPlans';
 import { salePlanWordsOr } from '@/lib/salePlan';
 import type { EarningsResponse } from '@/hooks/useEarnings';
 
-/* ══ THE MONTH CARD — the Sales dashboard's hero (2026-10-01; fixed pounds 2026-11-04, docs/commission-owed.md) ═══════════
-   The first thing a salesperson sees: how many sales this month and how far off the big-month bonus they are. Below that the month in
-   two steps: the sales before the bonus and the sales that earn it, with one dot per sale that counts. Tapping a dot shows that sale.
+/* ══ THE MONTH CARD — the Sales dashboard's hero (2026-10-01; the contract's ladder 2026-11-10, docs/commission-owed.md) ═══════════
+   The first thing a salesperson sees: how many sales this month and what the next one's first payment earns. Below that the month in
+   the ladder's three steps (£30 / £40 / £50 on the first payment), with one dot per sale that counts. Tapping a dot shows that sale.
    The money (earned this month, to date, expected) sits beside it in EarningsStats, so no figure is drawn twice.
    ⛔ STYLE (Paul, 2026-10-02): the dark card language of the work tiles — dark navy, a deep coloured
    wash, a coloured edge, white numbers. NOT a solid green card ("green on green with white text looks
    washed out"; "no green hero"). The steps sit side by side from lg and stack on a phone. */
 
 const dayMonth = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' });
-/** How many empty dots the open-ended bonus step draws before it says "and every sale after". */
-const BONUS_STEP_DOTS = 3;
+/** How many empty dots the open-ended top step draws before it says "and every sale after". */
+const TOP_STEP_DOTS = 3;
+/** The later-payment share as the contract words it (a percentage), from the constant that pays it. */
+const LATER_SHARE_WORDS = `${Math.round(LATER_PAYMENT_RATE * 100)}%`;
 
 type Client = EarningsResponse['clients'][number];
 type StepState = 'done' | 'here' | 'ahead';
@@ -34,7 +37,7 @@ function SaleDot({ sale, client, plan, state }: { sale: LadderSale; client: Clie
       <PopoverContent className="w-64 space-y-1.5 p-3 text-xs" align="start">
         <p className="text-sm font-semibold">{client?.business ?? 'Client'}</p>
         <p className="text-muted-foreground">Sale {sale.seq} · {dayMonth(sale.occurredAt)}{sold ? ` · ${sold}` : ''}</p>
-        <p><span className="font-semibold text-teal-600 dark:text-teal-300">{gbp(sale.commission)}</span> on the first payment{sale.seq >= BIG_MONTH_BONUS_FROM_SALE ? `, with the +£${BIG_MONTH_BONUS_GBP} big-month bonus` : ''}</p>
+        <p><span className="font-semibold text-teal-600 dark:text-teal-300">{gbp(sale.commission)}</span> on the first payment</p>
         <p className="text-muted-foreground">{!client ? null : client.commissionablePaymentsLeft > 0
           ? `Plus ${client.commissionablePaymentsLeft} more payment${client.commissionablePaymentsLeft === 1 ? '' : 's'} that earn${client.commissionablePaymentsLeft === 1 ? 's' : ''}${client.remainingPotential ? ` (up to ${gbp(client.remainingPotential)})` : ''}.`
           : 'Nothing more to come on this sale.'}</p>
@@ -51,12 +54,14 @@ export function MonthlyLadder({ lines, clients, sales, todayIso = new Date().toI
   const planOf = new Map((sales ?? []).map((s) => [s.leadId, s.plan]));
   const counted = t.sales.filter((s) => s.counted);
   const gone = t.sales.filter((s) => !s.counted);
-  const beforeBonus = BIG_MONTH_BONUS_FROM_SALE - 1;
-  const steps = [
-    { key: 'before', title: `Sales 1–${beforeBonus}`, from: 1, to: beforeBonus as number | null, words: 'The plan’s commission' },
-    { key: 'bonus', title: `Sale ${BIG_MONTH_BONUS_FROM_SALE}+`, from: BIG_MONTH_BONUS_FROM_SALE, to: null as number | null, words: `+£${BIG_MONTH_BONUS_GBP} big-month bonus` },
-  ];
+  /* The ladder's steps, from the constants that pay them: sales 1–12 £30, 13–24 £40, 25+ £50 on the first payment. */
+  const steps = FIRST_PAYMENT_LADDER.map((s, i) => {
+    const from = i === 0 ? 1 : FIRST_PAYMENT_LADDER[i - 1].upTo + 1;
+    const to = Number.isFinite(s.upTo) ? s.upTo : null;
+    return { key: `step-${from}`, title: to !== null ? `Sales ${from}–${to}` : `Sale ${from}+`, from, to, words: `£${s.pounds} first payment` };
+  });
   const nextIndex = counted.length; // 0-based slot of the next sale
+  const monthlyExample = PAYMENT_PLAN_SPEC.complete.monthlyGbp; const reducedExample = PAYMENT_PLAN_SPEC.twelve.monthlyGbp;
   return (
     <section className={cn('relative flex h-full min-w-0 flex-col overflow-hidden p-5 sm:p-6', SURFACE, 'border-indigo-400/30 bg-[hsl(226_52%_9%)]')} data-testid="monthly-ladder">
       {/* The work tiles' language, a step stronger: a deep indigo-to-violet wash on the dark card. */}
@@ -66,15 +71,15 @@ export function MonthlyLadder({ lines, clients, sales, todayIso = new Date().toI
       <div className="relative">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/20 px-2.5 py-1 text-xs font-semibold text-indigo-100 ring-1 ring-inset ring-indigo-400/30"><CalendarDays className="h-3.5 w-3.5" />{monthName(t.monthStart)}</p>
-          {t.bonusOn && <p className="text-xs font-medium text-slate-300">Your next sale earns <span className="rounded-full bg-amber-400 px-2 py-0.5 font-extrabold text-amber-950">+£{BIG_MONTH_BONUS_GBP}</span></p>}
+          <p className="text-xs font-medium text-slate-300" data-testid="ladder-next-pounds">Your next sale’s first payment earns <span className="rounded-full bg-amber-400 px-2 py-0.5 font-extrabold text-amber-950">£{t.nextFirstPounds}</span></p>
         </div>
         <p className="mt-4 text-6xl font-extrabold leading-none tracking-tight tabular-nums text-white" data-testid="ladder-count">{t.counted}<span className="ml-3 text-xl font-semibold text-slate-300">sale{t.counted === 1 ? '' : 's'} this month</span></p>
         <p className="mt-3 text-xl font-bold leading-snug text-amber-200" data-testid="ladder-next-line">{monthlyTrackerNextLine(t)}</p>
       </div>
 
-      <div className="relative mt-5 mb-4 grid gap-2.5 lg:grid-cols-[12fr_7fr]" role="list" aria-label="Sales this month">
+      <div className="relative mt-5 mb-4 grid gap-2.5 lg:grid-cols-[12fr_12fr_6fr]" role="list" aria-label="Sales this month">
         {steps.map((z) => {
-          const slots = z.to !== null ? z.to - z.from + 1 : Math.max(BONUS_STEP_DOTS, counted.length - z.from + 2);
+          const slots = z.to !== null ? z.to - z.from + 1 : Math.max(TOP_STEP_DOTS, counted.length - z.from + 2);
           const here = nextIndex + 1 >= z.from && (z.to === null || nextIndex + 1 <= z.to);
           const done = z.to !== null && counted.length >= z.to;
           const state: StepState = here ? 'here' : done ? 'done' : 'ahead';
@@ -95,7 +100,7 @@ export function MonthlyLadder({ lines, clients, sales, todayIso = new Date().toI
                   return <span key={k} aria-hidden className={cn('h-4 w-4 rounded-full border-2 lg:h-3 lg:w-3 lg:border-[1.5px]', idx === nextIndex ? 'animate-pulse border-dashed border-amber-300 motion-reduce:animate-none' : state === 'here' ? 'border-amber-200/30' : 'border-slate-600/70')} />;
                 })}
               </div>
-              {state === 'here' && z.to !== null && <p className="mt-2 flex items-center gap-1 text-xs font-bold text-amber-200"><Sparkles className="h-3 w-3" />{z.to - counted.length} to go before the bonus</p>}
+              {state === 'here' && z.to !== null && t.nextStepPounds !== null && <p className="mt-2 flex items-center gap-1 text-xs font-bold text-amber-200"><Sparkles className="h-3 w-3" />{z.to - counted.length} to go, then £{t.nextStepPounds}</p>}
               {state !== 'here' && z.to === null && <p className="mt-2 text-[11px] text-slate-500">and every sale after</p>}
             </div>
           );
@@ -103,11 +108,11 @@ export function MonthlyLadder({ lines, clients, sales, todayIso = new Date().toI
       </div>
       {gone.length > 0 && (
         <p className="relative mt-3 flex items-center gap-1.5 text-xs text-slate-300" data-testid="ladder-refunded"><Undo2 className="h-3.5 w-3.5" />
-          {gone.length} sale{gone.length === 1 ? '' : 's'} refunded this month — {gone.length === 1 ? 'it no longer counts' : 'they no longer count'} towards the bonus.</p>
+          {gone.length} sale{gone.length === 1 ? '' : 's'} refunded this month — {gone.length === 1 ? 'it no longer counts' : 'they no longer count'} towards your next sale’s number.</p>
       )}
       {/* The whole scheme in one line, from the same constants that pay it. */}
       <p className="relative mt-4 border-t border-white/[0.08] pt-3 lg:mt-auto text-xs leading-relaxed text-slate-300" data-testid="ladder-scheme">
-        Sale {BIG_MONTH_BONUS_FROM_SALE} and above in a month earns <span className="font-bold text-white">+£{BIG_MONTH_BONUS_GBP} once</span>, paid with that sale’s first commission. Sales are numbered when the first payment is collected. Never backdated; the count restarts on the 1st (UK time).
+        A sale’s first payment earns <span className="font-bold text-white">{FIRST_PAYMENT_LADDER.map((s) => `£${s.pounds}`).join(' / ')}</span> by its number in the month. Then <span className="font-bold text-white">{LATER_SHARE_WORDS} of each later plan payment</span> (£{laterPaymentPounds(monthlyExample)} on £{monthlyExample}, £{laterPaymentPounds(reducedExample)} on £{reducedExample}) until the plan is paid. Complete up front earns £{ONE_PAYMENT_COMMISSION.complete_upfront} and Essential in full £{ONE_PAYMENT_COMMISSION.full}, once. Sales are numbered when the first payment is collected. Never backdated; the count restarts on the 1st (UK time).
       </p>
     </section>
   );

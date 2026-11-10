@@ -3,7 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { KpiCard, Panel, gbp } from '@/components/salesDash/ui';
 import { ENGAGEMENT_END_UNKNOWN, FORECAST_MONTHS, type CommissionForecast, type EarningsTotals, type ForecastMonth } from '@/lib/commission';
-import { FIXED_COMMISSION } from '@/lib/commissionConfig';
+import { LATER_PAYMENT_RATE } from '@/lib/commissionConfig';
 
 /* ══ YOUR MONEY — THREE FIGURES AND THE NEXT SIX MONTHS (Paul, 2026-10-02; redesigned the same day) ══
    EarningsStats: the three money figures, each once, beside the month's ladder — earned this month,
@@ -110,7 +110,7 @@ export function CommissionForecastCard({ forecast, engagement }: {
         <p className="mt-3 flex items-start gap-1.5 border-t border-border/60 pt-3 text-[11px] leading-relaxed text-muted-foreground">
           <Info className="mt-0.5 h-3 w-3 shrink-0" />
           <span>
-            Expected is the fixed pounds on each live client's next monthly payments, up to the first {FIXED_COMMISSION.complete.payments} payments of the sale, on the date Stripe will bill them — not earned until they pay — plus commission waiting for the guarantee on the date it becomes payable. A failed or refunded payment drops out. New sales are never guessed.
+            Expected is your {Math.round(LATER_PAYMENT_RATE * 100)}% of each live client's plan payments still to come, on the date Stripe will bill them — not earned until they pay — plus commission waiting for the guarantee on the date it becomes payable. A failed or refunded payment drops out. New sales are never guessed.
           </span>
         </p>
       </div>

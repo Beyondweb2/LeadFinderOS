@@ -1,6 +1,42 @@
 # Commission owed, plan on every close, New paid clients, autosave (Paul, 2026-11-02)
 
-## Fixed amounts (Paul, 2026-11-04, branch `feat/commission-fixed-amounts`). This is the rule for every new sale.
+## The signed contract's rules (Paul, 2026-11-10). This is the rule for every sale since 2026-11-04.
+
+Paul, 2026-11-10: "the code is wrong. Pay must match the signed contract." The fixed pounds in the next section never paid a real sale
+(on 2026-11-10 the ledger held four `fixed_v1` rows, all test sales or the admin's own, no live line payment and no payout). They are replaced.
+
+**Every number lives in `src/lib/commissionConfig.ts`.**
+
+| | Earns |
+|---|---|
+| First payment of a plan paid over time | `FIRST_PAYMENT_LADDER`: £30 for that salesperson's sales 1–12 in the UK calendar month, £40 for 13–24, £50 from 25 |
+| Each later plan payment | `LATER_PAYMENT_RATE` (20%) of what was collected, in whole pounds (`laterPaymentPounds`): £20 on £99, £10 on £49.99 |
+| Until | the plan's last payment, never more than `PLAN_COMMISSION_MAX_PAYMENTS` (12) in all |
+| Complete paid up front (£999) | `ONE_PAYMENT_COMMISSION`: £300, once, whatever the sale's number |
+| Essential paid in full (£499) | £150, once, whatever the sale's number |
+| Hosting after the plan, renewals, upsells | nothing |
+
+On the first step a sale can earn: Complete monthly £250 (£30 + 11 × £20), Essential 6 months £130, Essential 12 months £140, the old £99 × 12 £250.
+A sale with no plan recorded is the old £99 × 12 schedule.
+
+- **The number** is the place the database stamps when the first payment lands (`stamp_monthly_commission_for`, unchanged). Not backdated; resets on
+  the 1st; a fully refunded or lost sale stops counting toward the next number. A one-payment sale still takes its place in the month. A sale the
+  database never numbered earns the first step.
+- **The stored rule name did not change.** These sales are still `payout_rule = 'fixed_v1'`. Commission is worked out from the ledger each time
+  (`commissionLines`), so every such sale was recalculated when the code changed, and no row was rewritten. `legacy` and `plan_v1` rows keep their numbers.
+- **Unchanged:** when it is payable (the day after the window, or the 1st of the next month), the claim rule, refunds and offsets, disputes held,
+  a failed payment is not a payment, a leaver is still paid, only a salesperson earns, test sales earn nothing, Mark as paid.
+- **Gone:** £25 × 6, £15 × 6, the blank-plan £15, the +£25 big-month bonus.
+- ⚠️ **Whole pounds.** Paul's words were "20% of each later plan payment (e.g. £20 per £99, £10 per £49.99)". 20% of £99 is £19.80, so his
+  examples only both hold if it is rounded to the pound, as the first-payment figures are. If the contract means pence, change `laterPaymentPounds` only.
+- **Screens:** the month card draws the three steps and the next sale's pounds; the rules panel, Commission owed's rate card and the team table read the
+  same constants; a sale reads "Complete monthly · 2 of 12 paid · £50 of £250". What's New leaves commission entries out for a salesperson with Hide
+  earnings on (`MONEY_ENTRY_IDS`, `money: true`).
+
+**Proof:** `scripts/commission-contract-rules.test.ts` (every plan, each step at both edges, a failed payment, refunds before and after payout, a
+dispute, a claim, the month reset), replacing `commission-fixed-amounts.test.ts`. No SQL changed.
+
+## Fixed amounts (Paul, 2026-11-04, branch `feat/commission-fixed-amounts`). REPLACED 2026-11-10 by the section above; kept as the record.
 
 **Every pound lives in `src/lib/commissionConfig.ts`** (`FIXED_COMMISSION`, `BIG_MONTH_BONUS_GBP`, `BIG_MONTH_BONUS_FROM_SALE`). No screen shows a percentage.
 

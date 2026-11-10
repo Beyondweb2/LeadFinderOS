@@ -16,12 +16,54 @@ export interface WhatsNewReport {
   /** What this actually means for you, in one or two sentences. */
   effect: string;
 }
-export interface WhatsNewEntry { id: string; date: string; title: string; body: string; audience: 'all' | 'sales' | 'admin'; report?: WhatsNewReport }
+export interface WhatsNewEntry { id: string; date: string; title: string; body: string; audience: 'all' | 'sales' | 'admin'; report?: WhatsNewReport;
+  /** About what a salesperson is paid: left out for a salesperson whose earnings are hidden (whatsNewFor hideMoney). */
+  money?: boolean }
 
 /** Entries dated on/after this must carry a report (older ones were written before the rule). */
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-10-commission-contract-admin', date: '2026-11-10', title: 'Commission now matches the signed contract', audience: 'admin', money: true,
+    body: 'Every sale since 4 November is worked out on the contract’s rules: £30 / £40 / £50 on the first payment by that person’s sales in the month, then 20% of each later plan payment. The fixed £25 and £15 amounts and the +£25 bonus are gone.',
+    report: {
+      added: ['A rate card line on Commission owed.', 'Sales team performance shows what each person’s next sale earns and how many sales to the next step.', 'Each sale on Commission owed reads like Complete monthly · 2 of 12 paid · £50 of £250, and says when its first payment was on a higher step.'],
+      changed: ['First payment: £30 for a person’s sales 1 to 12 in a UK calendar month, £40 for 13 to 24, £50 from 25. Not backdated.', 'Every later plan payment earns 20% of it in whole pounds (£20 on £99, £10 on £49.99) until the plan is fully paid, at most 12 payments.', 'Complete up front still pays £300 and Essential in full £150, whatever the sale’s number.', 'Existing sales were recalculated. None had been paid out, and no real sale was on the old amounts.', 'A salesperson with Hide earnings on no longer sees commission entries in What’s New.'],
+      removed: ['£25 on each of the first 6 payments, £15 on Essential plans, and the +£25 big-month bonus.'],
+      effect: 'What you owe now follows the contract: about £250 on a Complete monthly sale over its 12 payments instead of £150. Later payments are rounded to whole pounds (£20, not £19.80). Say if the contract means pence.',
+    } },
+  { id: '2026-11-10-commission-contract-sales', date: '2026-11-10', title: 'Your commission follows your contract', audience: 'sales', money: true,
+    body: 'A sale’s first payment earns £30, £40 or £50 depending on how many sales you have made that month. Then you earn 20% of every later plan payment until the plan is paid.',
+    report: {
+      added: ['The month card shows the three steps (sales 1 to 12, 13 to 24, 25 and above) and what your next sale’s first payment earns.'],
+      changed: ['First payment: £30 for your sales 1 to 12 in a UK calendar month, £40 for 13 to 24, £50 from 25. Earlier sales keep their step.', 'Every later plan payment earns 20% of it: £20 on a £99 payment, £10 on a £49.99 payment, to the end of the plan.', 'Complete paid up front earns £300 and Essential paid in full £150, once.', 'When it is payable has not changed.'],
+      removed: ['The fixed £25 and £15 per payment, the six-payment limit, and the +£25 big-month bonus.'],
+      effect: 'A Complete monthly sale can now earn up to £250 over its 12 payments, and more once you pass 12 sales in a month.',
+    } },
+  { id: '2026-11-10-add-mobile', date: '2026-11-10', title: 'Add a mobile to a landline lead', audience: 'all',
+    body: 'If a lead only has a landline, the Close section now has an Add mobile box. Type the mobile they give you and the sign-up link can go by WhatsApp or Text.',
+    report: {
+      added: ['An Add mobile box in the Close section, shown only when the lead has no mobile number.'],
+      changed: ['The lead’s number becomes the mobile. The old number is kept, and History records who changed it and when.'],
+      removed: [],
+      effect: 'You no longer have to fall back to email or copying the link by hand when the owner gives you their mobile on the call. A number on the do-not-contact list, or one already on another lead, is refused.',
+    } },
+  { id: '2026-11-10-paid-clients-archive', date: '2026-11-10', title: 'Archive a paid client, and more on each new sale', audience: 'admin',
+    body: 'New paid clients and Paid Clients each have an Archive button and Show archived. A new sale now shows the signed agreement, the trade and the town. The new-client email names the plan that was actually sold.',
+    report: {
+      added: ['Archive on every row of New paid clients and every card on Paid Clients, with Show archived and Restore. It puts a test or finished client away. Nothing is deleted: the client, payments and commission are untouched.', 'On each new sale: who signed the agreement, in what role, which version and when, with a link to the signed copy. Or a warning when there is no signed agreement.', 'Trade and town in Everything from the sale, and a line when the client corrected something on their sign-up page.', 'A bell notification when a team member\'s message name is waiting for your approval.'],
+      changed: ['The new-client email gives the plan\'s own price and payment count. Before, every sale read "£99 today, then £99/month (12 payments)", including £499 and £999 sales.', 'That email is tried three times if the email provider does not take it.', 'A sale held for your attribution review says so, instead of "Self-service".', 'Hide earnings now holds on the server too: a salesperson with it on is sent no commission figures at all.', 'The contact name falls back to the name they signed the agreement in.'],
+      removed: [],
+      effect: 'You can clear test and finished clients out of your lists, and a new sale tells you what was bought and that the agreement is signed without opening anything.',
+    } },
+  { id: '2026-11-10-calls-and-close', date: '2026-11-10', title: 'Calls stay up, and sending the link is smoother', audience: 'all',
+    body: 'A browser call can no longer be cut off by its five-minute pass running out, or by an app update. If they picked up a browser call, you can text the sign-up link straight away. The link message names the plan they bought.',
+    report: {
+      added: ['If the app was updated while you are on a call and a page will not open, a short screen offers Go back so you can carry on. The app reloads on the next page you open after the call.', 'A clear message if the plan cannot be changed because they have already signed the agreement for another one.', 'A "We could not check your access" screen with Try again, for when the connection drops as the app loads.'],
+      changed: ['The pass a call runs on now lasts an hour instead of five minutes, and running out no longer ends the call.', 'End call while it says Getting ready now really cancels the call. Before, it could still dial.', 'Text is switched on in the Close section once they have answered a browser call. You no longer have to log the call first.', 'The sign-up link message and email say Findable Complete or Findable Essential, whichever they bought.', 'The Close section says why Email is off, and says when a corrected phone number is not where the link will go.'],
+      removed: ['The automatic reload during a call.', 'The "No access, ask the admin" screen appearing because of a dropped connection.'],
+      effect: 'You can stay on the phone, move around the app and send the link without the call dropping or having to stop and log it first.',
+    } },
   { id: '2026-11-07-stale-page-reload', date: '2026-11-07', title: 'The app reloads itself after an update', audience: 'all',
     body: 'If the app was open during an update and a page will not open ("error loading dynamically imported module"), it now reloads itself once and carries on.',
     report: {
@@ -3258,5 +3300,15 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
     body: 'WhatsApp is now its own menu item with an unread count, filters for Unread and Waiting on us, and a timer on every reply that is waiting for an answer.' },
 ];
 
-export const whatsNewFor = (role: string | null | undefined) =>
-  WHATS_NEW.filter((e) => e.audience === 'all' || e.audience === role);
+/** Entries that are about what a salesperson is PAID (rates, payout dates, the commission screens). A salesperson Paul has
+ *  switched to Hide earnings (Team page) must not read a rate card here either (2026-11-10): What's New was the one screen
+ *  that still showed them commission. Give a new money entry `money: true`; these older ones are listed by id. */
+export const MONEY_ENTRY_IDS: ReadonlySet<string> = new Set([
+  '2026-11-04-commission-day-after-window', '2026-11-04-commission-fixed-sales', '2026-11-03-commission-stripe-no-handover',
+  '2026-11-03-sales-page-wording', '2026-11-02-commission-owed-sales', '2026-10-02-commission-six-forecast',
+  '2026-10-01-sales-page-monthly', '2026-09-28-earnings',
+]);
+export const isMoneyEntry = (e: WhatsNewEntry): boolean => e.money === true || MONEY_ENTRY_IDS.has(e.id);
+
+export const whatsNewFor = (role: string | null | undefined, opts: { hideMoney?: boolean } = {}) =>
+  WHATS_NEW.filter((e) => e.audience === 'all' || e.audience === role).filter((e) => !(opts.hideMoney === true && isMoneyEntry(e)));

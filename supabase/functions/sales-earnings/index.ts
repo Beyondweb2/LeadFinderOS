@@ -9,6 +9,9 @@ import { MARK_PAID_UNDO_HOURS } from "../../../src/lib/commissionConfig.ts";
 import { closeInfoMissing } from "../../../src/lib/salesHandoff.ts";
 import { TYPED_ACTIVITY_KINDS, paidClientRecord } from "../../../src/lib/paidClientRecord.ts";
 import { monthlyDiffers, salePlanParts } from "../../../src/lib/salePlan.ts";
+import { saleCreditOf } from "../../../src/lib/saleAttribution.ts";
+import { configuredPriceId, planPriceExpectations, priceProblem } from "../../../src/lib/planPriceCheck.ts";
+import { EARNINGS_HIDDEN_DETAIL, EARNINGS_HIDDEN_ERROR, salesEarningsHidden } from "../_shared/earnings-hidden.ts";
 
 // sales-earnings — commission from the payment ledger (Sales Experience, 2026-09-28; docs/sales-experience.md §4).
 //
@@ -26,6 +29,7 @@ import { monthlyDiffers, salePlanParts } from "../../../src/lib/salePlan.ts";
 //   backfill (admin) — rebuild ledger rows from Stripe's own history. { apply: false } (the default) only
 //     REPORTS what it would write; { apply: true } writes (idempotent — unique by the Stripe object).
 //     ⛔ Never invents a transaction: a charge it cannot tie to exactly one lead is reported, not written.
+//   plan_prices (admin) — every plan, what it charges, and whether the Stripe Price its monthly uses matches (read-only).
 //   webhook_config (admin) — which events the Stripe webhook endpoint sends (read-only).
 //   webhook_enable_disputes (admin; Paul approved 2026-09-29) — ADDS the three dispute events to the
 //     endpoint that points at our stripe-webhook, keeping every event it already sends. The one Stripe
@@ -166,20 +170,27 @@ async function teamNames(service: Service): Promise<Record<string, string>> {
 /** NEW PAID CLIENTS, newest first, for the admin home. Money from the ledger where it holds the sale, and Stripe's plan over the pick. */
 async function newPaidClients(service: Service) {
   const { data: leads, error } = await service.from("outreach_leads")
-    .select("id, business_name, amount_paid, payment_date, status, sold_by_user_id, payment_plan, sales_handoff, phone, email, contact_name, website, address, services_included, service_areas, website_control, website_control_note")
+    .select("id, business_name, amount_paid, payment_date, status, sold_by_user_id, sold_at, payment_plan, sales_handoff, phone, email, contact_name, website, address, category, search_keyword, search_location, services_included, service_areas, website_control, website_control_note")
     .gt("amount_paid", 0).order("payment_date", { ascending: false, nullsFirst: false }).limit(50);
   if (error) throw new Error(error.message);
   const rows = (leads ?? []) as Obj[];
   const ids = rows.map((l) => l.id as string);
-  const [ledger, onboarding, exclusions, activity] = await Promise.all([
+  const [ledger, onboarding, exclusions, activity, agreements] = await Promise.all([
     service.from("payment_ledger").select("lead_id, kind, status, amount_gbp, occurred_at, sold_by_user_id, sale_plan, sale_plan_flag").in("lead_id", ids).in("kind", ["initial", "recurring"]).limit(5000),
-    service.from("onboarding_responses").select("lead_id, website_manager, payment_plan, quick_close, contact_name, contact_email, confirmed_phone, business_website, business_address, services_list, areas_list").in("lead_id", ids).order("updated_at", { ascending: false }).limit(1000),
+    service.from("onboarding_responses").select("lead_id, status, website_manager, payment_plan, quick_close, contact_name, contact_email, confirmed_phone, confirmed_location, business_website, business_address, services_list, areas_list").in("lead_id", ids).order("updated_at", { ascending: false }).limit(1000),
     service.from("metric_exclusions").select("value").eq("kind", "lead").in("value", ids).limit(1000),
     service.from("lead_activity").select("lead_id, kind, body, created_at").in("lead_id", ids).in("kind", TYPED_ACTIVITY_KINDS).not("body", "is", null).order("created_at", { ascending: false }).limit(1000),
+    /* The signed agreement (2026-11-10): who, in what role, which version, when. Never the agreed text or the IP. */
+    service.from("client_agreement_acceptances").select("lead_id, agreement_version, typed_name, typed_role, accepted_at").in("lead_id", ids).order("accepted_at", { ascending: false }).limit(1000),
   ]);
-  for (const r of [ledger, onboarding, exclusions, activity]) if (r.error) throw new Error(r.error.message);
+  for (const r of [ledger, onboarding, exclusions, activity, agreements]) if (r.error) throw new Error(r.error.message);
+  /* The sign-up that was PAID, not merely the newest row: a later restarted or free-check row must not hide what the
+     salesperson typed on the one the client paid on (2026-11-10). No paid row (a client marked paid by hand) → the newest. */
   const firstOb = new Map<string, Obj>();
+  for (const o of (onboarding.data ?? []) as Obj[]) if (o.status === "paid" && !firstOb.has(o.lead_id)) firstOb.set(o.lead_id, o);
   for (const o of (onboarding.data ?? []) as Obj[]) if (!firstOb.has(o.lead_id)) firstOb.set(o.lead_id, o);
+  const firstAgreement = new Map<string, Obj>();
+  for (const a of (agreements.data ?? []) as Obj[]) if (!firstAgreement.has(a.lead_id)) firstAgreement.set(a.lead_id, a);
   const tests = new Set(((exclusions.data ?? []) as { value: string }[]).map((e) => e.value));
   return rows.map((l) => {
     const pays = ((ledger.data ?? []) as Obj[]).filter((r) => r.lead_id === l.id && r.status === "succeeded");
@@ -188,11 +199,14 @@ async function newPaidClients(service: Service) {
     const recurring = pays.filter((r) => r.kind === "recurring").sort((a, b) => String(a.occurred_at).localeCompare(String(b.occurred_at))).map((r) => Number(r.amount_gbp));
     const ob = firstOb.get(l.id) ?? null;
     const answers = ((ob?.quick_close as Obj | null)?.answers ?? {}) as Obj;
-    const record = paidClientRecord({ lead: l, onboarding: ob, activity: ((activity.data ?? []) as { lead_id: string; kind: string; body: string | null; created_at: string }[]).filter((a) => a.lead_id === l.id) });
+    const record = paidClientRecord({ lead: l, onboarding: ob, agreement: firstAgreement.get(l.id) ?? null, activity: ((activity.data ?? []) as { lead_id: string; kind: string; body: string | null; created_at: string }[]).filter((a) => a.lead_id === l.id) });
     const missing = closeInfoMissing({ contactName: record.contactName, manager: (answers.manager ?? ob?.website_manager ?? null) as string | null, agencyContract: (answers.agency_contract ?? null) as string | null, plan });
+    /* A sale whose seller the database held for Paul's review has no seller: say so, never "Self-service" (saleCreditOf, the one rule). */
+    const credit = saleCreditOf({ ledgerSeller: (sale?.sold_by_user_id ?? null) as string | null, leadSeller: (l.sold_by_user_id ?? null) as string | null, leadSoldAt: (l.sold_at ?? null) as string | null });
     return {
       lead_id: l.id, business: l.business_name ?? "Client", plan, plan_words: salePlanParts(plan).words,
       amount_paid: sale ? Number(sale.amount_gbp) : Number(l.amount_paid ?? 0),
+      seller_pending: credit.kind === "awaiting_attribution" || credit.kind === "not_credited" ? credit.kind : null,
       seller_id: (sale?.sold_by_user_id ?? l.sold_by_user_id ?? null) as string | null,
       paid_at: (sale?.occurred_at ?? l.payment_date ?? null) as string | null,
       missing, flag: (sale?.sale_plan_flag ?? (monthlyDiffers(plan, recurring) ? "monthly_differs" : null)) as string | null,
@@ -220,6 +234,11 @@ Deno.serve(async (req) => {
     const mode = typeof body.mode === "string" ? body.mode : "summary";
     const adminOnly = async () => { await recordDenial(service, actor.id, `sales-earnings:${mode}`); return json({ ok: false, error: "admin_only", detail: "This action is for the admin account only." }, 403); };
 
+    /* ⛔ HIDE EARNINGS (2026-11-10, _shared/earnings-hidden.ts): a salesperson Paul switched to unpaid is sent no money by
+       either read, whatever their browser asks. Every other mode is admin-only already. */
+    if ((mode === "summary" || mode === "owed") && await salesEarningsHidden(service, actor)) {
+      return json({ ok: false, error: EARNINGS_HIDDEN_ERROR, detail: EARNINGS_HIDDEN_DETAIL }, 403);
+    }
     if (mode === "summary") {
       let personId: string | null;
       if (actor.role === "sales") personId = actor.id;
@@ -314,6 +333,36 @@ Deno.serve(async (req) => {
       if (after.length === before.length) return json({ ok: true, changed: false, enabled_events: before });
       const updated = await stripeAddEvents(ep.id, after);
       return json({ ok: true, changed: true, before, enabled_events: updated.enabled_events });
+    }
+    /* ══ IS EVERY PLAN WIRED TO THE RIGHT STRIPE PRICE? (2026-11-10, src/lib/planPriceCheck.ts) ══════════════════════
+       Read only. For each plan: what the first payment charges (an inline amount from the code), and the monthly Price
+       the edge secret points at, READ from Stripe and judged against the plan. Only the last six characters of a Price
+       id are returned, and never a key. */
+    if (mode === "plan_prices") {
+      const env = (n: string) => Deno.env.get(n) ?? undefined;
+      const seen = new Map<string, Obj | null>();
+      const rows = [];
+      for (const x of planPriceExpectations()) {
+        if (x.monthlyCount < 1) { rows.push({ ...x, monthly: null, ok: true, problem: null }); continue; }
+        const cfg = configuredPriceId(x.secrets, env);
+        if (!cfg.id) { rows.push({ ...x, monthly: null, ok: false, problem: `No Stripe Price is set (edge secret ${x.secrets.join(" or ")}).` }); continue; }
+        if (cfg.malformed) { rows.push({ ...x, monthly: { secret: cfg.secret }, ok: false, problem: `The edge secret ${cfg.secret} does not hold a Stripe Price id.` }); continue; }
+        if (!seen.has(cfg.id)) {
+          let price: Obj | null = null;
+          try { price = await stripeGet(`prices/${encodeURIComponent(cfg.id)}`, { "expand[]": "product" }); }
+          catch (e) { console.error("[sales-earnings] plan_prices:", e instanceof Error ? e.message : e); }
+          seen.set(cfg.id, price);
+        }
+        const price = seen.get(cfg.id) ?? null;
+        const problem = priceProblem(x.monthlyPence, price as never);
+        rows.push({
+          ...x, ok: problem === null, problem,
+          monthly: { secret: cfg.secret, price_tail: cfg.id.slice(-6), unit_amount: price?.unit_amount ?? null, currency: price?.currency ?? null,
+            interval: price?.recurring?.interval ?? null, active: price?.active ?? null, livemode: price?.livemode ?? null,
+            product: typeof price?.product === "object" ? (price.product?.name ?? null) : null },
+        });
+      }
+      return json({ ok: true, all_ok: rows.every((r) => r.ok), plans: rows });
     }
     if (mode === "webhook_config") {
       const eps = await stripeList("webhook_endpoints", {});

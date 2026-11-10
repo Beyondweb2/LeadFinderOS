@@ -5,7 +5,7 @@ import { guardAction } from "../_shared/protection.ts";
 import { loadQaExclusions } from "../_shared/qa-guard.ts";
 import { qaSendVerdict } from "../../../src/lib/qaSafety.ts";
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
-import { voiceAccessToken } from "../../../src/lib/twilioAuth.ts";
+import { VOICE_TOKEN_CALL_TTL_S, voiceAccessToken } from "../../../src/lib/twilioAuth.ts";
 import { resolveTwilioEnv } from "../_shared/twilio.ts";
 import { COUNTRY_OFF, callMarketOf, channelOn } from "../../../src/lib/outreachMarkets.ts";
 import { loadCountrySettings } from "../_shared/country-settings.ts";
@@ -16,7 +16,9 @@ import { loadCountrySettings } from "../_shared/country-settings.ts";
 // WHOM. The browser then asks Twilio to connect; twilio-webhook (the TwiML App's Voice URL) reads the number to
 // dial from THAT ROW — the browser never supplies a number, so a token cannot be used to dial anyone else.
 //
-// ⛔ A token is for one rep (identity = their user id) and one lead (the row), 5 minutes, outgoing only.
+// ⛔ A token is for one rep (identity = their user id) and one lead (the row), outgoing only. It lasts as long as a sales
+//    call may run (VOICE_TOKEN_CALL_TTL_S, one hour; it was 5 minutes until 2026-11-10 and Twilio reports an expired
+//    token on the Device mid-call).
 // ⛔ Lead access = the same rule as everything else (assigned and not a client for a rep; their book for admin).
 // ⛔ UK numbers only (mobile or landline); premium / non-geographic ranges are refused. Opt-out / wrong number
 //    (contact_suppressions, unreadable = refuse) block a call exactly as they block a text.
@@ -87,7 +89,7 @@ Deno.serve(async (req) => {
     if (simulated) return json({ ok: true, simulated: true, callId: row.id, phoneTail: digits.slice(-4) });
     const token = await voiceAccessToken({
       accountSid: env.accountSid, apiKeySid: env.apiKeySid, apiKeySecret: env.apiKeySecret, twimlAppSid: env.twimlAppSid,
-      identity: who.actor.id, ttlSeconds: 300,
+      identity: who.actor.id, ttlSeconds: VOICE_TOKEN_CALL_TTL_S,
     });
     return json({ ok: true, simulated: false, callId: row.id, token, identity: who.actor.id, phoneTail: digits.slice(-4) });
   } catch (e) {

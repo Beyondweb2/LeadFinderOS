@@ -21,7 +21,7 @@ import { useUgcAccess } from '@/hooks/useUgc';
  * button — not a redirect to /auth, which would bounce a signed-in user straight back here.
  */
 export function RequireAccess({ children }: { children: ReactNode }) {
-  const { isLoading, role } = useSubscription();
+  const { isLoading, role, roleError, retryRole } = useSubscription();
   /* A UGC login (Jess) has no LeadFinder role: she belongs on /ugc, never on an operator screen. Asked only when
      there is no role, so admins and salespeople pay nothing for it. */
   const ugc = useUgcAccess(!isLoading && !role);
@@ -45,6 +45,23 @@ export function RequireAccess({ children }: { children: ReactNode }) {
   }
 
   if (!role && ugc.data?.member) return <Navigate to="/ugc" replace />;
+
+  /* ⛔ COULD NOT CHECK ≠ NO ACCESS (2026-11-10, useSubscription roleError). A dropped connection at sign-in used to show
+     the "No access… ask the admin" screen below to a salesperson whose account was fine. This one says what happened and
+     tries again; it never offers Sign out as the only way on (Sign out ends every session on the account). */
+  if (!role && roleError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-6" data-testid="access-unchecked">
+        <div className="max-w-sm text-center space-y-4">
+          <h1 className="text-lg font-semibold">We could not check your access</h1>
+          <p className="text-sm text-muted-foreground">
+            The connection dropped while the app was loading. Your account is fine. Check your internet and try again.
+          </p>
+          <Button onClick={() => retryRole()} data-testid="access-retry">Try again</Button>
+        </div>
+      </div>
+    );
+  }
 
   if (!role) {
     return (
