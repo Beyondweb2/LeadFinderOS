@@ -775,7 +775,7 @@ const PLACE_SUFFIX_BY_COUNTRY: Record<string, string> = {
    They are new markets with no measured audits, so no day-28 replay compares against a different wording. Every
    other country keeps its space ("Pune India", "Leeds UK"), byte for byte. Singapore's town IS the country, so a
    Singapore question already names it and is never pinned twice (placeNamesCountry). */
-const COMMA_PLACE_SUFFIX = new Set(['malaysia', 'singapore']);
+const COMMA_PLACE_SUFFIX = new Set(['malaysia', 'singapore', 'ireland']);
 export function placeJoin(suffix: string): string {
   return COMMA_PLACE_SUFFIX.has(suffix.trim().toLowerCase()) ? ', ' : ' ';
 }
