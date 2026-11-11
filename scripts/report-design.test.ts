@@ -124,8 +124,8 @@ const leader = searches.flatMap((s) => rowsFor(s, [["A"], ["A"], ["A"], ["B"], [
 const banned = /\b(discovery|baseline|verdict|engines?|fragment(ed|ation)|citations?|visibility score|geo)\b/i;
 /** Each report type has its own body (hook: featured search + table; opportunity: best opportunity + targets; client: today vs after 4 weeks + the table), the same score on top and the same footer. */
 const SECTIONS: Record<ReportKind, string[]> = {
-  hook: ["Your AI score", "Featured search", "All searches we asked", "What we found on your website", "Why this matters", "What we'd do"],
-  opportunity: ["Your AI score", "closest opportunity", "AI recommends these instead", "What we found on your website", "Get listed on these sites", "Why this matters", "What we'd do"],
+  hook: ["Your AI score", "Featured search", "What we found on your website", "Why this matters", "What we'd do"],
+  opportunity: ["Your AI score", "best opportunity", "AI recommends these instead", "What we found on your website", "Get listed on these sites", "Why this matters", "What we'd do"],
   baseline: ["Your AI score", "Today and after 4 weeks", "Your 5 searches", "AI recommends these instead", "What we found on your website", "Get listed on these sites", "What we'd do"],
 };
 for (const kind of ["opportunity", "hook", "baseline"] as ReportKind[]) {
@@ -159,11 +159,14 @@ ok(tIssues.indexOf("No reviews or testimonials found") < tIssues.indexOf("Long p
 ok(websiteSectionFromCheck({ state: "issues", serious: [{ title: "A" }], minor: [{ title: "B" }] }).issues[0].serious && websiteSectionFromCheck(null).state === "not_checked", "the stored check becomes the plain section");
 // edge: nothing winnable -> lead with the closest, never an empty section
 const tNone = text(renderReport(model(leader, "opportunity")));
-ok(mOpp.counts.now === 0 && /Your closest opportunity/.test(tNone) && /None you could win yet/.test(tNone) && mOpp.targets.length > 0, "edge: 0 could-win -> the closest targets lead, never an empty section");
+ok(mOpp.counts.now === 0 && /Your best opportunity/.test(tNone) && mOpp.targets.length > 0 && !/you could win/i.test(tNone.replace(/Winnable/g, "")), "edge: nothing easy -> the best winnable searches still lead; possible-with-work counts as winnable, never an empty section");
+const allHard = ["plumber in Bow", "electrician in Bow"].flatMap((q) => rowsFor(q, [["Z"], ["Z"], ["Z"], ["Z"], ["Z"], ["Z"]]));
+const tHard = text(renderReport(model(allHard, "opportunity")));
+ok(/None winnable yet./.test(tHard) && /Your opportunities/.test(tHard) && !/Your best opportunity/.test(tHard), "edge: nothing winnable at all -> a plain line, not an empty box");
 // edge: a winnable one, count line from real counts, plural
 const winRows = [...rowsFor("plumber in Bow", [["A"], ["A"], ["B"], ["C"], ["D"], ["E"]]), ...leader.filter((r) => r.question !== "plumber in Bow")];
 const mWin = model(winRows, "opportunity");
-ok(mWin.counts.now === 1 && /Your best opportunity/.test(text(renderReport(mWin))) && /1 you could win · \d+ possible with work/.test(text(renderReport(mWin))), "a winnable search leads, with the count line built from the real counts");
+ok(mWin.counts.now === 1 && /Your best opportunity/.test(text(renderReport(mWin))) && /5 winnable searches/.test(text(renderReport(mWin))) && !/1 you could win/.test(text(renderReport(mWin))), "the count line adds the easy and the work-needed searches together as winnable");
 // edge: few / no competitors, no directories, fewer than 10 searches
 const lone = rowsFor("plumber in Bow", [[], [], [], [], [], []]);
 const tLone = text(renderReport(model(lone, "opportunity")));
@@ -181,6 +184,7 @@ const mHook = buildReportModel(leader.slice(0, 3 * 1), { ...ctx, town: "London",
 ok(/Featured search/.test(text(renderReport(mHook))) && mHook.examples.length === 1, "first-contact report: example searches in the same order of sections");
 // flagged searches are named, not counted
 ok(/left out: the place name is unclear/.test(text(renderReport({ ...mOpp, counts: { ...mOpp.counts, flagged: 2 } }))), "flagged searches are mentioned in plain words");
+ok(!/All searches we asked/.test(text(renderReport(mHook))), "first-contact report: no all-searches table, the website findings follow the featured search");
 // escaping
 const evil = renderReport({ ...mOpp, businessName: "A<script>x</script>", rivals: [{ name: "<img src=x>", count: 3 }], top: { name: "<img src=x>", count: 3 } });
 ok(!/<script>x|<img src=x>/.test(evil), "business and firm names are escaped");

@@ -34,8 +34,8 @@ export interface OppDirectory { name: string; /** answers that name or cite it *
 
 /** The groups, in the words the reports print (plain English, no jargon). */
 export const RULE_WORDS: { key: OppTier; label: string; short: string }[] = [
-  { key: 'now', label: 'You could win', short: 'No one stands out yet' },
-  { key: 'possible', label: 'Possible with work', short: 'One firm leads, or work needed' },
+  { key: 'now', label: 'Winnable now', short: 'No one stands out yet' },
+  { key: 'possible', label: 'Winnable with work', short: 'One firm leads, or work needed' },
   { key: 'hard', label: 'Hard to win', short: 'One firm named almost every time' },
   { key: 'nofirms', label: "AI doesn't name firms yet", short: 'Most answers name no firm' },
   { key: 'named', label: 'Keep and grow', short: 'AI already names you' },

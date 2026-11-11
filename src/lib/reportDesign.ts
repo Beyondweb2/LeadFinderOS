@@ -36,8 +36,8 @@ export function esc(s: unknown): string {
 export const shortName = (n: string): string => n.replace(/[\s,]+(ltd|limited)\.?$/i, '').trim() || n;
 
 const GROUP: Record<OppTier, { label: string; kind: 'y' | 'a' | 'n' | 'na' | 'b' }> = {
-  now: { label: 'You could win', kind: 'y' },
-  possible: { label: 'Possible with work', kind: 'a' },
+  now: { label: 'Winnable now', kind: 'y' },
+  possible: { label: 'Winnable with work', kind: 'a' },
   hard: { label: 'Hard to win', kind: 'n' },
   nofirms: { label: "AI doesn't name firms yet", kind: 'na' },
   named: { label: 'Keep and grow', kind: 'b' },
@@ -329,10 +329,11 @@ function whyPanel(m: ReportModel): string {
   return `<section class="rp-panel"><h2 class="rp-h">Why this matters</h2><div class="rp-tiles">${tiles.join('')}</div></section>`;
 }
 
-/** "13 you could win · 22 possible with work · 5 hard to win · 8 where AI names no firms yet" — only the groups that exist. */
+/** "25 winnable searches · 4 hard to win · 8 where AI names no firms yet" — only the groups that exist. Anything that needs
+ *  work is still winnable (Paul, 2026-11-11), so "winnable" is the easy ones and the ones that need work together. */
 export function countsLine(c: ReportModel['counts']): string {
-  const parts = [`${c.now} you could win`];
-  if (c.possible) parts.push(`${c.possible} possible with work`);
+  const winnable = c.now + c.possible;
+  const parts = [`${winnable} winnable ${winnable === 1 ? 'search' : 'searches'}`];
   if (c.hard) parts.push(`${c.hard} hard to win`);
   if (c.nofirms) parts.push(`${c.nofirms} where AI names no firms yet`);
   if (c.named) parts.push(`${c.named} to keep and grow`);
@@ -343,7 +344,7 @@ export function countsLine(c: ReportModel['counts']): string {
 
 function footBlock(m: ReportModel): string {
   const w = m.website;
-  const first = m.band === 'high' ? 'Keep your best pages strong and add one for each search below.' : m.counts.now > 0 ? 'Make a clear page for each search you could win.' : 'Make a clear page for each of your closest searches.';
+  const first = m.band === 'high' ? 'Keep your best pages strong and add one for each search below.' : m.counts.now + m.counts.possible > 0 ? 'Make a clear page for each winnable search.' : 'Make a clear page for each search AI could name you in.';
   const second = w.state === 'no_website' ? 'Build a website AI can read.' : w.state === 'issues' && w.issues.length ? 'Fix what stops AI reading your website.' : 'Tidy your website and Google profile.';
   const third = m.kind === 'baseline' ? `Check again ${m.checkAgainLabel ? `on ${m.checkAgainLabel}` : `in ${REMEASURE_WEEKS_STANDARD} weeks`} and show you.` : `Check again after ${REMEASURE_WEEKS_STANDARD} weeks and show you.`;
   return `<footer class="rp-foot"><h3>What we'd do</h3><ul class="rp-do"><li>${esc(first)}</li><li>${esc(second)}</li><li>${esc(third)}</li></ul>` +
@@ -361,28 +362,28 @@ function hookBody(m: ReportModel): string {
   const intro = `We asked AI assistants the searches people make when they look for ${m.what} in ${m.where}, and recorded whether ${esc(shortName(m.businessName))} was named in each answer.`;
   return `<p class="rp-line">${headlineText(m)}</p><p class="rp-intro">${intro}</p>` +
     featuredBlock(m, 'Featured search', 'We asked each AI the same search. Here is what each one said.') +
-    tableBlock(m, m.all, 'All searches we asked', '', false, false) +
     `<div class="rp-pair">${websitePanel(m)}${whyPanel(m)}</div>`;
 }
 
 function opportunityBody(m: ReportModel): string {
   const c = m.counts;
   const high = m.band === 'high';
-  const label = high ? 'Where to keep and grow' : c.now > 0 ? 'Your best opportunity' : 'Your closest opportunity';
-  const sub = c.now > 0 ? 'No one stands out for this search yet. Here is what each AI said.' : 'None you could win yet. This is the closest.';
+  const winnable = c.now + c.possible;
+  const label = high ? 'Where to keep and grow' : 'Your best opportunity';
+  const sub = 'Here is what each AI said.';
   const rest = m.targets.filter((q) => q.question !== m.featured?.question);
   const flagNote = c.flagged ? ` ${plural(c.flagged, 'search', 'searches')} left out: the place name is unclear.` : '';
-  const title = high ? 'Next places to keep and grow' : c.now > 1 ? `${c.now - (m.featured?.tier === 'now' ? 1 : 0)} more searches you could win, then the closest` : 'Next closest searches';
+  const title = high ? 'Next places to keep and grow' : 'More winnable searches';
   const targets = rest.length
     ? `<section class="rp-panel"><h2 class="rp-h">${esc(title)}</h2><p class="rp-h-sub">${esc(`${countsLine(c)}.${flagNote}`)}</p>${rest.map((q) => {
         const g = GROUP[q.tier];
         const firms = q.firms.slice(0, 3);
         return `<div class="rp-target"><h3>${esc(q.question)}</h3>${firms.length ? pills(firms, 3) : ''}<p>${chip(g.kind, g.label)} ${esc(q.why)}</p></div>`;
       }).join('')}</section>`
-    : `<section class="rp-panel"><h2 class="rp-h">The rest of your searches</h2><p class="rp-h-sub">${esc(`${countsLine(c)}.${flagNote}`)}</p></section>`;
+    : `<section class="rp-panel"><h2 class="rp-h">${winnable ? 'The rest of your searches' : 'Your opportunities'}</h2><p class="rp-h-sub">${esc(`${countsLine(c)}.${winnable ? '' : ' None winnable yet.'}${flagNote}`)}</p></section>`;
+  const proof = m.featured ? `<p class="rp-feat-sub" style="margin-top:-8px">${chip(GROUP[m.featured.tier].kind, GROUP[m.featured.tier].label)} ${esc(m.featured.why)}</p>` : '';
   return `<p class="rp-line">${headlineText(m)}</p>` +
-    (m.featured ? featuredBlock(m, label, sub, m.featured.tier === 'now' || m.featured.tier === 'named' ? `<p class="rp-feat-sub" style="margin-top:-8px">${chip(GROUP[m.featured.tier].kind, GROUP[m.featured.tier].label)} ${esc(m.featured.why)}</p>` : `<p class="rp-feat-sub" style="margin-top:-8px">${chip(GROUP[m.featured.tier].kind, GROUP[m.featured.tier].label)} ${esc(m.featured.why)}</p>`)
-      : `<section class="rp-panel"><h2 class="rp-h">${esc(label)}</h2><p class="rp-h-sub">No searches to show yet.</p></section>`) +
+    (m.featured ? featuredBlock(m, label, sub, proof) : '') +
     targets + insteadPanel(m) +
     `<div class="rp-pair">${websitePanel(m)}${listedPanel(m)}</div>` + whyPanel(m);
 }

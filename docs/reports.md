@@ -627,6 +627,7 @@ we'd do + one button.** Nothing is specific to a business: `reportModel.ts` buil
 and dates; `reportDesign.ts` renders it (the approved Findable look). Mockups: `docs/mockups/report-template/` (LDM, ABLM, one made-up edge case).
 Tests: `scripts/report-design.test.ts` (rule, places, phrases, score, every edge case, copy bans, order).
 
+- **Winnable (Paul, 2026-11-11):** anything that needs work is still winnable. The pages say "Winnable now" (4+/6 name a firm, no firm 3+/6, service on site, specific place) and "Winnable with work" (the rest that is not hard), and count them together ("25 winnable searches"); the internal groups stay now / possible / hard.
 - **Rule:** see `docs/architecture-rules.md` and the header of `reportOpportunity.ts`. Counts scale by fraction for other answer counts (8 answers = 8 of 8).
 - **AI score:** share of the answers that named any business that named THIS business (stored answers only; flagged searches left out). The line is
   "AI named you N times. [Top competitor]: M." Bands: 0 = "doesn't mention you yet"; under half = "mentions you in N of M answers"; half or more =
