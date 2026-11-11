@@ -1,7 +1,7 @@
 /* The simple client reports (src/lib/reportDesign.ts + reportOpportunity.ts): presentation over stored counts.
    Pins Paul's sorting rule (2026-11-11, third version), directories-never-competitors, the plain-English copy
    rules (no jargon, "searches", the footer line, no promises), the page order, escaping and the phone viewport. */
-import { oppQuestion, summariseOpportunity, hookFromRows, directoriesInAnswer, isDirectoryName, ruleVerdict, inTheirArea, RULE_WORDS, type OppRow } from "../src/lib/reportOpportunity.ts";
+import { oppQuestion, summariseOpportunity, hookFromRows, searchPhrase, directoriesInAnswer, isDirectoryName, ruleVerdict, inTheirArea, RULE_WORDS, type OppRow } from "../src/lib/reportOpportunity.ts";
 import { chooseReportDesign, renderOpportunityReport, renderHookReport, renderBaselineReport, shortName } from "../src/lib/reportDesign.ts";
 
 let f = 0;
@@ -68,17 +68,21 @@ const rows = [
 ];
 const s = summariseOpportunity(rows, ctx);
 ok(s.now + s.possible + s.hard === 3 && s.answers === 18, "the three groups add up to the searches asked");
-const base = { businessName: "Acme Heating Ltd", trade: "heating", town: "London", dateLabel: "11 Nov 2026" };
+const base = { businessName: "Acme Heating Ltd", trade: "domestic maintenance", town: "London", dateLabel: "11 Nov 2026", searchWhat: "a plumber or electrician", searchWhere: "East London" };
 const text = (h: string) => h.replace(/<style>[\s\S]*?<\/style>/, "").replace(/ style="[^"]*"/g, "").replace(/<[^>]+>/g, " ");
 const opp = renderOpportunityReport({ ...base, summary: s });
 const hook = renderHookReport({ ...base, ...hookFromRows(rows, ["electrician in Bow"]) });
 const bl = renderBaselineReport({ ...base, questions: s.questions, rivals: s.rivals, answers: 18, namedYou: 0, directories: s.directories, checkAgainLabel: "9 Dec 2026" });
 
-ok(opp.includes("When people ask AI for heating in London, it doesn&#39;t mention you yet.") || text(opp).includes("it doesn't mention you yet"), "headline: 'When people ask AI for … it doesn't mention you yet.'");
+ok(text(opp).replace(/\s+/g, " ").includes("When people ask AI for a plumber or electrician in East London, it doesn't mention you yet."), "headline: what customers type, in the region, 'it doesn't mention you yet'");
+ok(!/domestic maintenance/i.test(text(opp)) && !/domestic maintenance/i.test(text(hook)) && !/domestic maintenance/i.test(text(bl)), "the trade label never appears on the page");
+const sp = searchPhrase(["plumber in Bow", "plumber in Hackney", "EICR certificate in East London", "electrician in East London", "electrician in Mile End", "boiler service in Bow"], "London");
+ok(sp.what === "an electrician or plumber" && sp.where === "East London", "searchPhrase: top two searches by count, widest region the searches use");
+ok(searchPhrase(["leak detection in Bow"], "London").what === "a plumber" && searchPhrase(["x in Bow"], "").what === "a business like yours" && searchPhrase(["x in Bow"], "Leeds").where === "Leeds", "searchPhrase: one search, nothing recognised, town fallback");
 const order = (html: string, marks: string[]) => marks.map((m) => html.indexOf(m)).every((v, i, a) => v >= 0 && (i === 0 || v > a[i - 1]));
-ok(order(opp, ["Findable", "<h1>", "You could win", "AI recommends these instead", "searches you could win", "Get listed on these sites", "What we'd do", "Talk to Paul on WhatsApp", "See all searches"]), "opportunity report: sections in Paul's order");
+ok(order(opp, ["Findable", "<h1>", "You could win", "AI recommends these instead", "searches you could win", "Get listed on these sites", "What we&#39;d do", "Talk to Paul on WhatsApp", "See all searches"]), "opportunity report: sections in Paul's order");
 ok(order(hook, ["<h1>", "AI recommends these instead", "Example searches", "Talk to Paul on WhatsApp"]), "first-contact report: headline, who AI recommends, example searches, button");
-ok(order(bl, ["How often AI mentions you today", "searches we track", "We check again on 9 Dec 2026", "What we'd do", "Talk to Paul on WhatsApp"]), "client report: today, the searches, when we check again, what we do, button");
+ok(order(bl, ["How often AI mentions you today", "searches we track", "We check again on 9 Dec 2026", "What we&#39;d do", "Talk to Paul on WhatsApp"]), "client report: today, the searches, when we check again, what we do, button");
 for (const [name, html] of [["opportunity", opp], ["first-contact", hook], ["client", bl]] as const) {
   const t = text(html);
   ok(!/\b(discovery|baseline|verdict|engines?|fragment(ed|ation)|citations?|visibility score|geo)\b/i.test(t), `${name}: no jargon on the page`);
