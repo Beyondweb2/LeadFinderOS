@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { askPlace } from "../../../src/lib/placeAsk.ts";
 import { townGated, TOWN_GATE_REASON } from "../../../src/lib/townVerdict.ts";
 import { cleanTypedTown } from "../../../src/lib/typedTown.ts";
 import { SITE_CHECK_HEADERS } from "../../../src/lib/siteReadIdentity.ts";
@@ -432,6 +433,10 @@ Deno.serve(async (req) => {
     // usage I failed to spot still on the searched town.
     let locationText: string = typeof body.location_text === "string" ? body.location_text.trim() : "";
     const country: string | null = typeof body.country === "string" ? body.country : null;
+    /* AMBIGUOUS PLACES (2026-11-11): a Discovery asked about a town whose name clashes with another place (Stratford) is told its
+       wider area by the caller (the client's home area) and writes the place with it ("Stratford, East London"). NEW audits only: this
+       shapes the text of questions being written; a stored question, a frozen baseline and the replay are never touched. */
+    const widerArea: string = typeof body.wider_area === "string" ? body.wider_area.trim().slice(0, 60) : "";
     const website: string | null = typeof body.website === "string" && body.website.trim() ? body.website.trim() : null;
     const hasWebsite: boolean = body.has_website === true;
     const leadId: string | null = typeof body.lead_id === "string" && body.lead_id ? body.lead_id : null;
@@ -1149,13 +1154,13 @@ Deno.serve(async (req) => {
            40 here would be an 80 the operator never got to choose from, and a pool that came back
            short would be a short audit nobody was told about. */
         const generated = await generateDiscoverySet(
-          businessName, businessType, locationText, hasWebsite, specialisms, questionCount,
+          businessName, businessType, askPlace(locationText, widerArea), hasWebsite, specialisms, questionCount,
           businessScope, country, serviceAreaCoverage, marketContext, questionStyle,
         );
         qs = fillGenerated("discovery preview", generated, questionCount, [],
-          { type: businessType, loc: locationText, hasWebsite, specialisms, scope: businessScope, country, market: marketContext });
+          { type: businessType, loc: askPlace(locationText, widerArea), hasWebsite, specialisms, scope: businessScope, country, market: marketContext });
       } else {
-        qs = await generateQuestions(businessName, questionType, locationText, hasWebsite, specialisms, questionCount, businessScope, country, serviceAreaCoverage, moneyQuestionCount, null, false, marketContext);
+        qs = await generateQuestions(businessName, questionType, askPlace(locationText, widerArea), hasWebsite, specialisms, questionCount, businessScope, country, serviceAreaCoverage, moneyQuestionCount, null, false, marketContext);
       }
       /* A HOOK PREVIEW (the prospect workspace's "Propose questions") is planned exactly as the run
          will plan it, so the three the salesperson reviews are the three that are asked. */

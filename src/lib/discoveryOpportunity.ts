@@ -103,9 +103,9 @@ export function opportunityFor(question: string, rows: QueueRow[], ctx: Opportun
     isDirectoryHost: (h) => ctx.isAggregatorUrl('https://' + h),
   });
   const clientNamed = namedRuns > 0;
-  const classification: OpportunityClass = clientNamed || q.tier === 'named' ? 'named' : q.tier === 'now' ? 'winnable' : q.tier === 'possible' ? 'possible' : 'low';
-  const verdict = clientNamed || q.tier === 'named' ? 'named' : q.tier === 'now' ? 'open' : q.tier === 'possible' ? 'contested' : q.tier === 'nofirms' ? 'no-local-race' : q.tier === 'flagged' ? 'unmeasured' : 'locked';
-  const fragmentation = q.distinct >= 6 ? 'highly fragmented' : q.top <= 2 && q.distinct >= 2 ? 'fragmented across engines' : q.top * 2 >= q.answers ? 'dominant competitors' : 'mixed competition';
+  const classification: OpportunityClass = clientNamed || q.tier === 'named' ? 'named' : q.tier === 'lots' ? 'winnable' : q.tier === 'some' ? 'possible' : 'low';
+  const verdict = clientNamed || q.tier === 'named' ? 'named' : q.tier === 'lots' ? 'open' : q.tier === 'some' ? 'contested' : q.tier === 'nofirms' ? 'no-local-race' : q.tier === 'flagged' || q.tier === 'notoffered' ? 'unmeasured' : 'locked';
+  const fragmentation = q.tier === 'lots' ? 'highly fragmented' : q.tier === 'little' ? 'dominant competitors' : 'mixed competition';
   return {
     classification, verdict, reason: q.reasons[0] ?? '', clientNamed, fragmentation, namedRuns, runs,
     engines: engineTallies(question, rows, ctx), competitors: q.firms.map((f) => f.name),

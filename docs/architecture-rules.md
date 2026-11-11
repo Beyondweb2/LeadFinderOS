@@ -19,16 +19,18 @@
   entry to write; making it a task would invent work.
 - **No winnability SCORING.** A score reads a single run, and competitor lists differ between runs, so it flips between
   identical inputs. Counts only.
-  ✅ **Owner decision 2026-11-11 (Paul): the words "could win" / "you could win" ARE allowed on a client report when the evidence
-  is shown beside them (e.g. "6 answers named 9 firms, no one more than twice") and the page carries the "These are opportunities, not
-  guarantees" line.** They come from ONE fixed written rule over counts across every answer (`src/lib/reportOpportunity.ts`, header
-  comment + `RULE_WORDS`): **You could win** = 4+ of 6 answers name a firm, no firm in 3+ of 6, a service on their website, a SPECIFIC
-  area (borough, town, district; not a whole city, region or country); **Possible with work** = one firm in 3 or 4 of 6, only 3 of 6
-  naming a firm, a service not on their website, a whole-city / region / country search, or a search with no place; **Hard to win** =
-  one firm in 5 or 6 of 6; **AI doesn't name firms yet** = most answers name no firm (never winnable); **Keep and grow** = they are
-  named in half or more of the answers; an **ambiguous place** (e.g. Stratford: AI answers for Stratford-upon-Avon) is flagged and
-  left out of every count, and is asked from now on with its wider area. Directories, review sites and bare service phrases are never
-  competitors. Every number comes from the stored answers, never from a stored summary such as `mention_rate`.
+  ✅ **Owner decision 2026-11-11 (Paul): reports sort searches by how much ROOM AI leaves, with the evidence beside each ("6 answers named
+  11 different firms") and the "These are opportunities, not guarantees" line.** The goal is for the business to be NAMED by AI (one of the firms
+  listed), not to be first or to beat anyone, and we always build their site, so no label speaks of work needed. ONE fixed written rule over counts
+  across every answer (`src/lib/reportOpportunity.ts`, header comment + `RULE_WORDS`): "regulars" = firms named in at least half of a search's
+  answers; "repeat share" = the share of all firm mentions the regulars make. **Lots of room** = repeat share under 0.3 (many different firms, the list
+  keeps changing); **Some room** = 0.3 to under 0.6 (a few repeat, other spots change); **Little room** = 0.6 or more, or one firm in 5/6+ of the answers
+  with a share of 0.5 or more (the same small group in nearly every answer); **AI doesn't name firms yet** = most answers name no firm (never a target);
+  **Keep and grow** = they are named in half or more of the answers. Lots of room needs a service on their website and a SPECIFIC area (borough, town,
+  district); a whole city, region, country, "across X", or no place caps it at Some room; a service not on their website is left out. A search AI answered
+  for the WRONG place (half or more of its answers: e.g. Stratford-upon-Avon for Stratford) is left out; fewer wrong answers are dropped one by one.
+  Directories, review sites and bare service phrases are never firms. Every number comes from the stored answers, never from a stored summary such as
+  `mention_rate`. Thresholds and the data behind them: `docs/reports.md`, "Room rule".
 - **No outcome promises in anything customer-facing.** Say what was measured, what was done, and what changed. Never promise
   a ranking, a recommendation or a citation — "winnable" is a description of the answers today, not a forecast.
 - **Migrations are applied ONE AT A TIME, never with `supabase db push`** — that is broken here

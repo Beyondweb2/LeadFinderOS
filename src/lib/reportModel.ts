@@ -39,7 +39,7 @@ export interface ReportModel {
   top: OppFirm | null;
   rivals: OppFirm[];
   website: WebsiteSection;
-  counts: { now: number; possible: number; hard: number; nofirms: number; named: number; flagged: number; searches: number };
+  counts: { lots: number; some: number; little: number; nofirms: number; named: number; flagged: number; notoffered: number; /** lots + some + little + nofirms + named */ room: number; searches: number };
   /** The two AI the score is built from, over the searches that count. */
   engines: { chatgpt: { named: number; answers: number }; gemini: { named: number; answers: number } };
   /** Google's AI Overview, for context (never scored): searches asked, searches where it showed, and where it named you. */
@@ -95,9 +95,9 @@ export function buildReportModel(rows: OppRow[], ctx0: OppContext, o: ReportMode
   let targets: OppQuestion[] = [];
   let examples: HookExample[] = [];
   if (o.kind === 'opportunity') {
-    // You could win first, then the closest Possible with work; a business that is already named a lot leads with where to keep and grow.
-    const pool = s.questions.filter((q) => q.tier === 'now' || q.tier === 'possible' || q.tier === 'named');
-    const rank = (q: OppQuestion) => (q.tier === 'now' ? 2 : q.tier === 'possible' ? 1 : 0) + (band === 'high' && q.tier === 'named' ? 5 : 0);
+    // Searches with lots of room first, then some room; a business that is already named a lot leads with where to keep and grow.
+    const pool = s.questions.filter((q) => q.tier === 'lots' || q.tier === 'some' || q.tier === 'named');
+    const rank = (q: OppQuestion) => (q.tier === 'lots' ? 2 : q.tier === 'some' ? 1 : 0) + (band === 'high' && q.tier === 'named' ? 5 : 0);
     const order = new Map(s.best.map((q, i) => [q.question, i]));
     const sorted = [...pool].sort((x, y) => rank(y) - rank(x) || (order.get(x.question) ?? 999) - (order.get(y.question) ?? 999) || x.question.localeCompare(y.question));
     targets = sorted.slice(0, o.bestCount ?? 10);
@@ -126,7 +126,7 @@ export function buildReportModel(rows: OppRow[], ctx0: OppContext, o: ReportMode
     score: { value, named: sc.named, denominator: sc.denominator, answers: sc.answers }, band,
     top: sc.firms[0] ?? null, rivals: sc.firms,
     website: o.website,
-    counts: { now: s.now, possible: s.possible, hard: s.hard, nofirms: s.nofirms, named: s.named, flagged: s.flagged, searches: s.questions.length - s.flagged },
+    counts: { lots: s.lots, some: s.some, little: s.little, nofirms: s.nofirms, named: s.named, flagged: s.flagged, notoffered: s.notoffered, room: s.room, searches: s.questions.length - s.flagged },
     targets, examples, directories: s.directories,
     flagged: s.questions.filter((q) => q.tier === 'flagged').map((q) => q.question),
     checkAgainLabel: o.checkAgainLabel,

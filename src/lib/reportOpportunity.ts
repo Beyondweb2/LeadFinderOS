@@ -6,18 +6,22 @@
    changes a score, a stored row or the audit method. Every number comes from the stored answers (never from a
    stored summary such as ai_audit_runs.mention_rate).
 
-   THE STRICT RULE (Paul, 2026-11-11), per search, over its answers (n, 6 for 3 asks x 2 AI):
-     • "AI doesn't name firms yet" — most answers (more than half) name no firm. NEVER counted as winnable.
-     • "Hard to win"        — one firm named in 5/6 or more of the answers (top/n >= 5/6).
-     • "You could win"      — 4/6+ of the answers name a firm, NO firm in 3/6+ of them, a service on their website,
-                              and a SPECIFIC area (a borough, town or district; not a whole city, region or country).
-     • "Possible with work" — everything else: one firm in 3 or 4 of 6, only 3/6 naming a firm, a service not on
-                              their site, a whole-city / region / country search, or a search with no place in it.
-     • "Keep and grow"      — named by this business in half or more of the answers (already winning).
-     • "Flagged"            — an ambiguous place (e.g. Stratford: AI answers for Stratford-upon-Avon). Left out of
-                              every count; from now on such places are asked with their wider area.
-   Other answer counts scale by fraction (top/n, named/n). Directories and review sites, and bare service phrases
-   ("Landlord Certificate London"), are never competitors.
+   THE ROOM RULE (Paul, 2026-11-11), per search, over its answers (n, 6 for 3 asks x 2 AI). The goal is for the business to
+   be NAMED by AI (one of the firms listed), not to be first or to beat anyone, and we always build their site, so no label
+   speaks of work needed. A search is graded by how much ROOM there is in the list AI gives:
+     • "Lots of room"  — many different firms, the list keeps changing (repeat share under 0.3), a service on their
+                         website, a SPECIFIC area (a borough, town or district).
+     • "Some room"     — a few firms repeat but other spots change (0.3 to under 0.6); also any search with lots of room
+                         that covers a whole city, region or country, or names no place (capped here).
+     • "Little room"   — the same small group in nearly every answer (repeat share 0.6 or more, or one firm in 5/6+ of the
+                         answers with a share of 0.5 or more).
+     • "AI doesn't name firms yet" — most answers (more than half) name no firm.
+     • "Keep and grow" — named by this business in half or more of the answers.
+     • left out        — "flagged": AI answered for the WRONG PLACE (half or more of the answers: e.g. Stratford-upon-Avon for
+                         Stratford; fewer wrong answers are dropped one by one); "not offered": a service not on their site.
+   "Regulars" are the firms named in at least half of the search's answers; "repeat share" is the share of all firm mentions
+   that the regulars make. Other answer counts scale by fraction. Directories, review sites and bare service phrases
+   ("Landlord Certificate London") are never firms.
 
    ⛔ NOT A SCORE. docs/architecture-rules.md bans winnability SCORING; this is a fixed written rule over COUNTS, so the
    same data always gives the same page. "You could win" is allowed only with its evidence ("6 answers named 9 firms,
@@ -27,19 +31,25 @@
    Pure: no DOM, no Deno-only imports. Imported by the render-audit-report edge function, so relative imports carry .ts.
    ═══════════════════════════════════════════════════════════════════════════════════════ */
 
-export type OppTier = 'now' | 'possible' | 'hard' | 'nofirms' | 'named' | 'flagged';
+export type OppTier = 'lots' | 'some' | 'little' | 'nofirms' | 'named' | 'flagged' | 'notoffered';
+
+/** Room thresholds, from the real LDM and ABLM answers (docs/reports.md "Room rule"). */
+export const ROOM_LITTLE_AT = 0.6;
+export const ROOM_LITTLE_TOP_ALL = 0.5;
+export const ROOM_SOME_AT = 0.3;
 
 export interface OppFirm { name: string; count: number }
 export interface OppDirectory { name: string; /** answers that name or cite it */ answers: number; /** questions it appears in */ questions: number }
 
 /** The groups, in the words the reports print (plain English, no jargon). */
 export const RULE_WORDS: { key: OppTier; label: string; short: string }[] = [
-  { key: 'now', label: 'Winnable now', short: 'No one stands out yet' },
-  { key: 'possible', label: 'Winnable with work', short: 'One firm leads, or work needed' },
-  { key: 'hard', label: 'Hard to win', short: 'One firm named almost every time' },
+  { key: 'lots', label: 'Lots of room', short: 'AI names different firms each time' },
+  { key: 'some', label: 'Some room', short: 'A few firms repeat, other spots change' },
+  { key: 'little', label: 'Little room', short: 'The same few firms in nearly every answer' },
   { key: 'nofirms', label: "AI doesn't name firms yet", short: 'Most answers name no firm' },
   { key: 'named', label: 'Keep and grow', short: 'AI already names you' },
-  { key: 'flagged', label: 'Check this place', short: 'Ambiguous place, left out of the counts' },
+  { key: 'flagged', label: 'Check this place', short: 'AI answered for another place, left out' },
+  { key: 'notoffered', label: 'Not your service', short: 'Not a service on your website' },
 ];
 
 import { cleanAnswerText, isJunkAnswer, isMapCardAnswer } from './answerText.ts';
@@ -80,6 +90,11 @@ export interface OppQuestion {
   dirs: { name: string; answers: number }[];
   /** Names dropped from the firm lists because they are service phrases, not businesses. */
   droppedPhrases: string[];
+  /** Firms named in at least half of the answers, and the share of all firm mentions they make (0 to 1). */
+  regulars: number;
+  repeatShare: number;
+  /** Answers left out because they are about another place with the same name. */
+  wrongPlace: number;
   /** Per AI: answers received, answers naming this business, the firms it named (most first) and a real answer snippet. */
   engines: { chatgpt: EngineFacts; gemini: EngineFacts };
   /** Google's AI Overview for this search (shown for context, not scored): shown or not, named you, the firms it named. */
@@ -258,7 +273,7 @@ export function inTheirArea(area: string | null, areas: string[] | undefined): b
 /* ── Ambiguous places ("Stratford" = Stratford-upon-Avon or Stratford E15?) ──────────────────────────────
    Detected from the stored answers: firm names, cited sites or answer text that say "<place>-upon-…" (or on / under /
    le / next / by …). Evidence only, so a place is flagged because AI actually answered for another place with its name. */
-export function placeMixup(area: string | null, firmNames: string[], hosts: string[], texts: string[]): boolean {
+export function placeMixup(area: string | null, firmNames: string[], hosts: string[], texts: string[], minHits = 2): boolean {
   if (!area) return false;
   const a = area.replace(/[^A-Za-z]/g, '');
   if (a.length < 3) return false;
@@ -271,19 +286,10 @@ export function placeMixup(area: string | null, firmNames: string[], hosts: stri
   for (const n of firmNames) if (proper.test(flat(n))) hits++;
   for (const h of hosts) if (hostRe.test(h.replace(/\./g, ' '))) hits++;
   for (const t of texts) if (proper.test(flat(t).slice(0, 4000))) hits++;
-  return hits >= 2;
+  return hits >= minHits;
 }
 
-/** Places whose names clash with another place; asked from now on with their wider area ("Stratford, East London"). */
-const CLASHING_PLACES = new Set(['stratford', 'newcastle', 'richmond', 'bury', 'brighton', 'newport', 'bangor', 'henley', 'sutton', 'kingston', 'wellington', 'lancaster', 'perth', 'burton', 'weston', 'chester', 'ashford']);
-export const isClashingPlace = (place: string): boolean => CLASHING_PLACES.has(place.trim().toLowerCase());
-/** The place as it should be ASKED: a clashing name carries its wider area ("Stratford, East London"). */
-export function askPlace(place: string, widerArea?: string | null): string {
-  const p = place.trim();
-  const w = (widerArea ?? '').trim();
-  if (!w || !isClashingPlace(p) || p.toLowerCase() === w.toLowerCase() || new RegExp(`\\b${p}\\b`, 'i').test(w)) return p;
-  return `${p}, ${w}`;
-}
+export { isClashingPlace, askPlace } from './placeAsk.ts';
 
 /* ── Heads of searches (the customer's own words) and service phrases ──────────────────────────────────── */
 
@@ -410,36 +416,49 @@ export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): 
   const variants = new Map<string, Map<string, number>>();
   const dirCounts = new Map<string, number>();
   const per = { chatgpt: [0, 0], gemini: [0, 0] } as Record<(typeof ENGINES)[number], [number, number]>;
-  const cites = new Set<string>();
   const texts: string[] = [];
   const dropped = new Set<string>();
   const vocab = ctx.vocab ?? buildVocab([question], ctx.services.map((s) => s.name), [ctx.town ?? '']);
+  const info = areaInfo(question);
+  const area = info?.area ?? null;
   let answers = 0, empty = 0, namedYou = 0;
-  const allNames: string[] = [];
   const eng: Record<(typeof ENGINES)[number], { answers: number; named: number; counts: Map<string, number>; names: Map<string, string>; snippet: string | null }> = {
     chatgpt: { answers: 0, named: 0, counts: new Map(), names: new Map(), snippet: null },
     gemini: { answers: 0, named: 0, counts: new Map(), names: new Map(), snippet: null },
   };
   let aioShown = false, aioNamed = false; const aioFirms = new Set<string>(); let aioSnippet: string | null = null;
+
+  /* THE WRONG PLACE, ANSWER BY ANSWER (Paul, 2026-11-11). An answer that is about another place with the same name
+     ("Stratford-upon-Avon" for "Stratford") is left out; the search itself is left out only when HALF OR MORE of its
+     answers are for the wrong place. A search AI answered for the right place is never left out. */
+  const cells: { e: (typeof ENGINES)[number]; cell: Cell; wrong: boolean }[] = [];
+  for (const row of own) for (const e of ENGINES) {
+    const cell = (row.result ?? {})[e] as Cell | undefined;
+    if (!cell || typeof cell !== 'object') continue;
+    const names = (cell.competitors ?? []).filter((n): n is string => typeof n === 'string');
+    const hosts = (cell.citations ?? []).map((c) => hostOf(c.url)).filter(Boolean);
+    const wrong = !!area && placeMixup(area, names, hosts, cell.answer_text ? [String(cell.answer_text)] : [], 1);
+    cells.push({ e, cell, wrong });
+  }
+  const wrongPlace = cells.filter((c) => c.wrong).length;
+  const mixup = cells.length > 0 && wrongPlace * 2 >= cells.length;
+  const cites = new Set<string>();
+  for (const { e, cell } of cells.filter((c) => !c.wrong)) {
+    answers++; per[e][1]++;
+    if (namedOf(ctx)(cell)) { namedYou++; per[e][0]++; }
+    const firms = rivalsOf(cell, ctx, vocab, dropped);
+    if (!firms.length) empty++;
+    const ef = eng[e];
+    ef.answers++; if (namedOf(ctx)(cell)) ef.named++;
+    for (const f of firms) { const k = firmKey(f); if (k) { ef.counts.set(k, (ef.counts.get(k) ?? 0) + 1); if (!ef.names.has(k)) ef.names.set(k, f.trim()); } }
+    if (!ef.snippet) ef.snippet = snippetOf(cell.answer_text);
+    for (const k of new Set(firms.map(firmKey))) if (k) counts.set(k, (counts.get(k) ?? 0) + 1);
+    for (const f of firms) { const k = firmKey(f); if (k) { const m = variants.get(k) ?? new Map<string, number>(); m.set(f.trim(), (m.get(f.trim()) ?? 0) + 1); variants.set(k, m); } }
+    for (const d of directoriesInAnswer(cell, ctx)) dirCounts.set(d, (dirCounts.get(d) ?? 0) + 1);
+    for (const c of cell.citations ?? []) { const h = hostOf(c.url); if (h) cites.add(h); }
+    if (cell.answer_text) texts.push(String(cell.answer_text));
+  }
   for (const row of own) {
-    for (const e of ENGINES) {
-      const cell = (row.result ?? {})[e] as Cell | undefined;
-      if (!cell || typeof cell !== 'object') continue;
-      answers++; per[e][1]++;
-      if (namedOf(ctx)(cell)) { namedYou++; per[e][0]++; }
-      for (const n of cell.competitors ?? []) if (typeof n === 'string') allNames.push(n);
-      const firms = rivalsOf(cell, ctx, vocab, dropped);
-      if (!firms.length) empty++;
-      const ef = eng[e];
-      ef.answers++; if (namedOf(ctx)(cell)) ef.named++;
-      for (const f of firms) { const k = firmKey(f); if (k) { ef.counts.set(k, (ef.counts.get(k) ?? 0) + 1); if (!ef.names.has(k)) ef.names.set(k, f.trim()); } }
-      if (!ef.snippet) ef.snippet = snippetOf(cell.answer_text);
-      for (const k of new Set(firms.map(firmKey))) if (k) counts.set(k, (counts.get(k) ?? 0) + 1);
-      for (const f of firms) { const k = firmKey(f); if (k) { const m = variants.get(k) ?? new Map<string, number>(); m.set(f.trim(), (m.get(f.trim()) ?? 0) + 1); variants.set(k, m); } }
-      for (const d of directoriesInAnswer(cell, ctx)) dirCounts.set(d, (dirCounts.get(d) ?? 0) + 1);
-      for (const c of cell.citations ?? []) { const h = hostOf(c.url); if (h) cites.add(h); }
-      if (cell.answer_text) texts.push(String(cell.answer_text));
-    }
     const ao = (row.result ?? {}).ai_overview as Cell | undefined;
     if (ao && typeof ao === 'object' && String(ao.answer_text ?? '').trim()) {
       aioShown = true;
@@ -454,44 +473,42 @@ export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): 
   const top = firms[0]?.count ?? 0;
   const distinct = firms.length;
   const named = answers - empty;
-  const info = areaInfo(question);
-  const area = info?.area ?? null;
   const scope = placeScope(question);
   const svc = serviceCheck(question, ctx);
   const serviceOnSite = svc.offered && !svc.confirmNote;
   const areaOk = inTheirArea(area, ctx.areas);
   const intent = intentOf(question);
-  const mixup = placeMixup(area, allNames, [...cites], texts);
 
-  /* THE STRICT RULE, in order. Fractions, so other answer counts scale (6 of 6, 8 of 8 …). */
-  const hard = answers > 0 && top * 6 >= answers * 5;
+  /* THE ROOM RULE (Paul, 2026-11-11). The goal is to be NAMED by AI (one of the firms listed), not to be first.
+     "Regulars" = firms named in at least half of this search's answers. "Repeat share" = the share of every firm
+     mention that the regulars make. Thresholds from the real LDM and ABLM data (docs/reports.md): a closed list
+     (the same few firms in most answers) sits at 0.6 and above; a rotating list under 0.3. */
+  const regulars = firms.filter((f) => f.count * 2 >= answers);
+  const mentions = firms.reduce((n, f) => n + f.count, 0);
+  const repeatShare = mentions ? regulars.reduce((n, f) => n + f.count, 0) / mentions : 0;
   const keep = answers > 0 && namedYou * 2 >= answers;
   const nofirms = answers > 0 && empty * 2 > answers;
-  const leads = answers > 0 && top * 2 >= answers;
-  const enoughNamed = answers > 0 && named * 6 >= answers * 4;
+  const closed = repeatShare >= ROOM_LITTLE_AT || (top * 6 >= answers * 5 && repeatShare >= ROOM_LITTLE_TOP_ALL);
+  const roomy = repeatShare < ROOM_SOME_AT;
   let tier: OppTier;
-  if (answers === 0) tier = 'flagged';
-  else if (mixup) tier = 'flagged';
+  if (answers === 0 || mixup) tier = 'flagged';
   else if (keep) tier = 'named';
-  else if (hard) tier = 'hard';
+  else if (!serviceOnSite) tier = 'notoffered';
   else if (nofirms) tier = 'nofirms';
-  else if (leads || !enoughNamed || !serviceOnSite || !areaOk || scope !== 'specific') tier = 'possible';
-  else tier = 'now';
+  else if (closed) tier = 'little';
+  else if (roomy && scope === 'specific' && areaOk) tier = 'lots';
+  else tier = 'some'; // a rotating list capped at "some room" when the search covers a whole city, region or country, or no place
 
-  const times = (n: number) => (n === 1 ? 'once' : n === 2 ? 'twice' : `${n} times`);
+  const proof = `${named} answers named ${distinct} different firms`;
   let why: string;
   if (answers === 0) why = 'Not answered yet';
   else if (mixup) why = `AI answers for another ${area}`;
   else if (tier === 'named') why = `AI names you in ${namedYou} of ${answers} answers`;
-  else if (tier === 'hard') why = `${firms[0].name} in ${top} of ${answers} answers`;
+  else if (tier === 'notoffered') why = 'Not a service on your website';
   else if (tier === 'nofirms') why = named === 0 ? `AI named no firm in any of the ${answers} answers` : `Only ${named} of ${answers} answers name a firm`;
-  else if (tier === 'now') why = `${named} answers named ${distinct} firms, no one more than ${times(top)}`;
-  else if (leads) why = `${firms[0].name} in ${top} of ${answers} answers`;
-  else if (!serviceOnSite) why = svc.confirmNote ?? 'Not on your website yet';
-  else if (!areaOk) why = 'Outside your areas';
-  else if (scope === 'wide') why = 'Whole-area search, harder to win';
-  else if (scope === 'none') why = 'No place in the search';
-  else why = `Only ${named} of ${answers} answers name a firm`;
+  else if (tier === 'little') why = `${proof}; the same ${regulars.length} come up in most`;
+  else if (tier === 'some') why = regulars.length ? `${proof}; ${regulars.length} come up in most` : `${proof}${scope === 'specific' ? '' : '. Whole-area search'}`;
+  else why = proof;
 
   const reasons = [why];
   const dirs = [...dirCounts.entries()].map(([name, n]) => ({ name, answers: n })).sort((a, b) => b.answers - a.answers || a.name.localeCompare(b.name));
@@ -509,6 +526,7 @@ export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): 
     question, tier, easy: false, why, answers, empty, named, distinct, top, firms: firms.slice(0, 5), namedYou,
     chatgptNamed: per.chatgpt[0], chatgptAnswers: per.chatgpt[1], geminiNamed: per.gemini[0], geminiAnswers: per.gemini[1],
     area, scope, service: svc.offered ? label : null, hasPage: svc.hasPage, reasons, help, intent, dirs, droppedPhrases: [...dropped],
+    regulars: regulars.length, repeatShare: Math.round(repeatShare * 100) / 100, wrongPlace,
     engines: {
       chatgpt: engineFacts(eng.chatgpt), gemini: engineFacts(eng.gemini),
     },
@@ -535,8 +553,11 @@ function rivalsOf(cell: Cell, ctx: Pick<OppContext, 'isRival'>, vocab?: Set<stri
 
 export interface OppSummary {
   questions: OppQuestion[];
-  /** Counts by group. `flagged` searches are left out of every other count. */
-  now: number; possible: number; hard: number; nofirms: number; named: number; flagged: number;
+  /** Counts by group. `flagged` (ambiguous place) searches are left out of every count; `notoffered` (a service not on
+   *  their website) are left out of the room counts and the targets. */
+  lots: number; some: number; little: number; nofirms: number; named: number; flagged: number; notoffered: number;
+  /** Searches the room counts are over: lots + some + little + nofirms + named. */
+  room: number;
   /** Kept for older callers. */
   easy: number;
   /** Answers across the searches that count (flagged searches left out). */
@@ -545,7 +566,7 @@ export interface OppSummary {
   rivals: OppFirm[];
   /** Directories and review sites, ranked by how many answers cite or name them. */
   directories: OppDirectory[];
-  /** The best targets, ranked: You could win first, then the closest Possible with work. */
+  /** The best targets, ranked: lots of room first, then some room, then already named. */
   best: OppQuestion[];
 }
 
@@ -559,16 +580,12 @@ export function directoriesAcross(qs: OppQuestion[]): OppDirectory[] {
   return [...m.entries()].map(([name, v]) => ({ name, ...v })).sort((a, b) => b.answers - a.answers || b.questions - a.questions || a.name.localeCompare(b.name));
 }
 
-/** Ranking for the targets: You could win first; then the closest Possible with work (fewest things in the way). Deterministic. */
+/** Ranking for the targets: lots of room first, then some room; within a group the least repeated list, a specific place and the
+ *  most answers naming firms first. Deterministic. */
 export function bestScore(q: OppQuestion): number {
-  if (q.tier === 'now') return 1000 - q.top * 10 + (isLocalArea(q.area) ? 15 : 0) + (q.hasPage ? 8 : 0);
-  if (q.tier === 'possible') {
-    // closest = a service they offer, a specific place, the least dominated, the most answers naming firms
-    return 500 + (q.service ? 120 : 0) + (q.scope === 'specific' ? 60 : q.scope === 'wide' ? 20 : 0) - q.top * 15 + q.named * 3;
-  }
-  if (q.tier === 'named') return 200;
-  if (q.tier === 'nofirms') return 100;
-  return 0;
+  const fresh = (1 - q.repeatShare) * 100;
+  const base = q.tier === 'lots' ? 1000 : q.tier === 'some' ? 500 : q.tier === 'named' ? 200 : q.tier === 'little' ? 100 : q.tier === 'nofirms' ? 50 : 0;
+  return base + fresh + (q.scope === 'specific' ? 20 : 0) + q.named;
 }
 
 /** Builds the summary of every search: groups, counts, rivals, directories and the ranked targets. */
@@ -595,11 +612,12 @@ export function summariseOpportunity(rows: OppRow[], ctx: OppContext, bestCount 
   for (const [k, m] of variants) display.set(k, [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].length - b[0].length)[0][0]);
   const rivals = [...counts.entries()].map(([k, count]) => ({ name: display.get(k) ?? k, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   const live = questions.filter((q) => q.tier !== 'flagged');
-  const best = live.filter((q) => q.tier === 'now' || q.tier === 'possible' || q.tier === 'named').sort((a, b) => bestScore(b) - bestScore(a) || a.question.localeCompare(b.question)).slice(0, bestCount);
+  const best = live.filter((q) => q.tier === 'lots' || q.tier === 'some' || q.tier === 'named').sort((a, b) => bestScore(b) - bestScore(a) || a.question.localeCompare(b.question)).slice(0, bestCount);
   const n = (t: OppTier) => questions.filter((q) => q.tier === t).length;
   return {
-    questions, answers, rivals, best, directories: directoriesAcross(live),
-    now: n('now'), possible: n('possible'), hard: n('hard'), nofirms: n('nofirms'), named: n('named'), flagged: n('flagged'), easy: 0,
+    questions, answers, rivals, best, directories: directoriesAcross(live.filter((q) => q.tier !== 'notoffered')),
+    lots: n('lots'), some: n('some'), little: n('little'), nofirms: n('nofirms'), named: n('named'), flagged: n('flagged'), notoffered: n('notoffered'),
+    room: n('lots') + n('some') + n('little') + n('nofirms') + n('named'), easy: 0,
   };
 }
 
@@ -654,8 +672,8 @@ export interface RuleVerdict {
   q: OppQuestion;
 }
 
-/** THE one rule for one search across all its runs: You could win -> 'open', Possible with work -> 'contested',
- *  Hard to win -> 'locked', "AI doesn't name firms yet" -> 'no_local_race' (generic advice: the Q&A-page case),
+/** THE one rule for one search across all its runs: Lots of room -> 'open', Some room -> 'contested',
+ *  Little room -> 'locked', "AI doesn't name firms yet" -> 'no_local_race' (generic advice: the Q&A-page case),
  *  a place left out -> 'unmeasured'. A client named in more than half the runs is 'named'; one run alone never
  *  establishes presence ('unmeasured'), exactly as before. `results` = one stored result map per run. */
 export function ruleVerdict(question: string, results: Record<string, unknown>[], ctx: OppContext): RuleVerdict {
@@ -677,10 +695,10 @@ export function ruleVerdict(question: string, results: Record<string, unknown>[]
   if (runs === 0) verdict = 'unmeasured';
   else if (clientNamed) verdict = 'named';
   else if (runs === 1 && namedRuns === 1) verdict = 'unmeasured';
-  else if (q.tier === 'flagged') verdict = 'unmeasured';
-  else if (q.tier === 'now') verdict = 'open';
+  else if (q.tier === 'flagged' || q.tier === 'notoffered') verdict = 'unmeasured';
+  else if (q.tier === 'lots') verdict = 'open';
   else if (q.tier === 'nofirms') verdict = 'no_local_race';
-  else if (q.tier === 'hard') verdict = 'locked';
+  else if (q.tier === 'little') verdict = 'locked';
   else verdict = 'contested';
   return { verdict, tier: q.tier, easy: false, reason: q.why, namedFirms: q.firms.map((f) => f.name), clientNamed, q };
 }

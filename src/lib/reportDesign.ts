@@ -36,12 +36,13 @@ export function esc(s: unknown): string {
 export const shortName = (n: string): string => n.replace(/[\s,]+(ltd|limited)\.?$/i, '').trim() || n;
 
 const GROUP: Record<OppTier, { label: string; kind: 'y' | 'a' | 'n' | 'na' | 'b' }> = {
-  now: { label: 'Winnable now', kind: 'y' },
-  possible: { label: 'Winnable with work', kind: 'a' },
-  hard: { label: 'Hard to win', kind: 'n' },
+  lots: { label: 'Lots of room', kind: 'y' },
+  some: { label: 'Some room', kind: 'a' },
+  little: { label: 'Little room', kind: 'na' },
   nofirms: { label: "AI doesn't name firms yet", kind: 'na' },
   named: { label: 'Keep and grow', kind: 'b' },
   flagged: { label: 'Check this place', kind: 'na' },
+  notoffered: { label: 'Not your service', kind: 'na' },
 };
 
 const WA_BUTTON = 'Talk to Paul on WhatsApp';
@@ -329,22 +330,27 @@ function whyPanel(m: ReportModel): string {
   return `<section class="rp-panel"><h2 class="rp-h">Why this matters</h2><div class="rp-tiles">${tiles.join('')}</div></section>`;
 }
 
-/** "25 winnable searches · 4 hard to win · 8 where AI names no firms yet" — only the groups that exist. Anything that needs
- *  work is still winnable (Paul, 2026-11-11), so "winnable" is the easy ones and the ones that need work together. */
+/** "AI names different firms each time for 12 of your 31 searches. There's room for you to be one of them." — built from the real counts. */
 export function countsLine(c: ReportModel['counts']): string {
-  const winnable = c.now + c.possible;
-  const parts = [`${winnable} winnable ${winnable === 1 ? 'search' : 'searches'}`];
-  if (c.hard) parts.push(`${c.hard} hard to win`);
-  if (c.nofirms) parts.push(`${c.nofirms} where AI names no firms yet`);
-  if (c.named) parts.push(`${c.named} to keep and grow`);
-  return parts.join(' · ');
+  const first = c.lots > 0
+    ? `AI names different firms each time for ${c.lots} of your ${plural(c.room, 'search', 'searches')}. There's room for you to be one of them.`
+    : c.some > 0
+      ? `AI repeats a few firms but changes the rest for ${c.some} of your ${plural(c.room, 'search', 'searches')}. There's still room for you to be one of them.`
+      : c.room > 0 ? `AI names the same few firms for most of your ${plural(c.room, 'search', 'searches')}.` : 'No searches to count yet.';
+  const rest: string[] = [];
+  if (c.lots > 0 && c.some > 0) rest.push(`${c.some} with some room`);
+  if (c.little) rest.push(`${c.little} with little room`);
+  if (c.nofirms) rest.push(`${c.nofirms} where AI names no firms yet`);
+  if (c.named) rest.push(`${c.named} to keep and grow`);
+  if (c.notoffered) rest.push(`${c.notoffered} for services not on your website`);
+  return rest.length ? `${first} ${rest.join(' · ')}` : first;
 }
 
 /* ── The footer: what we'd do + the one button ──────────────────────────────────────────── */
 
 function footBlock(m: ReportModel): string {
   const w = m.website;
-  const first = m.band === 'high' ? 'Keep your best pages strong and add one for each search below.' : m.counts.now + m.counts.possible > 0 ? 'Make a clear page for each winnable search.' : 'Make a clear page for each search AI could name you in.';
+  const first = m.band === 'high' ? 'Keep your best pages strong and add one for each search below.' : m.counts.lots + m.counts.some > 0 ? 'Make a clear page for each search where you can get named.' : 'Make a clear page for each of your searches.';
   const second = w.state === 'no_website' ? 'Build a website AI can read.' : w.state === 'issues' && w.issues.length ? 'Fix what stops AI reading your website.' : 'Tidy your website and Google profile.';
   const third = m.kind === 'baseline' ? `Check again ${m.checkAgainLabel ? `on ${m.checkAgainLabel}` : `in ${REMEASURE_WEEKS_STANDARD} weeks`} and show you.` : `Check again after ${REMEASURE_WEEKS_STANDARD} weeks and show you.`;
   return `<footer class="rp-foot"><h3>What we'd do</h3><ul class="rp-do"><li>${esc(first)}</li><li>${esc(second)}</li><li>${esc(third)}</li></ul>` +
@@ -368,19 +374,19 @@ function hookBody(m: ReportModel): string {
 function opportunityBody(m: ReportModel): string {
   const c = m.counts;
   const high = m.band === 'high';
-  const winnable = c.now + c.possible;
+  const room = c.lots + c.some;
   const label = high ? 'Where to keep and grow' : 'Your best opportunity';
   const sub = 'Here is what each AI said.';
   const rest = m.targets.filter((q) => q.question !== m.featured?.question);
-  const flagNote = c.flagged ? ` ${plural(c.flagged, 'search', 'searches')} left out: the place name is unclear.` : '';
-  const title = high ? 'Next places to keep and grow' : 'More winnable searches';
+  const flagNote = c.flagged ? ` ${plural(c.flagged, 'search', 'searches')} left out: AI answered for another place.` : '';
+  const line = esc(`${countsLine(c)}${flagNote}`);
   const targets = rest.length
-    ? `<section class="rp-panel"><h2 class="rp-h">${esc(title)}</h2><p class="rp-h-sub">${esc(`${countsLine(c)}.${flagNote}`)}</p>${rest.map((q) => {
+    ? `<section class="rp-panel"><h2 class="rp-h">Searches where you can get named</h2><p class="rp-h-sub">${line}</p>${rest.map((q) => {
         const g = GROUP[q.tier];
         const firms = q.firms.slice(0, 3);
         return `<div class="rp-target"><h3>${esc(q.question)}</h3>${firms.length ? pills(firms, 3) : ''}<p>${chip(g.kind, g.label)} ${esc(q.why)}</p></div>`;
       }).join('')}</section>`
-    : `<section class="rp-panel"><h2 class="rp-h">${winnable ? 'The rest of your searches' : 'Your opportunities'}</h2><p class="rp-h-sub">${esc(`${countsLine(c)}.${winnable ? '' : ' None winnable yet.'}${flagNote}`)}</p></section>`;
+    : `<section class="rp-panel"><h2 class="rp-h">Searches where you can get named</h2><p class="rp-h-sub">${line}${room ? '' : ' None with room yet.'}</p></section>`;
   const proof = m.featured ? `<p class="rp-feat-sub" style="margin-top:-8px">${chip(GROUP[m.featured.tier].kind, GROUP[m.featured.tier].label)} ${esc(m.featured.why)}</p>` : '';
   return `<p class="rp-line">${headlineText(m)}</p>` +
     (m.featured ? featuredBlock(m, label, sub, proof) : '') +
@@ -395,7 +401,7 @@ function baselineBody(m: ReportModel): string {
     `<div class="rp-card"><span class="rp-k" style="color:#6b6c72"><i></i>Today &middot; ${esc(m.dateLabel)}</span><p class="rp-bigdark rp-t-${tone}" style="margin-top:10px;${tone === 'grey' ? 'color:#5d5e63' : ''}">${s.value === null ? 'No score yet' : `${s.value}<span style="font-size:18px;color:#6b6c72"> / 100</span>`}</p><p class="rp-h-sub" style="margin:6px 0 0">AI named you ${s.named} ${s.named === 1 ? 'time' : 'times'}.${m.top ? ` ${esc(m.top.name)}: ${m.top.count}.` : ''}</p></div>` +
     `<div class="rp-card rp-card--next"><span class="rp-k" style="color:#6b6c72"><i></i>${m.checkAgainLabel ? `We check again on ${esc(m.checkAgainLabel)}` : `We check again in ${REMEASURE_WEEKS_STANDARD} weeks`}</span><p class="rp-bigdark" style="margin-top:10px;color:#a3a5ab">&mdash;</p><p class="rp-h-sub" style="margin:6px 0 0">Same ${plural(m.counts.searches, 'search', 'searches')}. Same AI.</p></div></div></section>`;
   const c = m.counts;
-  const flagNote = c.flagged ? ` ${plural(c.flagged, 'search', 'searches')} left out: the place name is unclear.` : '';
+  const flagNote = c.flagged ? ` ${plural(c.flagged, 'search', 'searches')} left out: AI answered for another place.` : '';
   return `<p class="rp-line">${headlineText(m)}</p>` + today +
     tableBlock(m, m.all, `Your ${m.all.length} searches`, `${countsLine(c)}.${flagNote}`, true, true) +
     insteadPanel(m) + `<div class="rp-pair">${websitePanel(m)}${listedPanel(m)}</div>`;

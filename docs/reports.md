@@ -627,8 +627,23 @@ we'd do + one button.** Nothing is specific to a business: `reportModel.ts` buil
 and dates; `reportDesign.ts` renders it (the approved Findable look). Mockups: `docs/mockups/report-template/` (LDM, ABLM, one made-up edge case).
 Tests: `scripts/report-design.test.ts` (rule, places, phrases, score, every edge case, copy bans, order).
 
-- **Winnable (Paul, 2026-11-11):** anything that needs work is still winnable. The pages say "Winnable now" (4+/6 name a firm, no firm 3+/6, service on site, specific place) and "Winnable with work" (the rest that is not hard), and count them together ("25 winnable searches"); the internal groups stay now / possible / hard.
-- **Rule:** see `docs/architecture-rules.md` and the header of `reportOpportunity.ts`. Counts scale by fraction for other answer counts (8 answers = 8 of 8).
+- **Room rule (Paul, 2026-11-11, replaces "winnable / possible / hard"):** the goal is to be NAMED by AI, not to be first; we always build their site, so no label
+  speaks of work needed. Per search, over its answers: **regulars** = firms named in at least half of the answers; **repeat share** = regular mentions / all firm
+  mentions. `nofirms` (more than half the answers name no firm) -> "AI doesn't name firms yet"; named in half or more -> Keep and grow; share >= 0.6, or one firm
+  in 5/6+ with a share >= 0.5 -> **Little room**; share < 0.3 -> **Lots of room** (needs a service on their site and a specific area, else capped at Some); else
+  **Some room**. A service not on their site is "Not your service" (left out of the room counts and targets). Constants: `ROOM_LITTLE_AT` 0.6,
+  `ROOM_LITTLE_TOP_ALL` 0.5, `ROOM_SOME_AT` 0.3.
+- **Where the thresholds come from (real data, 6 answers per search):** London Domestic Maintenance (37 searches) repeat shares: 0 for every rotating list
+  (plumber in Tower Hamlets 13 different firms, 0), 0.18-0.30 for open fields, 0.41-0.55 for mixed fields, 0.60-0.89 for closed lists (boiler service in Bow 0.65,
+  emergency plumber in East London 0.89 with 5 firms in most answers). ABLM (accountants, 20 searches): 0.2-0.56 mixed, 0.6-0.83 closed lists (the same 5-7 firms
+  recur). The gaps at about 0.3 and 0.6 are where the real lists separate; the "one firm in 5 of 6" rule catches a spot that never changes even when the rest
+  rotates. Counts scale by fraction for other answer counts (8 answers: regular = 4+).
+- **Wrong place, answer by answer:** an answer is for the wrong place when its firm names, cited sites or text say "<place>-upon-…" (or on/under/le/next/cum
+  + a river or name). Such answers are dropped; the whole search is left out only when half or more of its answers are wrong. Stratford: "boiler repair in
+  Stratford" (3 of 6 wrong) is left out; "plumber in Stratford" (2 of 6) keeps its 4 right answers.
+- **Asking places from now on:** `placeAsk.ts` `askPlace`: a clashing place (Stratford, Newcastle, Richmond, Bury, Brighton, Newport, Bangor, Henley, Sutton, Kingston,
+  Wellington, Lancaster, Perth, Burton, Weston, Chester, Ashford) is written with its wider area ("Stratford, London") by `create-ai-audit`, in the Discovery
+  and new-question paths only (baseline and replay paths and every stored question are untouched). `baseline-discovery` passes `wider_area` (the client's home area).
 - **AI score:** share of the answers that named any business that named THIS business (stored answers only; flagged searches left out). The line is
   "AI named you N times. [Top competitor]: M." Bands: 0 = "doesn't mention you yet"; under half = "mentions you in N of M answers"; half or more =
   "Keep it up and grow it" (the targets then lead with where to keep and grow).

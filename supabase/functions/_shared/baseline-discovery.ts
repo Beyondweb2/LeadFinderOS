@@ -106,6 +106,8 @@ export async function generateDiscoveryPool(input: DiscoveryInput, call: { url: 
         country: input.country, website: input.website, services, service_areas: [], specialisms: [],
       }, { questionCount: n, purpose: "discovery", userId: call.userId }),
       question_style: "customer",
+      /* An ambiguous town (Stratford) is asked with the client's home area ("Stratford, East London"); only for the area towns. */
+      wider_area: town.trim().toLowerCase() === input.primaryTown.trim().toLowerCase() ? "" : input.primaryTown,
       not_offered: input.notOffered ?? [],
       must_not_say: input.mustNotSay ?? "",
     };

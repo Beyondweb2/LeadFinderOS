@@ -516,6 +516,10 @@ Deno.serve(async (req) => {
         const nctx = { businessName: bizName, trade: trade || null, town: town || null };
         const oppRows: OppRow[] = queueRows.filter((r) => r.status === "done" || r.result).map((r) => ({ question: r.question, result: r.result as unknown as Record<string, unknown> | null }));
         const questions = [...new Set(oppRows.map((r) => r.question.trim()))];
+        /* A standalone audit (no lead) has no lead-level check: use the website check stored with its own run. */
+        if (websiteSection.state === "not_checked" && runCrawl?.status === "complete") {
+          websiteSection = websiteSectionFromCheck(websiteCheckFor({ result: runCrawl as never, created_at: runCrawl.checked_at ?? new Date().toISOString() }, { website: ownWebsite || null }));
+        }
         /* No website at all (Google was asked and found none): the page says so and pitches "a site AI can read". */
         if (!ownWebsite && hasWebsite === false) websiteSection = { state: "no_website", issues: [] };
         /* The website check's services, from whichever run stored one (a Discovery's crawl sits on run 1). Without one the
