@@ -22,8 +22,8 @@
   ✅ **Owner decision 2026-11-11 (Paul): the words "could win" / "Winnable" ARE allowed on a client report when the evidence
   is shown beside them (e.g. "no business named in 4 of 6 answers") and the page carries the "not a promise" line.** They come
   from ONE fixed written rule over counts across every answer (`src/lib/reportOpportunity.ts`, `RULE_WORDS`): Winnable (easy) =
-  no business named at all; Winnable = no single business named in MOST answers AND a service they offer in their area;
-  Possible = fragmented but outside their area or a service not on their website; Hard = one business named in most answers.
+  no business named at all; Winnable = no single business named in HALF OR MORE of the answers (3+ of 6 is Hard) AND a service they offer in their area;
+  Possible = fragmented but outside their area or a service not on their website; Hard = one business named in half or more of the answers.
   Fragmented alone is never enough. Directories and review sites are counted separately and are never competitors.
 - **No outcome promises in anything customer-facing.** Say what was measured, what was done, and what changed. Never promise
   a ranking, a recommendation or a citation — "winnable" is a description of the answers today, not a forecast.

@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-11-winnable-rule-everywhere', date: '2026-11-11', title: 'One winnable rule everywhere', audience: 'all',
+    body: 'Hard now means one business is named in half or more of the answers (3 or more of 6). The page plan, the market view, the action plan, the Discovery screens and the client reports all use that same rule.',
+    report: {
+      added: ['Reports state the rule in plain words: Winnable (easy), Winnable, Possible, Hard.'],
+      changed: ['Hard is now half or more of the answers (it was more than half).', 'The page plan, action plan and market view use the same rule instead of the old per-run grader, so they agree with the reports.', 'The audit page shows counts for each question (named in n of m answers) instead of a winnability badge and a /10 score.'],
+      removed: ['The old per-run winnability grader, its Open? / Contested? / Locked? badges, the /10 score and the "flagged winnable (unreliable)" count.'],
+      effect: 'Fewer questions read as Winnable, and each one comes with the count that shows why. Nothing about what AI says changed, only how the questions are sorted.',
+    } },
   { id: '2026-11-11-report-redesign', date: '2026-11-11', title: 'New look for the reports prospects and clients open', audience: 'all',
     body: 'The opportunity report (Discovery), the first-contact report and the client baseline now share one dark Findable design: the businesses AI names instead are shown first, each question says why it is Winnable, Possible or Hard, and a "Get listed here first" list shows which directories AI cites. Works on a phone.',
     report: {

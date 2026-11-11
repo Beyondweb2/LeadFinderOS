@@ -6,11 +6,11 @@
 
    THE RULE (Paul, 2026-11-11 — shown on every report in these exact words, RULE_WORDS below):
      • Winnable (easy) — no business is named at all, and it is a service they offer in their area.
-     • Winnable        — no single business is named in MOST answers (more than half), AND it is a
+     • Winnable        — no single business is named in HALF OR MORE of the answers (under 3 of 6), AND it is a
                          service they offer in their area.
-     • Possible        — answers are fragmented (no business in most answers) but the question is
+     • Possible        — answers are fragmented (no business in half or more of them) but the question is
                          outside their area, or about a service not on their website.
-     • Hard            — one business is named in most answers (more than half).
+     • Hard            — one business is named in half or more of the answers (3 or more of 6).
    ⛔ FRAGMENTED ALONE IS NEVER ENOUGH FOR WINNABLE: it also has to be a service they offer, in their area.
 
    ⛔ NOT A SCORE. docs/architecture-rules.md bans winnability SCORING (it flips between identical inputs).
@@ -33,9 +33,9 @@ export interface OppDirectory { name: string; /** answers that name or cite it *
 /** The four lines every report prints, in Paul's words. */
 export const RULE_WORDS: { key: string; label: string; text: string }[] = [
   { key: 'easy', label: 'Winnable (easy)', text: 'No business is named at all, and it is a service you offer in your area.' },
-  { key: 'now', label: 'Winnable', text: 'No single business is named in most answers, and it is a service you offer in your area.' },
+  { key: 'now', label: 'Winnable', text: 'No single business is named in half or more of the answers, and it is a service you offer in your area.' },
   { key: 'possible', label: 'Possible', text: 'Answers are fragmented, but the question is outside your area or about a service that is not on your website.' },
-  { key: 'hard', label: 'Hard', text: 'One business is named in most answers.' },
+  { key: 'hard', label: 'Hard', text: 'One business is named in half or more of the answers.' },
 ];
 
 /** The shape of one stored answer cell this module reads (a subset of auditReport's EngineCell). */
@@ -232,9 +232,9 @@ export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): 
   const pages = (ctx.pageUrls ?? []).join(' ').toLowerCase();
   const hasPage = topic ? (ctx.services.some((s) => topic.pageKey.test(s.name.toLowerCase()) && s.dedicated) || (topic.label === 'EICR certificates' && /eicr/.test(pages))) : null;
 
-  /* THE RULE, in order. "Most" = more than half the answers. */
-  const mostCut = answers / 2;
-  const dominant = answers > 0 && top > mostCut;
+  /* THE RULE, in order. */
+  /* "Hard" = ONE business named in HALF OR MORE of the answers (Paul, 2026-11-11: 3 or more of 6). */
+  const dominant = answers > 0 && top * 2 >= answers;
   let tier: OppTier;
   let easy = false;
   if (answers === 0) tier = 'possible';
@@ -245,7 +245,7 @@ export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): 
   const areaMixup = area === 'Stratford' && (firms.some((f) => /upon.?avon/i.test(f.name)) || [...cites].some((d) => /avon/i.test(d)));
   const reasons: string[] = [];
   if (areaMixup) reasons.push('AI is answering for Stratford-upon-Avon, not Stratford E15, so nobody in your patch is being named.');
-  if (dominant) reasons.push(`${firms[0].name} is named in ${top} of ${answers} answers, which is most of them.`);
+  if (dominant) reasons.push(`${firms[0].name} is named in ${top} of ${answers} answers, which is half or more of them.`);
   else if (tier === 'possible' && answers > 0) {
     if (needsConfirm && topic?.confirmNote) reasons.push(topic.confirmNote);
     else if (!serviceOnSite) reasons.push('Not a service we found on your website.');
@@ -383,4 +383,45 @@ export function theirAreas(o: { locationText?: string | null; pageUrls?: string[
   }
   if (o.fromDiscovery) for (const q of o.questions ?? []) add(areaOf(q));
   return [...out];
+}
+
+/** The verdict vocabulary the page plan, the market view and the Discovery screens already speak. */
+export type RuleVerdictLabel = 'named' | 'open' | 'contested' | 'locked' | 'unmeasured';
+export interface RuleVerdict {
+  verdict: RuleVerdictLabel;
+  tier: OppTier;
+  easy: boolean;
+  /** One plain sentence of evidence, from the counts. */
+  reason: string;
+  /** The businesses named, most first (real businesses only, never directories). */
+  namedFirms: string[];
+  clientNamed: boolean;
+  q: OppQuestion;
+}
+
+/** THE one winnable rule for one question across all its runs: Winnable -> 'open', Possible -> 'contested', Hard -> 'locked'.
+ *  Replaces the per-run classifier and its "majority of runs" fold: the rule reads every answer at once, so it cannot
+ *  flip between identical inputs. A client named in MORE THAN HALF of the runs is 'named' (defend); one run alone never
+ *  establishes presence ('unmeasured'), exactly as before. `results` = one stored result map per run. */
+export function ruleVerdict(question: string, results: Record<string, unknown>[], ctx: OppContext): RuleVerdict {
+  const rows: OppRow[] = results.map((result) => ({ question, result }));
+  const q = oppQuestion(question, rows, ctx);
+  const isNamed = namedOf(ctx);
+  let runs = 0, namedRuns = 0;
+  for (const r of results) {
+    let any = false, here = false;
+    for (const e of ENGINES) {
+      const cell = (r ?? {})[e] as Cell | undefined;
+      if (!cell || typeof cell !== 'object') continue;
+      any = true; here = here || isNamed(cell);
+    }
+    if (any) { runs++; if (here) namedRuns++; }
+  }
+  const clientNamed = runs >= 2 && namedRuns * 2 > runs;
+  let verdict: RuleVerdictLabel;
+  if (runs === 0) verdict = 'unmeasured';
+  else if (clientNamed) verdict = 'named';
+  else if (runs === 1 && namedRuns === 1) verdict = 'unmeasured';
+  else verdict = q.tier === 'now' ? 'open' : q.tier === 'possible' ? 'contested' : 'locked';
+  return { verdict, tier: q.tier, easy: q.easy, reason: q.reasons[0] ?? '', namedFirms: q.firms.map((f) => f.name), clientNamed, q };
 }
