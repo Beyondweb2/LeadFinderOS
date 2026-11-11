@@ -182,7 +182,7 @@ console.log('\n── 9. INCOMPLETE MEASUREMENTS ARE NEVER READ AS NAMINGS ─�
 console.log('\n── 10. NAMED 0/3 CAN BE WINNABLE — AND ONE RULER DECIDES BOTH ──');
 {
   const cell = (competitors: string[], extra: Record<string, unknown> = {}) => ({ named: false, self_named: false, position: null, competitors, citations: [], answer_text: '', ...extra });
-  const rows = [1, 2, 3].map((i) => ({ id: `r${i}`, question: 'rewiring in Bath UK', status: 'done', result: { chatgpt: cell(['Spark Bros Electrical', 'Avon Rewires Ltd', 'Bath Power Co']), gemini: cell(['Circuit Kings Bath', 'Wessex Wiring', 'Volt House Electrical']) } }));
+  const rows = [1, 2, 3].map((i) => ({ id: `r${i}`, question: 'rewiring in Bath UK', status: 'done', result: { chatgpt: cell([`Spark Bros Electrical ${i}`, `Avon Rewires ${i} Ltd`, `Bath Power ${i} Co`]), gemini: cell([`Circuit Kings Bath ${i}`, `Wessex Wiring ${i}`, `Volt House ${i} Electrical`]) } }));
   const o = opportunityFor('rewiring in Bath UK', rows as never, { businessName: 'BS4 Electrical Services Ltd', location: 'Bath', website: '', trade: 'electrician', isAggregatorUrl: () => false });
   ok(o.classification === 'winnable' && o.engines.every((e) => e.complete === 3 && e.named === 0), '10. 3/3 complete, named 0/3 on both engines → Winnable (the classification is right; only the old wording was ambiguous)');
   /* The two-ruler bug: a string match said "named" while the model's verdict said "not named". */

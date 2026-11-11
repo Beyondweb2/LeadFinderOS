@@ -1,7 +1,8 @@
 /* Deterministic paid-client action-plan reconciliation.
  * This is deliberately separate from the optional OpenAI clustering path: baseline completion must
  * produce a useful, retry-safe plan without another provider call. */
-import { classifyWinnability, type EngineMap } from "../../../src/lib/auditReport.ts";
+import { isRealCompetitor, type EngineMap } from "../../../src/lib/auditReport.ts";
+import { ruleVerdict } from "../../../src/lib/reportOpportunity.ts";
 import { isAggregatorUrl } from "./aggregators.ts";
 import { believableSignals, crawlUnreadable, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
 import { cellNamed, type NamedContext } from "../../../src/lib/namedSignal.ts";
@@ -18,11 +19,10 @@ const norm = (s: string) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g,
 const slug = (s: string) => norm(s).replace(/\s+/g, "-").slice(0, 80) || "page";
 const uniq = <T>(xs: T[]) => [...new Set(xs)];
 
-function classification(result: ReturnType<typeof classifyWinnability>, namedAny: boolean): Opportunity["classification"] {
-  if (namedAny || result.clientNamed) return "named";
-  if (result.verdict === "open") return "winnable";
-  if (result.verdict === "contested") return "possible";
-  return "low";
+/* 2026-11-11: the ONE written winnable rule (src/lib/reportOpportunity.ts), read over every answer of the question. */
+function classification(tier: "now" | "possible" | "hard", named: boolean): Opportunity["classification"] {
+  if (named) return "named";
+  return tier === "now" ? "winnable" : tier === "possible" ? "possible" : "low";
 }
 
 function priority(kind: Opportunity["classification"]): number {
@@ -111,14 +111,20 @@ export async function reconcileActionPlan(service: Client, input: { auditId: str
   const opportunities: Opportunity[] = [];
   for (const [question, qRows] of byQuestion) {
     const merged = mergedEngine(qRows, { businessName: audit.business_name ?? null, trade: audit.business_type ?? null, town: audit.location_text ?? null });
-    const w = classifyWinnability(merged.result, { businessName: audit.business_name ?? "", locationText: home, ownWebsite: audit.website ?? "", isAggregatorUrl });
-    const kind = classification(w, merged.namedAny);
+    const nctx = { businessName: audit.business_name ?? null, trade: audit.business_type ?? null, town: audit.location_text ?? null };
+    const w = ruleVerdict(question, qRows.map((r) => (r.result ?? {}) as Record<string, unknown>), {
+      businessName: audit.business_name ?? "", services: [],
+      isNamed: (c) => cellNamed(c as never, nctx),
+      isRival: (n) => isRealCompetitor(n, home),
+      isDirectoryHost: (h) => isAggregatorUrl("https://" + h),
+    });
+    const kind = classification(w.tier, merged.namedAny || w.clientNamed);
     const ctx = questionContext(question, services, towns, home);
     const match = existing.find((p) => norm(String(p.primary_question ?? "")) === norm(question)
       || norm(String(p.job ?? "")).includes(norm(ctx.service)) && norm(String(p.job ?? "")).includes(norm(ctx.town)));
     opportunities.push({ question, classification: kind, verdict: w.verdict, reason: w.reason, service: ctx.service, town: ctx.town,
       action: match || (kind === "named" ? "optimise" : "build"), existingUrl: match?.published_url ? String(match.published_url) : null,
-      priority: priority(kind), named: merged.namedAny, fragmentation: w.U >= 6 ? "high" : w.C === 0 && w.U >= 2 ? "fragmented" : "mixed" });
+      priority: priority(kind), named: merged.namedAny, fragmentation: w.q.distinct >= 6 ? "high" : w.q.top <= 2 && w.q.distinct >= 2 ? "fragmented" : "mixed" });
   }
   const technical = technicalTasks((await service.from("ai_audit_runs").select("results").eq("id", runIds[runIds.length - 1]).maybeSingle()).data?.results?.crawl_check);
   /* Upsert by question/service/town, never delete: operator edits and manual statuses survive a retry. */

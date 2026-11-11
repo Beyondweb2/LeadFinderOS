@@ -2,6 +2,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import { useSearchParams, Link } from 'react-router-dom';
 import { fetchAllRows, fetchAllRowsParallel } from '@/lib/fetchAllRows';
 import { cellNamed } from '@/lib/namedSignal';
+import { ruleVerdict } from '@/lib/reportOpportunity';
 import { asPence, SEO_SCAN_USD } from '@/lib/marketView';
 import { supabase } from '@/integrations/supabase/client';
 import { runAgainFromSource, RE_AUDIT_EST_USD_PER_QUESTION } from '@/lib/reAudit';
@@ -41,7 +42,7 @@ import { poolRuns, engineSummary, type PooledInput } from '@/lib/pooledRuns';
 import { isPaidLead } from '@/lib/leadPayment';
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells } from '@/lib/competitorCleaning';
 import {
-  DISPLAY_ENGINES, SCORED_ENGINES, ENGINE_LABELS, isRealCompetitor, isRenderableSeo, buildReportData, seoStyleForAudit, classifyWinnability,
+  DISPLAY_ENGINES, SCORED_ENGINES, ENGINE_LABELS, isRealCompetitor, isRenderableSeo, buildReportData, seoStyleForAudit,
   type EngineResult, type EngineMap, type QueueRow, type RunRow,
 } from '@/lib/auditReport';
 import { tradeWord } from '@/lib/trade';
@@ -2095,14 +2096,6 @@ const AiAudit = () => {
      one) — used by scoreQuestion to exclude own-site citations from the aggregator share. May be
      "". ⚠️ This is why auditWebsite survived the schema block: it feeds SCORING, not display. */
   const ownWebsite = (auditWebsite || (resultsHasWebsite ? website : '')).trim();
-  // Winnable shortlist headline: done questions that scored a real, targetable opportunity
-  // (band winnable/named, score ≥ 6). Recomputed live from the queue rows.
-  const winnableCount = queueRows.filter((r) => {
-    if (r.status !== 'done' || !r.result) return false;
-    const s = scoreQuestion(r.result, resultsBusinessName || businessName, resultsLoc, ownWebsite);
-    return (s.band === 'winnable' || s.band === 'named') && (s.score ?? 0) >= 6;
-  }).length;
-
   /* ── Fold the audit book into businesses, then trades ────────────────────────────
      BUSINESS KEY: lead_id when the audit has one, else the normalised name (2 of 43 audits
      were started from the wizard with no lead). Re-runs that minted separate audit rows for
@@ -3563,14 +3556,6 @@ const AiAudit = () => {
                       ? `· ${poolTally?.questions.length ?? 0} questions × ${auditRuns.length} runs`
                       : `· ${queueRows.length} ${queueRows.length === 1 ? 'question' : 'questions'}`}
                   </span>
-                  {winnableCount > 0 && (
-                    <span
-                      className="ml-1.5 font-normal text-muted-foreground"
-                      title={'OPERATOR VIEW ONLY, AND NOT RELIABLE. Measured over all 402 stored answered questions: 77.6% classify as "winnable" and 0% have ever classified as "locked", because the rule fires on 6+ distinct firms named and the mean is 15.3 - it reads breadth as opportunity. 17.9% of repeated questions changed verdict between identical runs with no work done. Never quote this to a client.'}
-                    >
-                      · {winnableCount} flagged winnable <span className="text-amber-500">(unreliable)</span>
-                    </span>
-                  )}
                 </span>
                 <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showDetails ? 'rotate-180' : ''}`} />
               </button>
@@ -3778,52 +3763,26 @@ function ResultsHeadline({ run, live, draining }: { run: RunRow | null; live: { 
   );
 }
 
-/* Per-term winnability badge styling — OPERATOR VIEW ONLY.
-   These verdicts are NOT shown to customers and must not be quoted to one. The rule is currently
-   inverted and noise-driven: it fires "open" on `U >= 6` distinct firms named when the mean U is
-   15.3, so 77.6% of 402 stored questions read winnable and "locked" has never once fired; and
-   17.9% of repeated questions changed verdict between identical runs with no work done. Kept
-   visible here, labelled, so the logic can be worked on with real examples in front of you.
-   Fixing it needs multi-run stability, inverted thresholds and citation-source analysis. */
-const WINNABILITY_BADGE: Record<'open' | 'contested' | 'locked' | 'named' | 'no-local-race', { label: string; cls: string }> = {
-  open:            { label: 'Open?',             cls: 'bg-green-500/20 text-green-500 border-transparent' },
-  contested:       { label: 'Contested?',        cls: 'bg-amber-500/20 text-amber-500 border-transparent' },
-  locked:          { label: 'Locked?',           cls: 'bg-red-500/20 text-red-400 border-transparent' },
-  named:           { label: 'Named',            cls: 'bg-blue-500/20 text-blue-400 border-transparent' },
-  'no-local-race': { label: 'Not a local race', cls: 'bg-muted text-muted-foreground border-transparent' },
-};
+/* Per-question facts, as COUNTS — no winnability badge and no /10 score here (2026-11-11, Paul).
+   The old per-run classifier scored a single run, and its verdict flipped between identical runs; the one written
+   rule (src/lib/reportOpportunity.ts) reads every answer of a question at once, and is shown on the reports.
+   This card shows only what this run's answers said: who was named, and which firms AI named instead. */
+interface QuestionFacts { reason: string; namedFirms: string[]; clientNamed: boolean; named: number; answers: number }
 
-type ScoreBand = 'named' | 'winnable' | 'hard' | 'no-local-race';
-interface QuestionScore {
-  score: number | null;      // /10; null when there's no local race to score
-  band: ScoreBand;
-  reason: string;            // ONE plain-English sentence — the thing a human reads
-  namedFirms: string[];      // real competitor firms AI named (isRealCompetitor-filtered)
-  clientNamed: boolean;
-}
-
-/** Per-question winnability for the badge — a thin adapter over the SHARED classifyWinnability
- *  rule (auditReport.ts), mapped back into QuestionScore so bandVerdict + QuestionCard stay
- *  unchanged. isAggregatorUrl is dependency-injected (the SPA's own copy). The fragmentation +
- *  cross-engine-consensus logic (and the reason text) lives entirely in the shared helper. */
-function scoreQuestion(result: EngineMap, businessName: string, locationText: string, ownWebsite: string): QuestionScore {
-  const w = classifyWinnability(result, { businessName, locationText, ownWebsite, isAggregatorUrl });
-  // Map the helper's verdict back to a ScoreBand. 'open'/'contested' both → 'winnable'; bandVerdict
-  // re-derives open vs contested from the score (open 7-9 / contested 4-6), so the verdict round-trips.
-  const band: ScoreBand =
-    w.verdict === 'named' ? 'named'
-    : w.verdict === 'no-local-race' ? 'no-local-race'
-    : w.verdict === 'locked' ? 'hard'
-    : 'winnable';
-  return { score: w.score, band, reason: w.reason, namedFirms: w.namedFirms, clientNamed: w.clientNamed };
-}
-
-/** Map a score band → the existing WINNABILITY_BADGE key so styling stays consistent. */
-function bandVerdict(band: ScoreBand, score: number | null): 'open' | 'contested' | 'locked' | 'named' | 'no-local-race' {
-  if (band === 'named') return 'named';
-  if (band === 'hard') return 'locked';
-  if (band === 'no-local-race') return 'no-local-race';
-  return (score ?? 0) >= 7 ? 'open' : 'contested'; // winnable
+function questionFacts(result: EngineMap, businessName: string, locationText: string, question: string): QuestionFacts {
+  const nctx = { businessName, trade: null, town: locationText || null };
+  const rv = ruleVerdict(question, [result as unknown as Record<string, unknown>], {
+    businessName, services: [],
+    isNamed: (c) => cellNamed(c as never, nctx),
+    isRival: (n) => isRealCompetitor(n, locationText),
+    isDirectoryHost: (h) => isAggregatorUrl('https://' + h),
+  });
+  const named = rv.q.namedYou, answers = rv.q.answers;
+  const firms = rv.namedFirms.slice(0, 5);
+  const reason = named > 0
+    ? `Named in ${named} of ${answers} answers on this run.`
+    : firms.length ? `Not named in this run's ${answers} answers. AI named: ${firms.join(', ')}.` : `Not named in this run's ${answers} answers, and AI named no business.`;
+  return { reason, namedFirms: firms, clientNamed: named > 0, named, answers };
 }
 
 function QuestionCard({ row, businessName, locationText, ownWebsite, apifyCycleEnd }: { row: QueueRow; businessName: string; locationText: string; ownWebsite: string; apifyCycleEnd?: string | null }) {
@@ -3837,10 +3796,10 @@ function QuestionCard({ row, businessName, locationText, ownWebsite, apifyCycleE
      detection anywhere in this codebase, so that sentence was never a real diagnosis. */
   const failure = failed ? explainAuditFailure(row.result, { apifyCycleEnd }) : null;
   // The plain-English verdict + /10 score, computed from THIS question's real answer data.
-  const s = row.status === 'done' && row.result ? scoreQuestion(row.result, businessName, locationText, ownWebsite) : null;
-  const verdict = s ? bandVerdict(s.band, s.score) : null;
+  const s = row.status === 'done' && row.result ? questionFacts(row.result, businessName, locationText, row.question) : null;
+  const verdict = s?.clientNamed ? 'named' : null;
   // The chip on the right: the score /10, or an honest non-score state.
-  const scoreChip = failed ? 'Couldn’t check' : pending ? null : s ? (s.score != null ? `${s.score}/10` : 'Not scored') : null;
+  const scoreChip = failed ? 'Couldn’t check' : pending ? null : s ? `${s.named} of ${s.answers} named you` : null;
 
   return (
     <Card>
@@ -3850,7 +3809,7 @@ function QuestionCard({ row, businessName, locationText, ownWebsite, apifyCycleE
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-medium">{row.question}</span>
               {verdict && (
-                <Badge className={`shrink-0 ${WINNABILITY_BADGE[verdict].cls}`}>{WINNABILITY_BADGE[verdict].label}</Badge>
+                <Badge className="shrink-0 bg-blue-500/20 text-blue-400 border-transparent">Named</Badge>
               )}
             </div>
             {/* The upgrade: a one-line plain-English read of WHY + who's named + how hard. */}
@@ -3874,7 +3833,7 @@ function QuestionCard({ row, businessName, locationText, ownWebsite, apifyCycleE
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {scoreChip && (
-              <span className={`text-sm font-bold tabular-nums ${failed ? 'text-muted-foreground' : s?.score != null ? 'text-foreground' : 'text-muted-foreground'}`}>{scoreChip}</span>
+              <span className={`text-sm font-bold tabular-nums ${failed ? 'text-muted-foreground' : s ? 'text-foreground' : 'text-muted-foreground'}`}>{scoreChip}</span>
             )}
             {pending ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               : failed ? <Badge variant="secondary">failed</Badge>

@@ -2,14 +2,15 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { bookOwnerId, refusalBody, resolveActor } from "../_shared/access.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
-import { classifyWinnability, unwrapCitationUrl, runIsModelRead, DISPLAY_ENGINES, type EngineMap } from "../../../src/lib/auditReport.ts";
+import { isRealCompetitor, unwrapCitationUrl, runIsModelRead, DISPLAY_ENGINES, type EngineMap } from "../../../src/lib/auditReport.ts";
+import { ruleVerdict } from "../../../src/lib/reportOpportunity.ts";
 
 /* ⛔ THE TWO SCORED ENGINES ONLY, for the slot read. AI Overview and Google organic are captured
    but never scored, and §5's pages-move-Gemini evidence says nothing about them — reading slots
    off an engine whose behaviour we have never measured would put an unevidenced number at the top
    of the screen. Same restriction the opportunity-engine filter already applies. */
 const SCORED_SLOT_ENGINES = ["chatgpt", "gemini"] as const;
-import { majorityVerdict, type WinnVerdict } from "../../../src/lib/pagePlanQueue.ts";
+import type { WinnVerdict } from "../../../src/lib/pagePlanQueue.ts";
 import { classifySource } from "../../../src/lib/sourceType.ts";
 import { nicheTradeKey, ENGINE_LABELS_NICHE } from "../../../src/lib/nicheView.ts";
 /* 🔴 §6b's NAME TEST, RESTORED AND WIRED HERE (2026-09-15, Paul's brief). `named` is
@@ -264,16 +265,14 @@ Deno.serve(async (req) => {
           }
         }
         if (judgeable) questionsTotal += byQ.size;
-        for (const [, runResults] of byQ) {
+        for (const [qText, runResults] of byQ) {
           if (isMulti && judgeable && runResults.length > 1) multiRunQuestions++;
-          const verdicts = runResults.map((res) => {
-            const v = classifyWinnability(res, {
-              businessName: a.business_name ?? "", locationText: a.location_text ?? "",
-              ownWebsite: String(a.website ?? ""), isAggregatorUrl,
-            }).verdict;
-            return (v === "no-local-race" ? "no_local_race" : v) as WinnVerdict;
-          });
-          const m = majorityVerdict(verdicts);
+          const m: WinnVerdict = ruleVerdict(qText, runResults as unknown as Record<string, unknown>[], {
+            businessName: a.business_name ?? "", services: [],
+            isNamed: (c) => cellNamed(c as never),
+            isRival: (n) => isRealCompetitor(n, a.location_text ?? ""),
+            isDirectoryHost: (h) => isAggregatorUrl("https://" + h),
+          }).verdict;
           /* ⛔ WINNABILITY READS `named` TOO — classifyWinnability's first branch is "were they
              named". An unjudgeable name would file its own questions under `named` and make the
              trade look more taken than it is, which is the same inflation in the column Paul picks

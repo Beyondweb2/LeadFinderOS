@@ -1,7 +1,7 @@
 /* The redesigned client reports (src/lib/reportDesign.ts + reportOpportunity.ts): presentation over stored counts.
    Pins Paul's winnable rule (2026-11-11), directories-never-competitors, the "never a % headline / never a promise"
    copy rules, escaping and the phone viewport. */
-import { oppQuestion, summariseOpportunity, hookFromRows, directoriesInAnswer, isDirectoryName, inTheirArea, RULE_WORDS, type OppRow } from "../src/lib/reportOpportunity.ts";
+import { oppQuestion, summariseOpportunity, hookFromRows, directoriesInAnswer, isDirectoryName, ruleVerdict, inTheirArea, RULE_WORDS, type OppRow } from "../src/lib/reportOpportunity.ts";
 import { chooseReportDesign, renderOpportunityReport, renderHookReport, renderBaselineReport, shortName } from "../src/lib/reportDesign.ts";
 
 let f = 0;
@@ -20,21 +20,27 @@ const ctx = { businessName: "Acme Heating Ltd", services: [{ name: "boiler servi
 let q = oppQuestion("boiler service in Bow", rowsFor("boiler service in Bow", [["Gas First"], ["Gas First"], ["Gas First"], ["Gas First"], ["Gas First"], ["Gas First", "X"]]), ctx);
 ok(q.tier === "hard" && q.top === 6, "one firm in 6 of 6 answers is Hard");
 q = oppQuestion("boiler service in Bow", rowsFor("boiler service in Bow", [["G"], ["G"], ["G"], ["G"], ["A"], ["B"]]), ctx);
-ok(q.tier === "hard" && q.top === 4, "one firm in 4 of 6 answers (most) is Hard");
+ok(q.tier === "hard" && q.top === 4, "one firm in 4 of 6 answers is Hard");
 q = oppQuestion("boiler service in Bow", rowsFor("boiler service in Bow", [["G"], ["G"], ["G"], ["A"], ["B"], ["C"]]), ctx);
-ok(q.tier === "now" && !q.easy && q.top === 3, "one firm in exactly half (3 of 6) is not 'most': Winnable");
+ok(q.tier === "hard" && q.top === 3, "one firm in exactly half (3 of 6) is Hard: half or more");
+q = oppQuestion("boiler service in Bow", rowsFor("boiler service in Bow", [["G"], ["G"], ["A"], ["B"], ["C"], ["D"]]), ctx);
+ok(q.tier === "now" && !q.easy && q.top === 2, "one firm in 2 of 6 (under half) is Winnable");
 q = oppQuestion("boiler servicing in London", rowsFor("boiler servicing in London", [[], [], [], [], [], []]), ctx);
 ok(q.tier === "now" && q.easy, "no business named at all, a service they offer, in their area: Winnable (easy)");
 q = oppQuestion("boiler servicing in London", rowsFor("boiler servicing in London", [[], [], [], ["A"], ["B"], []]), ctx);
-ok(q.tier === "now" && !q.easy && q.empty === 4, "no single business in most answers, offered, in area: Winnable");
+ok(q.tier === "now" && !q.easy && q.empty === 4, "no single business in half or more of the answers, offered, in area: Winnable");
 const fragmentedOutside = oppQuestion("boiler servicing in Clapham", rowsFor("boiler servicing in Clapham", [["A"], ["B"], ["C"], ["D"], ["E"], ["F"]]), { ...ctx, areas: ["London", "Hackney"] });
 ok(fragmentedOutside.tier === "possible" && /outside/i.test(fragmentedOutside.reasons.join(" ")), "fragmented but outside their area: Possible, never Winnable");
 const fragmentedNoService = oppQuestion("leak detection in Bow", rowsFor("leak detection in Bow", [["A"], ["B"], ["C"], ["D"], ["E"], ["F"]]), ctx);
 ok(fragmentedNoService.tier === "possible" && /not a service/i.test(fragmentedNoService.reasons.join(" ")), "fragmented but a service not on their site: Possible, never Winnable");
 q = oppQuestion("leak detection in Bow", rowsFor("leak detection in Bow", [["Leak Co"], ["Leak Co"], ["Leak Co"], ["Leak Co"], [], []]), ctx);
-ok(q.tier === "hard", "dominance beats everything: a business in most answers is Hard even for a service they do not offer");
+ok(q.tier === "hard", "dominance beats everything: a business in half or more of the answers is Hard even for a service they do not offer");
 q = oppQuestion("best boiler servicing in London", rowsFor("best boiler servicing in London", [["A"], ["B"], ["C"], ["D"], ["E"], ["F"]]), ctx);
 ok(q.tier === "now", "a 'best' question follows the same rule (no special cap)");
+const rvv = ruleVerdict("boiler servicing in London", rowsFor("x", [["A"], ["A"], ["A"], ["B"], [], []]).map((r) => r.result as Record<string, unknown>), ctx);
+ok(rvv.verdict === "locked" && rvv.tier === "hard", "ruleVerdict speaks the page plan's vocabulary: Hard is 'locked'");
+const rvo = ruleVerdict("boiler servicing in London", rowsFor("x", [[], [], ["A"], [], [], []]).map((r) => r.result as Record<string, unknown>), ctx);
+ok(rvo.verdict === "open", "ruleVerdict: Winnable is 'open'");
 ok(inTheirArea("Clapham", ["Hackney"]) === false && inTheirArea("Hackney", ["Hackney"]) && inTheirArea("Bow", undefined), "area test: known areas decide, unknown areas do not exclude");
 ok(RULE_WORDS.map((r) => r.label).join("|") === "Winnable (easy)|Winnable|Possible|Hard", "the four rule lines are printed in Paul's order");
 

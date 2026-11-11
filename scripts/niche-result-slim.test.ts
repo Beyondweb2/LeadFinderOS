@@ -5,8 +5,9 @@
    Run: npx tsx scripts/niche-result-slim.test.ts */
 import { readFileSync } from "node:fs";
 import { nicheFoldResult } from "../supabase/functions/_shared/niche-result.ts";
-import { classifyWinnability, runIsModelRead, unwrapCitationUrl, DISPLAY_ENGINES, type EngineMap, type QueueRow } from "../src/lib/auditReport.ts";
+import { runIsModelRead, unwrapCitationUrl, DISPLAY_ENGINES, type EngineMap, type QueueRow } from "../src/lib/auditReport.ts";
 import { cellNamed } from "../src/lib/namedSignal.ts";
+import { ruleVerdict } from "../src/lib/reportOpportunity.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
@@ -61,8 +62,9 @@ for (let i = 0; i < 600; i++) {
   const full: Record<string, unknown> = { raw_payload: { huge: "z".repeat(200) } };
   for (const e of DISPLAY_ENGINES) { const v = engine(); if (v) full[e] = v; }
   const slim = viaDb(full) as EngineMap;
-  const opts = { businessName: "Acme Plumbing", locationText: "Leeds", ownWebsite: "https://acmeplumbing.co.uk", isAggregatorUrl: isAgg };
-  if (safe(() => classifyWinnability(full as EngineMap, opts)) !== safe(() => classifyWinnability(slim, opts))) diffs++;
+  const rctx = { businessName: "Acme Plumbing", services: [], isDirectoryHost: (h: string) => isAgg(h) };
+  const rv = (r: EngineMap) => { const v = ruleVerdict("q", [r as unknown as Record<string, unknown>], rctx); return { verdict: v.verdict, tier: v.tier, firms: v.namedFirms }; };
+  if (safe(() => rv(full as EngineMap)) !== safe(() => rv(slim))) diffs++;
   for (const e of DISPLAY_ENGINES) {
     const a = (full as EngineMap)[e], b = slim[e];
     cells++;

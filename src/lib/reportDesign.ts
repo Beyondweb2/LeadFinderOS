@@ -257,7 +257,7 @@ export function renderOpportunityReport(d0: OpportunityDesignInput): string {
     topBar(d, 'WhatsApp Paul', 'I saw my AI opportunity report and would like to talk it through.') +
     `<section class="hero"><div class="eyebrow">AI visibility &middot; opportunity report &middot; ${esc(d.dateLabel)}</div>` +
     `<h1><em>${s.now}</em> questions ${esc(d.businessName)} could win</h1>` +
-    `<p class="lede">We asked ${esc(engines)} ${total} questions customers might ask${where ? ` about ${esc(where)}` : ''}, ${d.asks} times each. On these ${s.now}, no single business is named in most answers, and they are services you offer in your area.</p>` +
+    `<p class="lede">We asked ${esc(engines)} ${total} questions customers might ask${where ? ` about ${esc(where)}` : ''}, ${d.asks} times each. On these ${s.now}, no single business is named in half or more of the answers, and they are services you offer in your area.</p>` +
     `<div class="tiles"><div class="tile now"><div class="n">${s.now}</div><div class="l">Winnable</div></div>` +
     `<div class="tile possible"><div class="n">${s.possible}</div><div class="l">Possible</div></div>` +
     `<div class="tile hard"><div class="n">${s.hard}</div><div class="l">Hard</div></div></div>` +

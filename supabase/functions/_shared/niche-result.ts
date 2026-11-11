@@ -8,7 +8,7 @@
 
    The trimmed copy stores `answer_present` (the JavaScript truthiness of answer_text) instead of the
    text. This turns it back into the shape the fold has always read, so NOT ONE LINE of the fold,
-   classifyWinnability, cellNamed or runIsModelRead changes:
+   ruleVerdict, cellNamed or runIsModelRead changes:
      • per engine: named, self_named, position, competitors, citations ([{url}]) as stored;
      • answer_text: `true` when answer_present, absent otherwise. ⚠️ A boolean, deliberately not a
        made-up string: runIsModelRead only tests its truthiness, and cellNamed's text judge requires a

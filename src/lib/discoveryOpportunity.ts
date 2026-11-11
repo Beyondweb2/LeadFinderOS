@@ -80,8 +80,8 @@ export function engineTallies(question: string, rows: QueueRow[], ctx: Pick<Oppo
    firms across runs and so marked all 40 questions of London Domestic Maintenance "winnable". It now applies the ONE
    written rule in reportOpportunity.ts (Winnable / Possible / Hard over counts across every answer; fragmented alone is
    never enough). The Discovery screens, the paid-baseline function and the client reports all read that same rule.
-   classifyWinnability itself still exists for the per-run page-plan verdicts (page-generator, action-plan, market-view),
-   which write client_pages rows — a separate decision, not changed here. */
+   classifyWinnability itself was then RETIRED too (2026-11-11): page-generator, action-plan and market-view call the same
+   rule through ruleVerdict, so every screen and report agrees. */
 export function opportunityFor(question: string, rows: QueueRow[], ctx: OpportunityContext): Opportunity {
   const nctx = { businessName: ctx.businessName, trade: ctx.trade ?? null, town: ctx.location };
   const own = rows.filter((r) => r.question.trim() === question.trim());
@@ -105,7 +105,7 @@ export function opportunityFor(question: string, rows: QueueRow[], ctx: Opportun
   const clientNamed = namedRuns > 0;
   const classification: OpportunityClass = clientNamed ? 'named' : q.tier === 'now' ? 'winnable' : q.tier === 'possible' ? 'possible' : 'low';
   const verdict = clientNamed ? 'named' : q.tier === 'now' ? 'open' : q.tier === 'possible' ? 'contested' : 'locked';
-  const fragmentation = q.distinct >= 6 ? 'highly fragmented' : q.top <= 2 && q.distinct >= 2 ? 'fragmented across engines' : q.top * 2 > q.answers ? 'dominant competitors' : 'mixed competition';
+  const fragmentation = q.distinct >= 6 ? 'highly fragmented' : q.top <= 2 && q.distinct >= 2 ? 'fragmented across engines' : q.top * 2 >= q.answers ? 'dominant competitors' : 'mixed competition';
   return {
     classification, verdict, reason: q.reasons[0] ?? '', clientNamed, fragmentation, namedRuns, runs,
     engines: engineTallies(question, rows, ctx), competitors: q.firms.map((f) => f.name),

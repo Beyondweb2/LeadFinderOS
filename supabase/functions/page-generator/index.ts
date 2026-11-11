@@ -3,7 +3,8 @@ import { logOpenAiUsage } from "../_shared/openai-usage.ts";
 import { refusalBody, requireAdmin } from "../_shared/access.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { buildPagePlan, stuffingCheck, enforceNaturalness, enforceCatchmentHonesty, FALSE_BASE_RE, MAX_TOWN_MENTIONS, MAX_SERVICE_PHRASE_REPEATS, MAX_SINGLE_WORD_PCT, type PagePlan, type PlannedPage, type StuffingVerdict } from "../../../src/lib/pagePlan.ts";
-import { classifyWinnability, unwrapCitationUrl, SCORED_ENGINES, DISPLAY_ENGINES, type EngineMap } from "../../../src/lib/auditReport.ts";
+import { isRealCompetitor, unwrapCitationUrl, SCORED_ENGINES, DISPLAY_ENGINES, type EngineMap } from "../../../src/lib/auditReport.ts";
+import { ruleVerdict } from "../../../src/lib/reportOpportunity.ts";
 import { sourceMix, classifySource } from "../../../src/lib/sourceType.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { qaHeadings, ownershipFor, ownedFromWebsiteBuild, ownedFromQueue } from "../../../src/lib/intentOwnership.ts";
@@ -11,7 +12,7 @@ import { qaModeFor, renderGuarded, confirmCount, confirmReason, confirmMark, typ
 import { claimSupport, scanClaims } from "../../../src/lib/claimRules.ts";
 import { excludedFromText, namesExcluded } from "../../../src/lib/siteScope.ts";
 import { measuredQuestionRefusal, siteServiceTruth, truthSiteScope, type SiteTruth } from "../../../src/lib/siteServiceTruth.ts";
-import { preMergeQuestions, validateClusters, buildQueue, topSources, enforceTownSplit, majorityVerdict, AUTHORITY_LOCK_SHARE, AUTHORITY_LOCK_MIN_CITES, type ClusterProposal, type QuestionSignals, type WinnVerdict } from "../../../src/lib/pagePlanQueue.ts";
+import { preMergeQuestions, validateClusters, buildQueue, topSources, enforceTownSplit, AUTHORITY_LOCK_SHARE, AUTHORITY_LOCK_MIN_CITES, type ClusterProposal, type QuestionSignals, type WinnVerdict } from "../../../src/lib/pagePlanQueue.ts";
 
 // page-generator — service-plus-town delivery pages, from the OVERLAP of the client's
 // questionnaire (services_list x areas_list) and their baseline audit's exact measured queries.
@@ -452,8 +453,8 @@ Deno.serve(async (req) => {
         }
 
         /* Signals per distinct question, from the SAME latest runs the question list came from.
-           Winnability = classifyWinnability PER RUN (the audit page's own vocabulary and rule),
-           folded by majorityVerdict — single-run winnability is noise (measured 17.9% flip).
+           Winnability = the ONE written rule over every answer of the question at once (src/lib/reportOpportunity.ts
+           ruleVerdict; 2026-11-11, replacing the per-run classifier whose verdict flipped 17.9% of the time).
            Named = counts per engine (named-in-N-of-M-runs) so holds can print verifiable numbers. */
         const { data: resRows } = await service.from("ai_audit_queue")
           .select("question, result").in("run_id", qaRunIds).eq("status", "done");
@@ -495,22 +496,21 @@ Deno.serve(async (req) => {
           }
           domainsByQ.set(q, doms); namedByQ.set(q, named);
         }
-        const toVerdict = (v: string): WinnVerdict =>
-          v === "no-local-race" ? "no_local_race"
-          : v === "named" || v === "open" || v === "contested" || v === "locked" ? v : "unmeasured";
         const signals = new Map<string, QuestionSignals>();
         for (const q of qaQuestions) {
-          const perRun = (runsByQ.get(q) ?? []).map((result) =>
-            classifyWinnability(result, { businessName: qaAudit.business_name, locationText: locText, ownWebsite, isAggregatorUrl }));
-          const labels = perRun.map((v) => toVerdict(v.verdict));
-          const wv = majorityVerdict(labels);
-          const majRun = perRun.find((v) => toVerdict(v.verdict) === wv);
+          const rv = ruleVerdict(q, (runsByQ.get(q) ?? []) as unknown as Record<string, unknown>[], {
+            businessName: qaAudit.business_name ?? "", services: [],
+            isNamed: (c) => cellNamed(c as never, namedCtx),
+            isRival: (n) => isRealCompetitor(n, locText),
+            isDirectoryHost: (h) => isAggregatorUrl("https://" + h),
+          });
+          const wv: WinnVerdict = rv.verdict;
           const nr = namedByQ.get(q) ?? { chatgpt: [0, 0] as [number, number], gemini: [0, 0] as [number, number] };
           signals.set(q, {
             question: q,
             winnability: wv,
-            winnabilityReason: majRun?.reason ?? "",
-            incumbents: (majRun?.namedFirms ?? []).slice(0, 5),
+            winnabilityReason: rv.reason,
+            incumbents: rv.namedFirms.slice(0, 5),
             authorityLockRuns: authByQ.get(q)?.runs ?? 0,
             authorityDomains: [...new Set(authByQ.get(q)?.domains ?? [])].slice(0, 5),
             named: {
