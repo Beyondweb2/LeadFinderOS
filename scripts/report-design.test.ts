@@ -56,7 +56,9 @@ ok(q.tier === "some" && q.scope === "none", "a search with no place in it is cap
 q = oppQuestion("boiler servicing in Clapham", rowsFor("boiler servicing in Clapham", LOTS), { ...ctx, areas: ["London", "Hackney"] });
 ok(q.tier === "some", "outside the areas the business works: capped at Some room");
 q = oppQuestion("leak detection in Bow", rowsFor("leak detection in Bow", LOTS), ctx);
-ok(q.tier === "notoffered" && q.why === "Not a service on your website", "a service not on their website is left out (Not your service), never a target");
+ok(q.tier === "notonsite" && q.why === "Not on your site yet: add a page if you offer this", "a service missing from the current site is NOT excluded: Not on your site yet, kept out of the room counts");
+q = oppQuestion("leak detection in Bow", rowsFor("leak detection in Bow", LOTS), { ...ctx, notOffered: ["leak detection"] });
+ok(q.tier === "notoffered", "only a service the client said they do not offer is excluded");
 q = oppQuestion("best boiler servicing in Hackney", rowsFor("best boiler servicing in Hackney", LOTS), ctx);
 ok(q.tier === "lots", "a 'best' search follows the same rule (no special cap)");
 const r8 = [1, 2, 3, 4].map((i) => ({ question: Q, result: { chatgpt: cell([`F${i}`, "Z"]), gemini: cell([`G${i}`, "Z"]) } }));
@@ -134,9 +136,9 @@ const searches = ["plumber in Bow", "plumber in Hackney", "electrician in Bow", 
 const mixed = searches.flatMap((s) => rowsFor(s, SOME));
 const banned = /\b(discovery|baseline|verdict|engines?|fragment(ed|ation)|citations?|visibility score|geo|winnable|hard to win|work needed)\b/i;
 const SECTIONS: Record<ReportKind, string[]> = {
-  hook: ["Your AI score", "Featured search", "What we found on your website", "Why this matters", "What we'd do"],
-  opportunity: ["Your AI score", "best opportunity", "Searches where you can get named", "AI recommends these instead", "What we found on your website", "Get listed on these sites", "Why this matters", "What we'd do"],
-  baseline: ["Your AI score", "Today and after 4 weeks", "Your 5 searches", "AI recommends these instead", "What we found on your website", "Get listed on these sites", "What we'd do"],
+  hook: ["AI named you in", "Featured search", "What we found on your website", "Why this matters", "What we'd do"],
+  opportunity: ["AI named you in", "best opportunity", "Searches where you can get named", "AI recommends these instead", "What we found on your website", "Get listed on these sites", "Why this matters", "What we'd do"],
+  baseline: ["AI named you in", "Today and after 4 weeks", "Your targeted searches", "AI recommends these instead", "What we found on your website", "Get listed on these sites", "What we'd do"],
 };
 for (const kind of ["opportunity", "hook", "baseline"] as ReportKind[]) {
   const html = renderReport(model(mixed, kind));
@@ -150,7 +152,7 @@ for (const kind of ["opportunity", "hook", "baseline"] as ReportKind[]) {
 }
 const mOpp = model(mixed, "opportunity");
 const tOpp = text(renderReport(mOpp));
-ok(mOpp.score.value === 0 && /AI named you 0 times\./.test(tOpp) && /When people ask AI for a plumber or electrician in London, it doesn't mention you yet\./.test(tOpp), "score first, then the headline in customer words");
+ok(mOpp.score.value === 0 && /0%\s*of answers/.test(tOpp) && /AI named you in/.test(tOpp) && /When people ask AI for a plumber or electrician in London, it doesn't mention you yet\./.test(tOpp), "score first, then the headline in customer words");
 ok(mOpp.top !== null && new RegExp(`${mOpp.top.name}: ${mOpp.top.count}\\.`).test(tOpp), "the score line names the top competitor and its count");
 
 // the count line and the proof, from the real counts
@@ -188,7 +190,7 @@ const tIe = text(renderReport(model(ie, "opportunity", { town: "Dublin", website
 ok(/When people ask AI for an accountant in Dublin/.test(tIe) && !/\bUK\b/.test(tIe), "edge: another trade and country (Dublin accountant), nothing UK-specific");
 // client report and first contact
 const tBase = text(renderReport(model(mixed, "baseline")));
-ok(/Your 5 searches/.test(tBase) && /Check again on 9 Dec 2026 and show you\./.test(tBase) && /Lots of room|Some room|Little room/.test(tBase), "client report: the tracked searches with their room, and the stored 'check again' date");
+ok(/Your targeted searches/.test(tBase) && /best chance of being named, plus your main ones/.test(tBase) && /Check again on 9 Dec 2026 and show you\./.test(tBase) && /Lots of room|Some room|Little room/.test(tBase), "client report: the tracked searches with their room, and the stored 'check again' date");
 const mHook = buildReportModel(mixed.slice(0, 3), { ...ctx, town: "London", siteText: undefined }, { kind: "hook", businessName: "Acme Heating Ltd", town: "London", dateLabel: "11 Nov 2026", website: issuesSite });
 ok(/Featured search/.test(text(renderReport(mHook))) && !/All searches we asked/.test(text(renderReport(mHook))), "first-contact report: the featured search, then the website findings (no all-searches table)");
 ok(/left out: AI answered for another place/.test(text(renderReport({ ...mOpp, counts: { ...mOpp.counts, flagged: 2 } }))), "searches AI answered for the wrong place are named, not counted");

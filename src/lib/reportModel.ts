@@ -39,7 +39,7 @@ export interface ReportModel {
   top: OppFirm | null;
   rivals: OppFirm[];
   website: WebsiteSection;
-  counts: { lots: number; some: number; little: number; nofirms: number; named: number; flagged: number; notoffered: number; /** lots + some + little + nofirms + named */ room: number; searches: number };
+  counts: { lots: number; some: number; little: number; nofirms: number; named: number; flagged: number; notoffered: number; notonsite: number; /** lots + some + little + nofirms + named */ room: number; searches: number };
   /** The two AI the score is built from, over the searches that count. */
   engines: { chatgpt: { named: number; answers: number }; gemini: { named: number; answers: number } };
   /** Google's AI Overview, for context (never scored): searches asked, searches where it showed, and where it named you. */
@@ -58,6 +58,8 @@ export interface ReportModel {
   flagged: string[];
   /** "9 Dec 2026" — client reports only. */
   checkAgainLabel?: string;
+  /** Baseline: the main money searches that have little room, shown as "Main search, harder to get named" (up to 4). */
+  mainQuestions: string[];
 }
 
 export interface ReportModelInput {
@@ -75,6 +77,13 @@ export interface ReportModelInput {
   order?: string[];
   /** First contact: the searches to show as examples (default: the first three). */
   hookQuestions?: string[];
+}
+
+/** The main money searches of a baseline: the plain "best / recommend a good <trade> in <home town>" ones (up to 4), in the baseline's order.
+ *  Only the ones with little room are labelled (the others need no excuse). */
+export function mainSearches(qs: OppQuestion[], town: string): string[] {
+  const home = town.trim().toLowerCase();
+  return qs.filter((q) => q.tier === 'little' && !!q.area && q.area.trim().toLowerCase() === home && (q.intent === 'best' || /\b(recommend|good|reviews?)\b/i.test(q.question))).slice(0, 4).map((q) => q.question);
 }
 
 export function buildReportModel(rows: OppRow[], ctx0: OppContext, o: ReportModelInput): ReportModel {
@@ -101,6 +110,8 @@ export function buildReportModel(rows: OppRow[], ctx0: OppContext, o: ReportMode
     const order = new Map(s.best.map((q, i) => [q.question, i]));
     const sorted = [...pool].sort((x, y) => rank(y) - rank(x) || (order.get(x.question) ?? 999) - (order.get(y.question) ?? 999) || x.question.localeCompare(y.question));
     targets = sorted.slice(0, o.bestCount ?? 10);
+    // Services missing from the current site are not hidden: they show last as "Not on your site yet" (we build the new site).
+    targets.push(...s.questions.filter((q) => q.tier === 'notonsite').sort((a, b) => a.question.localeCompare(b.question)).slice(0, 3));
   } else if (o.kind === 'baseline') {
     const order = new Map((o.order ?? questions).map((q, i) => [q.trim(), i]));
     targets = s.questions.filter((q) => q.tier !== 'flagged').sort((a, b) => (order.get(a.question) ?? 999) - (order.get(b.question) ?? 999));
@@ -126,10 +137,11 @@ export function buildReportModel(rows: OppRow[], ctx0: OppContext, o: ReportMode
     score: { value, named: sc.named, denominator: sc.denominator, answers: sc.answers }, band,
     top: sc.firms[0] ?? null, rivals: sc.firms,
     website: o.website,
-    counts: { lots: s.lots, some: s.some, little: s.little, nofirms: s.nofirms, named: s.named, flagged: s.flagged, notoffered: s.notoffered, room: s.room, searches: s.questions.length - s.flagged },
+    counts: { lots: s.lots, some: s.some, little: s.little, nofirms: s.nofirms, named: s.named, flagged: s.flagged, notoffered: s.notoffered, notonsite: s.notonsite, room: s.room, searches: s.questions.length - s.flagged },
     targets, examples, directories: s.directories,
     flagged: s.questions.filter((q) => q.tier === 'flagged').map((q) => q.question),
     checkAgainLabel: o.checkAgainLabel,
+    mainQuestions: o.kind === 'baseline' ? mainSearches(targets, o.town) : [],
   };
 }
 

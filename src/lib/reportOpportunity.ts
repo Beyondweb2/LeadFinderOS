@@ -31,7 +31,7 @@
    Pure: no DOM, no Deno-only imports. Imported by the render-audit-report edge function, so relative imports carry .ts.
    ═══════════════════════════════════════════════════════════════════════════════════════ */
 
-export type OppTier = 'lots' | 'some' | 'little' | 'nofirms' | 'named' | 'flagged' | 'notoffered';
+export type OppTier = 'lots' | 'some' | 'little' | 'nofirms' | 'named' | 'flagged' | 'notoffered' | 'notonsite';
 
 /** Room thresholds, from the real LDM and ABLM answers (docs/reports.md "Room rule"). */
 export const ROOM_LITTLE_AT = 0.6;
@@ -49,7 +49,8 @@ export const RULE_WORDS: { key: OppTier; label: string; short: string }[] = [
   { key: 'nofirms', label: "AI doesn't name firms yet", short: 'Most answers name no firm' },
   { key: 'named', label: 'Keep and grow', short: 'AI already names you' },
   { key: 'flagged', label: 'Check this place', short: 'AI answered for another place, left out' },
-  { key: 'notoffered', label: 'Not your service', short: 'Not a service on your website' },
+  { key: 'notoffered', label: 'Not your service', short: 'You told us you do not offer this' },
+  { key: 'notonsite', label: 'Not on your site yet', short: 'Add a page if you offer this' },
 ];
 
 import { cleanAnswerText, isJunkAnswer, isMapCardAnswer } from './answerText.ts';
@@ -137,6 +138,9 @@ export interface OppContext {
   isDirectoryHost?: (host: string) => boolean;
   /** Words the business's own searches use (built by summariseOpportunity); used to spot service phrases. */
   vocab?: Set<string>;
+  /** Services the client said they do NOT offer (onboarding). Only these, or a search clearly outside their trade, are excluded;
+   *  a service merely missing from the current site is "Not on your site yet" (we build the new site). */
+  notOffered?: string[];
 }
 const namedOf = (ctx: Pick<OppContext, 'isNamed'>) => (c: Cell): boolean => (ctx.isNamed ? ctx.isNamed(c) : !!(c.self_named || c.named));
 
@@ -478,6 +482,7 @@ export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): 
   const serviceOnSite = svc.offered && !svc.confirmNote;
   const areaOk = inTheirArea(area, ctx.areas);
   const intent = intentOf(question);
+  const clientSaidNo = (ctx.notOffered ?? []).some((n) => { const t = n.toLowerCase().split(/\s+/).filter((w) => w.length > 2).map(stem); return t.length > 0 && t.every((w) => question.toLowerCase().includes(w)); });
 
   /* THE ROOM RULE (Paul, 2026-11-11). The goal is to be NAMED by AI (one of the firms listed), not to be first.
      "Regulars" = firms named in at least half of this search's answers. "Repeat share" = the share of every firm
@@ -493,7 +498,8 @@ export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): 
   let tier: OppTier;
   if (answers === 0 || mixup) tier = 'flagged';
   else if (keep) tier = 'named';
-  else if (!serviceOnSite) tier = 'notoffered';
+  else if (clientSaidNo) tier = 'notoffered';
+  else if (!serviceOnSite) tier = 'notonsite';
   else if (nofirms) tier = 'nofirms';
   else if (closed) tier = 'little';
   else if (roomy && scope === 'specific' && areaOk) tier = 'lots';
@@ -504,7 +510,8 @@ export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): 
   if (answers === 0) why = 'Not answered yet';
   else if (mixup) why = `AI answers for another ${area}`;
   else if (tier === 'named') why = `AI names you in ${namedYou} of ${answers} answers`;
-  else if (tier === 'notoffered') why = 'Not a service on your website';
+  else if (tier === 'notoffered') why = 'You told us you do not offer this';
+  else if (tier === 'notonsite') why = 'Not on your site yet: add a page if you offer this';
   else if (tier === 'nofirms') why = named === 0 ? `AI named no firm in any of the ${answers} answers` : `Only ${named} of ${answers} answers name a firm`;
   else if (tier === 'little') why = `${proof}; the same ${regulars.length} come up in most`;
   else if (tier === 'some') why = regulars.length ? `${proof}; ${regulars.length} come up in most` : `${proof}${scope === 'specific' ? '' : '. Whole-area search'}`;
@@ -555,7 +562,7 @@ export interface OppSummary {
   questions: OppQuestion[];
   /** Counts by group. `flagged` (ambiguous place) searches are left out of every count; `notoffered` (a service not on
    *  their website) are left out of the room counts and the targets. */
-  lots: number; some: number; little: number; nofirms: number; named: number; flagged: number; notoffered: number;
+  lots: number; some: number; little: number; nofirms: number; named: number; flagged: number; notoffered: number; notonsite: number;
   /** Searches the room counts are over: lots + some + little + nofirms + named. */
   room: number;
   /** Kept for older callers. */
@@ -615,8 +622,8 @@ export function summariseOpportunity(rows: OppRow[], ctx: OppContext, bestCount 
   const best = live.filter((q) => q.tier === 'lots' || q.tier === 'some' || q.tier === 'named').sort((a, b) => bestScore(b) - bestScore(a) || a.question.localeCompare(b.question)).slice(0, bestCount);
   const n = (t: OppTier) => questions.filter((q) => q.tier === t).length;
   return {
-    questions, answers, rivals, best, directories: directoriesAcross(live.filter((q) => q.tier !== 'notoffered')),
-    lots: n('lots'), some: n('some'), little: n('little'), nofirms: n('nofirms'), named: n('named'), flagged: n('flagged'), notoffered: n('notoffered'),
+    questions, answers, rivals, best, directories: directoriesAcross(live.filter((q) => q.tier !== 'notoffered' && q.tier !== 'notonsite')),
+    lots: n('lots'), some: n('some'), little: n('little'), nofirms: n('nofirms'), named: n('named'), flagged: n('flagged'), notoffered: n('notoffered'), notonsite: n('notonsite'),
     room: n('lots') + n('some') + n('little') + n('nofirms') + n('named'), easy: 0,
   };
 }
@@ -695,7 +702,7 @@ export function ruleVerdict(question: string, results: Record<string, unknown>[]
   if (runs === 0) verdict = 'unmeasured';
   else if (clientNamed) verdict = 'named';
   else if (runs === 1 && namedRuns === 1) verdict = 'unmeasured';
-  else if (q.tier === 'flagged' || q.tier === 'notoffered') verdict = 'unmeasured';
+  else if (q.tier === 'flagged' || q.tier === 'notoffered' || q.tier === 'notonsite') verdict = 'unmeasured';
   else if (q.tier === 'lots') verdict = 'open';
   else if (q.tier === 'nofirms') verdict = 'no_local_race';
   else if (q.tier === 'little') verdict = 'locked';

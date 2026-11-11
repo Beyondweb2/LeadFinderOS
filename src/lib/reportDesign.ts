@@ -43,6 +43,7 @@ const GROUP: Record<OppTier, { label: string; kind: 'y' | 'a' | 'n' | 'na' | 'b'
   named: { label: 'Keep and grow', kind: 'b' },
   flagged: { label: 'Check this place', kind: 'na' },
   notoffered: { label: 'Not your service', kind: 'na' },
+  notonsite: { label: 'Not on your site yet', kind: 'na' },
 };
 
 const WA_BUTTON = 'Talk to Paul on WhatsApp';
@@ -235,8 +236,8 @@ function scoreBlock(m: ReportModel): string {
   const tone = s.value === null ? 'grey' : m.band === 'none' ? 'red' : m.band === 'some' ? 'amber' : 'green';
   const big = s.value === null
     ? `<p class="rp-big rp-t-grey"><span class="rp-big-n" style="font-size:36px">No score yet</span></p>`
-    : `<p class="rp-big rp-t-${tone}"><span class="rp-big-n">${s.value}</span><span class="rp-big-w">/ 100</span></p>`;
-  const line = s.value === null ? "AI didn't name any business in these answers." : `AI named you ${s.named} ${s.named === 1 ? 'time' : 'times'}.${m.top ? ` ${esc(m.top.name)}: ${m.top.count}.` : ''}`;
+    : `<p class="rp-big rp-t-${tone}"><span class="rp-big-n">${s.value}%</span><span class="rp-big-w">of answers</span></p>`;
+  const line = s.value === null ? "AI didn't name any business in these answers." : `${s.named} of ${s.denominator} answers that named a business named you.${m.top ? ` ${esc(m.top.name)}: ${m.top.count}.` : ''}`;
   const card = (e: Eng) => {
     const c = m.engines[e];
     const pct = c.answers ? Math.round((c.named / c.answers) * 100) : 0;
@@ -246,7 +247,7 @@ function scoreBlock(m: ReportModel): string {
   const o = m.overview;
   const aio = o.shown
     ? `<p class="rp-aio-line"><span class="rp-dot rp-dot--aio"></span><b>Google AI Overview</b><span>shown on ${o.shown} of ${plural(o.asked, 'search', 'searches')}, named in ${o.named}</span><em>Shown for context, not scored</em></p>` : '';
-  return `<section class="rp-score"><div class="rp-score-in"><div class="rp-overall"><span class="rp-k"><i></i>Your AI score</span>${big}<span class="rp-overall-s">${line}</span></div>${card('chatgpt')}${card('gemini')}</div>${aio}</section>`;
+  return `<section class="rp-score"><div class="rp-score-in"><div class="rp-overall"><span class="rp-k"><i></i>AI named you in</span>${big}<span class="rp-overall-s">${line}</span></div>${card('chatgpt')}${card('gemini')}</div>${aio}</section>`;
 }
 
 /* ── The answer boxes (the example's chat cards) ────────────────────────────────────────── */
@@ -285,7 +286,8 @@ function tableBlock(m: ReportModel, qs: OppQuestion[], title: string, sub: strin
   const head = `<tr><th>Search</th>${ENGS.map((e) => `<th class="rp-te"><span class="rp-dot rp-dot--${ENGINE_KEY[e]}"></span>${ENGINE_LABEL[e]}</th>`).join('')}${withAfter ? '<th class="rp-te">After 4 weeks</th>' : ''}</tr>`;
   const body = qs.map((q, i) => {
     const g = GROUP[q.tier];
-    return `<tr><td class="rp-tq"><span class="rp-qn">${i + 1}.</span> ${esc(q.question)}${withGroup ? `<small>${chip(g.kind, g.label)}</small>` : ''}</td>` +
+    const label = m.mainQuestions.includes(q.question) ? 'Main search, harder to get named' : g.label;
+    return `<tr><td class="rp-tq"><span class="rp-qn">${i + 1}.</span> ${esc(q.question)}${withGroup ? `<small>${chip(g.kind, label)}</small>` : ''}</td>` +
       ENGS.map((e) => `<td class="rp-tr" data-eng="${ENGINE_LABEL[e]}"><div class="rp-cell">${resultCell(q.engines[e])}</div></td>`).join('') +
       (withAfter ? `<td class="rp-tr" data-eng="After 4 weeks"><div class="rp-cell"><span class="rp-after">Not checked yet</span></div></td>` : '') + `</tr>`;
   }).join('');
@@ -342,7 +344,7 @@ export function countsLine(c: ReportModel['counts']): string {
   if (c.little) rest.push(`${c.little} with little room`);
   if (c.nofirms) rest.push(`${c.nofirms} where AI names no firms yet`);
   if (c.named) rest.push(`${c.named} to keep and grow`);
-  if (c.notoffered) rest.push(`${c.notoffered} for services not on your website`);
+  if (c.notonsite) rest.push(`${c.notonsite} not on your site yet (add a page if you offer them)`);
   return rest.length ? `${first} ${rest.join(' · ')}` : first;
 }
 
@@ -398,12 +400,12 @@ function baselineBody(m: ReportModel): string {
   const s = m.score;
   const tone = s.value === null ? 'grey' : m.band === 'none' ? 'red' : m.band === 'some' ? 'amber' : 'green';
   const today = `<section class="rp-panel"><h2 class="rp-h">Today and after ${REMEASURE_WEEKS_STANDARD} weeks</h2><div class="rp-today">` +
-    `<div class="rp-card"><span class="rp-k" style="color:#6b6c72"><i></i>Today &middot; ${esc(m.dateLabel)}</span><p class="rp-bigdark rp-t-${tone}" style="margin-top:10px;${tone === 'grey' ? 'color:#5d5e63' : ''}">${s.value === null ? 'No score yet' : `${s.value}<span style="font-size:18px;color:#6b6c72"> / 100</span>`}</p><p class="rp-h-sub" style="margin:6px 0 0">AI named you ${s.named} ${s.named === 1 ? 'time' : 'times'}.${m.top ? ` ${esc(m.top.name)}: ${m.top.count}.` : ''}</p></div>` +
+    `<div class="rp-card"><span class="rp-k" style="color:#6b6c72"><i></i>AI named you in &middot; ${esc(m.dateLabel)}</span><p class="rp-bigdark rp-t-${tone}" style="margin-top:10px;${tone === 'grey' ? 'color:#5d5e63' : ''}">${s.value === null ? 'No score yet' : `${s.value}%<span style="font-size:18px;color:#6b6c72"> of answers</span>`}</p><p class="rp-h-sub" style="margin:6px 0 0">AI named you ${s.named} ${s.named === 1 ? 'time' : 'times'}.${m.top ? ` ${esc(m.top.name)}: ${m.top.count}.` : ''}</p></div>` +
     `<div class="rp-card rp-card--next"><span class="rp-k" style="color:#6b6c72"><i></i>${m.checkAgainLabel ? `We check again on ${esc(m.checkAgainLabel)}` : `We check again in ${REMEASURE_WEEKS_STANDARD} weeks`}</span><p class="rp-bigdark" style="margin-top:10px;color:#a3a5ab">&mdash;</p><p class="rp-h-sub" style="margin:6px 0 0">Same ${plural(m.counts.searches, 'search', 'searches')}. Same AI.</p></div></div></section>`;
   const c = m.counts;
   const flagNote = c.flagged ? ` ${plural(c.flagged, 'search', 'searches')} left out: AI answered for another place.` : '';
   return `<p class="rp-line">${headlineText(m)}</p>` + today +
-    tableBlock(m, m.all, `Your ${m.all.length} searches`, `${countsLine(c)}.${flagNote}`, true, true) +
+    tableBlock(m, m.all, 'Your targeted searches', `We chose searches where you have the best chance of being named, plus your main ones. ${countsLine(c)}.${flagNote}`, true, true) +
     insteadPanel(m) + `<div class="rp-pair">${websitePanel(m)}${listedPanel(m)}</div>`;
 }
 

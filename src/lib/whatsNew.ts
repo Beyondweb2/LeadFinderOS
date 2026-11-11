@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-11-room-rule', date: '2026-11-11', title: 'Reports now show how much room AI leaves', audience: 'all',
+    body: 'Every search in a report is graded Lots, Some or Little room to be named, with the proof beside it. The score reads "AI named you in X% of answers". A service missing from the current site shows as "Not on your site yet" instead of being left out.',
+    report: {
+      added: ['Room labels per search: Lots of room, Some room, Little room, AI says it names no firms yet, with proof such as "6 answers named 11 different firms".', '"Not on your site yet: add a page if you offer this" for services missing from the current website.', 'A new baseline pick: the hook searches, 3 or 4 main searches, and about 14 with the most room.', 'Client report heading "Your targeted searches".'],
+      changed: ['The score label is always "AI named you in X% of answers".', 'Ambiguous places such as Stratford are asked with their wider area in new audits.', 'A search AI answered for the wrong place is dropped or left out.'],
+      removed: ['The winnable / possible / hard grading.'],
+      effect: 'A report now says honestly where a business can get named, and never excludes a service just because the old site lacks it. Baselines already frozen are unchanged.',
+    } },
   { id: '2026-11-11-findable-report-look', date: '2026-11-11', title: 'Reports now look like Findable', audience: 'all',
     body: 'The opportunity, first-contact and client reports use Findable\x27s own look: a dark card with numbered sections, coloured tiles and gold chips. The headline now says what customers actually search for, like "a gas engineer or electrician in East London", not the trade label.',
     report: {

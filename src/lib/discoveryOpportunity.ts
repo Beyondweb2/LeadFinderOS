@@ -104,7 +104,7 @@ export function opportunityFor(question: string, rows: QueueRow[], ctx: Opportun
   });
   const clientNamed = namedRuns > 0;
   const classification: OpportunityClass = clientNamed || q.tier === 'named' ? 'named' : q.tier === 'lots' ? 'winnable' : q.tier === 'some' ? 'possible' : 'low';
-  const verdict = clientNamed || q.tier === 'named' ? 'named' : q.tier === 'lots' ? 'open' : q.tier === 'some' ? 'contested' : q.tier === 'nofirms' ? 'no-local-race' : q.tier === 'flagged' || q.tier === 'notoffered' ? 'unmeasured' : 'locked';
+  const verdict = clientNamed || q.tier === 'named' ? 'named' : q.tier === 'lots' ? 'open' : q.tier === 'some' ? 'contested' : q.tier === 'nofirms' ? 'no-local-race' : q.tier === 'flagged' || q.tier === 'notoffered' || q.tier === 'notonsite' ? 'unmeasured' : 'locked';
   const fragmentation = q.tier === 'lots' ? 'highly fragmented' : q.tier === 'little' ? 'dominant competitors' : 'mixed competition';
   return {
     classification, verdict, reason: q.reasons[0] ?? '', clientNamed, fragmentation, namedRuns, runs,
