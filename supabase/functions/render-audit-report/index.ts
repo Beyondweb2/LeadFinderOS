@@ -13,8 +13,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildReportData, seoStyleForAudit, isRealCompetitor, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
-import { hookFromRows, searchPhrase, summariseOpportunity, theirAreas, type OppContext, type OppRow } from "../../../src/lib/reportOpportunity.ts";
-import { chooseReportDesign, renderBaselineReport, renderHookReport, renderOpportunityReport } from "../../../src/lib/reportDesign.ts";
+import { theirAreas, type OppContext, type OppRow } from "../../../src/lib/reportOpportunity.ts";
+import { buildReportModel, websiteSectionFromCheck, type WebsiteSection } from "../../../src/lib/reportModel.ts";
+import { chooseReportDesign, renderReport } from "../../../src/lib/reportDesign.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { renderReportHtml } from "../../../src/lib/aiAuditReportHtml.ts";
 import { measuringState } from "../../../src/lib/measuringState.ts";
@@ -249,6 +250,8 @@ Deno.serve(async (req) => {
     let leadBaselineAuditId: string | null = null;
     let leadRemeasureAuditId: string | null = null;
     let leadRemeasureDue: string | null = null;
+    /* The stored website check, in plain terms, for the redesigned pages. No score number (team-only by rule). */
+    let websiteSection: WebsiteSection = { state: "not_checked", issues: [] };
     let amountPaid = 0;
     let leadWebsite = "";
     let leadPlaceId: string | null = null;
@@ -453,6 +456,7 @@ Deno.serve(async (req) => {
          older picks above (the run's quick-crawl faults, the evidence tiers, the content issues). Serious issues only
          (high / medium), each the issue's title + what was seen. A clean check says so; no row keeps the old path. */
       const wc = cc ? websiteCheckFor({ result: stored as never, created_at: (cc as { created_at: string }).created_at }, { website: ownWebsite ?? null }) : null;
+      if (wc) websiteSection = websiteSectionFromCheck(wc);
       if (wc && (wc.state === "issues" || wc.state === "clean")) {
         data.siteChecked = true;
         const lines = wc.serious.map((i) => ({ title: issueLine(i), detail: i.saw, minor: i.severity !== "high", kind: i.id as never }));
@@ -511,51 +515,35 @@ Deno.serve(async (req) => {
         const town = audit.location_text ?? "";
         const nctx = { businessName: bizName, trade: trade || null, town: town || null };
         const oppRows: OppRow[] = queueRows.filter((r) => r.status === "done" || r.result).map((r) => ({ question: r.question, result: r.result as unknown as Record<string, unknown> | null }));
-        const base = {
-          businessName: bizName, trade, town, dateLabel: data.generatedAtLabel, shareUrl: data.shareUrl,
-        };
-        const flags = {
-          isNamed: (c: unknown) => cellNamed(c as never, nctx),
-          isRival: (n: string) => isRealCompetitor(n, town),
-        };
-        if (designKind === "hook") {
-          const qs = [...new Set(oppRows.map((r) => r.question.trim()))].slice(0, 3);
-          const h = hookFromRows(oppRows, qs, flags);
-          /* The headline uses what customers type (from the searches), never the trade label. */
-          const ph = searchPhrase(qs, town);
-          return htmlResponse(renderHookReport({ ...base, searchWhat: ph.what, searchWhere: ph.where, ...h }), 200);
-        }
-        /* The website check's services, from whichever run stored one (a Discovery's crawl sits on run 1). Without
-           one the "service on your website" test is skipped rather than guessed. */
+        const questions = [...new Set(oppRows.map((r) => r.question.trim()))];
+        /* No website at all (Google was asked and found none): the page says so and pitches "a site AI can read". */
+        if (!ownWebsite && hasWebsite === false) websiteSection = { state: "no_website", issues: [] };
+        /* The website check's services, from whichever run stored one (a Discovery's crawl sits on run 1). Without one the
+           "service on your website" test is skipped rather than guessed. */
         const { data: crawlRuns } = await service
           .from("ai_audit_runs").select("run_number, crawl:results->crawl_check").eq("audit_id", audit.id).order("run_number", { ascending: true });
         // deno-lint-ignore no-explicit-any
         const crawl = ((crawlRuns ?? []) as any[]).map((r) => r.crawl).find((c) => Array.isArray(c?.insights?.services) && c.insights.services.length) ?? null;
         const services = crawl ? (crawl.insights.services as Array<{ name?: string; coverage?: string }>).map((x) => ({ name: String(x.name ?? ""), dedicated: x.coverage === "dedicated" })) : [];
         const pageUrls: string[] = crawl ? ((crawl.signals?.checkedPages ?? []) as Array<{ url?: string }>).map((x) => String(x.url ?? "")) : [];
-        const questions = [...new Set(oppRows.map((r) => r.question.trim()))];
         const octx: OppContext = {
-          businessName: bizName, services, pageUrls,
+          businessName: bizName, services, pageUrls, town,
           siteText: crawl ? [bizName, trade, ...services.map((x) => x.name), ...pageUrls].join(" ").toLowerCase() : undefined,
           areas: theirAreas({ locationText: town, pageUrls, questions, fromDiscovery: true }),
           isDirectoryHost: (h: string) => isAggregatorUrl("https://" + h),
-          ...flags,
+          isNamed: (c: unknown) => cellNamed(c as never, nctx),
+          isRival: (n: string) => isRealCompetitor(n, town),
         };
-        const summary = summariseOpportunity(oppRows, octx);
-        const asks = Math.max(1, runRows.filter((r) => r.status === "complete").length);
-        if (designKind === "opportunity") {
-          const po = searchPhrase(summary.questions.filter((q) => q.service).map((q) => q.question), town);
-          return htmlResponse(renderOpportunityReport({ ...base, searchWhat: po.what, searchWhere: po.where, summary, asks }), 200);
-        }
-        const order = new Map(questions.map((q, i) => [q, i]));
-        const locked = [...summary.questions].sort((a, b) => (order.get(a.question) ?? 0) - (order.get(b.question) ?? 0));
-        return htmlResponse(renderBaselineReport({
-          ...base, searchWhat: searchPhrase(locked.map((q) => q.question), town).what, searchWhere: searchPhrase(locked.map((q) => q.question), town).where,
-          questions: locked, rivals: summary.rivals, asks,
-          answers: locked.reduce((n, q) => n + q.answers, 0), namedYou: locked.reduce((n, q) => n + q.namedYou, 0), directories: summary.directories,
+        /* A first-contact report is the few searches of the hook: one answer per AI per search. */
+        const hookQs = questions.slice(0, 3);
+        const hookRows = designKind === "hook" ? hookQs.map((q) => oppRows.find((r) => r.question.trim() === q)).filter((r): r is OppRow => !!r) : oppRows;
+        const model = buildReportModel(hookRows, octx, {
+          kind: designKind, businessName: bizName, town, dateLabel: data.generatedAtLabel, shareUrl: data.shareUrl,
+          website: websiteSection, order: questions, hookQuestions: hookQs, bestCount: 10,
           /* "We check again on <date>": the lead's stored day-28 date. Absent = the page says "in 4 weeks". */
           checkAgainLabel: leadRemeasureDue ? new Date(leadRemeasureDue).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : undefined,
-        }), 200);
+        });
+        return htmlResponse(renderReport(model), 200);
       } catch (e) {
         // A design that cannot render must never cost the reader their report: fall through to the classic page.
         console.error("[render-audit-report] redesign failed, serving classic:", e instanceof Error ? e.message : e);

@@ -103,8 +103,8 @@ export function opportunityFor(question: string, rows: QueueRow[], ctx: Opportun
     isDirectoryHost: (h) => ctx.isAggregatorUrl('https://' + h),
   });
   const clientNamed = namedRuns > 0;
-  const classification: OpportunityClass = clientNamed ? 'named' : q.tier === 'now' ? 'winnable' : q.tier === 'possible' ? 'possible' : 'low';
-  const verdict = clientNamed ? 'named' : q.tier === 'now' ? 'open' : q.tier === 'possible' ? 'contested' : 'locked';
+  const classification: OpportunityClass = clientNamed || q.tier === 'named' ? 'named' : q.tier === 'now' ? 'winnable' : q.tier === 'possible' ? 'possible' : 'low';
+  const verdict = clientNamed || q.tier === 'named' ? 'named' : q.tier === 'now' ? 'open' : q.tier === 'possible' ? 'contested' : q.tier === 'nofirms' ? 'no-local-race' : q.tier === 'flagged' ? 'unmeasured' : 'locked';
   const fragmentation = q.distinct >= 6 ? 'highly fragmented' : q.top <= 2 && q.distinct >= 2 ? 'fragmented across engines' : q.top * 2 >= q.answers ? 'dominant competitors' : 'mixed competition';
   return {
     classification, verdict, reason: q.reasons[0] ?? '', clientNamed, fragmentation, namedRuns, runs,

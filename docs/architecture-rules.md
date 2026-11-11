@@ -20,12 +20,15 @@
 - **No winnability SCORING.** A score reads a single run, and competitor lists differ between runs, so it flips between
   identical inputs. Counts only.
   ✅ **Owner decision 2026-11-11 (Paul): the words "could win" / "you could win" ARE allowed on a client report when the evidence
-  is shown beside them (e.g. "AI names nobody", "No one stands out yet") and the page carries the "These are opportunities, not
-  guarantees" line.** They come from ONE fixed written rule over counts across every answer (`src/lib/reportOpportunity.ts`,
-  `RULE_WORDS`): **You could win** = no single business named in half or more of the answers, and a service on their website;
-  **Possible with work** = one business named in 3 or 4 of 6, or a service not on their website; **Hard to win** = one business
-  named in 5 or 6 of 6. Many different businesses named is never enough on its own. Directories and review sites are counted
-  separately and are never competitors.
+  is shown beside them (e.g. "6 answers named 9 firms, no one more than twice") and the page carries the "These are opportunities, not
+  guarantees" line.** They come from ONE fixed written rule over counts across every answer (`src/lib/reportOpportunity.ts`, header
+  comment + `RULE_WORDS`): **You could win** = 4+ of 6 answers name a firm, no firm in 3+ of 6, a service on their website, a SPECIFIC
+  area (borough, town, district; not a whole city, region or country); **Possible with work** = one firm in 3 or 4 of 6, only 3 of 6
+  naming a firm, a service not on their website, a whole-city / region / country search, or a search with no place; **Hard to win** =
+  one firm in 5 or 6 of 6; **AI doesn't name firms yet** = most answers name no firm (never winnable); **Keep and grow** = they are
+  named in half or more of the answers; an **ambiguous place** (e.g. Stratford: AI answers for Stratford-upon-Avon) is flagged and
+  left out of every count, and is asked from now on with its wider area. Directories, review sites and bare service phrases are never
+  competitors. Every number comes from the stored answers, never from a stored summary such as `mention_rate`.
 - **No outcome promises in anything customer-facing.** Say what was measured, what was done, and what changed. Never promise
   a ranking, a recommendation or a citation — "winnable" is a description of the answers today, not a forecast.
 - **Migrations are applied ONE AT A TIME, never with `supabase db push`** — that is broken here
