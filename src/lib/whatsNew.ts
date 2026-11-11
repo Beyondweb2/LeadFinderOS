@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-11-report-redesign', date: '2026-11-11', title: 'New look for the reports prospects and clients open', audience: 'all',
+    body: 'The opportunity report (Discovery), the first-contact report and the client baseline now share one dark Findable design: the businesses AI names instead are shown first, each question says why it is Winnable, Possible or Hard, and a "Get listed here first" list shows which directories AI cites. Works on a phone.',
+    report: {
+      added: ['Opportunity report: "N questions you could win", who AI names instead, the best 20 to start with and the written rule for Winnable / Possible / Hard.', 'Baseline report: the 20 locked questions, where you stand now, the plan and an empty slot for the 4-week comparison.', '"Get listed here first": directories and review sites AI named or cited (Checkatrade, Yell, Gas Safe Register and others), most often first. They are never counted as competitors.'],
+      changed: ['Discovery, paid baseline and complete first-contact report links open the new design. Add ?design=classic to a link to see the old page.', 'Winnable on the Discovery screens now follows one written rule over counts (no business named in most answers, a service on the website, in their area), not the old per-run classifier that marked almost everything winnable.'],
+      removed: ['Nothing removed: the classic report is still served while a report is measuring, for the day-28 re-measure and for anything the new pages cannot show.'],
+      effect: 'Reports read faster and show the evidence for every question. "Winnable" always sits beside its evidence and a not-a-promise line, never a ranking promise.',
+    } },
   { id: '2026-11-11-ireland', date: '2026-11-11', title: 'Ireland is now a country you can add leads in', audience: 'all',
     body: 'Pick Ireland when you add a lead. Irish numbers (085 123 4567 or +353 …) are read correctly for WhatsApp links and call numbers, AI checks name Ireland, and Coverage has an Ireland view with counties.',
     report: {

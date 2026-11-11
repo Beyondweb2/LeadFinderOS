@@ -17,7 +17,7 @@
    ═══════════════════════════════════════════════════════════════════════════════════════ */
 
 import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, REMEASURE_WEEKS_STANDARD } from './findableOffer.ts';
-import type { OppFirm, OppQuestion, OppSummary, OppTier } from './reportOpportunity.ts';
+import { RULE_WORDS, type OppDirectory, type OppFirm, type OppQuestion, type OppSummary, type OppTier } from './reportOpportunity.ts';
 
 export function esc(s: unknown): string {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -37,7 +37,10 @@ export interface DesignBase {
 /** "London Domestic Maintenance Ltd" -> "London Domestic Maintenance": the legal suffix reads badly in a headline. */
 export const shortName = (n: string): string => n.replace(/[\s,]+(ltd|limited)\.?$/i, '').trim() || n;
 
-const TIER_LABEL: Record<OppTier, string> = { now: 'Winnable now', possible: 'Possible', hard: 'Hard' };
+/** The two engines every discovery and baseline asks. */
+const ENGINES_TEXT = 'ChatGPT and Gemini';
+const TIER_LABEL: Record<OppTier, string> = { now: 'Winnable', possible: 'Possible', hard: 'Hard' };
+const tierLabel = (q: OppQuestion): string => (q.easy ? 'Winnable (easy)' : TIER_LABEL[q.tier]);
 
 const waHref = (businessName: string, text: string) =>
   `https://wa.me/${FINDABLE_CONTACT_WHATSAPP}?text=${encodeURIComponent(`Hi, this is ${businessName} - ${text}`)}`;
@@ -111,6 +114,12 @@ details.more[open]>summary:after{content:"\\2212"}
 .cta p{color:#d7dae0;margin:6px 0 16px;max-width:60ch}.cta .row{display:flex;flex-wrap:wrap;gap:10px}
 .foot{margin-top:30px;color:var(--faint);font-size:13px;border-top:1px solid var(--line);padding-top:16px}
 .foot p{margin:4px 0}
+.rule{margin-top:14px;border:1px solid var(--line);border-radius:14px;background:var(--card);padding:6px 16px}
+.rule div{display:grid;grid-template-columns:130px minmax(0,1fr);gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14.5px}
+.rule div:first-child{border-top:0}.rule b{font-weight:700}
+.rule .e{color:var(--green)}.rule .n{color:var(--green)}.rule .p{color:var(--amber)}.rule .h{color:var(--muted)}
+.dl{display:grid;gap:8px}.dl .it{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.dl .it small{display:block;color:var(--muted);font-size:13px}
 .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.step{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
 .step .no{color:var(--y);font-weight:800;font-size:13px;letter-spacing:.1em}.step h3{margin:6px 0 6px}.step p{margin:0;color:var(--muted);font-size:14.5px}
 .cmp{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -136,6 +145,7 @@ table.bl td.nowrap{white-space:nowrap}
   .q-head{grid-template-columns:34px minmax(0,1fr)}.q-head .chip{grid-column:2;justify-self:start}
   .q .why,.q .who,.q .help{margin-left:0}
   .steps,.cmp{grid-template-columns:1fr}
+  .rule div{grid-template-columns:1fr;gap:2px}
   .hq .eng{grid-template-columns:1fr;gap:2px}
   table.bl thead{display:none}table.bl,table.bl tbody,table.bl tr,table.bl td{display:block;width:100%}
   table.bl tr{border-bottom:1px solid var(--line);padding:10px 0}table.bl td{border:0;padding:3px 0}
@@ -187,12 +197,28 @@ function firmChips(q: OppQuestion, n = 3): string {
   return q.firms.slice(0, n).map((f) => `<span class="chip firm">${esc(f.name)}<b>${f.count}/${answers}</b></span>`).join('');
 }
 
+/** The winnable rule in plain words, printed on every report that sorts questions. */
+function ruleBox(): string {
+  const cls: Record<string, string> = { easy: 'e', now: 'n', possible: 'p', hard: 'h' };
+  return `<div class="rule">${RULE_WORDS.map((r) => `<div><b class="${cls[r.key]}">${esc(r.label)}</b><span>${esc(r.text)}</span></div>`).join('')}</div>` +
+    `<p class="sub" style="margin-top:8px;font-size:13.5px">Fragmented answers alone are never enough for Winnable. This is not a promise that AI will name you.</p>`;
+}
+
+/** "Get listed here first": the directories and review sites AI cites, most first. Never a competitor list. */
+function listedBox(dirs: OppDirectory[], answers: number, max = 6): string {
+  const top = dirs.slice(0, max);
+  if (!top.length) return '';
+  return `<section class="section"><h2>Get listed here first</h2><p class="sub">Directories and review sites AI named or cited as a source, most often first. They are where customers find and check businesses, not competitors.</p>` +
+    `<div class="dl">${top.map((x, i) => `<div class="it"><span style="color:var(--faint);font-weight:700">${i + 1}</span><span><b>${esc(x.name)}</b><small>in ${plural(x.questions, 'question')}</small></span><span style="font-weight:800">${x.answers} of ${answers}</span></div>`).join('')}</div>` +
+    `<p class="sub" style="margin-top:10px;font-size:13.5px">Number of the ${answers} AI answers that named or cited each one.</p></section>`;
+}
+
 /* ═══ 1. DISCOVERY / OPPORTUNITY ═════════════════════════════════════════════════════════ */
 
 export interface OpportunityDesignInput extends DesignBase {
   summary: OppSummary;
   /** "ChatGPT and Gemini" */
-  engines: string;
+  engines?: string;
   asks: number;
   /** How many of the best to list up front. */
   bestCount?: number;
@@ -200,7 +226,7 @@ export interface OpportunityDesignInput extends DesignBase {
 
 function qCard(q: OppQuestion, i: number): string {
   return `<article class="q"><div class="q-head"><span class="rank">${i + 1}</span><h3>${esc(q.question)}</h3>` +
-    `<span class="chip ${q.tier}">${TIER_LABEL[q.tier]}</span></div>` +
+    `<span class="chip ${q.tier}">${tierLabel(q)}</span></div>` +
     `<p class="why">${esc(q.reasons[0] ?? '')}${q.reasons.slice(1, 3).map((r) => `<span>${esc(r)}</span>`).join('')}</p>` +
     `<div class="who"><span class="lab">AI names today</span>${firmChips(q)}</div>` +
     (q.help ? `<p class="help"><span class="lab">Most likely to help</span>${esc(q.help)}</p>` : '') + `</article>`;
@@ -208,6 +234,7 @@ function qCard(q: OppQuestion, i: number): string {
 
 export function renderOpportunityReport(d0: OpportunityDesignInput): string {
   const d = { ...d0, businessName: shortName(d0.businessName) };
+  const engines = (d0 as { engines?: string }).engines ?? ENGINES_TEXT;
   const s = d.summary;
   const total = s.questions.length;
   const bestN = Math.min(d.bestCount ?? 20, s.best.length);
@@ -218,7 +245,7 @@ export function renderOpportunityReport(d0: OpportunityDesignInput): string {
     const list = rest.filter((q) => q.tier === tier);
     if (!list.length) return '';
     return `<h4>${TIER_LABEL[tier]} (${list.length})</h4>` + list.map((q) =>
-      `<div class="li"><span>${esc(q.question)}</span><span class="chip ${q.tier}">${TIER_LABEL[tier]}</span><small>${esc(q.reasons[0] ?? '')}</small></div>`).join('');
+      `<div class="li"><span>${esc(q.question)}</span><span class="chip ${q.tier}">${tierLabel(q)}</span><small>${esc(q.reasons[0] ?? '')}</small></div>`).join('');
   };
   const leaders = s.rivals[0];
   const topNote = leaders
@@ -230,26 +257,28 @@ export function renderOpportunityReport(d0: OpportunityDesignInput): string {
     topBar(d, 'WhatsApp Paul', 'I saw my AI opportunity report and would like to talk it through.') +
     `<section class="hero"><div class="eyebrow">AI visibility &middot; opportunity report &middot; ${esc(d.dateLabel)}</div>` +
     `<h1><em>${s.now}</em> questions ${esc(d.businessName)} could win</h1>` +
-    `<p class="lede">We asked ${esc(d.engines)} ${total} questions customers might ask${where ? ` about ${esc(where)}` : ''}, ${d.asks} times each. On these ${s.now}, AI has no settled favourite yet: it names nobody, or a different business every time.</p>` +
-    `<div class="tiles"><div class="tile now"><div class="n">${s.now}</div><div class="l">Winnable now</div></div>` +
+    `<p class="lede">We asked ${esc(engines)} ${total} questions customers might ask${where ? ` about ${esc(where)}` : ''}, ${d.asks} times each. On these ${s.now}, no single business is named in most answers, and they are services you offer in your area.</p>` +
+    `<div class="tiles"><div class="tile now"><div class="n">${s.now}</div><div class="l">Winnable</div></div>` +
     `<div class="tile possible"><div class="n">${s.possible}</div><div class="l">Possible</div></div>` +
     `<div class="tile hard"><div class="n">${s.hard}</div><div class="l">Hard</div></div></div>` +
-    `<p class="sub" style="margin-top:12px;font-size:13.5px">${total} questions &middot; ${s.answers} AI answers. Winnable means AI has no settled favourite today. It is not a promise that AI will name you.</p></section>` +
+    `<p class="sub" style="margin-top:12px;font-size:13.5px">${total} questions &middot; ${s.answers} AI answers. The evidence is shown beside each question. Winnable is not a promise that AI will name you.</p>` +
+    `<div class="section" style="margin-top:20px"><h2 style="font-size:20px">How we sort the questions</h2>${ruleBox()}</div></section>` +
 
     (s.rivals.length
       ? `<section class="section"><h2>AI names these businesses instead</h2><p class="sub">Across every answer, these are the businesses AI named most.</p>` +
         rivalBars(s.rivals, s.answers) + (topNote ? `<div class="note">${esc(topNote)}</div>` : '') + `</section>`
       : '') +
 
-    `<section class="section"><h2>The ${bestN} to start with</h2><p class="sub">Ranked: no settled favourite in the answers first, then questions in your own patch and on services your website already shows.</p>` +
+    `<section class="section"><h2>The ${bestN} to start with</h2><p class="sub">Ranked: Winnable first, then questions in your own patch and on services your website already shows.</p>` +
     `<div class="qs">${best.map(qCard).join('')}</div>` +
     (rest.length
       ? `<details class="more"><summary>The other ${rest.length} questions we asked</summary><div class="grp">${grp('now')}${grp('possible')}${grp('hard')}</div></details>`
       : '') + `</section>` +
 
+    listedBox(s.directories, s.answers) +
     ctaBand(d, 'Next step', `Talk it through with us. We will go through the ${bestN} questions, what each one needs, and which to measure first.`,
       'WhatsApp Paul', 'I saw my AI opportunity report and would like to talk it through.', 'AI opportunity report') +
-    footer(d, [`Method: ${total} questions, each asked ${d.asks} times to ${d.engines}, ${s.answers} answers in total. A business is counted when an answer names it.`]);
+    footer(d, [`Method: ${total} questions, each asked ${d.asks} times to ${engines}, ${s.answers} answers in total. A business is counted when an answer names it.`]);
   return shell(`${d.businessName} - AI opportunity report`, body);
 }
 
@@ -267,6 +296,7 @@ export interface HookDesignInput extends DesignBase {
 
 export function renderHookReport(d0: HookDesignInput): string {
   const d = { ...d0, businessName: shortName(d0.businessName) };
+  const engines = (d0 as { engines?: string }).engines ?? ENGINES_TEXT;
   const answers = d.questions.reduce((n, q) => n + q.answers.length, 0);
   const named = d.questions.reduce((n, q) => n + q.answers.filter((a) => a.namedYou).length, 0);
   const where = d.trade ? `${d.trade}${d.town ? ` in ${d.town}` : ''}` : (d.town || 'your area');
@@ -306,14 +336,17 @@ export interface BaselineDesignInput extends DesignBase {
   questions: OppQuestion[];
   rivals: OppFirm[];
   asks: number;
-  engines: string;
+  engines?: string;
   /** Answers received across the locked questions, and how many named the business. */
   answers: number;
   namedYou: number;
+  /** Directories and review sites across the locked questions, ranked. */
+  directories: OppDirectory[];
 }
 
 export function renderBaselineReport(d0: BaselineDesignInput): string {
   const d = { ...d0, businessName: shortName(d0.businessName) };
+  const engines = (d0 as { engines?: string }).engines ?? ENGINES_TEXT;
   const n = d.questions.length;
   const now = d.questions.filter((q) => q.tier === 'now').length;
   const poss = d.questions.filter((q) => q.tier === 'possible').length;
@@ -323,31 +356,56 @@ export function renderBaselineReport(d0: BaselineDesignInput): string {
     `<tr><td class="nowrap dash">${i + 1}</td><td><b>${esc(q.question)}</b>` +
     `<div style="color:var(--muted);font-size:13.5px;margin-top:3px">${esc(q.reasons[0] ?? '')}</div></td>` +
     `<td class="nowrap">ChatGPT ${q.chatgptNamed}/${q.chatgptAnswers}<br>Gemini ${q.geminiNamed}/${q.geminiAnswers}</td>` +
-    `<td><span class="chip ${q.tier}">${TIER_LABEL[q.tier]}</span></td>` +
+    `<td><span class="chip ${q.tier}">${tierLabel(q)}</span></td>` +
     `<td class="dash nowrap">&mdash;</td></tr>`).join('');
   const body =
     topBar(d, 'WhatsApp Paul', 'a question about my baseline report.') +
     `<section class="hero"><div class="eyebrow">AI visibility baseline &middot; ${esc(d.dateLabel)}</div>` +
     `<h1>${esc(d.businessName)}: where you start, and where we aim first</h1>` +
     `<p class="lede">${n} questions, locked. We measure them now, work on them, then ask the same ${n} again after ${REMEASURE_WEEKS_STANDARD} weeks.</p>` +
-    `<div class="tiles"><div class="tile now"><div class="n">${now}</div><div class="l">Winnable now</div></div>` +
+    `<div class="tiles"><div class="tile now"><div class="n">${now}</div><div class="l">Winnable</div></div>` +
     `<div class="tile possible"><div class="n">${poss}</div><div class="l">Possible</div></div>` +
     `<div class="tile hard"><div class="n">${hard}</div><div class="l">Hard</div></div></div>` +
-    `<p class="sub" style="margin-top:12px;font-size:13.5px">Winnable means AI has no settled favourite on that question today. It is not a promise that AI will name you.</p></section>` +
+    `<p class="sub" style="margin-top:12px;font-size:13.5px">The evidence is shown beside each question. Winnable is not a promise that AI will name you.</p>` +
+    `<div class="section" style="margin-top:20px"><h2 style="font-size:20px">How we sort the questions</h2>${ruleBox()}</div></section>` +
     (d.rivals.length
-      ? `<section class="section"><h2>Who AI names instead of you today</h2><p class="sub">Across these ${n} questions, ${d.engines}, ${d.asks} asks each.</p>${rivalBars(d.rivals, d.answers)}</section>`
+      ? `<section class="section"><h2>Who AI names instead of you today</h2><p class="sub">Across these ${n} questions, ${engines}, ${d.asks} asks each.</p>${rivalBars(d.rivals, d.answers)}</section>`
       : '') +
     `<section class="section"><h2>Your ${n} questions</h2>` +
     `<p class="sub">Where you stand now: AI named ${esc(d.businessName)} in ${d.namedYou} of ${d.answers} answers (${namedQs} of ${n} questions). The last column is filled in after ${REMEASURE_WEEKS_STANDARD} weeks.</p>` +
     `<div class="card" style="padding:6px 10px"><table class="bl"><thead><tr><th>#</th><th>Question and why</th><th>Named you now</th><th>Opportunity</th><th>After ${REMEASURE_WEEKS_STANDARD} wks</th></tr></thead><tbody>${rows}</tbody></table></div></section>` +
     `<section class="section"><h2>The plan</h2><div class="steps">` +
-    `<div class="step"><span class="no">STEP 1</span><h3>Lock the baseline</h3><p>These ${n} questions, asked of ${esc(d.engines)} ${d.asks} times each. They do not change.</p></div>` +
+    `<div class="step"><span class="no">STEP 1</span><h3>Lock the baseline</h3><p>These ${n} questions, asked of ${esc(engines)} ${d.asks} times each. They do not change.</p></div>` +
     `<div class="step"><span class="no">STEP 2</span><h3>Work on the pages</h3><p>The pages and fixes each question needs, starting with the Winnable ones: a page for the service in your area, backed by reviews.</p></div>` +
     `<div class="step"><span class="no">STEP 3</span><h3>Measure again</h3><p>After ${REMEASURE_WEEKS_STANDARD} weeks we ask the same questions of the same engines and show the two side by side.</p></div></div></section>` +
     `<section class="section"><h2>${REMEASURE_WEEKS_STANDARD}-week comparison</h2><div class="cmp">` +
     `<div class="slot"><b>Baseline</b><div class="big">${d.namedYou} of ${d.answers}</div>answers named ${esc(d.businessName)}</div>` +
     `<div class="slot"><b>After ${REMEASURE_WEEKS_STANDARD} weeks</b><div class="big dash">Not measured yet</div>Same ${n} questions, same engines, same number of asks.</div></div></section>` +
+    listedBox(d.directories, d.answers) +
     ctaBand(d, 'Questions?', 'Message Paul and we will go through any question on this page.', 'WhatsApp Paul', 'a question about my baseline report.', 'Baseline report question') +
     footer(d, [FINDABLE_GUARANTEE]);
   return shell(`${d.businessName} - AI visibility baseline`, body);
+}
+
+/* ═══ Which design a stored audit gets ═══════════════════════════════════════════════════ */
+
+export type ReportDesignKind = 'opportunity' | 'baseline' | 'hook';
+
+/** Pure choice, so the edge function and the tests share one rule. null = keep the classic report.
+ *  A report that is still measuring, or whose business name cannot be judged, always keeps the classic page
+ *  (those two states have their own careful wording there). The day-28 re-measure keeps it too. */
+export function chooseReportDesign(o: {
+  auditPurpose?: string | null;
+  paidKind?: 'baseline' | 'remeasure' | null;
+  hookComplete: boolean;
+  measuring: boolean;
+  nameNotJudgeable?: boolean;
+  classic?: boolean;
+}): ReportDesignKind | null {
+  if (o.classic || o.measuring || o.nameNotJudgeable) return null;
+  if (o.paidKind === 'remeasure') return null;
+  if (o.paidKind === 'baseline') return 'baseline';
+  if (String(o.auditPurpose ?? '').trim().toLowerCase() === 'discovery') return 'opportunity';
+  if (o.hookComplete) return 'hook';
+  return null;
 }

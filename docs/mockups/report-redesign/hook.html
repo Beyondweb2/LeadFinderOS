@@ -63,6 +63,12 @@ details.more[open]>summary:after{content:"\2212"}
 .cta p{color:#d7dae0;margin:6px 0 16px;max-width:60ch}.cta .row{display:flex;flex-wrap:wrap;gap:10px}
 .foot{margin-top:30px;color:var(--faint);font-size:13px;border-top:1px solid var(--line);padding-top:16px}
 .foot p{margin:4px 0}
+.rule{margin-top:14px;border:1px solid var(--line);border-radius:14px;background:var(--card);padding:6px 16px}
+.rule div{display:grid;grid-template-columns:130px minmax(0,1fr);gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14.5px}
+.rule div:first-child{border-top:0}.rule b{font-weight:700}
+.rule .e{color:var(--green)}.rule .n{color:var(--green)}.rule .p{color:var(--amber)}.rule .h{color:var(--muted)}
+.dl{display:grid;gap:8px}.dl .it{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.dl .it small{display:block;color:var(--muted);font-size:13px}
 .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.step{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
 .step .no{color:var(--y);font-weight:800;font-size:13px;letter-spacing:.1em}.step h3{margin:6px 0 6px}.step p{margin:0;color:var(--muted);font-size:14.5px}
 .cmp{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -88,6 +94,7 @@ table.bl td.nowrap{white-space:nowrap}
   .q-head{grid-template-columns:34px minmax(0,1fr)}.q-head .chip{grid-column:2;justify-self:start}
   .q .why,.q .who,.q .help{margin-left:0}
   .steps,.cmp{grid-template-columns:1fr}
+  .rule div{grid-template-columns:1fr;gap:2px}
   .hq .eng{grid-template-columns:1fr;gap:2px}
   table.bl thead{display:none}table.bl,table.bl tbody,table.bl tr,table.bl td{display:block;width:100%}
   table.bl tr{border-bottom:1px solid var(--line);padding:10px 0}table.bl td{border:0;padding:3px 0}

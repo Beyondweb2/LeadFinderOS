@@ -618,3 +618,17 @@ competitors named beside the business), both through the same run-level gate; th
 list (`sameBusiness`). Overview `names` likewise. Order = first mention in the answer text (`quickReplyOrder`), stored
 order for names the text never writes; the business first when the verdict named them but the text never spells them.
 Scores are untouched. Only `render-audit-report` needs a redeploy for the public page.
+
+## Redesigned client reports (2026-11-11)
+
+Three pages in the Findable black-and-yellow design, phone-first: **opportunity** (Discovery audits), **baseline** (paid baseline) and **hook** (a complete six-answer hook).
+Code: `src/lib/reportDesign.ts` (renderers + `chooseReportDesign`), `src/lib/reportOpportunity.ts` (the counts and the rule), wired at the end of `render-audit-report`.
+Examples and screenshots: `docs/mockups/report-redesign/`. Tests: `scripts/report-design.test.ts` (and the new files are in the `client-copy-claims` scan).
+
+- **The rule (Paul, printed on the reports in `RULE_WORDS`):** Winnable (easy) = no business named at all, and a service they offer in their area. Winnable = no single business named in MOST answers (more than half) AND a service they offer in their area. Possible = fragmented, but outside their area or a service not on their website. Hard = one business named in most answers. Fragmented alone is never enough.
+- **"Their area":** where the audit's town, their website's area pages and (for a Discovery or a baseline cut from one) the questions' own towns put them. A Discovery asks about the business's own patch, so its questions pass this test by construction; the test bites for a question added from outside.
+- **"A service they offer":** the question's topic must appear on the website check's services/pages (`TOPICS` in `reportOpportunity.ts`). No stored website check = the test is skipped, never guessed.
+- **Directories** (Checkatrade, Yell, TrustATrader, MyBuilder, Bark, Rated People, Trustpilot, Which? Trusted Traders, FreeIndex, Google reviews, Gas Safe Register, NICEIC, … plus hosts the shared aggregator list knows) are counted per question and overall from answer text and cited sources, shown as "Get listed here first", and are never competitors.
+- **Old classifier:** `opportunityFor` (Discovery/paid-baseline screens) now uses this rule. `classifyWinnability` still feeds the per-run page-plan rows (`page-generator`, `action-plan`, `market-view`), which write `client_pages`; changing it is a separate decision.
+- `?design=classic` shows the previous report; measuring, name-unjudgeable and the day-28 re-measure always keep it. A render error falls back to it.
+- **London Domestic Maintenance** (discovery `w9ebxk`): 25 Winnable, 4 Possible, 11 Hard under this rule (the 16/16/8 shown at design approval used a stricter earlier rule).

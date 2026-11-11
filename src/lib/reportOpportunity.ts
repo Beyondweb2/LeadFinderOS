@@ -4,16 +4,22 @@
    PRESENTATION INPUT ONLY (2026-11-11, report redesign). It reads answers already collected;
    it never calls a provider and never changes a score, a stored row or the audit method.
 
-   ⛔ NOT A WINNABILITY SCORE. docs/architecture-rules.md bans one (it flips between identical
-   inputs). This is a fixed, written rule over COUNTS across every stored answer, so the same data
-   always gives the same page:
-     • Hard      — one business is named in 5+ of 6 answers, or it is not a service the site shows.
-     • Winnable  — no business is named in more than 2 answers, or 3 with 8+ different businesses
-                   named, and it is not a "best" / emergency question (those turn on reviews and
-                   24/7 cover, which a page alone does not give).
-     • Possible  — everything else.
-   "Winnable now" means AI has no settled favourite TODAY. It is not a promise that AI will name
-   anyone (Master Standard: no outcome promises).
+   THE RULE (Paul, 2026-11-11 — shown on every report in these exact words, RULE_WORDS below):
+     • Winnable (easy) — no business is named at all, and it is a service they offer in their area.
+     • Winnable        — no single business is named in MOST answers (more than half), AND it is a
+                         service they offer in their area.
+     • Possible        — answers are fragmented (no business in most answers) but the question is
+                         outside their area, or about a service not on their website.
+     • Hard            — one business is named in most answers (more than half).
+   ⛔ FRAGMENTED ALONE IS NEVER ENOUGH FOR WINNABLE: it also has to be a service they offer, in their area.
+
+   ⛔ NOT A SCORE. docs/architecture-rules.md bans winnability SCORING (it flips between identical inputs).
+   This is a fixed, written rule over COUNTS across every stored answer, so the same data always gives the
+   same page. "Winnable" is allowed only with the evidence shown beside it and the "not a promise" line;
+   it never promises a ranking, a recommendation or a citation.
+
+   DIRECTORIES (Paul, 2026-11-11): directories and review sites are counted from the stored answers —
+   named in the text, or cited as a source — per question and overall. They are NEVER competitors.
 
    Pure: no DOM, no Deno-only imports. Imported by the render-audit-report edge function, so
    relative imports carry an explicit .ts.
@@ -22,14 +28,25 @@
 export type OppTier = 'now' | 'possible' | 'hard';
 
 export interface OppFirm { name: string; count: number }
+export interface OppDirectory { name: string; /** answers that name or cite it */ answers: number; /** questions it appears in */ questions: number }
+
+/** The four lines every report prints, in Paul's words. */
+export const RULE_WORDS: { key: string; label: string; text: string }[] = [
+  { key: 'easy', label: 'Winnable (easy)', text: 'No business is named at all, and it is a service you offer in your area.' },
+  { key: 'now', label: 'Winnable', text: 'No single business is named in most answers, and it is a service you offer in your area.' },
+  { key: 'possible', label: 'Possible', text: 'Answers are fragmented, but the question is outside your area or about a service that is not on your website.' },
+  { key: 'hard', label: 'Hard', text: 'One business is named in most answers.' },
+];
 
 /** The shape of one stored answer cell this module reads (a subset of auditReport's EngineCell). */
-interface Cell { self_named?: boolean; named?: boolean; competitors?: string[]; citations?: { url?: string }[] }
+interface Cell { self_named?: boolean; named?: boolean; competitors?: string[]; citations?: { url?: string }[]; answer_text?: string }
 export interface OppRow { question: string; result: Record<string, unknown> | null }
 
 export interface OppQuestion {
   question: string;
   tier: OppTier;
+  /** Winnable because no business was named at all (shown "Winnable (easy)"). */
+  easy: boolean;
   /** Answers received from ChatGPT + Gemini (6 for 3 asks). */
   answers: number;
   /** Answers that named no business at all. */
@@ -47,7 +64,8 @@ export interface OppQuestion {
   reasons: string[];
   help: string;
   intent: 'best' | 'emergency' | null;
-  directories: string[];
+  /** Directories and review sites this question's answers name or cite, most first. */
+  dirs: { name: string; answers: number }[];
 }
 
 export interface OppContext {
@@ -56,9 +74,20 @@ export interface OppContext {
   services: { name: string; dedicated: boolean }[];
   /** Page paths the website check read (used only to see which topics have a page). */
   pageUrls?: string[];
-  /** Everything the site says about what it does, lower-cased and joined (business type + name + services). */
+  /** Everything the site says about what it does, lower-cased and joined (business type + name + services).
+   *  ABSENT = the site was not read, so nothing is judged "not a service on your site". */
   siteText?: string;
+  /** The places they work: where the site, the lead and the discovery put them. ABSENT = every question's
+   *  area counts as theirs (a discovery asks about the business's own patch). */
+  areas?: string[];
+  /** The report's own "was the business named in this answer" ruler (namedSignal.cellNamed). Default: the stored flags. */
+  isNamed?: (cell: Cell) => boolean;
+  /** Drops a name that is page furniture, not a business (auditReport.isRealCompetitor). Default: keep all. */
+  isRival?: (name: string) => boolean;
+  /** Extra directory hosts the caller knows (the shared aggregator list), beyond the built-in list. */
+  isDirectoryHost?: (host: string) => boolean;
 }
+const namedOf = (ctx: Pick<OppContext, 'isNamed'>) => (c: Cell): boolean => (ctx.isNamed ? ctx.isNamed(c) : !!(c.self_named || c.named));
 
 const ENGINES = ['chatgpt', 'gemini'] as const;
 
@@ -66,14 +95,58 @@ const ENGINES = ['chatgpt', 'gemini'] as const;
 const FILLER = /\b(ltd|limited|london|services|service|the|and|&)\b/g;
 export const firmKey = (s: string): string => s.toLowerCase().replace(FILLER, '').replace(/[^a-z0-9]/g, '');
 
-const DIRECTORIES: [RegExp, string][] = [
-  [/checkatrade\.com/, 'Checkatrade'], [/trustatrader\.com/, 'TrustATrader'], [/yell\.com/, 'Yell'],
-  [/trustedtraders\.which\.co\.uk|which\.co\.uk/, 'Which? Trusted Traders'], [/gov\.uk/, 'gov.uk'],
-  [/gassaferegister\.co\.uk/, 'Gas Safe Register'], [/mybuilder\.com/, 'MyBuilder'], [/bark\.com/, 'Bark'],
-  [/nrla\.org\.uk/, 'NRLA'], [/shelter\.org/, 'Shelter'], [/niceic\.com/, 'NICEIC'], [/hse\.gov\.uk/, 'HSE'],
+/* ── Directories and review sites ───────────────────────────────────────────────────────────
+   A directory is where a customer FINDS or CHECKS a business, not a business competing for the job.
+   Matched by the host of a cited source, or by name in the answer text. gov.uk / HSE guidance pages
+   are not listings, so they are not here. */
+const DIRECTORIES: { name: string; host: RegExp; text?: RegExp }[] = [
+  { name: 'Checkatrade', host: /(^|\.)checkatrade\.com$/, text: /\bcheckatrade\b/i },
+  { name: 'TrustATrader', host: /(^|\.)trustatrader\.com$/, text: /\btrust ?a ?trader\b/i },
+  { name: 'Yell', host: /(^|\.)yell\.com$/, text: /\byell\.com\b|\bYell\b(?= (listing|profile|directory)| \()/ },
+  { name: 'MyBuilder', host: /(^|\.)mybuilder\.com$/, text: /\bmybuilder\b/i },
+  { name: 'Bark', host: /(^|\.)bark\.com$/, text: /\bbark\.com\b/i },
+  { name: 'Rated People', host: /(^|\.)ratedpeople\.com$/, text: /\brated ?people\b/i },
+  { name: 'Trustpilot', host: /(^|\.)trustpilot\.(com|co\.uk)$/, text: /\btrustpilot\b/i },
+  { name: 'Which? Trusted Traders', host: /(^|\.)trustedtraders\.which\.co\.uk$/, text: /\bwhich\??\s+trusted traders\b/i },
+  { name: 'FreeIndex', host: /(^|\.)freeindex\.co\.uk$/, text: /\bfreeindex\b/i },
+  { name: 'TrustMark', host: /(^|\.)trustmark\.org\.uk$/, text: /\btrustmark\b/i },
+  { name: 'Gas Safe Register', host: /(^|\.)gassaferegister\.co\.uk$/, text: /\bgas safe register\b/i },
+  { name: 'NICEIC', host: /(^|\.)niceic\.com$/, text: /\bniceic\b/i },
+  { name: 'Google reviews', host: /(^|\.)(maps\.google\.[a-z.]+|g\.page|business\.google\.com)$|^google\.[a-z.]+$/, text: /\bgoogle (reviews?|maps|business profile)\b/i },
+  { name: 'Thomson Local', host: /(^|\.)thomsonlocal\.com$/, text: /\bthomson local\b/i },
+  { name: 'Cylex', host: /(^|\.)cylex(-uk)?\.co\.uk$/ },
+  { name: 'Scoot', host: /(^|\.)scoot\.co\.uk$/ },
+  { name: 'Hotfrog', host: /(^|\.)hotfrog\.(co\.uk|com)$/ },
+  { name: 'Nextdoor', host: /(^|\.)nextdoor\.(co\.uk|com)$/ },
+  { name: 'Houzz', host: /(^|\.)houzz\.(co\.uk|com)$/ },
+  { name: 'Trade Facilities / Find a Tradesman', host: /(^|\.)(findatradesman\.co\.uk|tradesman\.com)$/ },
 ];
+/** Names that are a directory, not a business — dropped from the competitor lists. */
+const DIRECTORY_NAME = /^(checkatrade|trust ?a ?trader|yell|mybuilder|bark|rated ?people|trustpilot|which\??( trusted traders)?|freeindex|trustmark|gas safe( register)?|niceic|google( reviews| maps| business profile)?|thomson local|cylex|scoot|hotfrog|nextdoor|houzz|facebook|instagram|reddit|quora|trustedtraders)\b/i;
+export const isDirectoryName = (name: string): boolean => DIRECTORY_NAME.test(name.trim());
 
-/** Topic → (what the question has to say, what the site has to show, how the client's service is named). */
+function hostOf(u: string | undefined): string {
+  try { return new URL(String(u)).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; }
+}
+const prettyHost = (h: string): string => h.replace(/^(www|m)\./, '');
+
+/** Which directories ONE answer names (in its text) or cites (as a source). Each counts once per answer. */
+export function directoriesInAnswer(cell: Cell, ctx: Pick<OppContext, 'isDirectoryHost'> = {}): string[] {
+  const found = new Set<string>();
+  const text = String(cell.answer_text ?? '');
+  const hosts = (cell.citations ?? []).map((c) => hostOf(c.url)).filter(Boolean);
+  for (const d of DIRECTORIES) {
+    if (hosts.some((h) => d.host.test(h)) || (d.text && d.text.test(text))) found.add(d.name);
+  }
+  // Others found: a cited host the shared directory list (or a directory-shaped name) recognises.
+  for (const h of hosts) {
+    if (DIRECTORIES.some((d) => d.host.test(h))) continue;
+    if (/\.gov\.uk$/.test(h)) continue;
+    if (ctx.isDirectoryHost?.(h) || /(^|[.-])(directory|listings?|reviews?)([.-]|$)/.test(h)) found.add(prettyHost(h));
+  }
+  return [...found];
+}
+
 const TOPICS: { test: RegExp; needs: RegExp; label: string; pageKey: RegExp; confirm?: RegExp; confirmNote?: string }[] = [
   { test: /\beicr\b/, needs: /eicr|electrical/, label: 'EICR certificates', pageKey: /eicr/ },
   { test: /consumer unit/, needs: /electric/, label: 'consumer unit replacement', pageKey: /consumer|electric/ },
@@ -104,6 +177,14 @@ export function areaOf(question: string): string | null {
 /** A named patch (a borough or neighbourhood) rather than the whole of London. */
 export const isLocalArea = (area: string | null): boolean => !!area && !/^(london|east london)$/i.test(area);
 
+/** Is this question's area one of the places they work? A question with no area, or no known work areas, counts as theirs. */
+export function inTheirArea(area: string | null, areas: string[] | undefined): boolean {
+  if (!area || !areas) return true;
+  const a = area.toLowerCase();
+  const mine = areas.map((x) => x.toLowerCase());
+  return mine.some((m) => m === a || m.includes(a) || a.includes(m));
+}
+
 function intentOf(question: string): OppQuestion['intent'] {
   const q = question.toLowerCase();
   if (/\bbest\b/.test(q)) return 'best';
@@ -111,140 +192,166 @@ function intentOf(question: string): OppQuestion['intent'] {
   return null;
 }
 
-function domainOf(u: string | undefined): string {
-  try { return new URL(String(u)).hostname.replace(/^www\./, ''); } catch { return ''; }
-}
-
 /** One question's counts, tier and reasons. `rows` are every queue row (any run) for it. */
 export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): OppQuestion {
   const own = rows.filter((r) => r.question.trim() === question.trim());
   const counts = new Map<string, number>();
-  const display = new Map<string, string>(); const variants = new Map<string, Map<string, number>>();
-  const cites = new Map<string, number>();
+  const variants = new Map<string, Map<string, number>>();
+  const dirCounts = new Map<string, number>();
   const per = { chatgpt: [0, 0], gemini: [0, 0] } as Record<(typeof ENGINES)[number], [number, number]>;
+  const cites = new Set<string>();
   let answers = 0, empty = 0, namedYou = 0;
   for (const row of own) {
     for (const e of ENGINES) {
       const cell = (row.result ?? {})[e] as Cell | undefined;
       if (!cell || typeof cell !== 'object') continue;
       answers++; per[e][1]++;
-      if (cell.self_named || cell.named) { namedYou++; per[e][0]++; }
-      const firms = (cell.competitors ?? []).filter((c) => typeof c === 'string' && c.trim());
+      if (namedOf(ctx)(cell)) { namedYou++; per[e][0]++; }
+      const firms = rivalsOf(cell, ctx);
       if (!firms.length) empty++;
       for (const k of new Set(firms.map(firmKey))) if (k) counts.set(k, (counts.get(k) ?? 0) + 1);
       for (const f of firms) { const k = firmKey(f); if (k) { const m = variants.get(k) ?? new Map<string, number>(); m.set(f.trim(), (m.get(f.trim()) ?? 0) + 1); variants.set(k, m); } }
-      for (const c of cell.citations ?? []) { const d = domainOf(c.url); if (d) cites.set(d, (cites.get(d) ?? 0) + 1); }
+      for (const d of directoriesInAnswer(cell, ctx)) dirCounts.set(d, (dirCounts.get(d) ?? 0) + 1);
+      for (const c of cell.citations ?? []) { const h = hostOf(c.url); if (h) cites.add(h); }
     }
   }
+  const display = new Map<string, string>();
   for (const [k, m] of variants) display.set(k, [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].length - b[0].length)[0][0]);
   const firms: OppFirm[] = [...counts.entries()].map(([k, count]) => ({ name: display.get(k) ?? k, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   const top = firms[0]?.count ?? 0;
   const distinct = firms.length;
   const area = areaOf(question);
   const topic = topicFor(question);
+  const siteKnown = ctx.siteText != null;
   const site = (ctx.siteText ?? '').toLowerCase();
-  const offered = !!topic && topic.needs.test(site);
-  const needsConfirm = !!(offered && topic?.confirm && !topic.confirm.test(site));
+  const offered = siteKnown ? (!!topic && topic.needs.test(site)) : true;
+  const needsConfirm = !!(siteKnown && offered && topic?.confirm && !topic.confirm.test(site));
+  const serviceOnSite = offered && !needsConfirm;
+  const areaOk = inTheirArea(area, ctx.areas);
   const intent = intentOf(question);
   const pages = (ctx.pageUrls ?? []).join(' ').toLowerCase();
   const hasPage = topic ? (ctx.services.some((s) => topic.pageKey.test(s.name.toLowerCase()) && s.dedicated) || (topic.label === 'EICR certificates' && /eicr/.test(pages))) : null;
 
-  const half = Math.ceil(answers / 2);
+  /* THE RULE, in order. "Most" = more than half the answers. */
+  const mostCut = answers / 2;
+  const dominant = answers > 0 && top > mostCut;
   let tier: OppTier;
-  if (!offered || top >= Math.max(5, answers - 1)) tier = 'hard';
-  else if (!intent && (top <= 2 || (top === 3 && distinct >= 8))) tier = 'now';
-  else tier = 'possible';
-  if (needsConfirm && tier === 'now') tier = 'possible';
+  let easy = false;
   if (answers === 0) tier = 'possible';
+  else if (dominant) tier = 'hard';
+  else if (serviceOnSite && areaOk) { tier = 'now'; easy = top === 0; }
+  else tier = 'possible';
 
-  const directoriesSeen = [...new Set(
-    [...cites.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6)
-      .map(([d]) => DIRECTORIES.find(([re]) => re.test(d))?.[1]).filter((x): x is string => !!x),
-  )];
-
-  const areaMixup = area === 'Stratford' && (firms.some((f) => /upon.?avon/i.test(f.name)) || [...cites.keys()].some((d) => /avon/i.test(d)));
+  const areaMixup = area === 'Stratford' && (firms.some((f) => /upon.?avon/i.test(f.name)) || [...cites].some((d) => /avon/i.test(d)));
   const reasons: string[] = [];
   if (areaMixup) reasons.push('AI is answering for Stratford-upon-Avon, not Stratford E15, so nobody in your patch is being named.');
-  if (needsConfirm && topic?.confirmNote) reasons.push(topic.confirmNote);
-  if (!offered) reasons.push('Not a service we found on your website.');
-  else if (top >= Math.max(5, answers - 1)) reasons.push(`${firms[0].name} is named in ${top} of ${answers} answers.`);
-  else {
-    if (empty >= half) reasons.push(`AI named no business in ${empty} of ${answers} answers.`);
-    if (areaMixup) { /* already said */ }
-    else if (distinct >= 8 && top <= 3) reasons.push(`${distinct} different businesses named; none in more than ${top} of ${answers} answers.`);
-    else if (distinct >= 8) reasons.push(`${distinct} different businesses named, but ${firms[0].name} appears in ${top} of ${answers}.`);
-    else if (distinct >= 3 && empty < half && top <= 3) reasons.push(`${distinct} businesses named; the most-named appears in ${top} of ${answers} answers.`);
-    if (top === 4) reasons.push(`One business leads: ${firms[0].name} in 4 of ${answers} answers.`);
-    if (directoriesSeen.length >= 2) reasons.push(`Answers lean on directories and guidance pages (${directoriesSeen.slice(0, 3).join(', ')}).`);
-    if (intent === 'best') reasons.push('A "best" question: reviews count most here.');
-    if (intent === 'emergency') reasons.push('An emergency question: 24/7 cover and reviews count here.');
+  if (dominant) reasons.push(`${firms[0].name} is named in ${top} of ${answers} answers, which is most of them.`);
+  else if (tier === 'possible' && answers > 0) {
+    if (needsConfirm && topic?.confirmNote) reasons.push(topic.confirmNote);
+    else if (!serviceOnSite) reasons.push('Not a service we found on your website.');
+    if (!areaOk) reasons.push(`${area} is outside the areas your website covers.`);
   }
+  if (!dominant && answers > 0) {
+    if (top === 0) reasons.push(`AI named no business in any of the ${answers} answers.`);
+    else {
+      if (empty * 2 >= answers && empty > 0) reasons.push(`AI named no business in ${empty} of ${answers} answers.`);
+      if (!areaMixup) {
+        if (distinct >= 8) reasons.push(`${distinct} different businesses named; none in more than ${top} of ${answers} answers.`);
+        else if (distinct >= 2 && empty * 2 < answers) reasons.push(`${distinct} businesses named; the most-named appears in ${top} of ${answers} answers.`);
+      }
+    }
+  }
+  const dirs = [...dirCounts.entries()].map(([name, n]) => ({ name, answers: n })).sort((a, b) => b.answers - a.answers || a.name.localeCompare(b.name));
+  if (dirs.length >= 2) reasons.push(`Answers lean on directories and review sites (${dirs.slice(0, 3).map((d) => d.name).join(', ')}).`);
+  if (intent === 'best') reasons.push('A "best" question: reviews count most here.');
+  if (intent === 'emergency') reasons.push('An emergency question: 24/7 cover and reviews count here.');
   if (!reasons.length) reasons.push(`${distinct} businesses named across ${answers} answers.`);
 
   const label = topic?.label ?? null;
   let help = '';
   if (offered && label) {
-    const where = area ? ` for ${area}` : ' for London';
     const art = /^[aeiou]|^eicr/i.test(label) ? 'An' : 'A';
+    const where = area ? ` for ${area}` : ' for London';
     help = `${hasPage ? art : 'A new'} ${label} page${where}${hasPage && isLocalArea(area) ? ' (your existing pages cover other areas)' : ''}, plus Google reviews.`;
     if (intent === 'emergency') help = `${art} ${label} page${where} that shows call-out cover, plus Google reviews.`;
   }
 
   return {
-    question, tier, answers, empty, distinct, top, firms: firms.slice(0, 5), namedYou,
+    question, tier, easy, answers, empty, distinct, top, firms: firms.slice(0, 5), namedYou,
     chatgptNamed: per.chatgpt[0], chatgptAnswers: per.chatgpt[1], geminiNamed: per.gemini[0], geminiAnswers: per.gemini[1],
-    area, service: offered ? label : null, hasPage, reasons, help, intent, directories: directoriesSeen,
+    area, service: offered ? label : null, hasPage, reasons, help, intent, dirs,
   };
+}
+
+/** Competitor names from one answer: real businesses only. A directory or review site is NEVER a competitor. */
+function rivalsOf(cell: Cell, ctx: Pick<OppContext, 'isRival'>): string[] {
+  return (cell.competitors ?? []).filter((c) => typeof c === 'string' && c.trim() && !isDirectoryName(c) && (!ctx.isRival || ctx.isRival(c)));
 }
 
 export interface OppSummary {
   questions: OppQuestion[];
   now: number; possible: number; hard: number;
+  /** Of the Winnable questions, how many are "easy" (no business named at all). */
+  easy: number;
   answers: number;
   /** Audit-wide: how many answers named each business, most first. */
   rivals: OppFirm[];
+  /** Directories and review sites, ranked by how many answers cite or name them. */
+  directories: OppDirectory[];
   /** The best questions to start with, ranked (Winnable first; their own patch and an existing page count in favour). */
   best: OppQuestion[];
+}
+
+/** Directories across a set of questions: answers that name or cite each, and how many questions it shows up in. */
+export function directoriesAcross(qs: OppQuestion[]): OppDirectory[] {
+  const m = new Map<string, { answers: number; questions: number }>();
+  for (const q of qs) for (const d of q.dirs) {
+    const cur = m.get(d.name) ?? { answers: 0, questions: 0 };
+    cur.answers += d.answers; cur.questions += 1; m.set(d.name, cur);
+  }
+  return [...m.entries()].map(([name, v]) => ({ name, ...v })).sort((a, b) => b.answers - a.answers || b.questions - a.questions || a.name.localeCompare(b.name));
 }
 
 /** Ranking for "the best 20": tier first, then patch / service-page / how open the answers are. Deterministic. */
 export function bestScore(q: OppQuestion): number {
   if (q.tier === 'hard') return -1000;
   return (q.tier === 'now' ? 100 : 60)
+    + (q.easy ? 10 : 0)
     + (isLocalArea(q.area) ? 15 : 0)
     + (q.hasPage ? 8 : 0)
     + Math.min(q.empty, 4) * 3
-    - q.top * 4
-    - (q.intent ? 12 : 0);
+    - q.top * 4;
 }
 
 export function summariseOpportunity(rows: OppRow[], ctx: OppContext, bestCount = 20): OppSummary {
   const qs = [...new Set(rows.map((r) => r.question.trim()))];
   const questions = qs.map((q) => oppQuestion(q, rows, ctx)).sort((a, b) => a.question.localeCompare(b.question));
-  const counts = new Map<string, number>(); const display = new Map<string, string>(); const variants = new Map<string, Map<string, number>>();
+  const counts = new Map<string, number>(); const variants = new Map<string, Map<string, number>>();
   let answers = 0;
   for (const row of rows) for (const e of ENGINES) {
     const cell = (row.result ?? {})[e] as Cell | undefined;
     if (!cell || typeof cell !== 'object') continue;
     answers++;
-    const firms = (cell.competitors ?? []).filter((c) => typeof c === 'string' && c.trim());
+    const firms = rivalsOf(cell, ctx);
     for (const k of new Set(firms.map(firmKey))) if (k) counts.set(k, (counts.get(k) ?? 0) + 1);
     for (const f of firms) { const k = firmKey(f); if (k) { const m = variants.get(k) ?? new Map<string, number>(); m.set(f.trim(), (m.get(f.trim()) ?? 0) + 1); variants.set(k, m); } }
   }
+  const display = new Map<string, string>();
   for (const [k, m] of variants) display.set(k, [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].length - b[0].length)[0][0]);
   const rivals = [...counts.entries()].map(([k, count]) => ({ name: display.get(k) ?? k, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   const best = questions.filter((q) => q.tier !== 'hard').sort((a, b) => bestScore(b) - bestScore(a) || a.question.localeCompare(b.question)).slice(0, bestCount);
   return {
-    questions, answers, rivals, best,
+    questions, answers, rivals, best, directories: directoriesAcross(questions),
     now: questions.filter((q) => q.tier === 'now').length,
     possible: questions.filter((q) => q.tier === 'possible').length,
     hard: questions.filter((q) => q.tier === 'hard').length,
+    easy: questions.filter((q) => q.easy).length,
   };
 }
 
 /** The hook report's view of a few questions: ONE answer per engine (the first stored row for each question),
  *  who each named, and the businesses named across them. Pure; counts only. */
-export function hookFromRows(rows: OppRow[], questions: string[]): { questions: { question: string; answers: { engine: string; namedYou: boolean; rivals: string[] }[] }[]; rivals: OppFirm[] } {
+export function hookFromRows(rows: OppRow[], questions: string[], ctx: Pick<OppContext, 'isNamed' | 'isRival'> = {}): { questions: { question: string; answers: { engine: string; namedYou: boolean; rivals: string[] }[] }[]; rivals: OppFirm[] } {
   const label: Record<string, string> = { chatgpt: 'ChatGPT', gemini: 'Gemini' };
   const counts = new Map<string, number>(); const display = new Map<string, string>();
   const out = questions.map((question) => {
@@ -252,13 +359,28 @@ export function hookFromRows(rows: OppRow[], questions: string[]): { questions: 
     const answers = ENGINES.flatMap((e) => {
       const cell = (row?.result ?? {})[e] as Cell | undefined;
       if (!cell || typeof cell !== 'object') return [];
-      const rivals = (cell.competitors ?? []).filter((c) => typeof c === 'string' && c.trim());
+      const rivals = rivalsOf(cell, ctx);
       for (const k of new Set(rivals.map(firmKey))) if (k) counts.set(k, (counts.get(k) ?? 0) + 1);
       for (const f of rivals) { const k = firmKey(f); if (k && !display.has(k)) display.set(k, f.trim()); }
-      return [{ engine: label[e], namedYou: !!(cell.self_named || cell.named), rivals }];
+      return [{ engine: label[e], namedYou: namedOf(ctx)(cell), rivals }];
     });
     return { question, answers };
   });
   const rivals = [...counts.entries()].map(([k, count]) => ({ name: display.get(k) ?? k, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   return { questions: out, rivals };
+}
+
+/** Where they work, for the "in their area" test: the audit's own town, the areas their website has pages for
+ *  (…/eicr/camden-town), and — for a Discovery or a baseline cut from one — every area the questions ask about,
+ *  because those questions are generated around the business's own patch. Pure. */
+export function theirAreas(o: { locationText?: string | null; pageUrls?: string[]; questions?: string[]; fromDiscovery?: boolean }): string[] {
+  const out = new Set<string>();
+  const add = (s: string | null | undefined) => { const t = String(s ?? '').trim(); if (t) out.add(t); };
+  add(o.locationText);
+  for (const u of o.pageUrls ?? []) {
+    const m = u.match(/\/(?:certificates|areas?|locations?|services?)\/[^/]+\/([a-z0-9-]+)\/?$/i);
+    if (m) add(m[1].replace(/-/g, ' '));
+  }
+  if (o.fromDiscovery) for (const q of o.questions ?? []) add(areaOf(q));
+  return [...out];
 }
