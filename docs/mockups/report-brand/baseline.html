@@ -1,0 +1,78 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow, noarchive"><title>London Domestic Maintenance - AI search report</title><style>
+:root{color-scheme:dark;--page:#0a0a0c;--card:#17181c;--tile:#1e1f24;--line:#2c2d34;--text:#f7f8fa;--mist:#c3c6cd;--muted:#8f939d;
+  --y:#f5b301;--gold:#ffd13f;--on-gold:#2a2100;--green:#4ade80;--amber:#fbbf24;--rose:#fb7185;
+  --sys:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;background:var(--page)}
+body{margin:0;background:var(--page);color:var(--text);font:16px/1.5 var(--sys);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;
+  background:radial-gradient(52rem 34rem at 88% -8%,rgba(245,179,1,.13),transparent 62%),radial-gradient(40rem 30rem at -8% 30%,rgba(42,82,160,.10),transparent 60%)}
+a{color:inherit}
+h1,h2,h3{font-family:var(--sys);font-weight:900;letter-spacing:-.02em;margin:0;color:#fff}
+p{margin:0}
+.wrap{max-width:720px;margin:0 auto;padding:0 14px 40px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 2px 14px}
+.wm{font-weight:900;font-size:22px;letter-spacing:-.02em;line-height:1}.wm i{font-style:normal;color:var(--y);font-size:1.35em;line-height:0}
+.date{font-size:14px;color:var(--muted)}
+h1{font-size:clamp(28px,7.4vw,46px);line-height:1.06;letter-spacing:-.03em;margin:6px 2px 18px}
+h1 .hl{color:var(--gold)}
+.rp{position:relative;display:grid;gap:22px;padding:18px 16px 20px;border-radius:24px;background:var(--card);border:1px solid var(--line);box-shadow:0 30px 70px -30px #000,0 0 0 1px rgba(255,255,255,.03) inset}
+.rp-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:6px 14px}
+.k{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.k u{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--gold)}
+.rp-head b{display:block;font-weight:900;font-size:20px;letter-spacing:-.02em;color:#fff;text-align:right}
+.rp-head small{display:block;font-size:13px;font-weight:500;color:var(--muted);text-align:right}
+.blk{position:relative;display:grid;gap:10px}
+.mk{flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--gold);color:#111;font-weight:900;font-size:13px;font-style:normal;box-shadow:0 0 0 4px rgba(255,209,63,.22)}
+.mk.c{position:absolute;left:-8px;top:-8px;z-index:2}
+.blk h2{display:flex;align-items:center;gap:12px;font-size:21px;line-height:1.15}
+.blk .line{color:var(--mist);font-size:14.5px;margin:-4px 0 0 38px}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.t{display:grid;gap:3px;align-content:start;padding:12px 11px;border-radius:14px;background:var(--tile);border:1px solid var(--line)}
+.t .k{font-size:10px;letter-spacing:.08em}
+.t b{font-weight:900;font-size:36px;line-height:1.05;letter-spacing:-.03em}
+.t span{font-size:12px;color:var(--mist);line-height:1.3}
+.t.g{background:linear-gradient(160deg,rgba(74,222,128,.14),#17181c 70%);border-color:rgba(74,222,128,.38)}.t.g b{color:var(--green)}.t.g .k u{background:var(--green)}
+.t.a{background:linear-gradient(160deg,rgba(251,191,36,.13),#17181c 70%);border-color:rgba(251,191,36,.34)}.t.a b{color:var(--amber)}.t.a .k u{background:var(--amber)}
+.t.r{background:linear-gradient(160deg,rgba(251,113,133,.13),#17181c 70%);border-color:rgba(251,113,133,.34)}.t.r b{color:var(--rose)}.t.r .k u{background:var(--rose)}
+.pn{display:grid;gap:0;padding:4px 14px;border-radius:14px;background:var(--tile);border:1px solid var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips b{display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:14px;color:var(--on-gold);background:var(--gold);border-radius:999px;padding:7px 8px 7px 13px}
+.chips b i{font-style:normal;font-size:12px;font-weight:800;background:rgba(0,0,0,.16);border-radius:999px;padding:1px 8px}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:12px 0;border-top:1px solid var(--line);font-size:16px}
+.row:first-child{border-top:0}
+.row b{font-weight:800;color:#fff;overflow-wrap:anywhere}.row span{color:var(--mist);white-space:nowrap;font-size:14px}
+.it{padding:13px 0;border-top:1px solid var(--line)}.it:first-child{border-top:0}
+.it h3{font-size:17px;line-height:1.25;font-weight:800;letter-spacing:-.01em}
+.it p{margin-top:3px;color:var(--mist);font-size:14.5px}
+.pill{display:inline-block;margin-top:8px;font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:4px 10px}
+.pill.g{color:var(--green);background:rgba(74,222,128,.14);border:1px solid rgba(74,222,128,.35)}
+.pill.a{color:var(--amber);background:rgba(251,191,36,.13);border:1px solid rgba(251,191,36,.34)}
+.pill.r{color:var(--rose);background:rgba(251,113,133,.13);border:1px solid rgba(251,113,133,.34)}
+.dots{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.dots li{position:relative;padding-left:26px;font-size:16.5px;color:#fff}
+.dots li:before{content:"";position:absolute;left:0;top:.42em;width:12px;height:12px;border-radius:50%;background:var(--gold)}
+.btn{display:flex;align-items:center;justify-content:center;width:100%;min-height:56px;border-radius:999px;background:var(--y);color:#0a0a0c;font-weight:800;font-size:18px;text-decoration:none;padding:14px 20px;text-align:center;box-shadow:0 8px 24px -8px rgba(245,179,1,.55)}
+details{border-radius:14px;background:var(--tile);border:1px solid var(--line)}
+summary{cursor:pointer;list-style:none;padding:15px 16px;font-weight:800;min-height:52px;color:#fff}
+summary::-webkit-details-marker{display:none}
+summary:after{content:"+";float:right;font-size:24px;line-height:1;color:var(--gold)}
+details[open] summary:after{content:"\2212"}
+details .in{padding:0 16px 10px}
+.grp{margin:14px 0 2px;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.hero{display:grid;gap:4px;padding:16px;border-radius:14px;background:linear-gradient(160deg,rgba(251,113,133,.13),#17181c 70%);border:1px solid rgba(251,113,133,.34)}
+.hero b{font-weight:900;font-size:clamp(40px,12vw,56px);line-height:1;letter-spacing:-.03em;color:var(--rose)}
+.hero b em{font-style:normal;color:#fff}
+.hero span{font-size:14px;color:var(--mist)}
+.tag{width:fit-content;margin-top:8px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);background:rgba(255,209,63,.1);border:1px solid rgba(255,209,63,.3);border-radius:999px;padding:4px 10px}
+.foot{display:grid;gap:6px;justify-items:center;margin-top:26px;color:var(--muted);font-size:13px;text-align:center}
+.foot .wm{font-size:18px;color:#fff}
+@media (min-width:760px){
+  .wrap{max-width:780px;padding-bottom:64px}
+  .rp{padding:26px 26px 28px;gap:28px}
+  .t b{font-size:46px}.t span{font-size:13px}.t .k{font-size:11px}
+  .blk h2{font-size:24px}
+}
+@media (max-width:380px){.t b{font-size:30px}.t{padding:10px 9px}}
+@media print{body::before{display:none}}
+</style></head><body><div class="wrap"><header class="top"><div class="wm">Findable<i>.</i></div></header><main class="rp"><div class="rp-head"><span class="k"><u></u>AI search report</span><div><b>London Domestic Maintenance</b><small>11 Nov 2026</small></div></div><section class="blk"><h2><i class="mk">1</i><span>How often AI mentions you today</span></h2><div class="hero"><b><em>0</em> of 120</b><span>AI answers that mentioned you.</span><span class="tag">Checked 11 Nov 2026</span></div></section><section class="blk"><h2><i class="mk">2</i><span>The 20 searches we track</span></h2><p class="line">Today&#39;s result for each.</p><div class="pn"><div class="it"><h3>1. landlord certificates in Hackney</h3><p>AI mentioned you: 0 of 6</p><span class="pill g">You could win</span></div><div class="it"><h3>2. boiler repair in Stratford</h3><p>AI mentioned you: 0 of 6</p><span class="pill g">You could win</span></div><div class="it"><h3>3. plumber in Tower Hamlets</h3><p>AI mentioned you: 0 of 6</p><span class="pill g">You could win</span></div><div class="it"><h3>4. EICR certificate for landlords in London</h3><p>AI mentioned you: 0 of 6</p><span class="pill g">You could win</span></div><div class="it"><h3>5. EICR certificate in East London</h3><p>AI mentioned you: 0 of 6</p><span class="pill g">You could win</span></div><div class="it"><h3>6. gas safety certificate for landlords in London</h3><p>AI mentioned you: 0 of 6</p><span class="pill g">You could win</span></div><div class="it"><h3>7. landlord gas safety certificate in East London</h3><p>AI mentioned you: 0 of 6</p><span class="pill g">You could win</span></div><div class="it"><h3>8. boiler servicing in London</h3><p>AI mentioned you: 0 of 6</p><span class="pill g">You could win</span></div><div class="it"><h3>9. landlord certificates in London</h3><p>AI mentioned you: 0 of 6</p><span class="pill g">You could win</span></div><div class="it"><h3>10. PAT testing for landlords in London</h3><p>AI mentioned you: 0 of 6</p><span class="pill g">You could win</span></div><div class="it"><h3>11. property maintenance for landlords in London</h3><p>AI mentioned you: 0 of 6</p><span class="pill g">You could win</span></div><div class="it"><h3>12. best plumber in London</h3><p>AI mentioned you: 0 of 6</p><span class="pill g">You could win</span></div><div class="it"><h3>13. who is the best property maintenance company in London</h3><p>AI mentioned you: 0 of 6</p><span class="pill g">You could win</span></div><div class="it"><h3>14. EICR certificate in Tower Hamlets</h3><p>AI mentioned you: 0 of 6</p><span class="pill a">Possible with work</span></div><div class="it"><h3>15. gas safety certificate in Tower Hamlets</h3><p>AI mentioned you: 0 of 6</p><span class="pill a">Possible with work</span></div><div class="it"><h3>16. landlord gas safety certificate in Stratford</h3><p>AI mentioned you: 0 of 6</p><span class="pill a">Possible with work</span></div><div class="it"><h3>17. handyman in Bow</h3><p>AI mentioned you: 0 of 6</p><span class="pill a">Possible with work</span></div><div class="it"><h3>18. boiler service in Hackney</h3><p>AI mentioned you: 0 of 6</p><span class="pill a">Possible with work</span></div><div class="it"><h3>19. boiler installation in Hackney</h3><p>AI mentioned you: 0 of 6</p><span class="pill a">Possible with work</span></div><div class="it"><h3>20. consumer unit replacement in Hackney</h3><p>AI mentioned you: 0 of 6</p><span class="pill a">Possible with work</span></div></div></section><section class="blk"><h2><i class="mk">3</i><span>We check again on 9 Dec 2026</span></h2><p class="line">Same 20 searches. Same AI.</p></section><section class="blk"><h2><i class="mk">4</i><span>What we&#39;d do</span></h2><ul class="dots"><li>Make a clear page for each search.</li><li>Tidy your website and Google profile.</li><li>Check again after 4 weeks and show you.</li></ul></section><a class="btn" href="https://wa.me/447943262742?text=Hi%2C%20this%20is%20London%20Domestic%20Maintenance%20-%20a%20question%20about%20my%20report." target="_blank" rel="noopener noreferrer">Talk to Paul on WhatsApp</a></main><footer class="foot"><div class="wm">Findable<i>.</i></div><p>These are opportunities, not guarantees.</p></footer></div></body></html>

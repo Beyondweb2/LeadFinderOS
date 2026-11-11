@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-11-findable-report-look', date: '2026-11-11', title: 'Reports now look like Findable', audience: 'all',
+    body: 'The opportunity, first-contact and client reports use Findable\x27s own look: a dark card with numbered sections, coloured tiles and gold chips. The headline now says what customers actually search for, like "a gas engineer or electrician in East London", not the trade label.',
+    report: {
+      added: ['One dark Findable report card with numbered sections, coloured number tiles and gold "AI recommends these instead" chips.', 'A headline built from the searches asked about the business\x27s own services.'],
+      changed: ['The reports use Findable\x27s colours, wordmark and system font instead of the earlier light design. Wording, order and the sorting rule are unchanged.'],
+      removed: ['The earlier dark-header light-body design.'],
+      effect: 'Reports match the Findable site and read quickly on a phone. The headline names the jobs customers really search for.',
+    } },
   { id: '2026-11-11-simple-reports', date: '2026-11-11', title: 'Simpler, clearer reports for prospects and clients', audience: 'all',
     body: 'The opportunity report, the first-contact report and the client report now share one plain design: a dark header with the headline and three numbers, big readable type, and short wording ("searches", "You could win", "Hard to win"). Works on a phone.',
     report: {

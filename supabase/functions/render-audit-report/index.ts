@@ -13,7 +13,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildReportData, seoStyleForAudit, isRealCompetitor, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
-import { hookFromRows, summariseOpportunity, theirAreas, type OppContext, type OppRow } from "../../../src/lib/reportOpportunity.ts";
+import { hookFromRows, searchPhrase, summariseOpportunity, theirAreas, type OppContext, type OppRow } from "../../../src/lib/reportOpportunity.ts";
 import { chooseReportDesign, renderBaselineReport, renderHookReport, renderOpportunityReport } from "../../../src/lib/reportDesign.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { renderReportHtml } from "../../../src/lib/aiAuditReportHtml.ts";
@@ -521,7 +521,9 @@ Deno.serve(async (req) => {
         if (designKind === "hook") {
           const qs = [...new Set(oppRows.map((r) => r.question.trim()))].slice(0, 3);
           const h = hookFromRows(oppRows, qs, flags);
-          return htmlResponse(renderHookReport({ ...base, ...h }), 200);
+          /* The headline uses what customers type (from the searches), never the trade label. */
+          const ph = searchPhrase(qs, town);
+          return htmlResponse(renderHookReport({ ...base, searchWhat: ph.what, searchWhere: ph.where, ...h }), 200);
         }
         /* The website check's services, from whichever run stored one (a Discovery's crawl sits on run 1). Without
            one the "service on your website" test is skipped rather than guessed. */
@@ -542,12 +544,14 @@ Deno.serve(async (req) => {
         const summary = summariseOpportunity(oppRows, octx);
         const asks = Math.max(1, runRows.filter((r) => r.status === "complete").length);
         if (designKind === "opportunity") {
-          return htmlResponse(renderOpportunityReport({ ...base, summary, asks }), 200);
+          const po = searchPhrase(summary.questions.filter((q) => q.service).map((q) => q.question), town);
+          return htmlResponse(renderOpportunityReport({ ...base, searchWhat: po.what, searchWhere: po.where, summary, asks }), 200);
         }
         const order = new Map(questions.map((q, i) => [q, i]));
         const locked = [...summary.questions].sort((a, b) => (order.get(a.question) ?? 0) - (order.get(b.question) ?? 0));
         return htmlResponse(renderBaselineReport({
-          ...base, questions: locked, rivals: summary.rivals, asks,
+          ...base, searchWhat: searchPhrase(locked.map((q) => q.question), town).what, searchWhere: searchPhrase(locked.map((q) => q.question), town).where,
+          questions: locked, rivals: summary.rivals, asks,
           answers: locked.reduce((n, q) => n + q.answers, 0), namedYou: locked.reduce((n, q) => n + q.namedYou, 0), directories: summary.directories,
           /* "We check again on <date>": the lead's stored day-28 date. Absent = the page says "in 4 weeks". */
           checkAgainLabel: leadRemeasureDue ? new Date(leadRemeasureDue).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : undefined,

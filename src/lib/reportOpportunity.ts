@@ -437,3 +437,33 @@ export function ruleVerdict(question: string, results: Record<string, unknown>[]
   else verdict = q.tier === 'now' ? 'open' : q.tier === 'possible' ? 'contested' : 'locked';
   return { verdict, tier: q.tier, easy: q.easy, reason: q.reasons[0] ?? '', namedFirms: q.firms.map((f) => f.name), clientNamed, q };
 }
+
+/* ── What customers actually search for (2026-11-11, Paul) ───────────────────────────────────────────────
+   The headline uses the words a customer types ("a gas engineer or electrician in East London"), taken from the
+   searches asked about the business's own main services, and NEVER the trade label ("domestic maintenance"). */
+const SEARCH_NOUNS: { test: RegExp; art: string; word: string }[] = [
+  { test: /electrician|\beicr\b|consumer unit|\bpat\b|electrical/i, art: 'an', word: 'electrician' },
+  { test: /plumb|leak detection/i, art: 'a', word: 'plumber' },
+  { test: /gas engineer|boiler|gas safety/i, art: 'a', word: 'gas engineer' },
+  { test: /handyman/i, art: 'a', word: 'handyman' },
+  { test: /landlord certificate/i, art: '', word: 'landlord certificates' },
+  { test: /property maintenance|maintenance company/i, art: 'a', word: 'property maintenance company' },
+];
+
+/** { what: "a gas engineer or electrician", where: "East London" } from the searches asked. Pure. */
+export function searchPhrase(questions: string[], town: string): { what: string; where: string } {
+  const score = new Map<number, number>();
+  for (const q of questions) {
+    const i = SEARCH_NOUNS.findIndex((n) => n.test.test(q));
+    if (i >= 0) score.set(i, (score.get(i) ?? 0) + 1);
+  }
+  const ranked = [...score.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).slice(0, 2).map(([i]) => SEARCH_NOUNS[i]);
+  let what = 'a business like yours';
+  if (ranked.length === 1) what = ranked[0].art ? `${ranked[0].art} ${ranked[0].word}` : ranked[0].word;
+  else if (ranked.length === 2) what = `${ranked[0].art ? `${ranked[0].art} ` : ''}${ranked[0].word} or ${ranked[1].word}`;
+  // The widest named region the searches use ("East London"), else the audit's own town.
+  const regions = new Map<string, number>();
+  for (const q of questions) { const a = areaOf(q); if (a && /london$/i.test(a) && a.toLowerCase() !== 'london') regions.set(a, (regions.get(a) ?? 0) + 1); }
+  const region = [...regions.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
+  return { what, where: region ?? (town || 'your area') };
+}

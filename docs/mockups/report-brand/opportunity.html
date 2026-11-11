@@ -1,0 +1,78 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow, noarchive"><title>London Domestic Maintenance - AI search report</title><style>
+:root{color-scheme:dark;--page:#0a0a0c;--card:#17181c;--tile:#1e1f24;--line:#2c2d34;--text:#f7f8fa;--mist:#c3c6cd;--muted:#8f939d;
+  --y:#f5b301;--gold:#ffd13f;--on-gold:#2a2100;--green:#4ade80;--amber:#fbbf24;--rose:#fb7185;
+  --sys:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;background:var(--page)}
+body{margin:0;background:var(--page);color:var(--text);font:16px/1.5 var(--sys);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;
+  background:radial-gradient(52rem 34rem at 88% -8%,rgba(245,179,1,.13),transparent 62%),radial-gradient(40rem 30rem at -8% 30%,rgba(42,82,160,.10),transparent 60%)}
+a{color:inherit}
+h1,h2,h3{font-family:var(--sys);font-weight:900;letter-spacing:-.02em;margin:0;color:#fff}
+p{margin:0}
+.wrap{max-width:720px;margin:0 auto;padding:0 14px 40px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 2px 14px}
+.wm{font-weight:900;font-size:22px;letter-spacing:-.02em;line-height:1}.wm i{font-style:normal;color:var(--y);font-size:1.35em;line-height:0}
+.date{font-size:14px;color:var(--muted)}
+h1{font-size:clamp(28px,7.4vw,46px);line-height:1.06;letter-spacing:-.03em;margin:6px 2px 18px}
+h1 .hl{color:var(--gold)}
+.rp{position:relative;display:grid;gap:22px;padding:18px 16px 20px;border-radius:24px;background:var(--card);border:1px solid var(--line);box-shadow:0 30px 70px -30px #000,0 0 0 1px rgba(255,255,255,.03) inset}
+.rp-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:6px 14px}
+.k{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.k u{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--gold)}
+.rp-head b{display:block;font-weight:900;font-size:20px;letter-spacing:-.02em;color:#fff;text-align:right}
+.rp-head small{display:block;font-size:13px;font-weight:500;color:var(--muted);text-align:right}
+.blk{position:relative;display:grid;gap:10px}
+.mk{flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--gold);color:#111;font-weight:900;font-size:13px;font-style:normal;box-shadow:0 0 0 4px rgba(255,209,63,.22)}
+.mk.c{position:absolute;left:-8px;top:-8px;z-index:2}
+.blk h2{display:flex;align-items:center;gap:12px;font-size:21px;line-height:1.15}
+.blk .line{color:var(--mist);font-size:14.5px;margin:-4px 0 0 38px}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.t{display:grid;gap:3px;align-content:start;padding:12px 11px;border-radius:14px;background:var(--tile);border:1px solid var(--line)}
+.t .k{font-size:10px;letter-spacing:.08em}
+.t b{font-weight:900;font-size:36px;line-height:1.05;letter-spacing:-.03em}
+.t span{font-size:12px;color:var(--mist);line-height:1.3}
+.t.g{background:linear-gradient(160deg,rgba(74,222,128,.14),#17181c 70%);border-color:rgba(74,222,128,.38)}.t.g b{color:var(--green)}.t.g .k u{background:var(--green)}
+.t.a{background:linear-gradient(160deg,rgba(251,191,36,.13),#17181c 70%);border-color:rgba(251,191,36,.34)}.t.a b{color:var(--amber)}.t.a .k u{background:var(--amber)}
+.t.r{background:linear-gradient(160deg,rgba(251,113,133,.13),#17181c 70%);border-color:rgba(251,113,133,.34)}.t.r b{color:var(--rose)}.t.r .k u{background:var(--rose)}
+.pn{display:grid;gap:0;padding:4px 14px;border-radius:14px;background:var(--tile);border:1px solid var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips b{display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:14px;color:var(--on-gold);background:var(--gold);border-radius:999px;padding:7px 8px 7px 13px}
+.chips b i{font-style:normal;font-size:12px;font-weight:800;background:rgba(0,0,0,.16);border-radius:999px;padding:1px 8px}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:12px 0;border-top:1px solid var(--line);font-size:16px}
+.row:first-child{border-top:0}
+.row b{font-weight:800;color:#fff;overflow-wrap:anywhere}.row span{color:var(--mist);white-space:nowrap;font-size:14px}
+.it{padding:13px 0;border-top:1px solid var(--line)}.it:first-child{border-top:0}
+.it h3{font-size:17px;line-height:1.25;font-weight:800;letter-spacing:-.01em}
+.it p{margin-top:3px;color:var(--mist);font-size:14.5px}
+.pill{display:inline-block;margin-top:8px;font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:4px 10px}
+.pill.g{color:var(--green);background:rgba(74,222,128,.14);border:1px solid rgba(74,222,128,.35)}
+.pill.a{color:var(--amber);background:rgba(251,191,36,.13);border:1px solid rgba(251,191,36,.34)}
+.pill.r{color:var(--rose);background:rgba(251,113,133,.13);border:1px solid rgba(251,113,133,.34)}
+.dots{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.dots li{position:relative;padding-left:26px;font-size:16.5px;color:#fff}
+.dots li:before{content:"";position:absolute;left:0;top:.42em;width:12px;height:12px;border-radius:50%;background:var(--gold)}
+.btn{display:flex;align-items:center;justify-content:center;width:100%;min-height:56px;border-radius:999px;background:var(--y);color:#0a0a0c;font-weight:800;font-size:18px;text-decoration:none;padding:14px 20px;text-align:center;box-shadow:0 8px 24px -8px rgba(245,179,1,.55)}
+details{border-radius:14px;background:var(--tile);border:1px solid var(--line)}
+summary{cursor:pointer;list-style:none;padding:15px 16px;font-weight:800;min-height:52px;color:#fff}
+summary::-webkit-details-marker{display:none}
+summary:after{content:"+";float:right;font-size:24px;line-height:1;color:var(--gold)}
+details[open] summary:after{content:"\2212"}
+details .in{padding:0 16px 10px}
+.grp{margin:14px 0 2px;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.hero{display:grid;gap:4px;padding:16px;border-radius:14px;background:linear-gradient(160deg,rgba(251,113,133,.13),#17181c 70%);border:1px solid rgba(251,113,133,.34)}
+.hero b{font-weight:900;font-size:clamp(40px,12vw,56px);line-height:1;letter-spacing:-.03em;color:var(--rose)}
+.hero b em{font-style:normal;color:#fff}
+.hero span{font-size:14px;color:var(--mist)}
+.tag{width:fit-content;margin-top:8px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);background:rgba(255,209,63,.1);border:1px solid rgba(255,209,63,.3);border-radius:999px;padding:4px 10px}
+.foot{display:grid;gap:6px;justify-items:center;margin-top:26px;color:var(--muted);font-size:13px;text-align:center}
+.foot .wm{font-size:18px;color:#fff}
+@media (min-width:760px){
+  .wrap{max-width:780px;padding-bottom:64px}
+  .rp{padding:26px 26px 28px;gap:28px}
+  .t b{font-size:46px}.t span{font-size:13px}.t .k{font-size:11px}
+  .blk h2{font-size:24px}
+}
+@media (max-width:380px){.t b{font-size:30px}.t{padding:10px 9px}}
+@media print{body::before{display:none}}
+</style></head><body><div class="wrap"><header class="top"><div class="wm">Findable<i>.</i></div></header><h1>When people ask AI for a gas engineer or electrician in East London, <span class="hl">it doesn't mention you yet.</span></h1><main class="rp"><div class="rp-head"><span class="k"><u></u>AI search report</span><div><b>London Domestic Maintenance</b><small>11 Nov 2026</small></div></div><div class="blk"><i class="mk c">1</i><div class="tiles"><div class="t g"><span class="k"><u></u>You could win</span><b>13</b><span>No one stands out yet</span></div><div class="t a"><span class="k"><u></u>Possible with work</span><b>22</b><span>One firm leads, or work needed</span></div><div class="t r"><span class="k"><u></u>Hard to win</span><b>5</b><span>One firm named almost every time</span></div></div></div><section class="blk"><h2><i class="mk">2</i><span>AI recommends these instead</span></h2><p class="line">How often AI named them.</p><div class="chips"><b>Gas First Ltd<i>25&times;</i></b><b>East End Plumbers<i>19&times;</i></b><b>Lloyd Hallowell Electrics<i>15&times;</i></b><b>UpKeep UK<i>15&times;</i></b><b>Hackney Heating<i>14&times;</i></b></div></section><section class="blk"><h2><i class="mk">3</i><span>13 searches you could win</span></h2><p class="line">The first 10 to go for.</p><div class="pn"><div class="it"><h3>landlord certificates in Hackney</h3><p>AI names: Hackney Heating, Hackney Plumbing &amp; Heating</p><span class="pill g">Most answers name no one</span></div><div class="it"><h3>boiler repair in Stratford</h3><p>AI names: A Energy Solutions, Adept P H B Ltd</p><span class="pill g">AI mixes up two Stratfords</span></div><div class="it"><h3>plumber in Tower Hamlets</h3><p>AI names: Docklands Plumbing Services, East London Plumbers and Heating</p><span class="pill g">No one stands out yet</span></div><div class="it"><h3>EICR certificate for landlords in London</h3><p>AI names: EICR PRO ELECTRICIANS, Landlord Certificate London</p><span class="pill g">Most answers name no one</span></div><div class="it"><h3>EICR certificate in East London</h3><p>AI names: Lloyd Hallowell Electrics, SCV Electrical Limited</p><span class="pill g">Most answers name no one</span></div><div class="it"><h3>gas safety certificate for landlords in London</h3><p>AI names: Gas Safety Medic Ltd, Landlord Certificate London</p><span class="pill g">Most answers name no one</span></div><div class="it"><h3>landlord gas safety certificate in East London</h3><p>AI names: Gas First Ltd, A Energy Solutions</p><span class="pill g">Most answers name no one</span></div><div class="it"><h3>boiler servicing in London</h3><p>AI names: Full Flame, Heat Knights Boiler Repair London</p><span class="pill g">Most answers name no one</span></div><div class="it"><h3>landlord certificates in London</h3><p>AI names: Landlord Certificate London, Landlord Certificates</p><span class="pill g">Most answers name no one</span></div><div class="it"><h3>PAT testing for landlords in London</h3><p>AI names: Fast PAT Testing London, PAT Test My Appliances London</p><span class="pill g">Most answers name no one</span></div></div></section><section class="blk"><h2><i class="mk">4</i><span>Get listed on these sites</span></h2><p class="line">AI uses them.</p><div class="pn"><div class="row"><b>Gas Safe Register</b><span>57 answers</span></div><div class="row"><b>Checkatrade</b><span>56 answers</span></div><div class="row"><b>NICEIC</b><span>50 answers</span></div><div class="row"><b>TrustATrader</b><span>35 answers</span></div><div class="row"><b>Yell</b><span>12 answers</span></div></div></section><section class="blk"><h2><i class="mk">5</i><span>What we&#39;d do</span></h2><ul class="dots"><li>Make a clear page for each search.</li><li>Tidy your website and Google profile.</li><li>Check again after 4 weeks and show you.</li></ul></section><a class="btn" href="https://wa.me/447943262742?text=Hi%2C%20this%20is%20London%20Domestic%20Maintenance%20-%20I%20saw%20my%20AI%20report%20and%20I%20would%20like%20to%20talk." target="_blank" rel="noopener noreferrer">Talk to Paul on WhatsApp</a><details><summary>See all searches</summary><div class="in"><p class="grp">You could win (13)</p><div class="it"><h3>best plumber in London</h3><p>No one stands out yet</p></div><div class="it"><h3>boiler repair in Stratford</h3><p>AI mixes up two Stratfords</p></div><div class="it"><h3>boiler servicing in London</h3><p>Most answers name no one</p></div><div class="it"><h3>EICR certificate for landlords in London</h3><p>Most answers name no one</p></div><div class="it"><h3>EICR certificate in East London</h3><p>Most answers name no one</p></div><div class="it"><h3>gas safety certificate for landlords in London</h3><p>Most answers name no one</p></div><div class="it"><h3>landlord certificates in Hackney</h3><p>Most answers name no one</p></div><div class="it"><h3>landlord certificates in London</h3><p>Most answers name no one</p></div><div class="it"><h3>landlord gas safety certificate in East London</h3><p>Most answers name no one</p></div><div class="it"><h3>PAT testing for landlords in London</h3><p>Most answers name no one</p></div><div class="it"><h3>plumber in Tower Hamlets</h3><p>No one stands out yet</p></div><div class="it"><h3>property maintenance for landlords in London</h3><p>Most answers name no one</p></div><div class="it"><h3>who is the best property maintenance company in London</h3><p>No one stands out yet</p></div><p class="grp">Possible with work (22)</p><div class="it"><h3>block management maintenance contractor in London</h3><p>One firm leads</p></div><div class="it"><h3>boiler installation in East London</h3><p>One firm leads</p></div><div class="it"><h3>boiler installation in Hackney</h3><p>One firm leads</p></div><div class="it"><h3>boiler service in Hackney</h3><p>One firm leads</p></div><div class="it"><h3>consumer unit replacement in Hackney</h3><p>One firm leads</p></div><div class="it"><h3>EICR certificate in Tower Hamlets</h3><p>One firm leads</p></div><div class="it"><h3>electrician in Bow</h3><p>One firm leads</p></div><div class="it"><h3>electrician in East London</h3><p>One firm leads</p></div><div class="it"><h3>electrician in Mile End</h3><p>One firm leads</p></div><div class="it"><h3>emergency electrician in Hackney</h3><p>One firm leads</p></div><div class="it"><h3>emergency electrician in London</h3><p>One firm leads</p></div><div class="it"><h3>emergency plumber in Bow</h3><p>One firm leads</p></div><div class="it"><h3>emergency plumber in Hackney</h3><p>One firm leads</p></div><div class="it"><h3>fire safety certificate for landlords in London</h3><p>Not on your website yet</p></div><div class="it"><h3>gas engineer in East London</h3><p>One firm leads</p></div><div class="it"><h3>gas engineer in Tower Hamlets</h3><p>One firm leads</p></div><div class="it"><h3>gas safety certificate in Tower Hamlets</h3><p>One firm leads</p></div><div class="it"><h3>handyman in Bow</h3><p>Not on your website yet</p></div><div class="it"><h3>landlord gas safety certificate in Stratford</h3><p>One firm leads</p></div><div class="it"><h3>leak detection in Tower Hamlets</h3><p>One firm leads</p></div><div class="it"><h3>property maintenance company in East London</h3><p>One firm leads</p></div><div class="it"><h3>property maintenance in Mile End</h3><p>One firm leads</p></div><p class="grp">Hard to win (5)</p><div class="it"><h3>boiler service in Bow</h3><p>One firm named almost every time</p></div><div class="it"><h3>emergency plumber in East London</h3><p>One firm named almost every time</p></div><div class="it"><h3>leak detection in East London</h3><p>One firm named almost every time</p></div><div class="it"><h3>maintenance company for property managers in London</h3><p>One firm named almost every time</p></div><div class="it"><h3>plumber in Stratford</h3><p>One firm named almost every time</p></div></div></details></main><footer class="foot"><div class="wm">Findable<i>.</i></div><p>These are opportunities, not guarantees.</p></footer></div></body></html>

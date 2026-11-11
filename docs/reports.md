@@ -619,15 +619,17 @@ list (`sameBusiness`). Overview `names` likewise. Order = first mention in the a
 order for names the text never writes; the business first when the verdict named them but the text never spells them.
 Scores are untouched. Only `render-audit-report` needs a redeploy for the public page.
 
-## Redesigned client reports (2026-11-11, third design: concept C)
+## Redesigned client reports (2026-11-11, fourth design: Findable look)
 
 One fixed template for every business, three pages: **opportunity** (Discovery audits), **client report** (paid baseline: the 20 tracked searches)
-and **first-contact** (a complete six-answer hook). Light body, **dark header and footer** (the header holds logo, date, business name,
-headline and the three numbers), big type, mobile first, plain English ("searches", never "questions"; no "discovery", "baseline", "verdict",
-"engines", "fragmented", "citations", "visibility score", "GEO" — pinned by `scripts/report-design.test.ts`). At most two short lines of text per
-section; the footer line is "These are opportunities, not guarantees."
+and **first-contact** (a complete six-answer hook). The look is copied from the LeadFinderOS waitlist's audit example and Findable's own tokens (read-only from
+`C:\Users\paulj\leadfinderos-waitlist` and `findable-site-current`): one dark rounded card, numbered yellow section markers, coloured number tiles, gold
+"named instead" chips, near-black `#0A0A0C`/`#17181C`/`#1E1F24`, yellow `#F5B301` button, the "Findable." wordmark, Findable's system font stack at weight 900 (no webfont).
+Plain English ("searches", never "questions"; no "discovery", "baseline", "verdict", "engines", "fragmented", "citations", "visibility score", "GEO" — pinned by
+`scripts/report-design.test.ts`); at most two short lines per section; footer line "These are opportunities, not guarantees."
+**Headline:** built from what customers type (`searchPhrase` in `reportOpportunity.ts`: the two most-asked services as "a gas engineer or electrician" + the widest region the searches use, e.g. "East London"), NEVER the trade label.
 Code: `src/lib/reportDesign.ts` (renderers + `chooseReportDesign`), `src/lib/reportOpportunity.ts` (the counts and the rule), wired at the end of
-`render-audit-report`. Mockups: `docs/mockups/report-simple/` (the other two header/footer concepts were dropped). The files are in the `client-copy-claims` scan.
+`render-audit-report`. Mockups: `docs/mockups/report-brand/` (with the waitlist example beside them). The files are in the `client-copy-claims` scan.
 
 - **The rule (Paul, `RULE_WORDS`):** You could win = no single business named in half or more of the answers AND a service on their website (and in their area). Possible with work = one business named in 3 or 4 of 6 (top/answers from half up to under 5/6), or a service not on their website / outside their area. Hard to win = one business in 5 or 6 of 6 (top/answers >= 5/6), whatever the service.
 - **"Their area":** where the audit's town, their website's area pages and (for a Discovery or a baseline cut from one) the questions' own towns put them. A Discovery asks about the business's own patch, so its questions pass this test by construction.
