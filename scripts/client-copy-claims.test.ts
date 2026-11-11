@@ -49,6 +49,8 @@ function renderedText(src: string): string {
 
 const RENDERERS: Array<[string, string]> = [
   ["welcome pack (paying client)", "src/lib/welcomePackHtml.ts"],
+  ["report redesign: opportunity / hook / baseline (prospect / client)", "src/lib/reportDesign.ts"],
+  ["report redesign: question reasons (prospect / client)", "src/lib/reportOpportunity.ts"],
   /* 2026-10-26: the admin home's proposed WhatsApp template wording (placeholders until Meta approves; questionnaire / paying client). */
   ["admin home template wording (prospect / client)", "src/lib/needsMeTemplates.ts"],
   /* 2026-10-17: the v5 9A.5 payment-12 reminder email (paying client). */

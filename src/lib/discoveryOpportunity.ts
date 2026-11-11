@@ -20,7 +20,8 @@
    IMPORTED BY AN EDGE FUNCTION (paid-baseline): relative imports with an explicit .ts only.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-import { classifyWinnability, type EngineMap, type QueueRow } from './auditReport.ts';
+import { isRealCompetitor, type EngineMap, type QueueRow } from './auditReport.ts';
+import { oppQuestion, type OppRow } from './reportOpportunity.ts';
 import { cellNamed } from './namedSignal.ts';
 
 export type OpportunityClass = 'named' | 'winnable' | 'possible' | 'low';
@@ -75,37 +76,38 @@ export function engineTallies(question: string, rows: QueueRow[], ctx: Pick<Oppo
   });
 }
 
+/* ⛔ REPLACED 2026-11-11 (Paul). This used to read classifyWinnability over a MERGED cell, which counted distinct
+   firms across runs and so marked all 40 questions of London Domestic Maintenance "winnable". It now applies the ONE
+   written rule in reportOpportunity.ts (Winnable / Possible / Hard over counts across every answer; fragmented alone is
+   never enough). The Discovery screens, the paid-baseline function and the client reports all read that same rule.
+   classifyWinnability itself still exists for the per-run page-plan verdicts (page-generator, action-plan, market-view),
+   which write client_pages rows — a separate decision, not changed here. */
 export function opportunityFor(question: string, rows: QueueRow[], ctx: OpportunityContext): Opportunity {
   const nctx = { businessName: ctx.businessName, trade: ctx.trade ?? null, town: ctx.location };
   const own = rows.filter((r) => r.question.trim() === question.trim());
-  const merged: EngineMap = {};
   let namedRuns = 0, runs = 0;
   for (const row of own) {
     const result = (row.result ?? {}) as EngineMap;
     let anyEngine = false, namedHere = false;
-    for (const [engine, raw] of Object.entries(result)) {
+    for (const raw of Object.values(result)) {
       if (!raw || typeof raw !== 'object') continue;
       anyEngine = true;
-      const isNamed = cellNamed(raw, nctx);
-      namedHere = namedHere || isNamed;
-      const cur = merged[engine] ?? { named: false, self_named: false, position: null, competitors: [], citations: [], answer_text: '' };
-      /* The merged cell carries the SAME judgement as the counts, as an explicit boolean in both
-         fields, so the classifier's cellNamed(merged) cannot fall back to a different ruler. */
-      cur.named = !!cur.named || isNamed;
-      cur.self_named = !!cur.self_named || isNamed;
-      cur.position = cur.position == null ? raw.position : raw.position == null ? cur.position : Math.min(cur.position, raw.position);
-      cur.competitors = [...new Set([...cur.competitors, ...(raw.competitors ?? [])])];
-      cur.citations = [...cur.citations, ...(raw.citations ?? [])].filter((c, i, a) => a.findIndex((x) => x.url === c.url) === i);
-      cur.answer_text = cur.answer_text || raw.answer_text;
-      merged[engine] = cur;
+      namedHere = namedHere || cellNamed(raw, nctx);
     }
     if (anyEngine) { runs++; if (namedHere) namedRuns++; }
   }
-  const result = classifyWinnability(merged, { businessName: ctx.businessName, locationText: ctx.location, ownWebsite: ctx.website, isAggregatorUrl: ctx.isAggregatorUrl });
-  const classification: OpportunityClass = result.clientNamed ? 'named' : result.verdict === 'open' ? 'winnable' : result.verdict === 'contested' ? 'possible' : 'low';
-  const fragmentation = result.U >= 6 ? 'highly fragmented' : result.C === 0 && result.U >= 2 ? 'fragmented across engines' : result.U <= 3 && result.C >= 2 ? 'dominant competitors' : 'mixed competition';
+  const q = oppQuestion(question, own as unknown as OppRow[], {
+    businessName: ctx.businessName, services: [],
+    isNamed: (c) => cellNamed(c as never, nctx),
+    isRival: (n) => isRealCompetitor(n, ctx.location),
+    isDirectoryHost: (h) => ctx.isAggregatorUrl('https://' + h),
+  });
+  const clientNamed = namedRuns > 0;
+  const classification: OpportunityClass = clientNamed ? 'named' : q.tier === 'now' ? 'winnable' : q.tier === 'possible' ? 'possible' : 'low';
+  const verdict = clientNamed ? 'named' : q.tier === 'now' ? 'open' : q.tier === 'possible' ? 'contested' : 'locked';
+  const fragmentation = q.distinct >= 6 ? 'highly fragmented' : q.top <= 2 && q.distinct >= 2 ? 'fragmented across engines' : q.top * 2 > q.answers ? 'dominant competitors' : 'mixed competition';
   return {
-    classification, verdict: result.verdict, reason: result.reason, clientNamed: result.clientNamed, fragmentation, namedRuns, runs,
-    engines: engineTallies(question, rows, ctx), competitors: (result.namedFirms ?? []).slice(0, 5),
+    classification, verdict, reason: q.reasons[0] ?? '', clientNamed, fragmentation, namedRuns, runs,
+    engines: engineTallies(question, rows, ctx), competitors: q.firms.map((f) => f.name),
   };
 }

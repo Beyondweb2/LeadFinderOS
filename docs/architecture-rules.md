@@ -17,9 +17,16 @@
 - **Unknown hosts route to WHO'S WINNING, never to tasks.** An unclassified host is almost always a
   competitor's own site. Surfacing it as intelligence means a new competitor appears automatically with no
   entry to write; making it a task would invent work.
-- **No winnability scoring anywhere.** It reads a single run, and competitor lists differ between runs, so its
-  output flips between identical inputs. Counts only.
-- **No outcome promises in anything customer-facing.** Say what was measured, what was done, and what changed.
+- **No winnability SCORING.** A score reads a single run, and competitor lists differ between runs, so it flips between
+  identical inputs. Counts only.
+  ✅ **Owner decision 2026-11-11 (Paul): the words "could win" / "Winnable" ARE allowed on a client report when the evidence
+  is shown beside them (e.g. "no business named in 4 of 6 answers") and the page carries the "not a promise" line.** They come
+  from ONE fixed written rule over counts across every answer (`src/lib/reportOpportunity.ts`, `RULE_WORDS`): Winnable (easy) =
+  no business named at all; Winnable = no single business named in MOST answers AND a service they offer in their area;
+  Possible = fragmented but outside their area or a service not on their website; Hard = one business named in most answers.
+  Fragmented alone is never enough. Directories and review sites are counted separately and are never competitors.
+- **No outcome promises in anything customer-facing.** Say what was measured, what was done, and what changed. Never promise
+  a ranking, a recommendation or a citation — "winnable" is a description of the answers today, not a forecast.
 - **Migrations are applied ONE AT A TIME, never with `supabase db push`** — that is broken here
   (history desynced) and would try to apply every migration missing from the remote history table.
   Run the single migration's statements through the Management API (§2), or hand them to Paul.
