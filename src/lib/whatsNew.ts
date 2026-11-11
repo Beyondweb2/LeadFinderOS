@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-11-calling-clear-errors', date: '2026-11-11', title: 'Browser calls: steadier abroad, and plain error messages', audience: 'all',
+    body: 'If a browser call fails, the screen now says what went wrong and what to do, instead of a Twilio error number. Calls also connect through the Twilio centre nearest to you (Singapore for Malaysia).',
+    report: {
+      added: ['Separate messages for: country not allowed yet, connection dropped, busy line, phone switched off, wrong number, microphone blocked / missing / in use.'],
+      changed: ['The dialer connects through the nearest Twilio centre for your time zone, and switches to the next one by itself if it cannot reach it.', 'A brief internet drop no longer ends the attempt straight away; the call tries to reconnect for up to 30 seconds.'],
+      removed: ['Raw messages like "Call error: … (31000)".'],
+      effect: 'Fewer failed calls from Malaysia and Singapore, and when one does fail you know whether to retry, check your connection, or call from your own phone.',
+    } },
   { id: '2026-11-10-one-campaign-and-auto-search', date: '2026-11-10', title: 'One campaign everywhere, and Coverage searches for you', audience: 'all',
     body: 'The campaign you pick now stays the same on Find Leads, Outreach and Inbox. Ticking towns on Coverage and pressing Find leads now runs the search straight away.',
     report: {

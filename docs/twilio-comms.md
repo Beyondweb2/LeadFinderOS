@@ -173,3 +173,20 @@ messaging / auth / database / payments / secrets.
   WhatsApp-queued → 40 `in_whatsapp_queue`; WhatsApp-contacted → 40 `whatsapp_messaged`; `whatsapp_failed` → 9 skipped;
   `no_whatsapp` mobiles → 38 would queue (2 are UK mobiles stored with country USA, still refused by the existing country check);
   landlines → 0. Tests: `scripts/sms-queue-rules.test.ts`.
+
+## Malaysia calling: error 31000 (2026-11-11, fix/malaysia-calling)
+- **What was wrong.** Stephan (in Malaysia) saw "Twilio error 31000". `call_logs` showed his 2 and 4 Nov Malaysian calls refused
+  by Twilio with **13227** (no international permission: Malaysia off in Voice geo permissions). The browser SDK reports a
+  server refusal it has no name for as its catch-all **31000** (`device.js` `_onSignalingError` → `UnknownError`), and the
+  screen printed Twilio's raw text. From 9 Nov his calls connect (busy / answered / rang out), so the permission was on by then.
+  31000 is also what a dropped browser↔Twilio connection looks like (VPN, strict wifi, a far edge).
+- **Fixed in code** (`src/lib/callErrorWords.ts`, `src/hooks/useTwilioCall.ts`): `enableImprovedSignalingErrorPrecision`;
+  the real code under a 31000/31005 is read from `originalError`; every code becomes one plain sentence (no raw code on
+  screen; the code goes to the console); the Device pins the nearest edge from the browser time zone
+  (Asia → singapore, tokyo, roaming; Australia → sydney…; Europe → dublin…; US → ashburn/umatilla…) with
+  `maxCallSignalingTimeoutMs` 30 s so it falls back / reconnects; microphone blocked / missing / in use told apart.
+- **Checked, not a cause:** stored numbers (every live Malaysia / Singapore lead is stored `+60…` / `+65…`; local `01x…`
+  → `601x…` pinned); token TTL (1 h, one per call); caller ID (our UK Twilio number; a Malaysian call completed with it).
+- **Not browser-callable by design:** Australia and USA (`callMarketOf` → null; refused with a plain reason).
+- **Twilio console (Paul's):** Voice → Settings → Geo permissions → Malaysia (and Singapore) ticked, including
+  high-risk / mobile prefixes if Twilio lists them. Tests: `scripts/malaysia-calling.test.ts`.
