@@ -25,6 +25,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { EdgeFunctionError } from '@/lib/edgeInvokeCore';
 import { callErrorEndsCall, deviceErrorEndsCall, setCallState } from '@/lib/liveCallFlag';
+import { CALL_SIGNALING_TIMEOUT_MS, browserTimeZone, callErrorCode, callErrorWords, micFailureKey, twilioEdgesFor, type CallErrorLike } from '@/lib/callErrorWords';
 
 export type CallState = 'idle' | 'preparing' | 'connecting' | 'ringing' | 'connected' | 'ended' | 'failed';
 
@@ -39,9 +40,11 @@ interface VoiceDevice { connect(o: { params: Record<string, string> }): Promise<
 
 export const CALL_FAILURE_WORDS: Record<string, string> = {
   mic_denied: 'The microphone is blocked. Allow it in your browser (the padlock by the address), then try again — or call from your own phone.',
+  no_mic: 'No microphone was found. Plug in a headset or microphone, then try again — or call from your own phone.',
+  mic_busy: 'Another app is using the microphone (Zoom, WhatsApp, Teams…). Close it, then try again.',
   unsupported: 'This browser cannot make calls. Use Chrome, Edge or Safari on a computer, or call from your own phone.',
   not_configured: 'Browser calling is not set up yet.',
-  network: 'The connection dropped. Check your internet and try again.',
+  network: 'The connection dropped. Check your internet, turn off any VPN, and try again.',
   declined: 'The call was declined.',
 };
 
@@ -109,20 +112,27 @@ export function useTwilioCall() {
       try {
         const s = await navigator.mediaDevices.getUserMedia({ audio: true });
         s.getTracks().forEach((t) => t.stop()); // permission only; the SDK opens its own stream
-      } catch { if (stale()) return; return fail('mic_denied'); }
+      } catch (me) { if (stale()) return; return fail(micFailureKey(me)); }
       if (stale()) return;
       set('connecting');
-      device = new Device(tok.token!, { codecPreferences: ['opus', 'pcmu'] as never, closeProtection: true, logLevel: 'error' }) as unknown as VoiceDevice;
+      /* 2026-11-11 (src/lib/callErrorWords.ts): the nearest Twilio edge for the rep's own clock (Malaysia → Singapore) with
+         fallbacks, signalling reconnection, and precise error codes instead of the catch-all 31000. */
+      device = new Device(tok.token!, {
+        codecPreferences: ['opus', 'pcmu'] as never, closeProtection: true, logLevel: 'error',
+        edge: twilioEdgesFor(browserTimeZone()), maxCallSignalingTimeoutMs: CALL_SIGNALING_TIMEOUT_MS,
+        enableImprovedSignalingErrorPrecision: true,
+      } as never) as unknown as VoiceDevice;
       deviceRef.current = device;
       device.on('error', (...a: unknown[]) => {
         if (stale()) return;
-        const er = a[0] as { code?: number; message?: string } | undefined;
+        const er = a[0] as CallErrorLike | undefined;
         /* The line exists: this is the Device talking (an expired token, a signalling blip), not the call ending. */
         if (!deviceErrorEndsCall(stateRef.current, !!callRef.current)) {
-          console.warn('[call] device error ignored while the call is live:', er?.code, er?.message);
+          console.warn('[call] device error ignored while the call is live:', callErrorCode(er), er?.message);
           return;
         }
-        fail('network', er?.message ? `Call error: ${er.message}` : undefined);
+        console.warn('[call] device error:', callErrorCode(er), er?.message);
+        fail('network', callErrorWords(er));
       });
       const call = await device.connect({ params: { callId: tok.callId } });
       if (stale()) {
@@ -139,14 +149,16 @@ export function useTwilioCall() {
       call.on('reject', () => { if (!stale()) fail('declined'); });
       call.on('error', (...a: unknown[]) => {
         if (stale()) return;
-        const er = a[0] as { code?: number; message?: string } | undefined;
+        const er = a[0] as CallErrorLike | undefined;
         /* Answered: a fatal error is followed by Twilio's own 'disconnect' (above), a passing one must not hang up. */
-        if (!callErrorEndsCall(stateRef.current)) { console.warn('[call] call error while connected:', er?.code, er?.message); return; }
-        fail('network', er?.message ? `Call error: ${er.message}` : undefined);
+        if (!callErrorEndsCall(stateRef.current)) { console.warn('[call] call error while connected:', callErrorCode(er), er?.message); return; }
+        console.warn('[call] call error:', callErrorCode(er), er?.message);
+        fail('network', callErrorWords(er));
       });
     } catch (e) {
       if (stale()) { try { device?.destroy(); } catch { /* already gone */ } return; }
-      fail('network', (e as Error)?.message ? `Could not start the call: ${(e as Error).message}` : undefined);
+      console.warn('[call] could not start:', callErrorCode(e as CallErrorLike), (e as Error)?.message);
+      fail('network', callErrorWords(e as CallErrorLike));
     }
   }, [ended, fail, set]);
 
