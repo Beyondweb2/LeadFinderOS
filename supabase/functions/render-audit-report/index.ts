@@ -248,6 +248,7 @@ Deno.serve(async (req) => {
        offer is a lost sale) and the website unknown (silence, never a guess). */
     let leadBaselineAuditId: string | null = null;
     let leadRemeasureAuditId: string | null = null;
+    let leadRemeasureDue: string | null = null;
     let amountPaid = 0;
     let leadWebsite = "";
     let leadPlaceId: string | null = null;
@@ -260,8 +261,9 @@ Deno.serve(async (req) => {
            paid before audit_purpose existed (2026-09-12) carry NULL on their baseline rows, and the
            lead claiming an audit is the only evidence those are paid baselines. Both columns are set
            by DB triggers and are immutable once set (src/lib/reportKind.ts). */
-        .from("outreach_leads").select("amount_paid, website, place_id, baseline_audit_id, remeasure_audit_id, country, address").eq("id", leadId).maybeSingle();
-      const l = lead as { amount_paid?: unknown; website?: string | null; place_id?: string | null; baseline_audit_id?: string | null; remeasure_audit_id?: string | null; country?: string | null; address?: string | null } | null;
+        .from("outreach_leads").select("amount_paid, website, place_id, baseline_audit_id, remeasure_audit_id, country, address, remeasure_due_date").eq("id", leadId).maybeSingle();
+      const l = lead as { amount_paid?: unknown; website?: string | null; place_id?: string | null; baseline_audit_id?: string | null; remeasure_audit_id?: string | null; country?: string | null; address?: string | null; remeasure_due_date?: string | null } | null;
+      leadRemeasureDue = l?.remeasure_due_date ? String(l.remeasure_due_date) : null;
       leadProspectOnly = prospectOnlyLead(l);
       amountPaid = Number(l?.amount_paid ?? 0) || 0;
       leadWebsite = String(l?.website ?? "").trim();
@@ -547,6 +549,8 @@ Deno.serve(async (req) => {
         return htmlResponse(renderBaselineReport({
           ...base, questions: locked, rivals: summary.rivals, asks,
           answers: locked.reduce((n, q) => n + q.answers, 0), namedYou: locked.reduce((n, q) => n + q.namedYou, 0), directories: summary.directories,
+          /* "We check again on <date>": the lead's stored day-28 date. Absent = the page says "in 4 weeks". */
+          checkAgainLabel: leadRemeasureDue ? new Date(leadRemeasureDue).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : undefined,
         }), 200);
       } catch (e) {
         // A design that cannot render must never cost the reader their report: fall through to the classic page.

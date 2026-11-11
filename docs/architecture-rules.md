@@ -19,12 +19,13 @@
   entry to write; making it a task would invent work.
 - **No winnability SCORING.** A score reads a single run, and competitor lists differ between runs, so it flips between
   identical inputs. Counts only.
-  ✅ **Owner decision 2026-11-11 (Paul): the words "could win" / "Winnable" ARE allowed on a client report when the evidence
-  is shown beside them (e.g. "no business named in 4 of 6 answers") and the page carries the "not a promise" line.** They come
-  from ONE fixed written rule over counts across every answer (`src/lib/reportOpportunity.ts`, `RULE_WORDS`): Winnable (easy) =
-  no business named at all; Winnable = no single business named in HALF OR MORE of the answers (3+ of 6 is Hard) AND a service they offer in their area;
-  Possible = fragmented but outside their area or a service not on their website; Hard = one business named in half or more of the answers.
-  Fragmented alone is never enough. Directories and review sites are counted separately and are never competitors.
+  ✅ **Owner decision 2026-11-11 (Paul): the words "could win" / "you could win" ARE allowed on a client report when the evidence
+  is shown beside them (e.g. "AI names nobody", "No one stands out yet") and the page carries the "These are opportunities, not
+  guarantees" line.** They come from ONE fixed written rule over counts across every answer (`src/lib/reportOpportunity.ts`,
+  `RULE_WORDS`): **You could win** = no single business named in half or more of the answers, and a service on their website;
+  **Possible with work** = one business named in 3 or 4 of 6, or a service not on their website; **Hard to win** = one business
+  named in 5 or 6 of 6. Many different businesses named is never enough on its own. Directories and review sites are counted
+  separately and are never competitors.
 - **No outcome promises in anything customer-facing.** Say what was measured, what was done, and what changed. Never promise
   a ranking, a recommendation or a citation — "winnable" is a description of the answers today, not a forecast.
 - **Migrations are applied ONE AT A TIME, never with `supabase db push`** — that is broken here

@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-11-simple-reports', date: '2026-11-11', title: 'Simpler, clearer reports for prospects and clients', audience: 'all',
+    body: 'The opportunity report, the first-contact report and the client report now share one plain design: a dark header with the headline and three numbers, big readable type, and short wording ("searches", "You could win", "Hard to win"). Works on a phone.',
+    report: {
+      added: ['A dark header and footer on every report, with the headline and the three numbers up top.', 'Plain wording: "13 searches you could win", "AI recommends these instead", "Get listed on these sites", and one button, "Talk to Paul on WhatsApp".', 'The client report says when we check again (the stored day-28 date).'],
+      changed: ['Searches are sorted into You could win, Possible with work and Hard to win: Hard is one business named in 5 or 6 of 6 answers, Possible is 3 or 4 of 6 or a service not on the website.', 'The page plan, action plan, market view and Discovery screens use the same rule.'],
+      removed: ['The dark report design and the long explanations: each section is now at most two short lines.'],
+      effect: 'Reports are quicker to read on a phone and say plainly what AI does today. They show opportunities, never a promise of ranking or of being recommended.',
+    } },
   { id: '2026-11-11-winnable-rule-everywhere', date: '2026-11-11', title: 'One winnable rule everywhere', audience: 'all',
     body: 'Hard now means one business is named in half or more of the answers (3 or more of 6). The page plan, the market view, the action plan, the Discovery screens and the client reports all use that same rule.',
     report: {

@@ -34,8 +34,6 @@ export interface DesignBase {
   town: string;
   dateLabel: string;
   shareUrl?: string;
-  /** Dark header / footer concept: 'a' black band, 'b' slim bar + footer button, 'c' dark hero with the numbers. The chosen one becomes the only standard. */
-  skin?: 'a' | 'b' | 'c';
 }
 
 /** The three groups, in words a tradesperson reads at a glance. */
@@ -105,7 +103,6 @@ details .inner{padding:0 18px 12px}
 .band .logo{color:#fff}.band .date{color:#a8a29e}.band .biz{color:#fff}
 .band h1{color:#fff}
 .band .nums{margin-top:18px;padding-bottom:22px}
-.band.slim .wrap{padding-bottom:6px}
 .num.dk{background:#1b1b1d;border-color:#2e2e31;color:#fff}.num.dk small{color:#a8a29e}.num.dk b{color:var(--y)}
 .num.dk.win{background:var(--y);border-color:var(--y);color:#111}.num.dk.win b{color:#111}.num.dk.win small{color:#3d3000}
 .band .y-line{height:5px;background:var(--y)}
@@ -113,7 +110,6 @@ details .inner{padding:0 18px 12px}
 .darkfoot .wrap{padding-bottom:0}.darkfoot .logo{color:#fff;font-size:22px}
 .darkfoot .fl{margin:10px 0 0;color:#d6d3d1;font-size:16px}.darkfoot .fl2{margin:4px 0 0;font-size:14px}
 .darkfoot .btn{margin-top:0;margin-bottom:22px}
-body.sk-b .main{padding-top:6px}
 @media (min-width:720px){
   body{font-size:19px}.wrap{padding-bottom:64px}
   h1{font-size:38px}h2{font-size:26px}
@@ -123,38 +119,28 @@ body.sk-b .main{padding-top:6px}
 @media print{body{background:#fff}.btn{display:none}}
 `;
 
-type Skin = 'a' | 'b' | 'c';
-const skinOf = (d: DesignBase): Skin => d.skin ?? 'a';
 const LOGO = `<div class="logo">Findable<i></i></div>`;
 
 /** The whole page: dark header band, light body, dark footer. */
-function shell(title: string, skin: Skin, band: string, main: string, foot: string): string {
+function shell(title: string, band: string, main: string, foot: string): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
     `<meta name="viewport" content="width=device-width, initial-scale=1">` +
     `<meta name="robots" content="noindex, nofollow, noarchive"><title>${esc(title)}</title>` +
-    `<style>${CSS}</style></head><body class="sk-${skin}">${band}<div class="wrap main">${main}</div>${foot}</body></html>`;
+    `<style>${CSS}</style></head><body>${band}<div class="wrap main">${main}</div>${foot}</body></html>`;
 }
 
-/** 1 + 2 (+ 3): the dark header with logo, date and business name; the headline and the three numbers sit in it (a, c)
- *  or just below it (b). Returns the band and whatever starts the light body. */
-function topParts(d: DesignBase, h1: string, nums: string): { band: string; lead: string } {
-  const skin = skinOf(d);
+/** 1 + 2 + 3: the dark header holds the logo, date, business name, headline and (when there are any) the three numbers
+ *  as dark tiles, so the key facts show before any scrolling (concept C, chosen by Paul 2026-11-11). */
+function topParts(d: DesignBase, h1: string, nums: string): { band: string } {
   const row = `<header class="top">${LOGO}<div class="date">${esc(d.dateLabel)}</div></header>`;
   const biz = `<p class="biz">${esc(d.businessName)}</p>`;
-  if (skin === 'b') {
-    return { band: `<div class="band slim"><div class="wrap">${row}</div><div class="y-line"></div></div>`, lead: biz + h1 + nums.split('class="num ').join('class="num dk ') };
-  }
-  if (skin === 'c') {
-    return { band: `<div class="band"><div class="wrap">${row}${biz}${h1}${nums.split('class="num ').join('class="num dk ')}</div><div class="y-line"></div></div>`, lead: '' };
-  }
-  return { band: `<div class="band"><div class="wrap">${row}${biz}${h1}<div style="height:22px"></div></div><div class="y-line"></div></div>`, lead: nums };
+  const tiles = nums.split('class="num ').join('class="num dk ');
+  return { band: `<div class="band"><div class="wrap">${row}${biz}${h1}${tiles}${nums ? '' : '<div style="height:22px"></div>'}</div><div class="y-line"></div></div>` };
 }
 
-/** The dark footer. Concept b carries the one button here instead of in the page. */
-function footerBlock(d: DesignBase, btnText: string): string {
-  const note = `<p class="fl">These are opportunities, not guarantees.</p>`;
-  if (skinOf(d) === 'b') return `<footer class="darkfoot"><div class="wrap">${rawButton(d, btnText)}${LOGO}${note}<p class="fl2">findable.live</p></div></footer>`;
-  return `<footer class="darkfoot"><div class="wrap">${LOGO}${note}<p class="fl2">findable.live</p></div></footer>`;
+/** The dark footer: logo and the one honest line. */
+function footerBlock(): string {
+  return `<footer class="darkfoot"><div class="wrap">${LOGO}<p class="fl">These are opportunities, not guarantees.</p><p class="fl2">findable.live</p></div></footer>`;
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -168,12 +154,9 @@ function headline(d: DesignBase, named: number, answers: number): string {
   return `<h1>${esc(text)}</h1>`;
 }
 
-/** 8. The one button (concept b puts it in the footer instead). */
-function rawButton(d: DesignBase, text: string): string {
-  return `<a class="btn" href="${esc(waHref(d.businessName, text))}" target="_blank" rel="noopener noreferrer">${WA_BUTTON}</a>`;
-}
+/** 8. The one button. */
 function button(d: DesignBase, text: string): string {
-  return skinOf(d) === 'b' ? '' : rawButton(d, text);
+  return `<a class="btn" href="${esc(waHref(d.businessName, text))}" target="_blank" rel="noopener noreferrer">${WA_BUTTON}</a>`;
 }
 
 /** 4. "AI recommends these instead": the top businesses and how often. */
@@ -233,8 +216,7 @@ export function renderOpportunityReport(d0: OpportunityDesignInput): string {
   const top = topParts(d, headline(d, named, s.answers),
     `<div class="nums">${num('now', s.now)}${num('possible', s.possible)}${num('hard', s.hard)}</div>`);
   const text = 'I saw my AI report and I would like to talk.';
-  const main = top.lead +
-    insteadBlock(s.rivals) +
+  const main = insteadBlock(s.rivals) +
     `<section class="sec"><h2>${s.now > 0 ? `${s.now} searches you could win` : 'Searches you could win'}</h2>` +
     (wins.length
       ? `<p class="line">The first ${wins.length} to go for.</p><div class="card">${wins.map((q) =>
@@ -242,7 +224,7 @@ export function renderOpportunityReport(d0: OpportunityDesignInput): string {
       : `<p class="line">None yet. See all searches below.</p>`) + `</section>` +
     listedBlock(s.directories) + doBlock() + button(d, text) +
     `<details><summary>See all searches</summary><div class="inner">${all}</div></details>`;
-  return shell(`${d.businessName} - AI search report`, skinOf(d), top.band, main, footerBlock(d, text));
+  return shell(`${d.businessName} - AI search report`, top.band, main, footerBlock());
 }
 
 /* ═══ HOOK REPORT (first contact) ════════════════════════════════════════════════════════ */
@@ -266,15 +248,14 @@ export function renderHookReport(d0: HookDesignInput): string {
   const named = d.questions.reduce((n, q) => n + q.answers.filter((a) => a.namedYou).length, 0);
   const top = topParts(d, headline(d, named, answers), '');
   const text = 'I saw my AI report and I would like a call.';
-  const main = top.lead +
-    insteadBlock(d.rivals) +
+  const main = insteadBlock(d.rivals) +
     `<section class="sec"><h2>Example searches</h2><p class="line">What AI said.</p><div class="card">` +
     d.questions.slice(0, 3).map((q) =>
       `<div class="item"><h3>${esc(q.question)}</h3>` +
       q.answers.map((a) => `<p><b>${esc(aiLabel(a.engine))}:</b> ${a.namedYou ? 'names you' : (a.rivals.length ? esc(a.rivals.slice(0, 2).join(', ')) : 'names nobody')}</p>`).join('') +
       `</div>`).join('') + `</div></section>` +
     button(d, text);
-  return shell(`${d.businessName} - AI search report`, skinOf(d), top.band, main, footerBlock(d, text));
+  return shell(`${d.businessName} - AI search report`, top.band, main, footerBlock());
 }
 
 /* ═══ CLIENT REPORT (the 20 searches we track) ═══════════════════════════════════════════ */
@@ -301,13 +282,12 @@ export function renderBaselineReport(d0: BaselineDesignInput): string {
     `<div class="item"><h3>${i + 1}. ${esc(q.question)}</h3><p>AI mentioned you: ${q.namedYou} of ${q.answers}</p>${groupChip(q.tier)}</div>`).join('');
   const top = topParts(d, '', '');
   const text = 'a question about my report.';
-  const main = top.lead +
-    `<section class="sec" style="margin-top:20px"><h2>How often AI mentions you today</h2>` +
+  const main = `<section class="sec" style="margin-top:20px"><h2>How often AI mentions you today</h2>` +
     `<div class="hero"><div class="big"><em>${d.namedYou}</em> of ${d.answers}</div><p class="line">AI answers that mentioned you.</p><span class="tag">Checked ${esc(d.dateLabel)}</span></div></section>` +
     `<section class="sec"><h2>The ${n} searches we track</h2><p class="line">Today's result for each.</p><div class="card">${rows}</div></section>` +
     `<section class="sec"><h2>We check again ${d.checkAgainLabel ? `on ${esc(d.checkAgainLabel)}` : `in ${REMEASURE_WEEKS_STANDARD} weeks`}</h2><p class="line">Same ${n} searches. Same AI.</p></section>` +
     doBlock() + button(d, text);
-  return shell(`${d.businessName} - AI search report`, skinOf(d), top.band, main, footerBlock(d, text));
+  return shell(`${d.businessName} - AI search report`, top.band, main, footerBlock());
 }
 
 /* ═══ Which design a stored audit gets ═══════════════════════════════════════════════════ */
