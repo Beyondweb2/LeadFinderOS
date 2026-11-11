@@ -71,7 +71,7 @@ console.log('── the number window: business, number, Copy, the two ways to c
   ok(callNumberView('+44 7700 900123', 'UK')!.stored === null, 'already international: no second line');
   ok(callNumberView('', 'UK') === null && callNumberView(null) === null, 'no number → null');
   ok(uk.whatsappUrl === 'https://wa.me/447700900123' && au.whatsappUrl === 'https://wa.me/61412345678', 'UK and Australian numbers offer Call on WhatsApp');
-  ok(callNumberView('+91 98765 43210', 'India')!.whatsappUrl === null && WHATSAPP_CALL_PREFIXES.join() === '44,61', 'INDIA NOT RE-ENABLED: an Indian number has no WhatsApp option (UK / Australia only)');
+  ok(callNumberView('+91 98765 43210', 'India')!.whatsappUrl === null && WHATSAPP_CALL_PREFIXES.join() === '44,61,353', 'INDIA NOT RE-ENABLED: an Indian number has no WhatsApp option (UK / Australia / Ireland only)');
   const html = (copied: boolean, view = uk) => renderToStaticMarkup(createElement(CallNumberCard, { businessName: 'Calder Plumbing', view, copied, onCopy: () => {}, onStartCall: () => {}, onCancel: () => {} }));
   const h = html(false);
   ok(h.includes('Calder Plumbing') && h.includes('+44 7700 900123') && h.includes('On file as 07700 900123'), 'shows the business and the number prominently');

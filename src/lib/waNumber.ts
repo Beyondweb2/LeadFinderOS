@@ -26,6 +26,10 @@
    src/lib/ukColdDestination.ts in the queue and in send-whatsapp-message. */
 const INDIA = new Set(['INDIA', 'IN']);
 const AUSTRALIA = new Set(['AUSTRALIA', 'AU']);
+/* IRELAND (2026-11-11): +353. Trunk 0 + 8-9 digits (mobiles 08x, Dublin 01, other areas 02x-09x) -> 353...; a mobile typed
+   without its 0 ("85 123 4567") -> 353...; "353..." typed without "+" stays. Anything else -> null, never bare digits.
+   Ireland is NOT a cold-messaging market (outreachMarkets.ts): this only places the number for links, calls and replies. */
+const IRELAND = new Set(['IRELAND', 'IE']);
 
 /* ══ MALAYSIA AND SINGAPORE (2026-10-14, feat/my-sg-support) ═════════════════════════════════════════
    Before this a Malaysian "012-345 6789" became 44 12345 6789 (a UK-shaped number nobody owns) and a
@@ -100,6 +104,13 @@ export function toWhatsAppDigits(raw: string | null | undefined, country?: strin
   }
   if (MALAYSIA.has(cc)) return malaysiaDigits(s.replace(/\D/g, ''));
   if (SINGAPORE.has(cc)) return singaporeDigits(s.replace(/\D/g, ''));
+  if (IRELAND.has(cc)) {
+    const d = s.replace(/\D/g, '');
+    if (/^353[1-9]\d{7,8}$/.test(d)) return d;               // already 353 + a national number, typed without "+"
+    if (/^0[1-9]\d{7,8}$/.test(d)) return '353' + d.slice(1); // trunk 0 + 8-9 digits
+    if (/^8[35679]\d{7}$/.test(d)) return '353' + d;         // a mobile with its 0 dropped
+    return null;
+  }
   if (AUSTRALIA.has(cc)) {
     const d = s.replace(/\D/g, '');
     if (/^61[23478]\d{8}$/.test(d)) return d;               // already 61 + a national number, typed without "+"

@@ -16,10 +16,10 @@ import { AU_TOWNS, auTownLabel, findAuTown, parseAuTown } from './australiaTowns
 
 /* Australia (2026-10-21, src/lib/australiaTowns.ts): every ABS urban centre of 1,000+ with its Census population, each
    named WITH its state ("Ballarat VIC") so same-name towns in two states never share a row. Prospect-only. */
-export type CoverageCountry = 'UK' | 'Malaysia' | 'Singapore' | 'Australia';
-export const COVERAGE_COUNTRIES: readonly CoverageCountry[] = ['UK', 'Malaysia', 'Singapore', 'Australia'];
+export type CoverageCountry = 'UK' | 'Malaysia' | 'Singapore' | 'Australia' | 'Ireland';
+export const COVERAGE_COUNTRIES: readonly CoverageCountry[] = ['UK', 'Malaysia', 'Singapore', 'Australia', 'Ireland'];
 export const DEFAULT_COVERAGE_COUNTRY: CoverageCountry = 'UK';
-export const COVERAGE_COUNTRY_LABEL: Record<CoverageCountry, string> = { UK: 'United Kingdom', Malaysia: 'Malaysia', Singapore: 'Singapore', Australia: 'Australia' };
+export const COVERAGE_COUNTRY_LABEL: Record<CoverageCountry, string> = { UK: 'United Kingdom', Malaysia: 'Malaysia', Singapore: 'Singapore', Australia: 'Australia', Ireland: 'Ireland' };
 
 /** A URL / stored value read back as a Coverage country; anything else is the UK (the default, as before). */
 export function normaliseCoverageCountry(v: unknown): CoverageCountry {
@@ -71,6 +71,21 @@ const MY_EXTRA: AbroadTown[] = [
   { name: 'Taiping', region: 'Perak' },
   { name: 'Sungai Petani', region: 'Kedah' },
 ];
+/* Ireland (2026-11-11): Find Leads' own suggestions for Ireland plus a few county towns, each with its COUNTY (a fact).
+   No population figures yet: none is shown, never an invented number (the rule Malaysia and Singapore started with). */
+const IE_COUNTY: Record<string, string> = {
+  Dublin: 'Dublin', Cork: 'Cork', Limerick: 'Limerick', Galway: 'Galway', Waterford: 'Waterford', Drogheda: 'Louth',
+  Swords: 'Dublin', Dundalk: 'Louth', Bray: 'Wicklow', Navan: 'Meath', Ennis: 'Clare', Kilkenny: 'Kilkenny',
+  Tralee: 'Kerry', Carlow: 'Carlow', Athlone: 'Westmeath', Sligo: 'Sligo', Wexford: 'Wexford', Letterkenny: 'Donegal',
+  Newbridge: 'Kildare', Celbridge: 'Kildare', Mullingar: 'Westmeath', Greystones: 'Wicklow', Tullamore: 'Offaly',
+  Maynooth: 'Kildare',
+};
+const IE_EXTRA: AbroadTown[] = [
+  { name: 'Castlebar', region: 'Mayo' }, { name: 'Westport', region: 'Mayo' }, { name: 'Ballina', region: 'Mayo' },
+  { name: 'Killarney', region: 'Kerry' }, { name: 'Naas', region: 'Kildare' }, { name: 'Portlaoise', region: 'Laois' },
+  { name: 'Clonmel', region: 'Tipperary' }, { name: 'Cavan', region: 'Cavan' }, { name: 'Monaghan', region: 'Monaghan' },
+  { name: 'Longford', region: 'Longford' }, { name: 'Roscommon', region: 'Roscommon' }, { name: 'Thurles', region: 'Tipperary' },
+];
 const SG_REGION: Record<string, string> = {
   'Orchard': 'Central', 'Marina Bay': 'Central', 'Bukit Timah': 'Central',
   'Jurong East': 'West', 'Clementi': 'West',
@@ -89,6 +104,10 @@ export const ABROAD_TOWNS: Record<Exclude<CoverageCountry, 'UK'>, readonly Abroa
     ...SUGGESTED_LOCATIONS.Singapore.map((name) => ({ name, region: SG_REGION[name] ?? null })),
   ],
   /* Every ABS urban centre of 1,000+ (australiaTowns.ts), named WITH its state ("Ballarat VIC"), grouped by state. */
+  Ireland: [
+    ...SUGGESTED_LOCATIONS.Ireland.map((name) => ({ name, region: IE_COUNTY[name] ?? null })),
+    ...IE_EXTRA,
+  ],
   Australia: AU_TOWNS.map((t) => ({ name: t.label, region: t.stateName, ...(t.abs ? { aka: t.abs } : {}) })),
 };
 
@@ -97,8 +116,8 @@ function key(s: string): string {
   return s.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-const INDEX: Record<'Malaysia' | 'Singapore', Map<string, string>> = { Malaysia: new Map(), Singapore: new Map() };
-for (const c of ['Malaysia', 'Singapore'] as const) {
+const INDEX: Record<'Malaysia' | 'Singapore' | 'Ireland', Map<string, string>> = { Malaysia: new Map(), Singapore: new Map(), Ireland: new Map() };
+for (const c of ['Malaysia', 'Singapore', 'Ireland'] as const) {
   for (const t of ABROAD_TOWNS[c]) {
     INDEX[c].set(key(t.name), t.name);
     for (const a of t.aliases ?? []) INDEX[c].set(key(a), t.name);
@@ -129,7 +148,7 @@ export interface ResolvedTown {
  */
 export function resolveCoverageTown(country: Exclude<CoverageCountry, 'UK'>, raw: string | null | undefined): ResolvedTown | null {
   if (country === 'Australia') return resolveAustralianTown(raw);
-  const ps = pieces(raw ?? '').filter((p) => key(p) && key(p) !== 'malaysia');
+  const ps = pieces(raw ?? '').filter((p) => key(p) && key(p) !== 'malaysia' && key(p) !== 'ireland');
   for (const p of ps) {
     const hit = INDEX[country].get(key(p));
     if (hit) return { name: hit, listed: true };
@@ -150,18 +169,21 @@ export function abroadCountryOfLocation(location: string | null | undefined): Ex
   if (k === 'malaysia' || k.endsWith(' malaysia')) return 'Malaysia';
   if (k === 'singapore' || k.endsWith(' singapore')) return 'Singapore';
   if (k === 'australia' || k.endsWith(' australia')) return 'Australia';
+  /* "Northern Ireland" is the UK. */
+  if ((k === 'ireland' || k.endsWith(' ireland')) && !k.endsWith('northern ireland')) return 'Ireland';
   /* "Ballarat VIC" with no country word: a listed Australian town named WITH its state. */
   const au = parseAuTown(String(location ?? ''));
   if (au.state) { const hit = findAuTown(au.name, au.state); if (hit && hit !== 'ambiguous') return 'Australia'; }
   const first = pieces(String(location ?? ''))[0] ?? '';
   if (INDEX.Malaysia.has(key(first))) return 'Malaysia';
   if (INDEX.Singapore.has(key(first))) return 'Singapore';
+  if (INDEX.Ireland.has(key(first))) return 'Ireland';
   return null;
 }
 
 /** A lead's stored country as one of the abroad Coverage countries (exact words the app stores), else null. */
 export function abroadCountryOfLead(country: string | null | undefined): Exclude<CoverageCountry, 'UK'> | null {
-  return country === 'Malaysia' || country === 'Singapore' || country === 'Australia' ? country : null;
+  return country === 'Malaysia' || country === 'Singapore' || country === 'Australia' || country === 'Ireland' ? country : null;
 }
 
 /**

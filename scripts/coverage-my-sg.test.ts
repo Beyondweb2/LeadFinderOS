@@ -24,7 +24,7 @@ ok(TRADES.every((t) => canonicalTrade(t.label)?.slug === t.slug), "every label r
 ok(["Roofers", "Web designers / digital agencies", "Language schools"].every((l) => TRADES.some((t) => t.label === l)), "Roofers, Web designers and Language schools all listed");
 
 console.log("── THE COUNTRIES AND TOWNS ──");
-ok(COVERAGE_COUNTRIES.join(",") === "UK,Malaysia,Singapore,Australia", "UK, Malaysia, Singapore, Australia (2026-10-21, scripts/australia-coverage.test.ts)");
+ok(COVERAGE_COUNTRIES.join(",") === "UK,Malaysia,Singapore,Australia,Ireland", "UK, Malaysia, Singapore, Australia, Ireland (2026-10-21, scripts/australia-coverage.test.ts)");
 ok(normaliseCoverageCountry(null) === "UK" && normaliseCoverageCountry("India") === "UK" && normaliseCoverageCountry("Malaysia") === "Malaysia", "unknown / blank → UK (the default)");
 for (const c of ["Malaysia", "Singapore"] as const) {
   const names = new Set(ABROAD_TOWNS[c].map((t) => t.name));

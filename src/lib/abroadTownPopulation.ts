@@ -20,8 +20,8 @@ import { AUSTRALIA_TOWNS_SOURCE, findAuTownText } from './australiaTowns.ts';
 
 /* Australia (2026-10-21): NOT a hand table. Each listed town carries its ABS Census 2021 urban-centre count
    (australiaTowns.ts) — an official count, so it is shown without "≈". A town only a lead named has none (blank). */
-export type PopulationCountry = 'Malaysia' | 'Singapore' | 'Australia';
-type TabledCountry = 'Malaysia' | 'Singapore';
+export type PopulationCountry = 'Malaysia' | 'Singapore' | 'Australia' | 'Ireland';
+type TabledCountry = 'Malaysia' | 'Singapore' | 'Ireland';
 
 export interface PopulationSource {
   /** Shown beside the table. */
@@ -91,6 +91,8 @@ export const TOWN_POPULATION: Record<TabledCountry, Readonly<Record<string, Town
     'Taiping': district(304_023, 'Larut, Matang and Selama District'),
     'Sungai Petani': council(545_053, 'Sungai Petani Municipal Council area'),
   },
+  /* Ireland (2026-11-11): no figures yet — every town shows a dash, never an invented number. */
+  Ireland: {},
   Singapore: {
     'Singapore': blank('The whole city: no town figure'),
     'Orchard': area(1_550, 'Orchard'),
@@ -148,9 +150,9 @@ export function populationSourcesFor(country: PopulationCountry): PopulationSour
   return [...seen.values()];
 }
 
-/** The population filter is offered for the UK, Malaysia and Australia — never for Singapore (one city). */
+/** The population filter is offered for the UK, Malaysia and Australia — never for Singapore (one city) or Ireland (no figures yet). */
 export function populationFilterShown(country: 'UK' | PopulationCountry): boolean {
-  return country !== 'Singapore';
+  return country !== 'Singapore' && country !== 'Ireland';
 }
 
 /** Malaysia's population filter: a blank bound is no bound; with no bound at all every town shows (blank figures

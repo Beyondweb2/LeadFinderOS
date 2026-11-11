@@ -26,6 +26,7 @@ import { leadReadiness, readinessLines } from '@/lib/leadReadiness';
 const ADD_COUNTRIES = [
   { value: 'UK', label: 'United Kingdom', phoneHint: '07… (or give a Maps link)', example: '07700 900123' },
   { value: 'Australia', label: 'Australia', phoneHint: '0412 345 678 or +61 … (or give a Maps link)', example: '0412 345 678' },
+  { value: 'Ireland', label: 'Ireland', phoneHint: '085 123 4567 or +353 … (or give a Maps link)', example: '085 123 4567' },
   { value: 'Malaysia', label: 'Malaysia', phoneHint: '012-345 6789 or +60 … (or give a Maps link)', example: '012-345 6789' },
   { value: 'Singapore', label: 'Singapore', phoneHint: '9123 4567 or +65 … (or give a Maps link)', example: '9123 4567' },
 ] as const;

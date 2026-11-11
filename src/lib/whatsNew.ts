@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-11-ireland', date: '2026-11-11', title: 'Ireland is now a country you can add leads in', audience: 'all',
+    body: 'Pick Ireland when you add a lead. Irish numbers (085 123 4567 or +353 …) are read correctly for WhatsApp links and call numbers, AI checks name Ireland, and Coverage has an Ireland view with counties.',
+    report: {
+      added: ['Ireland in the Add a lead country list and in Coverage (towns grouped by county).', 'Irish phone numbers: 085… becomes +353 85…, with a WhatsApp link.', 'AI check questions say "Westport, Ireland", never "UK".'],
+      changed: [],
+      removed: [],
+      effect: 'You can add and work Irish leads by hand. Ireland is not switched on for cold WhatsApp, texts or browser calls, and Coverage shows no population figures for it yet.',
+    } },
   { id: '2026-11-11-calling-clear-errors', date: '2026-11-11', title: 'Browser calls: steadier abroad, and plain error messages', audience: 'all',
     body: 'If a browser call fails, the screen now says what went wrong and what to do, instead of a Twilio error number. Calls also connect through the Twilio centre nearest to you (Singapore for Malaysia).',
     report: {

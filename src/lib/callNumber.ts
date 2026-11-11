@@ -29,11 +29,13 @@ export interface CallNumberView {
   whatsappUrl: string | null;
 }
 
-/** The outreach markets whose numbers may be opened in WhatsApp to call: UK and Australia. */
-export const WHATSAPP_CALL_PREFIXES: readonly string[] = ['44', '61'];
+/** The numbers that may be opened in WhatsApp to call: UK, Australia and Ireland (a rep's own tap). */
+export const WHATSAPP_CALL_PREFIXES: readonly string[] = ['44', '61', '353'];
 
 function grouped(d: string): string {
   if (/^44\d{10}$/.test(d)) return '+44 ' + d.slice(2, 6) + ' ' + d.slice(6);
+  if (/^3538[35679]\d{7}$/.test(d)) return '+353 ' + d.slice(3, 5) + ' ' + d.slice(5, 8) + ' ' + d.slice(8);
+  if (/^353[1-9]\d{7,8}$/.test(d)) return '+353 ' + d.slice(3);
   if (/^614\d{8}$/.test(d)) return '+61 ' + d.slice(2, 5) + ' ' + d.slice(5, 8) + ' ' + d.slice(8);
   if (/^61[2378]\d{8}$/.test(d)) return '+61 ' + d.slice(2, 3) + ' ' + d.slice(3, 7) + ' ' + d.slice(7);
   return '+' + d;

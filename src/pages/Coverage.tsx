@@ -521,6 +521,10 @@ export default function Coverage() {
         {populationSourcesFor(country).map((s) => (
           <span key={s.url}><a href={s.url} target="_blank" rel="noreferrer" className="underline">{s.label}</a> ({s.year})</span>
         ))}.
+      </p> : country === 'Ireland' ? <p className="text-xs text-muted-foreground" data-testid="coverage-ie-note">
+        <MapPin className="mr-1 inline h-3 w-3" />
+        Towns are the places Find Leads suggests for Ireland, plus any place your leads or searches name, grouped by county.
+        A lead counts here by its own country. There are no population figures for Ireland yet.
       </p> : <p className="text-xs text-muted-foreground">
         <MapPin className="mr-1 inline h-3 w-3" />
         Towns are the places Find Leads suggests for {COVERAGE_COUNTRY_LABEL[country]}, plus any place your leads or
