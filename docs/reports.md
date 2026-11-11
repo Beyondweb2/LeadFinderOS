@@ -619,16 +619,21 @@ list (`sameBusiness`). Overview `names` likewise. Order = first mention in the a
 order for names the text never writes; the business first when the verdict named them but the text never spells them.
 Scores are untouched. Only `render-audit-report` needs a redeploy for the public page.
 
-## Redesigned client reports (2026-11-11)
+## Redesigned client reports (2026-11-11, third design: concept C)
 
-Three pages in the Findable black-and-yellow design, phone-first: **opportunity** (Discovery audits), **baseline** (paid baseline) and **hook** (a complete six-answer hook).
-Code: `src/lib/reportDesign.ts` (renderers + `chooseReportDesign`), `src/lib/reportOpportunity.ts` (the counts and the rule), wired at the end of `render-audit-report`.
-Examples and screenshots: `docs/mockups/report-redesign/`. Tests: `scripts/report-design.test.ts` (and the new files are in the `client-copy-claims` scan).
+One fixed template for every business, three pages: **opportunity** (Discovery audits), **client report** (paid baseline: the 20 tracked searches)
+and **first-contact** (a complete six-answer hook). Light body, **dark header and footer** (the header holds logo, date, business name,
+headline and the three numbers), big type, mobile first, plain English ("searches", never "questions"; no "discovery", "baseline", "verdict",
+"engines", "fragmented", "citations", "visibility score", "GEO" — pinned by `scripts/report-design.test.ts`). At most two short lines of text per
+section; the footer line is "These are opportunities, not guarantees."
+Code: `src/lib/reportDesign.ts` (renderers + `chooseReportDesign`), `src/lib/reportOpportunity.ts` (the counts and the rule), wired at the end of
+`render-audit-report`. Mockups: `docs/mockups/report-simple/` (the other two header/footer concepts were dropped). The files are in the `client-copy-claims` scan.
 
-- **The rule (Paul, printed on the reports in `RULE_WORDS`):** Winnable (easy) = no business named at all, and a service they offer in their area. Winnable = no single business named in HALF OR MORE of the answers (3 or more of 6 is Hard) AND a service they offer in their area. Possible = fragmented, but outside their area or a service not on their website. Hard = one business named in half or more of the answers (Paul, 2026-11-11). Fragmented alone is never enough.
-- **"Their area":** where the audit's town, their website's area pages and (for a Discovery or a baseline cut from one) the questions' own towns put them. A Discovery asks about the business's own patch, so its questions pass this test by construction; the test bites for a question added from outside.
+- **The rule (Paul, `RULE_WORDS`):** You could win = no single business named in half or more of the answers AND a service on their website (and in their area). Possible with work = one business named in 3 or 4 of 6 (top/answers from half up to under 5/6), or a service not on their website / outside their area. Hard to win = one business in 5 or 6 of 6 (top/answers >= 5/6), whatever the service.
+- **"Their area":** where the audit's town, their website's area pages and (for a Discovery or a baseline cut from one) the questions' own towns put them. A Discovery asks about the business's own patch, so its questions pass this test by construction.
 - **"A service they offer":** the question's topic must appear on the website check's services/pages (`TOPICS` in `reportOpportunity.ts`). No stored website check = the test is skipped, never guessed.
-- **Directories** (Checkatrade, Yell, TrustATrader, MyBuilder, Bark, Rated People, Trustpilot, Which? Trusted Traders, FreeIndex, Google reviews, Gas Safe Register, NICEIC, … plus hosts the shared aggregator list knows) are counted per question and overall from answer text and cited sources, shown as "Get listed here first", and are never competitors.
-- **Old classifier RETIRED (2026-11-11):** `classifyWinnability` is deleted. `ruleVerdict` (same file) is the one rule for the page plan (`page-generator`), the action plan, `market-view`, the Discovery screens (`opportunityFor`) and the client reports. Winnable = `open`, Possible = `contested`, Hard = `locked`; a client named in more than half the runs is `named`. The retired `no_local_race` verdict is no longer produced (no business named at all is now Winnable (easy)). The operator audit page no longer shows a per-run winnability badge or /10 score, only counts.
+- **Directories** (Checkatrade, Yell, TrustATrader, MyBuilder, Bark, Rated People, Trustpilot, Which? Trusted Traders, FreeIndex, Google reviews, Gas Safe Register, NICEIC, … plus hosts the shared aggregator list knows) are counted per search and overall from answer text and cited sources, shown as "Get listed on these sites", and are never competitors.
+- **One rule everywhere:** `classifyWinnability` is deleted. `ruleVerdict` (same file) feeds the page plan (`page-generator`), the action plan, `market-view` and the Discovery screens (`opportunityFor`). Possible-to-Hard words for those: You could win = `open`, Possible with work = `contested`, Hard to win = `locked`; a client named in more than half the runs is `named`. The operator audit page shows counts only (no badge, no /10 score).
+- **Client report date:** "We check again on <date>" is `outreach_leads.remeasure_due_date`; absent = "in 4 weeks".
 - `?design=classic` shows the previous report ONLY when sent straight to the `render-audit-report` function (the findable.live proxy drops that parameter); measuring, name-unjudgeable and the day-28 re-measure always keep it. A render error falls back to it.
-- **London Domestic Maintenance** (discovery `w9ebxk`): 13 Winnable, 2 Possible, 25 Hard with Hard = half or more (it was 25/4/11 with Hard = more than half, and 16/16/8 under the first design-approval rule).
+- **London Domestic Maintenance** (discovery `w9ebxk`): 13 You could win, 22 Possible with work, 5 Hard to win (earlier rules gave 25/4/11 and 13/2/25).

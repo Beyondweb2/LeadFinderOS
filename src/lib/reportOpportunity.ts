@@ -4,14 +4,14 @@
    PRESENTATION INPUT ONLY (2026-11-11, report redesign). It reads answers already collected;
    it never calls a provider and never changes a score, a stored row or the audit method.
 
-   THE RULE (Paul, 2026-11-11 — shown on every report in these exact words, RULE_WORDS below):
-     • Winnable (easy) — no business is named at all, and it is a service they offer in their area.
-     • Winnable        — no single business is named in HALF OR MORE of the answers (under 3 of 6), AND it is a
-                         service they offer in their area.
-     • Possible        — answers are fragmented (no business in half or more of them) but the question is
-                         outside their area, or about a service not on their website.
-     • Hard            — one business is named in half or more of the answers (3 or more of 6).
-   ⛔ FRAGMENTED ALONE IS NEVER ENOUGH FOR WINNABLE: it also has to be a service they offer, in their area.
+   THE RULE (Paul, 2026-11-11, third version — the one the simple reports use; RULE_WORDS below):
+     • "You could win"      — no single business is named in HALF OR MORE of the answers (under 3 of 6), AND it is
+                              a service on their website, in their area.
+     • "Possible with work" — one business is named in 3 or 4 of 6 (half up to just under 5/6), OR it is a service
+                              not on their website (or outside their area).
+     • "Hard to win"        — one business is named in 5 or 6 of 6 (5/6 or more), whatever the service.
+   Other answer counts scale the same way (top / answers). ⛔ Many different businesses named is never enough on
+   its own: the service has to be on their website.
 
    ⛔ NOT A SCORE. docs/architecture-rules.md bans winnability SCORING (it flips between identical inputs).
    This is a fixed, written rule over COUNTS across every stored answer, so the same data always gives the
@@ -30,12 +30,11 @@ export type OppTier = 'now' | 'possible' | 'hard';
 export interface OppFirm { name: string; count: number }
 export interface OppDirectory { name: string; /** answers that name or cite it */ answers: number; /** questions it appears in */ questions: number }
 
-/** The four lines every report prints, in Paul's words. */
-export const RULE_WORDS: { key: string; label: string; text: string }[] = [
-  { key: 'easy', label: 'Winnable (easy)', text: 'No business is named at all, and it is a service you offer in your area.' },
-  { key: 'now', label: 'Winnable', text: 'No single business is named in half or more of the answers, and it is a service you offer in your area.' },
-  { key: 'possible', label: 'Possible', text: 'Answers are fragmented, but the question is outside your area or about a service that is not on your website.' },
-  { key: 'hard', label: 'Hard', text: 'One business is named in half or more of the answers.' },
+/** The three groups, in the words the reports print (plain English, no jargon). */
+export const RULE_WORDS: { key: OppTier; label: string; short: string }[] = [
+  { key: 'now', label: 'You could win', short: 'No one stands out yet' },
+  { key: 'possible', label: 'Possible with work', short: 'One firm leads, or work needed' },
+  { key: 'hard', label: 'Hard to win', short: 'One firm named almost every time' },
 ];
 
 /** The shape of one stored answer cell this module reads (a subset of auditReport's EngineCell). */
@@ -49,6 +48,8 @@ export interface OppQuestion {
   easy: boolean;
   /** Answers received from ChatGPT + Gemini (6 for 3 asks). */
   answers: number;
+  /** At most 5 words: why this search is in its group ("AI names nobody"). Plain English. */
+  why: string;
   /** Answers that named no business at all. */
   empty: number;
   distinct: number;
@@ -232,26 +233,29 @@ export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): 
   const pages = (ctx.pageUrls ?? []).join(' ').toLowerCase();
   const hasPage = topic ? (ctx.services.some((s) => topic.pageKey.test(s.name.toLowerCase()) && s.dedicated) || (topic.label === 'EICR certificates' && /eicr/.test(pages))) : null;
 
-  /* THE RULE, in order. */
-  /* "Hard" = ONE business named in HALF OR MORE of the answers (Paul, 2026-11-11: 3 or more of 6). */
-  const dominant = answers > 0 && top * 2 >= answers;
+  /* THE RULE (Paul, 2026-11-11): Hard = one business in 5 or 6 of 6 (top/answers >= 5/6); Possible = 3 or 4 of 6 (half or
+     more), or a service not on their website / outside their area; otherwise "you could win". */
+  const dominant = answers > 0 && top * 6 >= answers * 5;
+  const leads = answers > 0 && top * 2 >= answers;
   let tier: OppTier;
-  let easy = false;
+  const easy = false;
   if (answers === 0) tier = 'possible';
   else if (dominant) tier = 'hard';
-  else if (serviceOnSite && areaOk) { tier = 'now'; easy = top === 0; }
+  else if (leads) tier = 'possible';
+  else if (serviceOnSite && areaOk) tier = 'now';
   else tier = 'possible';
 
   const areaMixup = area === 'Stratford' && (firms.some((f) => /upon.?avon/i.test(f.name)) || [...cites].some((d) => /avon/i.test(d)));
   const reasons: string[] = [];
   if (areaMixup) reasons.push('AI is answering for Stratford-upon-Avon, not Stratford E15, so nobody in your patch is being named.');
-  if (dominant) reasons.push(`${firms[0].name} is named in ${top} of ${answers} answers, which is half or more of them.`);
+  if (dominant) reasons.push(`${firms[0].name} is named in ${top} of ${answers} answers.`);
+  else if (leads) reasons.push(`${firms[0].name} is named in ${top} of ${answers} answers.`);
   else if (tier === 'possible' && answers > 0) {
     if (needsConfirm && topic?.confirmNote) reasons.push(topic.confirmNote);
     else if (!serviceOnSite) reasons.push('Not a service we found on your website.');
     if (!areaOk) reasons.push(`${area} is outside the areas your website covers.`);
   }
-  if (!dominant && answers > 0) {
+  if (!leads && answers > 0) {
     if (top === 0) reasons.push(`AI named no business in any of the ${answers} answers.`);
     else {
       if (empty * 2 >= answers && empty > 0) reasons.push(`AI named no business in ${empty} of ${answers} answers.`);
@@ -267,6 +271,14 @@ export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): 
   if (intent === 'emergency') reasons.push('An emergency question: 24/7 cover and reviews count here.');
   if (!reasons.length) reasons.push(`${distinct} businesses named across ${answers} answers.`);
 
+  const why = areaMixup ? 'AI mixes up two Stratfords'
+    : dominant ? 'One firm named almost every time'
+    : leads ? 'One firm leads'
+    : !serviceOnSite ? 'Not on your website yet'
+    : !areaOk ? 'Outside your areas'
+    : top === 0 ? 'AI names nobody'
+    : empty * 2 >= answers ? 'Most answers name no one'
+    : 'No one stands out yet';
   const label = topic?.label ?? null;
   let help = '';
   if (offered && label) {
@@ -277,7 +289,7 @@ export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): 
   }
 
   return {
-    question, tier, easy, answers, empty, distinct, top, firms: firms.slice(0, 5), namedYou,
+    question, tier, easy, why, answers, empty, distinct, top, firms: firms.slice(0, 5), namedYou,
     chatgptNamed: per.chatgpt[0], chatgptAnswers: per.chatgpt[1], geminiNamed: per.gemini[0], geminiAnswers: per.gemini[1],
     area, service: offered ? label : null, hasPage, reasons, help, intent, dirs,
   };
