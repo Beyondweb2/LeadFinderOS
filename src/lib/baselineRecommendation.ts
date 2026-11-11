@@ -19,6 +19,10 @@
         ⛔ BALANCE DECIDES. The opportunity is only a TIE-BREAK between candidates that balance the
         set equally — questions where the business is not yet named go first. That is "favour
         opportunities" without "the 20 easiest questions": a rank cannot outvote the spread.
+     ROOM SPLIT (Paul, 2026-11-12): the 20 = every Hook search (locked) + 3-4 MAIN money searches (the core questions; topped up
+     from the home-town broad/service searches) even when they are Little room, labelled "Main search, harder to get named" +
+     about 14 with the most room to be named (Lots, then Some; a Little-room search only fills a gap) + none where AI names no
+     firms. A baseline already approved and frozen is never re-picked: this only shapes a NEW recommendation.
      3. Eligible but not chosen = KEEP AS FUTURE OPPORTUNITY (with why), and at approval it goes to
         the Opportunity Backlog (client_opportunities), which the guarantee never reads.
 
@@ -63,6 +67,8 @@ export interface RecInput {
 }
 
 export interface RecRow {
+  /** A main money search that has little room to be named (shown as "Main search, harder to get named"). */
+  main?: boolean;
   question: string; source: QuestionSource; town: string | null; service: string | null; intent: IntentType;
   reason: string; engines: EngineTally[] | null;
 }
@@ -112,6 +118,10 @@ const norm = (q: string) => q.trim().replace(/\s+/g, ' ').toLowerCase();
 
 /** Tie-break only (see header): not named anywhere → 0; partly named or unmeasured → 1; else 2. */
 function opportunityRank(i: RecInput | undefined): number {
+  /* The room verdict (reportOpportunity: open = Lots, contested = Some, locked = Little) decides first. */
+  if (i?.verdict === 'open') return 0;
+  if (i?.verdict === 'contested') return 1;
+  if (i?.verdict === 'locked') return 3;
   if (!i || !measured(i.engines)) return 1;
   if (absentEverywhere(i.engines)) return 0;
   return consistentlyNamed(i.engines) ? 2 : 1;
@@ -173,27 +183,45 @@ export function recommendBaseline(a: RecommendArgs): Recommendation {
   const hook = a.hook.map((q) => q.trim()).filter(Boolean).filter((q, i, arr) => arr.findIndex((x) => norm(x) === norm(q)) === i);
 
   const core = (a.core ?? []).map((q) => q.trim()).filter(Boolean).filter((q) => !hook.some((h) => norm(h) === norm(q)));
-  const isCore = (q: string) => core.some((c) => norm(c) === norm(q));
+  /* MAIN money searches: at least 3 (up to 4). The core questions first; if fewer, the home-town broad / service searches
+     (the plain "a good <trade> in <home town>"), even when they have little room. */
+  const MAIN_MIN = 3;
+  const topUp = new Set<string>();
+  if (core.length < MAIN_MIN) {
+    const home = normTown(a.ctx.primaryTown);
+    for (const i of a.pool) {
+      if (core.length >= MAIN_MIN) break;
+      const m = classifyQuestion(i.question.trim(), a.ctx);
+      if (!m.town || normTown(m.town) !== home || (m.intent !== 'broad' && m.intent !== 'service')) continue;
+      if (hook.some((h) => norm(h) === norm(i.question)) || core.some((c) => norm(c) === norm(i.question))) continue;
+      if (i.verdict === 'no-local-race' || exclusion(i.question, i, m, a.scope)) continue;
+      core.push(i.question.trim()); topUp.add(norm(i.question));
+    }
+  }
+  const isCore = (q: string) => core.some((c) => norm(c) === norm(q)) && !topUp.has(norm(q));
   const excluded = new Map<string, string>();
   const eligible: RecInput[] = [];
   for (const i of a.pool) {
     const m = classifyQuestion(i.question.trim(), a.ctx);
     if (hook.some((h) => norm(h) === norm(i.question))) continue;            // already locked in
-    if (isCore(i.question)) continue;                                        // admitted as core
+    if (core.some((c) => norm(c) === norm(i.question))) continue;           // admitted as core / main
     const why = exclusion(i.question, i, m, a.scope);
     if (why) excluded.set(norm(i.question), why); else eligible.push(i);
   }
-  const chosen = buildBalancedBaseline(
+  const build = (pool: RecInput[]) => buildBalancedBaseline(
     [
       ...hook.map((q) => ({ question: q, source: 'locked' as const })),
       ...core.map((q) => ({ question: q, source: 'core' as const })),
-      ...eligible.map((i) => ({ question: i.question, source: 'discovery' as const })),
+      ...pool.map((i) => ({ question: i.question, source: 'discovery' as const })),
     ],
     a.ctx, a.target, {
       rank: (q) => opportunityRank(byQ.get(norm(q))), serviceCap: MAX_QUESTIONS_PER_SERVICE, hardServiceCap: true,
       ...(a.scope ? { serviceOf: (q: string) => questionScope(q, a.scope!).service } : {}),
     },
   );
+  /* The rest come from searches with room (Lots / Some); a Little-room search is used only when too few others exist. */
+  let chosen = build(eligible.filter((i) => i.verdict !== 'locked'));
+  if (chosen.length < a.target) chosen = build(eligible);
   const chosenSet = new Set(chosen.map(norm));
 
   const rows: RecRow[] = chosen.map((q) => {
@@ -205,7 +233,8 @@ export function recommendBaseline(a: RecommendArgs): Recommendation {
       : isCore(q)
         ? `Core question — the plain question customers ask most, always in the baseline; ${visibilityPhrase(input)}.`
         : `${INTENT_LABELS[m.intent]}: ${subjectPhrase(m, a.trade, q, a.scope)}; ${visibilityPhrase(input)}.`;
-    return { question: q, source: isHook ? 'hook' : isCore(q) ? 'core' : 'discovery', town: m.town, service: m.service, intent: m.intent, reason, engines: input?.engines ?? null };
+    const main = (isCore(q) || topUp.has(norm(q))) && (byQ.get(norm(q))?.verdict === 'locked');
+    return { question: q, source: isHook ? 'hook' : isCore(q) ? 'core' : 'discovery', town: m.town, service: m.service, intent: m.intent, reason: main ? `Main search, harder to get named. ${reason}` : reason, engines: input?.engines ?? null, ...(main ? { main: true } : {}) };
   });
 
   const pool: PoolRec[] = a.pool.map((i) => {

@@ -63,3 +63,7 @@ token overlap. Residential / commercial / landlord stay meaningful.
 ## BS4 verification
 
 See the session report (2026-09-23). Generate-only: no Discovery run, no freeze, no baseline started.
+
+## Room split (2026-11-12)
+
+The pick now favours searches with room to be named: hook searches locked in, 3-4 main searches kept even when they have little room ("Main search, harder to get named"), about 14 with the most room, none where AI names no firms. Balance rules above still apply. See `docs/report-room-rule-v2-copy-note.md`.

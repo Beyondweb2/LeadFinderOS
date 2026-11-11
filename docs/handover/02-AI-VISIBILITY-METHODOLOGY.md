@@ -172,3 +172,7 @@ Rules (`resolveServiceTruth`, `src/lib/serviceScope.ts`; `siteServiceTruth.ts`; 
 5. A `capped` run counts as usable for the baseline freeze, but any capped replay run holds the results ("gave up").
 6. Two stale code comments: `auditQuestionCounts.ts` ("12, NOT 10") and `create-ai-audit/index.ts` ("BASELINE_QUESTIONS
    (10)") — the constant is 20.
+
+## Room rule, score label and baseline split (2026-11-12)
+
+See `docs/report-room-rule-v2-copy-note.md`: searches are graded Lots / Some / Little room by how much of the answers the repeating firms take; the score reads "AI named you in X% of answers"; a service missing from the current site is "Not on your site yet" (not excluded); the baseline of 20 = hook searches + 3-4 main searches + about 14 with the most room, none where AI names no firms. Frozen baselines are never re-picked.

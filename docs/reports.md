@@ -619,23 +619,46 @@ list (`sameBusiness`). Overview `names` likewise. Order = first mention in the a
 order for names the text never writes; the business first when the verdict named them but the text never spells them.
 Scores are untouched. Only `render-audit-report` needs a redeploy for the public page.
 
-## Redesigned client reports (2026-11-11, fourth design: Findable look)
+## Redesigned client reports — the template (2026-11-11, strict rule)
 
-One fixed template for every business, three pages: **opportunity** (Discovery audits), **client report** (paid baseline: the 20 tracked searches)
-and **first-contact** (a complete six-answer hook). The look is copied from the LeadFinderOS waitlist's audit example and Findable's own tokens (read-only from
-`C:\Users\paulj\leadfinderos-waitlist` and `findable-site-current`): one dark rounded card, numbered yellow section markers, coloured number tiles, gold
-"named instead" chips, near-black `#0A0A0C`/`#17181C`/`#1E1F24`, yellow `#F5B301` button, the "Findable." wordmark, Findable's system font stack at weight 900 (no webfont).
-Plain English ("searches", never "questions"; no "discovery", "baseline", "verdict", "engines", "fragmented", "citations", "visibility score", "GEO" — pinned by
-`scripts/report-design.test.ts`); at most two short lines per section; footer line "These are opportunities, not guarantees."
-**Headline:** built from what customers type (`searchPhrase` in `reportOpportunity.ts`: the two most-asked services as "a gas engineer or electrician" + the widest region the searches use, e.g. "East London"), NEVER the trade label.
-Code: `src/lib/reportDesign.ts` (renderers + `chooseReportDesign`), `src/lib/reportOpportunity.ts` (the counts and the rule), wired at the end of
-`render-audit-report`. Mockups: `docs/mockups/report-brand/` (with the waitlist example beside them). The files are in the `client-copy-claims` scan.
+ONE template for every business, three report types in the SAME order: **1 AI score + headline · 2 AI recommends these instead · 3 Your website
+check · 4 targets (opportunity: best 10; client: the tracked searches; first contact: 3 example searches) · 5 Get listed on these sites · 6 What
+we'd do + one button.** Nothing is specific to a business: `reportModel.ts` builds a `ReportModel` from the business's own rows, website check
+and dates; `reportDesign.ts` renders it (the approved Findable look). Mockups: `docs/mockups/report-template/` (LDM, ABLM, one made-up edge case).
+Tests: `scripts/report-design.test.ts` (rule, places, phrases, score, every edge case, copy bans, order).
 
-- **The rule (Paul, `RULE_WORDS`):** You could win = no single business named in half or more of the answers AND a service on their website (and in their area). Possible with work = one business named in 3 or 4 of 6 (top/answers from half up to under 5/6), or a service not on their website / outside their area. Hard to win = one business in 5 or 6 of 6 (top/answers >= 5/6), whatever the service.
-- **"Their area":** where the audit's town, their website's area pages and (for a Discovery or a baseline cut from one) the questions' own towns put them. A Discovery asks about the business's own patch, so its questions pass this test by construction.
-- **"A service they offer":** the question's topic must appear on the website check's services/pages (`TOPICS` in `reportOpportunity.ts`). No stored website check = the test is skipped, never guessed.
-- **Directories** (Checkatrade, Yell, TrustATrader, MyBuilder, Bark, Rated People, Trustpilot, Which? Trusted Traders, FreeIndex, Google reviews, Gas Safe Register, NICEIC, … plus hosts the shared aggregator list knows) are counted per search and overall from answer text and cited sources, shown as "Get listed on these sites", and are never competitors.
-- **One rule everywhere:** `classifyWinnability` is deleted. `ruleVerdict` (same file) feeds the page plan (`page-generator`), the action plan, `market-view` and the Discovery screens (`opportunityFor`). Possible-to-Hard words for those: You could win = `open`, Possible with work = `contested`, Hard to win = `locked`; a client named in more than half the runs is `named`. The operator audit page shows counts only (no badge, no /10 score).
-- **Client report date:** "We check again on <date>" is `outreach_leads.remeasure_due_date`; absent = "in 4 weeks".
-- `?design=classic` shows the previous report ONLY when sent straight to the `render-audit-report` function (the findable.live proxy drops that parameter); measuring, name-unjudgeable and the day-28 re-measure always keep it. A render error falls back to it.
-- **London Domestic Maintenance** (discovery `w9ebxk`): 13 You could win, 22 Possible with work, 5 Hard to win (earlier rules gave 25/4/11 and 13/2/25).
+- **Room rule (Paul, 2026-11-11, replaces "winnable / possible / hard"):** the goal is to be NAMED by AI, not to be first; we always build their site, so no label
+  speaks of work needed. Per search, over its answers: **regulars** = firms named in at least half of the answers; **repeat share** = regular mentions / all firm
+  mentions. `nofirms` (more than half the answers name no firm) -> "AI doesn't name firms yet"; named in half or more -> Keep and grow; share >= 0.6, or one firm
+  in 5/6+ with a share >= 0.5 -> **Little room**; share < 0.3 -> **Lots of room** (needs a service on their site and a specific area, else capped at Some); else
+  **Some room**. A service not on their site is "Not your service" (left out of the room counts and targets). Constants: `ROOM_LITTLE_AT` 0.6,
+  `ROOM_LITTLE_TOP_ALL` 0.5, `ROOM_SOME_AT` 0.3.
+- **Where the thresholds come from (real data, 6 answers per search):** London Domestic Maintenance (37 searches) repeat shares: 0 for every rotating list
+  (plumber in Tower Hamlets 13 different firms, 0), 0.18-0.30 for open fields, 0.41-0.55 for mixed fields, 0.60-0.89 for closed lists (boiler service in Bow 0.65,
+  emergency plumber in East London 0.89 with 5 firms in most answers). ABLM (accountants, 20 searches): 0.2-0.56 mixed, 0.6-0.83 closed lists (the same 5-7 firms
+  recur). The gaps at about 0.3 and 0.6 are where the real lists separate; the "one firm in 5 of 6" rule catches a spot that never changes even when the rest
+  rotates. Counts scale by fraction for other answer counts (8 answers: regular = 4+).
+- **Wrong place, answer by answer:** an answer is for the wrong place when its firm names, cited sites or text say "<place>-upon-…" (or on/under/le/next/cum
+  + a river or name). Such answers are dropped; the whole search is left out only when half or more of its answers are wrong. Stratford: "boiler repair in
+  Stratford" (3 of 6 wrong) is left out; "plumber in Stratford" (2 of 6) keeps its 4 right answers.
+- **Asking places from now on:** `placeAsk.ts` `askPlace`: a clashing place (Stratford, Newcastle, Richmond, Bury, Brighton, Newport, Bangor, Henley, Sutton, Kingston,
+  Wellington, Lancaster, Perth, Burton, Weston, Chester, Ashford) is written with its wider area ("Stratford, London") by `create-ai-audit`, in the Discovery
+  and new-question paths only (baseline and replay paths and every stored question are untouched). `baseline-discovery` passes `wider_area` (the client's home area).
+- **AI score:** share of the answers that named any business that named THIS business (stored answers only; flagged searches left out). The line is
+  "AI named you N times. [Top competitor]: M." Bands: 0 = "doesn't mention you yet"; under half = "mentions you in N of M answers"; half or more =
+  "Keep it up and grow it" (the targets then lead with where to keep and grow).
+- **Places:** `placeScope` = specific (borough/town/district) / wide (whole city, region, county, country, or "across X") / none. Ambiguous places are
+  detected from the stored answers (`placeMixup`: "<place>-upon-…" in firm names, sites or answers) and flagged; `askPlace` adds the wider area to a
+  clashing place name when searches are generated (use it where the places are inserted; the questions already stored are not rewritten).
+- **Competitors:** never a directory (`isDirectoryName`, UK + Ireland + Australia lists), never a bare service phrase (`isServicePhrase`: only
+  service/place words AND a document noun such as certificate/assessment/testing, no legal suffix); the dropped names are kept in `droppedPhrases`.
+- **Headline:** customer words from the searches' own heads (`headOf` / `searchPhrase`: "a plumber or electrician in East London"), any trade,
+  any country; never a trade label.
+- **Website check:** the stored issue list (serious first) in plain English; no website score number (team-only). States: issues / clean / no website
+  ("a site AI can read") / not checked yet.
+- **Page plan etc.:** `ruleVerdict` maps You could win -> open, Possible -> contested, Hard -> locked, AI doesn't name firms yet -> no_local_race
+  (the Q&A-page case), flagged -> unmeasured; named in more than half the runs -> named.
+- `ai_audit_runs.mention_rate` / `results.summary.named_datapoints` are NOT read by the template. LDM run 1 stored 2.5% (2 of 80) while every stored answer
+  says "not named" (no answer text even contains the name): that stored summary was written at finalisation and does not match the answers.
+- `?design=classic` shows the previous report only when sent straight to `render-audit-report` (the findable.live proxy drops it); measuring,
+  name-unjudgeable and the day-28 re-measure keep the classic page; a render error falls back to it.

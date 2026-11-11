@@ -1,0 +1,136 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow, noarchive"><title>ABLM Associates - AI search report</title><style>
+:root{color-scheme:light;--ink:#101114;--cream:#f7f5f1;--y:#ffd13f;--btn:#f5b301}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--cream);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.45}
+h1,h2,h3,p{margin:0}a{color:inherit}
+.rp-sheet{max-width:960px;margin:0 auto;background:var(--cream)}
+.rp-head{background:var(--ink);color:#fff;padding:24px 32px 18px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px 28px;flex-wrap:wrap}
+.rp-wm{font-size:28px;font-weight:900;letter-spacing:-.03em;line-height:1.05;color:#fff}.rp-wm i{font-style:normal;color:var(--btn);font-size:1.3em;line-height:0}
+.rp-sub{margin-top:8px;font-size:10.5px;font-weight:700;letter-spacing:.24em;text-transform:uppercase;color:#a3a5ab}
+.rp-meta{text-align:right;min-width:0;max-width:100%}
+.rp-meta-top{display:flex;justify-content:flex-end;gap:18px;font-size:10.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#a3a5ab}
+.rp-date{color:#d4d5d9}
+.rp-biz{font-size:20px;font-weight:800;color:#fff;margin-top:4px;letter-spacing:-.01em;overflow-wrap:anywhere}
+.rp-where{font-size:13px;color:#bdbec3;margin-top:2px}
+.rp-method{margin-top:6px;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--y)}
+.rp-score{background:var(--ink);padding:4px 24px 22px}
+.rp-score-in{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:14px;align-items:stretch}
+.rp-overall{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:18px;padding:18px 22px}
+.rp-k{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#dcdde0}
+.rp-k i{width:10px;height:10px;border-radius:3px;background:var(--y);display:inline-block}
+.rp-big{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin-top:10px;color:#fff}
+.rp-big-n{font-size:56px;font-weight:900;letter-spacing:-.05em;line-height:.95;white-space:nowrap}
+.rp-big-w{font-size:22px;font-weight:800;color:#bdbec3}
+.rp-overall-s{display:block;font-size:14px;color:#ebebed;margin-top:8px;line-height:1.35}
+.rp-t-red{color:#ff6b75}.rp-t-amber{color:#ffbe3d}.rp-t-green{color:#4ade80}.rp-t-grey{color:#dcdde0}
+.rp-eng{border-radius:18px;padding:16px 18px;border:1px solid rgba(255,255,255,.09);display:flex;flex-direction:column;justify-content:center;min-width:0}
+.rp-eng--gpt{background:linear-gradient(160deg,rgba(74,222,128,.10),rgba(255,255,255,.03))}
+.rp-eng--gem{background:linear-gradient(160deg,rgba(167,139,250,.16),rgba(255,255,255,.03))}
+.rp-eng-h{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:700;color:#fff}
+.rp-eng-v{font-size:40px;font-weight:900;letter-spacing:-.04em;line-height:1;margin-top:12px}
+.rp-eng-s{font-size:13px;color:#bdbec3;margin-top:6px}
+.rp-dot{display:inline-block;width:10px;height:10px;border-radius:50%;flex:none}
+.rp-dot--gpt{background:#4ade80}.rp-dot--gem{background:#a78bfa}.rp-dot--aio{background:#a3a5ab}
+.rp-aio-line{margin-top:14px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:13px;color:#d4d5d9;padding:10px 14px;border:1px dashed rgba(255,255,255,.18);border-radius:12px}
+.rp-aio-line b{color:#fff}.rp-aio-line em{margin-left:auto;font-size:12px;color:#a3a5ab}
+.rp-body{background:var(--cream);padding:22px 24px 8px}
+.rp-line{font-size:24px;font-weight:900;letter-spacing:-.025em;line-height:1.15;margin:0 2px 8px}
+.rp-line em{font-style:normal;background:var(--y);padding:0 6px;border-radius:6px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.rp-intro{font-size:15px;line-height:1.55;color:#3a3b40;margin:0 2px 18px;max-width:70ch}
+.rp-feat,.rp-panel{background:#fff;border:1px solid #e9e5dc;border-radius:20px;padding:22px 24px;margin-bottom:18px;min-width:0}
+.rp-panel{padding:18px 20px 16px}
+.rp-pill{display:inline-block;background:var(--y);color:var(--ink);font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;padding:6px 12px;border-radius:8px}
+.rp-feat-q{margin:14px 0 6px;font-size:26px;font-weight:850;letter-spacing:-.02em;line-height:1.2}
+.rp-feat-sub{margin:0 0 16px;font-size:14.5px;color:#55565c}
+.rp-ans-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.rp-ans{background:#fff;border:1px solid #e4e0d6;border-radius:16px;padding:16px 18px;min-width:0;display:flex;flex-direction:column}
+.rp-ans-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.rp-eng-name{display:inline-flex;align-items:center;gap:9px;font-size:14.5px;font-weight:800}
+.rp-inst-k{font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#6b6c72;margin:0 0 8px}
+.rp-names{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 12px}
+.rp-name{display:inline-flex;align-items:center;gap:7px;background:var(--y);color:#000;font-weight:800;font-size:14px;line-height:1.25;padding:7px 12px;border-radius:999px;max-width:100%;overflow-wrap:anywhere}
+.rp-name b{font-size:11.5px;background:rgba(0,0,0,.12);border-radius:999px;padding:1px 7px}
+.rp-name-more{display:inline-flex;align-items:center;font-size:12.5px;font-weight:700;color:#6b6c72;padding:0 4px}
+.rp-ans-k{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#8a8b90;margin:0 0 4px}
+.rp-snip{font-size:13.5px;line-height:1.55;color:#3a3b40;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden;overflow-wrap:anywhere}
+.rp-snip--none{display:block;color:#55565c}
+.rp-aio{margin-top:12px;background:#fbfaf7;border:1px dashed #dcd7cc;border-radius:14px;padding:11px 16px}
+.rp-aio-head{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap}
+.rp-aio-ctx{font-size:12px;color:#7a7b80;font-style:italic;flex:1 1 auto}
+.rp-chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:5px 11px;border-radius:999px;white-space:nowrap;border:1px solid}
+.rp-chip--y{background:#e6f5eb;color:#13703a;border-color:#c5e6d1}
+.rp-chip--n{background:#fdebec;color:#c21d2b;border-color:#f6c9cd}
+.rp-chip--a{background:#fdf0d8;color:#8a5200;border-color:#f3dcae}
+.rp-chip--na{background:#efeeea;color:#5d5e63;border-color:#dedbd3}
+.rp-chip--b{background:#e3f1f7;color:#14566f;border-color:#bfdde9}
+.rp-ans-head .rp-chip--y{background:#13703a;color:#fff;border-color:#13703a}
+.rp-h{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase}
+.rp-h::before{content:"";width:18px;height:4px;border-radius:2px;background:var(--y)}
+.rp-h-sub{margin:-6px 0 12px;font-size:14px;color:#55565c}
+.rp-tbl{width:100%;border-collapse:collapse;table-layout:fixed}
+.rp-tbl th{font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#6b6c72;text-align:left;padding:4px 10px 10px;border-bottom:1px solid #ebe8e0}
+.rp-tbl th.rp-te{width:150px;color:var(--ink)}.rp-tbl th .rp-dot{margin-right:7px}
+.rp-tbl td{padding:11px 10px;border-bottom:1px solid #f1eee7;font-size:14.5px;vertical-align:top}
+.rp-tbl tr:last-child td{border-bottom:0}
+.rp-tq{overflow-wrap:anywhere}.rp-qn{color:#8a8b90}
+.rp-tq small{display:block;margin-top:5px}
+.rp-cell{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
+.rp-np{display:inline-block;max-width:100%;font-size:11.5px;font-weight:800;line-height:1.3;padding:3px 9px;border-radius:999px;background:var(--y);color:#000;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rp-np-more{font-size:11.5px;font-weight:700;color:#6b6c72;white-space:nowrap}
+.rp-after{color:#8a8b90;font-size:13px}
+.rp-pair{display:grid;grid-template-columns:1.1fr 1fr;gap:18px}
+.rp-panel--site{background:#fffafa;border-color:#f3e3e3}
+.rp-rows>div+div{border-top:1px solid rgba(16,17,20,.07)}
+.rp-issue{display:grid;grid-template-columns:34px 1fr;gap:12px;align-items:center;padding:9px 0}
+.rp-ic{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px}
+.rp-ic--high{background:#fde4e6;color:#c21d2b}.rp-ic--low{background:#fdf0d8;color:#b86e00}
+.rp-issue-t{font-size:14.5px;font-weight:800;line-height:1.35}
+.rp-sev{display:inline-block;margin-left:6px;font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:999px;vertical-align:2px}
+.rp-sev--high{background:#fde4e6;color:#c21d2b}.rp-sev--low{background:#fdf0d8;color:#8a5200}
+.rp-issue-p{margin:3px 0 0;font-size:13px;color:#4f5056;line-height:1.45}
+.rp-tiles{display:grid;gap:10px}
+.rp-tile{display:grid;grid-template-columns:76px 1fr;align-items:center;gap:12px;background:var(--y);border-radius:16px;padding:12px 16px}
+.rp-tile b{font-size:30px;font-weight:900;letter-spacing:-.04em;line-height:1;text-align:center}
+.rp-tile span{font-size:14.5px;font-weight:750;line-height:1.35}
+.rp-why{margin-top:12px;font-size:14px;line-height:1.55;color:#3a3b40}
+.rp-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:11px 0;border-top:1px solid #f1eee7;font-size:15px}
+.rp-row:first-child{border-top:0}.rp-row b{font-weight:800;overflow-wrap:anywhere}.rp-row span{color:#6b6c72;white-space:nowrap;font-size:13.5px}
+.rp-target{padding:13px 0;border-top:1px solid #f1eee7}.rp-target:first-child{border-top:0}
+.rp-target h3{font-size:16.5px;font-weight:800;line-height:1.3}
+.rp-target p{margin:4px 0 0;font-size:13.5px;color:#55565c}
+.rp-target .rp-names{margin:8px 0 6px}.rp-target .rp-name{font-size:12.5px;padding:5px 10px}
+.rp-today{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.rp-today .rp-card{border-radius:16px;padding:16px 18px;background:#fff;border:1px solid #e4e0d6}
+.rp-today .rp-card--next{background:#fbfaf7;border-style:dashed;border-color:#dcd7cc}
+.rp-today .rp-bigdark{font-size:44px;font-weight:900;letter-spacing:-.04em;line-height:1}
+.rp-foot{background:var(--ink);color:#d4d5d9;padding:26px 28px 22px}
+.rp-foot h3{margin:0 0 10px;font-size:24px;font-weight:900;letter-spacing:-.02em;color:#fff}
+.rp-do{list-style:none;margin:0 0 16px;padding:0;display:grid;gap:8px}
+.rp-do li{position:relative;padding-left:24px;font-size:15.5px;color:#fff}
+.rp-do li:before{content:"";position:absolute;left:0;top:.45em;width:11px;height:11px;border-radius:50%;background:var(--y)}
+.rp-btn{display:inline-flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;padding:13px 24px;border-radius:999px;text-decoration:none;line-height:1.2;background:var(--btn);color:#101114;margin-bottom:18px;min-height:48px}
+.rp-foot-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 18px}
+.rp-foot-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:12px 16px;min-width:0}
+.rp-fk{display:block;font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:#9c9da3}
+.rp-fv{display:block;margin-top:3px;font-size:13.5px;font-weight:600;color:#fff;overflow-wrap:anywhere}
+.rp-foot-brand{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:14px;border-top:1px solid rgba(255,255,255,.10)}
+.rp-foot-name{font-size:19px;font-weight:900;letter-spacing:-.02em;color:#fff}.rp-foot-name i{font-style:normal;color:var(--btn)}
+.rp-foot-note{margin-top:10px;font-size:12px;line-height:1.5;color:#9c9da3}
+@media (max-width:760px){.rp-score-in{grid-template-columns:1fr 1fr}.rp-overall{grid-column:1/-1}}
+@media (max-width:640px){
+  .rp-head{padding:18px 16px 14px;flex-direction:column;gap:12px}.rp-wm{font-size:24px}.rp-meta{text-align:left;width:100%}.rp-meta-top{justify-content:space-between}
+  .rp-score{padding:2px 12px 16px}.rp-score-in{gap:10px}.rp-overall{padding:16px}.rp-big-n{font-size:46px}.rp-eng{padding:13px 14px}.rp-eng-v{font-size:30px;margin-top:8px}.rp-aio-line em{margin-left:0}
+  .rp-body{padding:16px 12px 4px}.rp-line{font-size:21px}
+  .rp-feat{padding:18px 14px;border-radius:18px}.rp-feat-q{font-size:21px}.rp-ans-grid{grid-template-columns:1fr}.rp-ans{padding:14px}.rp-name{font-size:13px;padding:6px 11px}
+  .rp-panel{padding:16px 14px 12px;border-radius:18px}
+  .rp-tbl,.rp-tbl tbody{display:block}.rp-tbl thead{display:none}
+  .rp-tbl tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 10px;border-bottom:1px solid #f1eee7;padding:12px 0}.rp-tbl tr:last-child{border-bottom:0}
+  .rp-tbl td{border:0;padding:0;min-width:0}.rp-tbl td.rp-tq{grid-column:1/-1;font-weight:650}
+  .rp-tbl td.rp-tr::before{content:attr(data-eng);display:block;font-size:11px;color:#6b6c72;font-weight:600;margin-bottom:4px}
+  .rp-pair,.rp-today{grid-template-columns:1fr;gap:0}.rp-today .rp-card+.rp-card{margin-top:10px}
+  .rp-tile{grid-template-columns:62px 1fr;padding:11px 14px}.rp-tile b{font-size:26px}
+  .rp-foot{padding:22px 16px 18px}.rp-foot h3{font-size:21px}.rp-btn{display:flex;width:100%}.rp-foot-grid{grid-template-columns:1fr}
+}
+@media print{body{background:#fff}.rp-btn{display:none}}
+</style></head><body><div class="rp-sheet"><header class="rp-head"><div class="rp-brand"><div class="rp-wm">Findable<i>.</i></div><div class="rp-sub">AI search opportunity report</div></div><div class="rp-meta"><div class="rp-meta-top"><span>Report for</span><span class="rp-date">11 Nov 2026</span></div><h1 class="rp-biz">ABLM Associates</h1><div class="rp-where">Wisbech</div><div class="rp-method">20 searches &times; 2 AI &times; 3 asks &middot; 120 answers &middot; plus Google&#39;s AI Overview, shown for context</div></div></header><section class="rp-score"><div class="rp-score-in"><div class="rp-overall"><span class="rp-k"><i></i>AI named you in</span><p class="rp-big rp-t-amber"><span class="rp-big-n">4%</span><span class="rp-big-w">of answers</span></p><span class="rp-overall-s">4 of 106 answers that named a business named you. LeeP Accountants: 28.</span></div><div class="rp-eng rp-eng--gpt"><div class="rp-eng-h"><span class="rp-dot rp-dot--gpt"></span>ChatGPT</div><b class="rp-eng-v rp-t-amber">2 of 60</b><span class="rp-eng-s">3% &middot; named in 2 answers</span></div><div class="rp-eng rp-eng--gem"><div class="rp-eng-h"><span class="rp-dot rp-dot--gem"></span>Gemini</div><b class="rp-eng-v rp-t-amber">2 of 60</b><span class="rp-eng-s">3% &middot; named in 2 answers</span></div></div><p class="rp-aio-line"><span class="rp-dot rp-dot--aio"></span><b>Google AI Overview</b><span>shown on 20 of 20 searches, named in 3</span><em>Shown for context, not scored</em></p></section><div class="rp-body"><p class="rp-line">When people ask AI for an accountant or MTD in Wisbech, <em>it mentions you in 4 of 106 answers.</em></p><section class="rp-feat"><span class="rp-pill">Your best opportunity</span><h2 class="rp-feat-q">“Chartered certified accountant for family-run businesses in England?”</h2><p class="rp-feat-sub">Here is what each AI said.</p><p class="rp-feat-sub" style="margin-top:-8px"><span class="rp-chip rp-chip--a">Some room</span> 3 answers named 10 different firms; 1 come up in most</p><div class="rp-ans-grid"><article class="rp-ans"><div class="rp-ans-head"><span class="rp-eng-name"><span class="rp-dot rp-dot--gpt"></span>ChatGPT</span><span class="rp-chip rp-chip--n">✕ Not named in 3 answers</span></div><div class="rp-inst-k">Named instead of you</div><div class="rp-names"><span class="rp-name">Cameron Baum Hollander<b>3&times;</b></span><span class="rp-name">BC&amp;A Accountants<b>2&times;</b></span><span class="rp-name">Crowthers Chartered Accountants<b>2&times;</b></span><span class="rp-name">Hawsons Chartered Accountants<b>2&times;</b></span><span class="rp-name-more">+1 more</span></div><p class="rp-ans-k">Real answer from ChatGPT</p><p class="rp-snip">Yes. If you&#39;re looking for a Chartered Certified Accountant (ACCA) or Chartered Accountant (ACA) who specialises in family-run businesses in England, I would look for a firm that offers…</p></article><article class="rp-ans"><div class="rp-ans-head"><span class="rp-eng-name"><span class="rp-dot rp-dot--gem"></span>Gemini</span><span class="rp-chip rp-chip--n">✕ Not named in 3 answers</span></div><p class="rp-ans-k">Real answer from Gemini</p><p class="rp-snip">Finding the right Chartered Certified Accountant (ACCA) or Chartered Accountant (ICAEW) for a family-run business in England requires an adviser who understands both the commercial…</p></article></div><div class="rp-aio"><div class="rp-aio-head"><span class="rp-eng-name"><span class="rp-dot rp-dot--aio"></span>Google AI Overview</span><span class="rp-aio-ctx">Shown for context, not scored</span><span class="rp-chip rp-chip--n">✕ Not named</span></div><div class="rp-names"><span class="rp-name">PKF Francis Clark</span><span class="rp-name">Melanie Curtis Accountants</span><span class="rp-name">Hawsons Chartered Accountants</span><span class="rp-name">Rickard Luckin</span><span class="rp-name-more">+1 more</span></div></div></section><section class="rp-panel"><h2 class="rp-h">Searches where you can get named</h2><p class="rp-h-sub">AI repeats a few firms but changes the rest for 5 of your 20 searches. There&#39;s still room for you to be one of them. 13 with little room · 1 where AI names no firms yet · 1 to keep and grow</p><div class="rp-target"><h3>Accountant for owner-managed businesses in England?</h3><div class="rp-names"><span class="rp-name">Alexander &amp; Co</span><span class="rp-name">RA Accountants</span><span class="rp-name">Grasp Accountants</span></div><p><span class="rp-chip rp-chip--a">Some room</span> 4 answers named 12 different firms; 2 come up in most</p></div><div class="rp-target"><h3>Best accountants in Wisbech?</h3><div class="rp-names"><span class="rp-name">Whitings LLP</span><span class="rp-name">Barwell Accountants</span><span class="rp-name">DMH Accountants Ltd</span></div><p><span class="rp-chip rp-chip--a">Some room</span> 6 answers named 17 different firms; 6 come up in most</p></div><div class="rp-target"><h3>Online accountant for small limited companies in England?</h3><div class="rp-names"><span class="rp-name">Crunch</span><span class="rp-name">Clever Accounts</span><span class="rp-name">Caroola</span></div><p><span class="rp-chip rp-chip--a">Some room</span> 6 answers named 11 different firms; 2 come up in most</p></div><div class="rp-target"><h3>Accountant for small businesses in London?</h3><div class="rp-names"><span class="rp-name">Clarkwell &amp; Co</span><span class="rp-name">GM Professional Accountants</span><span class="rp-name">TaxAssist Accountants</span></div><p><span class="rp-chip rp-chip--a">Some room</span> 3 answers named 7 different firms; 3 come up in most</p></div><div class="rp-target"><h3>Accountants for small businesses across Fenland?</h3><div class="rp-names"><span class="rp-name">Whitings LLP</span><span class="rp-name">Barwell Accountants</span><span class="rp-name">DMH Accountants Ltd</span></div><p><span class="rp-chip rp-chip--b">Keep and grow</span> AI names you in 3 of 6 answers</p></div></section><section class="rp-panel"><h2 class="rp-h">AI recommends these instead</h2><p class="rp-h-sub">How often AI named them.</p><div class="rp-names"><span class="rp-name">LeeP Accountants<b>28&times;</b></span><span class="rp-name">Whitings LLP<b>26&times;</b></span><span class="rp-name">JMC Accountancy Ltd<b>23&times;</b></span><span class="rp-name">Stephenson Smart<b>21&times;</b></span><span class="rp-name">TaxAssist Accountants<b>20&times;</b></span><span class="rp-name">Barwell Accountants<b>18&times;</b></span><span class="rp-name-more">+117 more</span></div></section><div class="rp-pair"><section class="rp-panel rp-panel--site"><h2 class="rp-h">What we found on your website</h2><p class="rp-issue-p">2 serious problems to fix first.</p><div class="rp-rows"><div class="rp-issue"><span class="rp-ic rp-ic--high">!</span><div class="rp-issue-t">Logo images are captioned with the wrong company names <span class="rp-sev rp-sev--high">Serious</span></div></div><div class="rp-issue"><span class="rp-ic rp-ic--high">!</span><div class="rp-issue-t">Key pages have no main heading (H1) <span class="rp-sev rp-sev--high">Serious</span></div></div><div class="rp-issue"><span class="rp-ic rp-ic--low">!</span><div class="rp-issue-t">Pages read as general copy, with few specifics <span class="rp-sev rp-sev--low">Minor</span></div></div><div class="rp-issue"><span class="rp-ic rp-ic--low">!</span><div class="rp-issue-t">We couldn’t find a founding year or company number <span class="rp-sev rp-sev--low">Minor</span></div></div></div></section><section class="rp-panel"><h2 class="rp-h">Get listed on these sites</h2><p class="rp-h-sub">AI uses them.</p><div class="rp-row"><b>ACCA</b><span>44 answers</span></div><div class="rp-row"><b>ICAEW</b><span>32 answers</span></div><div class="rp-row"><b>Yell</b><span>24 answers</span></div><div class="rp-row"><b>AAT</b><span>8 answers</span></div><div class="rp-row"><b>Google reviews</b><span>5 answers</span></div></section></div><section class="rp-panel"><h2 class="rp-h">Why this matters</h2><div class="rp-tiles"><div class="rp-tile"><b>102/106</b><span>answers that named a business did not name ABLM Associates</span></div><div class="rp-tile"><b>123</b><span>different businesses named instead</span></div></div></section></div><footer class="rp-foot"><h3>What we'd do</h3><ul class="rp-do"><li>Make a clear page for each search where you can get named.</li><li>Fix what stops AI reading your website.</li><li>Check again after 4 weeks and show you.</li></ul><a class="rp-btn" href="https://wa.me/447943262742?text=Hi%2C%20this%20is%20ABLM%20Associates%20-%20I%20saw%20my%20AI%20report%20and%20I%20would%20like%20to%20talk." target="_blank" rel="noopener noreferrer">Talk to Paul on WhatsApp</a><div class="rp-foot-grid"><div class="rp-foot-card"><span class="rp-fk">Prepared for</span><span class="rp-fv">ABLM Associates</span></div><div class="rp-foot-card"><span class="rp-fk">Report date</span><span class="rp-fv">11 Nov 2026</span></div><div class="rp-foot-card"><span class="rp-fk">Measured on</span><span class="rp-fv">ChatGPT and Gemini · Google AI Overview (not scored)</span></div></div><div class="rp-foot-brand"><span class="rp-foot-name">Findable<i>.</i></span><span class="rp-fk">findable.live</span></div><div class="rp-foot-note"><p>These are opportunities, not guarantees.</p></div></footer></div></body></html>

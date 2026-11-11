@@ -1,28 +1,32 @@
 /* ═══════════════════════════════════════════════════════════════════════════════════════
-   REPORT DESIGN — ONE fixed template for the three client-facing report pages, in Findable's own look.
-   (Paul, 2026-11-11, fourth design: the audit example on the LeadFinderOS waitlist page + the Findable site.)
+   REPORT DESIGN — the three client-facing report pages, in the report look of the LeadFinderOS example audit. (2026-11-11)
 
-     renderOpportunityReport  "Searches you could win" — the longer report (a Discovery audit).
-     renderHookReport         First contact: who AI recommends instead, three example searches, one button.
-     renderBaselineReport     The client's 20 tracked searches: today's result, when we check again.
+     hook         first contact: the quick audit. A featured search shown as the ChatGPT and Gemini answer boxes with the
+                  businesses "named instead of you", every search in a table, website findings, why it matters.
+     opportunity  the longer report: your best opportunity as the same answer boxes, the next targets, who AI recommends
+                  instead, website, listing sites.
+     baseline     the client's tracked searches: today's score beside a slot for the 4-week check, every search in a table.
 
-   LOOK, COPIED FROM THE TWO SOURCES (read-only, C:\Users\paulj\leadfinderos-waitlist and \findable-site-current):
-     • the waitlist's example audit: one dark rounded card, a small caps label + business name on top, coloured
-       score tiles (green / amber / rose gradient, a coloured dot in the label), gold "named instead" chips,
-       numbered markers on the card's sections;
-     • Findable's tokens (findable-site-current/src/styles/global.css): near-black #0A0A0C / #17181C / #1E1F24,
-       yellow #F5B301 for the button and #FFD13F for chips, the wordmark "Findable" + yellow dot, and its SYSTEM font
-       stack at weight 900 with tight tracking (no webfont, so nothing is fetched).
-   Plain English, at most two short lines per section; never "discovery", "baseline", "verdict", "engines",
-   "fragmented", "citations", "visibility score" or "GEO" (scripts/report-design.test.ts pins this).
+   ONE LOOK, THREE BODIES. The look is the example audit's (V2 AuditReport.tsx, read-only): a near-black top with the score
+   cards, a warm cream page, white cards, the businesses named instead as yellow pills, a slim Google AI Overview row
+   "shown for context, not scored", chips for named / not named, yellow "why this matters" tiles, a soft rose website card
+   and a near-black footer. Findable's own wordmark, colours (near-black #101114, gold #FFD13F, button #F5B301) and system
+   font stack. No blue. Each report type has its own body so a prospect, a prospect-in-depth and a client each get a page
+   built for them.
 
-   PRESENTATION ONLY: plain, already-counted input (reportOpportunity.ts builds it). Never a score, never a promise of
-   a ranking or of being recommended; the footer says "These are opportunities, not guarantees."
-   Pure (no DOM). Imported by the render-audit-report edge function, so relative imports carry .ts.
+   A TEMPLATE: nothing here is specific to a business. Everything shown comes from the ReportModel (reportModel.ts) built
+   from that business's own stored answers, website check and dates. Every section handles the edge cases (already named a
+   lot, no website, nothing winnable yet, few or no competitors, no listing sites, no website check yet, fewer than 10
+   searches, any trade, any country) with plain wording, and is never an empty box.
+
+   Plain English, short lines; never "discovery", "baseline", "verdict", "engines", "fragmented", "citations", "visibility
+   score" or "GEO". PRESENTATION ONLY: no website score number (team-only), no promise of a ranking or of being recommended;
+   the page says "These are opportunities, not guarantees."  Pure (no DOM); relative imports carry .ts.
    ═══════════════════════════════════════════════════════════════════════════════════════ */
 
 import { FINDABLE_CONTACT_WHATSAPP, REMEASURE_WEEKS_STANDARD } from './findableOffer.ts';
-import type { OppDirectory, OppFirm, OppQuestion, OppSummary, OppTier } from './reportOpportunity.ts';
+import type { EngineFacts, OppFirm, OppQuestion, OppTier } from './reportOpportunity.ts';
+import type { ReportKind, ReportModel } from './reportModel.ts';
 
 export function esc(s: unknown): string {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -31,271 +35,392 @@ export function esc(s: unknown): string {
 /** "London Domestic Maintenance Ltd" -> "London Domestic Maintenance". */
 export const shortName = (n: string): string => n.replace(/[\s,]+(ltd|limited)\.?$/i, '').trim() || n;
 
-export interface DesignBase {
-  businessName: string;
-  /** The trade label ("domestic maintenance"). NEVER used in the headline; kept for callers. */
-  trade: string;
-  /** The audit's town ("London"); the headline prefers the widest region the searches use ("East London"). */
-  town: string;
-  dateLabel: string;
-  shareUrl?: string;
-  /** What customers type: "a gas engineer or electrician" (searchPhrase in reportOpportunity.ts). */
-  searchWhat?: string;
-  /** Where: "East London". */
-  searchWhere?: string;
-}
-
-/** The three groups, in words a tradesperson reads at a glance. */
-const GROUP: Record<OppTier, { label: string; sub: string; tone: 'g' | 'a' | 'r' }> = {
-  now: { label: 'You could win', sub: 'No one stands out yet', tone: 'g' },
-  possible: { label: 'Possible with work', sub: 'One firm leads, or work needed', tone: 'a' },
-  hard: { label: 'Hard to win', sub: 'One firm named almost every time', tone: 'r' },
+const GROUP: Record<OppTier, { label: string; kind: 'y' | 'a' | 'n' | 'na' | 'b' }> = {
+  lots: { label: 'Lots of room', kind: 'y' },
+  some: { label: 'Some room', kind: 'a' },
+  little: { label: 'Little room', kind: 'na' },
+  nofirms: { label: "AI doesn't name firms yet", kind: 'na' },
+  named: { label: 'Keep and grow', kind: 'b' },
+  flagged: { label: 'Check this place', kind: 'na' },
+  notoffered: { label: 'Not your service', kind: 'na' },
+  notonsite: { label: 'Not on your site yet', kind: 'na' },
 };
 
 const WA_BUTTON = 'Talk to Paul on WhatsApp';
 const waHref = (businessName: string, text: string) =>
   `https://wa.me/${FINDABLE_CONTACT_WHATSAPP}?text=${encodeURIComponent(`Hi, this is ${businessName} - ${text}`)}`;
+const BUTTON_TEXT: Record<ReportKind, string> = {
+  opportunity: 'I saw my AI report and I would like to talk.',
+  hook: 'I saw my AI report and I would like a call.',
+  baseline: 'a question about my report.',
+};
 
-/* ── The look ──────────────────────────────────────────────────────────────────────────── */
+/* ── The look (the example audit's stylesheet, in Findable's tokens) ───────────────────────── */
 
 const CSS = `
-:root{color-scheme:dark;--page:#0a0a0c;--card:#17181c;--tile:#1e1f24;--line:#2c2d34;--text:#f7f8fa;--mist:#c3c6cd;--muted:#8f939d;
-  --y:#f5b301;--gold:#ffd13f;--on-gold:#2a2100;--green:#4ade80;--amber:#fbbf24;--rose:#fb7185;
-  --sys:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
-*{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%;background:var(--page)}
-body{margin:0;background:var(--page);color:var(--text);font:16px/1.5 var(--sys);-webkit-font-smoothing:antialiased;overflow-x:hidden}
-body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;
-  background:radial-gradient(52rem 34rem at 88% -8%,rgba(245,179,1,.13),transparent 62%),radial-gradient(40rem 30rem at -8% 30%,rgba(42,82,160,.10),transparent 60%)}
-a{color:inherit}
-h1,h2,h3{font-family:var(--sys);font-weight:900;letter-spacing:-.02em;margin:0;color:#fff}
-p{margin:0}
-.wrap{max-width:720px;margin:0 auto;padding:0 14px 40px}
-.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 2px 14px}
-.wm{font-weight:900;font-size:22px;letter-spacing:-.02em;line-height:1}.wm i{font-style:normal;color:var(--y);font-size:1.35em;line-height:0}
-.date{font-size:14px;color:var(--muted)}
-h1{font-size:clamp(28px,7.4vw,46px);line-height:1.06;letter-spacing:-.03em;margin:6px 2px 18px}
-h1 .hl{color:var(--gold)}
-.rp{position:relative;display:grid;gap:22px;padding:18px 16px 20px;border-radius:24px;background:var(--card);border:1px solid var(--line);box-shadow:0 30px 70px -30px #000,0 0 0 1px rgba(255,255,255,.03) inset}
-.rp-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:6px 14px}
-.k{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
-.k u{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--gold)}
-.rp-head b{display:block;font-weight:900;font-size:20px;letter-spacing:-.02em;color:#fff;text-align:right}
-.rp-head small{display:block;font-size:13px;font-weight:500;color:var(--muted);text-align:right}
-.blk{position:relative;display:grid;gap:10px}
-.mk{flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--gold);color:#111;font-weight:900;font-size:13px;font-style:normal;box-shadow:0 0 0 4px rgba(255,209,63,.22)}
-.mk.c{position:absolute;left:-8px;top:-8px;z-index:2}
-.blk h2{display:flex;align-items:center;gap:12px;font-size:21px;line-height:1.15}
-.blk .line{color:var(--mist);font-size:14.5px;margin:-4px 0 0 38px}
-.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.t{display:grid;gap:3px;align-content:start;padding:12px 11px;border-radius:14px;background:var(--tile);border:1px solid var(--line)}
-.t .k{font-size:10px;letter-spacing:.08em}
-.t b{font-weight:900;font-size:36px;line-height:1.05;letter-spacing:-.03em}
-.t span{font-size:12px;color:var(--mist);line-height:1.3}
-.t.g{background:linear-gradient(160deg,rgba(74,222,128,.14),#17181c 70%);border-color:rgba(74,222,128,.38)}.t.g b{color:var(--green)}.t.g .k u{background:var(--green)}
-.t.a{background:linear-gradient(160deg,rgba(251,191,36,.13),#17181c 70%);border-color:rgba(251,191,36,.34)}.t.a b{color:var(--amber)}.t.a .k u{background:var(--amber)}
-.t.r{background:linear-gradient(160deg,rgba(251,113,133,.13),#17181c 70%);border-color:rgba(251,113,133,.34)}.t.r b{color:var(--rose)}.t.r .k u{background:var(--rose)}
-.pn{display:grid;gap:0;padding:4px 14px;border-radius:14px;background:var(--tile);border:1px solid var(--line)}
-.chips{display:flex;flex-wrap:wrap;gap:8px}
-.chips b{display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:14px;color:var(--on-gold);background:var(--gold);border-radius:999px;padding:7px 8px 7px 13px}
-.chips b i{font-style:normal;font-size:12px;font-weight:800;background:rgba(0,0,0,.16);border-radius:999px;padding:1px 8px}
-.row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:12px 0;border-top:1px solid var(--line);font-size:16px}
-.row:first-child{border-top:0}
-.row b{font-weight:800;color:#fff;overflow-wrap:anywhere}.row span{color:var(--mist);white-space:nowrap;font-size:14px}
-.it{padding:13px 0;border-top:1px solid var(--line)}.it:first-child{border-top:0}
-.it h3{font-size:17px;line-height:1.25;font-weight:800;letter-spacing:-.01em}
-.it p{margin-top:3px;color:var(--mist);font-size:14.5px}
-.pill{display:inline-block;margin-top:8px;font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:4px 10px}
-.pill.g{color:var(--green);background:rgba(74,222,128,.14);border:1px solid rgba(74,222,128,.35)}
-.pill.a{color:var(--amber);background:rgba(251,191,36,.13);border:1px solid rgba(251,191,36,.34)}
-.pill.r{color:var(--rose);background:rgba(251,113,133,.13);border:1px solid rgba(251,113,133,.34)}
-.dots{list-style:none;margin:0;padding:0;display:grid;gap:10px}
-.dots li{position:relative;padding-left:26px;font-size:16.5px;color:#fff}
-.dots li:before{content:"";position:absolute;left:0;top:.42em;width:12px;height:12px;border-radius:50%;background:var(--gold)}
-.btn{display:flex;align-items:center;justify-content:center;width:100%;min-height:56px;border-radius:999px;background:var(--y);color:#0a0a0c;font-weight:800;font-size:18px;text-decoration:none;padding:14px 20px;text-align:center;box-shadow:0 8px 24px -8px rgba(245,179,1,.55)}
-details{border-radius:14px;background:var(--tile);border:1px solid var(--line)}
-summary{cursor:pointer;list-style:none;padding:15px 16px;font-weight:800;min-height:52px;color:#fff}
-summary::-webkit-details-marker{display:none}
-summary:after{content:"+";float:right;font-size:24px;line-height:1;color:var(--gold)}
-details[open] summary:after{content:"\\2212"}
-details .in{padding:0 16px 10px}
-.grp{margin:14px 0 2px;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
-.hero{display:grid;gap:4px;padding:16px;border-radius:14px;background:linear-gradient(160deg,rgba(251,113,133,.13),#17181c 70%);border:1px solid rgba(251,113,133,.34)}
-.hero b{font-weight:900;font-size:clamp(40px,12vw,56px);line-height:1;letter-spacing:-.03em;color:var(--rose)}
-.hero b em{font-style:normal;color:#fff}
-.hero span{font-size:14px;color:var(--mist)}
-.tag{width:fit-content;margin-top:8px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);background:rgba(255,209,63,.1);border:1px solid rgba(255,209,63,.3);border-radius:999px;padding:4px 10px}
-.foot{display:grid;gap:6px;justify-items:center;margin-top:26px;color:var(--muted);font-size:13px;text-align:center}
-.foot .wm{font-size:18px;color:#fff}
-@media (min-width:760px){
-  .wrap{max-width:780px;padding-bottom:64px}
-  .rp{padding:26px 26px 28px;gap:28px}
-  .t b{font-size:46px}.t span{font-size:13px}.t .k{font-size:11px}
-  .blk h2{font-size:24px}
+:root{color-scheme:light;--ink:#101114;--cream:#f7f5f1;--y:#ffd13f;--btn:#f5b301}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--cream);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.45}
+h1,h2,h3,p{margin:0}a{color:inherit}
+.rp-sheet{max-width:960px;margin:0 auto;background:var(--cream)}
+.rp-head{background:var(--ink);color:#fff;padding:24px 32px 18px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px 28px;flex-wrap:wrap}
+.rp-wm{font-size:28px;font-weight:900;letter-spacing:-.03em;line-height:1.05;color:#fff}.rp-wm i{font-style:normal;color:var(--btn);font-size:1.3em;line-height:0}
+.rp-sub{margin-top:8px;font-size:10.5px;font-weight:700;letter-spacing:.24em;text-transform:uppercase;color:#a3a5ab}
+.rp-meta{text-align:right;min-width:0;max-width:100%}
+.rp-meta-top{display:flex;justify-content:flex-end;gap:18px;font-size:10.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#a3a5ab}
+.rp-date{color:#d4d5d9}
+.rp-biz{font-size:20px;font-weight:800;color:#fff;margin-top:4px;letter-spacing:-.01em;overflow-wrap:anywhere}
+.rp-where{font-size:13px;color:#bdbec3;margin-top:2px}
+.rp-method{margin-top:6px;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--y)}
+.rp-score{background:var(--ink);padding:4px 24px 22px}
+.rp-score-in{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:14px;align-items:stretch}
+.rp-overall{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:18px;padding:18px 22px}
+.rp-k{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#dcdde0}
+.rp-k i{width:10px;height:10px;border-radius:3px;background:var(--y);display:inline-block}
+.rp-big{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin-top:10px;color:#fff}
+.rp-big-n{font-size:56px;font-weight:900;letter-spacing:-.05em;line-height:.95;white-space:nowrap}
+.rp-big-w{font-size:22px;font-weight:800;color:#bdbec3}
+.rp-overall-s{display:block;font-size:14px;color:#ebebed;margin-top:8px;line-height:1.35}
+.rp-t-red{color:#ff6b75}.rp-t-amber{color:#ffbe3d}.rp-t-green{color:#4ade80}.rp-t-grey{color:#dcdde0}
+.rp-eng{border-radius:18px;padding:16px 18px;border:1px solid rgba(255,255,255,.09);display:flex;flex-direction:column;justify-content:center;min-width:0}
+.rp-eng--gpt{background:linear-gradient(160deg,rgba(74,222,128,.10),rgba(255,255,255,.03))}
+.rp-eng--gem{background:linear-gradient(160deg,rgba(167,139,250,.16),rgba(255,255,255,.03))}
+.rp-eng-h{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:700;color:#fff}
+.rp-eng-v{font-size:40px;font-weight:900;letter-spacing:-.04em;line-height:1;margin-top:12px}
+.rp-eng-s{font-size:13px;color:#bdbec3;margin-top:6px}
+.rp-dot{display:inline-block;width:10px;height:10px;border-radius:50%;flex:none}
+.rp-dot--gpt{background:#4ade80}.rp-dot--gem{background:#a78bfa}.rp-dot--aio{background:#a3a5ab}
+.rp-aio-line{margin-top:14px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:13px;color:#d4d5d9;padding:10px 14px;border:1px dashed rgba(255,255,255,.18);border-radius:12px}
+.rp-aio-line b{color:#fff}.rp-aio-line em{margin-left:auto;font-size:12px;color:#a3a5ab}
+.rp-body{background:var(--cream);padding:22px 24px 8px}
+.rp-line{font-size:24px;font-weight:900;letter-spacing:-.025em;line-height:1.15;margin:0 2px 8px}
+.rp-line em{font-style:normal;background:var(--y);padding:0 6px;border-radius:6px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.rp-intro{font-size:15px;line-height:1.55;color:#3a3b40;margin:0 2px 18px;max-width:70ch}
+.rp-feat,.rp-panel{background:#fff;border:1px solid #e9e5dc;border-radius:20px;padding:22px 24px;margin-bottom:18px;min-width:0}
+.rp-panel{padding:18px 20px 16px}
+.rp-pill{display:inline-block;background:var(--y);color:var(--ink);font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;padding:6px 12px;border-radius:8px}
+.rp-feat-q{margin:14px 0 6px;font-size:26px;font-weight:850;letter-spacing:-.02em;line-height:1.2}
+.rp-feat-sub{margin:0 0 16px;font-size:14.5px;color:#55565c}
+.rp-ans-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.rp-ans{background:#fff;border:1px solid #e4e0d6;border-radius:16px;padding:16px 18px;min-width:0;display:flex;flex-direction:column}
+.rp-ans-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.rp-eng-name{display:inline-flex;align-items:center;gap:9px;font-size:14.5px;font-weight:800}
+.rp-inst-k{font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#6b6c72;margin:0 0 8px}
+.rp-names{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 12px}
+.rp-name{display:inline-flex;align-items:center;gap:7px;background:var(--y);color:#000;font-weight:800;font-size:14px;line-height:1.25;padding:7px 12px;border-radius:999px;max-width:100%;overflow-wrap:anywhere}
+.rp-name b{font-size:11.5px;background:rgba(0,0,0,.12);border-radius:999px;padding:1px 7px}
+.rp-name-more{display:inline-flex;align-items:center;font-size:12.5px;font-weight:700;color:#6b6c72;padding:0 4px}
+.rp-ans-k{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#8a8b90;margin:0 0 4px}
+.rp-snip{font-size:13.5px;line-height:1.55;color:#3a3b40;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden;overflow-wrap:anywhere}
+.rp-snip--none{display:block;color:#55565c}
+.rp-aio{margin-top:12px;background:#fbfaf7;border:1px dashed #dcd7cc;border-radius:14px;padding:11px 16px}
+.rp-aio-head{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap}
+.rp-aio-ctx{font-size:12px;color:#7a7b80;font-style:italic;flex:1 1 auto}
+.rp-chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:5px 11px;border-radius:999px;white-space:nowrap;border:1px solid}
+.rp-chip--y{background:#e6f5eb;color:#13703a;border-color:#c5e6d1}
+.rp-chip--n{background:#fdebec;color:#c21d2b;border-color:#f6c9cd}
+.rp-chip--a{background:#fdf0d8;color:#8a5200;border-color:#f3dcae}
+.rp-chip--na{background:#efeeea;color:#5d5e63;border-color:#dedbd3}
+.rp-chip--b{background:#e3f1f7;color:#14566f;border-color:#bfdde9}
+.rp-ans-head .rp-chip--y{background:#13703a;color:#fff;border-color:#13703a}
+.rp-h{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase}
+.rp-h::before{content:"";width:18px;height:4px;border-radius:2px;background:var(--y)}
+.rp-h-sub{margin:-6px 0 12px;font-size:14px;color:#55565c}
+.rp-tbl{width:100%;border-collapse:collapse;table-layout:fixed}
+.rp-tbl th{font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#6b6c72;text-align:left;padding:4px 10px 10px;border-bottom:1px solid #ebe8e0}
+.rp-tbl th.rp-te{width:150px;color:var(--ink)}.rp-tbl th .rp-dot{margin-right:7px}
+.rp-tbl td{padding:11px 10px;border-bottom:1px solid #f1eee7;font-size:14.5px;vertical-align:top}
+.rp-tbl tr:last-child td{border-bottom:0}
+.rp-tq{overflow-wrap:anywhere}.rp-qn{color:#8a8b90}
+.rp-tq small{display:block;margin-top:5px}
+.rp-cell{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
+.rp-np{display:inline-block;max-width:100%;font-size:11.5px;font-weight:800;line-height:1.3;padding:3px 9px;border-radius:999px;background:var(--y);color:#000;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rp-np-more{font-size:11.5px;font-weight:700;color:#6b6c72;white-space:nowrap}
+.rp-after{color:#8a8b90;font-size:13px}
+.rp-pair{display:grid;grid-template-columns:1.1fr 1fr;gap:18px}
+.rp-panel--site{background:#fffafa;border-color:#f3e3e3}
+.rp-rows>div+div{border-top:1px solid rgba(16,17,20,.07)}
+.rp-issue{display:grid;grid-template-columns:34px 1fr;gap:12px;align-items:center;padding:9px 0}
+.rp-ic{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px}
+.rp-ic--high{background:#fde4e6;color:#c21d2b}.rp-ic--low{background:#fdf0d8;color:#b86e00}
+.rp-issue-t{font-size:14.5px;font-weight:800;line-height:1.35}
+.rp-sev{display:inline-block;margin-left:6px;font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:999px;vertical-align:2px}
+.rp-sev--high{background:#fde4e6;color:#c21d2b}.rp-sev--low{background:#fdf0d8;color:#8a5200}
+.rp-issue-p{margin:3px 0 0;font-size:13px;color:#4f5056;line-height:1.45}
+.rp-tiles{display:grid;gap:10px}
+.rp-tile{display:grid;grid-template-columns:76px 1fr;align-items:center;gap:12px;background:var(--y);border-radius:16px;padding:12px 16px}
+.rp-tile b{font-size:30px;font-weight:900;letter-spacing:-.04em;line-height:1;text-align:center}
+.rp-tile span{font-size:14.5px;font-weight:750;line-height:1.35}
+.rp-why{margin-top:12px;font-size:14px;line-height:1.55;color:#3a3b40}
+.rp-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:11px 0;border-top:1px solid #f1eee7;font-size:15px}
+.rp-row:first-child{border-top:0}.rp-row b{font-weight:800;overflow-wrap:anywhere}.rp-row span{color:#6b6c72;white-space:nowrap;font-size:13.5px}
+.rp-target{padding:13px 0;border-top:1px solid #f1eee7}.rp-target:first-child{border-top:0}
+.rp-target h3{font-size:16.5px;font-weight:800;line-height:1.3}
+.rp-target p{margin:4px 0 0;font-size:13.5px;color:#55565c}
+.rp-target .rp-names{margin:8px 0 6px}.rp-target .rp-name{font-size:12.5px;padding:5px 10px}
+.rp-today{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.rp-today .rp-card{border-radius:16px;padding:16px 18px;background:#fff;border:1px solid #e4e0d6}
+.rp-today .rp-card--next{background:#fbfaf7;border-style:dashed;border-color:#dcd7cc}
+.rp-today .rp-bigdark{font-size:44px;font-weight:900;letter-spacing:-.04em;line-height:1}
+.rp-foot{background:var(--ink);color:#d4d5d9;padding:26px 28px 22px}
+.rp-foot h3{margin:0 0 10px;font-size:24px;font-weight:900;letter-spacing:-.02em;color:#fff}
+.rp-do{list-style:none;margin:0 0 16px;padding:0;display:grid;gap:8px}
+.rp-do li{position:relative;padding-left:24px;font-size:15.5px;color:#fff}
+.rp-do li:before{content:"";position:absolute;left:0;top:.45em;width:11px;height:11px;border-radius:50%;background:var(--y)}
+.rp-btn{display:inline-flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;padding:13px 24px;border-radius:999px;text-decoration:none;line-height:1.2;background:var(--btn);color:#101114;margin-bottom:18px;min-height:48px}
+.rp-foot-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 18px}
+.rp-foot-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:12px 16px;min-width:0}
+.rp-fk{display:block;font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:#9c9da3}
+.rp-fv{display:block;margin-top:3px;font-size:13.5px;font-weight:600;color:#fff;overflow-wrap:anywhere}
+.rp-foot-brand{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:14px;border-top:1px solid rgba(255,255,255,.10)}
+.rp-foot-name{font-size:19px;font-weight:900;letter-spacing:-.02em;color:#fff}.rp-foot-name i{font-style:normal;color:var(--btn)}
+.rp-foot-note{margin-top:10px;font-size:12px;line-height:1.5;color:#9c9da3}
+@media (max-width:760px){.rp-score-in{grid-template-columns:1fr 1fr}.rp-overall{grid-column:1/-1}}
+@media (max-width:640px){
+  .rp-head{padding:18px 16px 14px;flex-direction:column;gap:12px}.rp-wm{font-size:24px}.rp-meta{text-align:left;width:100%}.rp-meta-top{justify-content:space-between}
+  .rp-score{padding:2px 12px 16px}.rp-score-in{gap:10px}.rp-overall{padding:16px}.rp-big-n{font-size:46px}.rp-eng{padding:13px 14px}.rp-eng-v{font-size:30px;margin-top:8px}.rp-aio-line em{margin-left:0}
+  .rp-body{padding:16px 12px 4px}.rp-line{font-size:21px}
+  .rp-feat{padding:18px 14px;border-radius:18px}.rp-feat-q{font-size:21px}.rp-ans-grid{grid-template-columns:1fr}.rp-ans{padding:14px}.rp-name{font-size:13px;padding:6px 11px}
+  .rp-panel{padding:16px 14px 12px;border-radius:18px}
+  .rp-tbl,.rp-tbl tbody{display:block}.rp-tbl thead{display:none}
+  .rp-tbl tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 10px;border-bottom:1px solid #f1eee7;padding:12px 0}.rp-tbl tr:last-child{border-bottom:0}
+  .rp-tbl td{border:0;padding:0;min-width:0}.rp-tbl td.rp-tq{grid-column:1/-1;font-weight:650}
+  .rp-tbl td.rp-tr::before{content:attr(data-eng);display:block;font-size:11px;color:#6b6c72;font-weight:600;margin-bottom:4px}
+  .rp-pair,.rp-today{grid-template-columns:1fr;gap:0}.rp-today .rp-card+.rp-card{margin-top:10px}
+  .rp-tile{grid-template-columns:62px 1fr;padding:11px 14px}.rp-tile b{font-size:26px}
+  .rp-foot{padding:22px 16px 18px}.rp-foot h3{font-size:21px}.rp-btn{display:flex;width:100%}.rp-foot-grid{grid-template-columns:1fr}
 }
-@media (max-width:380px){.t b{font-size:30px}.t{padding:10px 9px}}
-@media print{body::before{display:none}}
+@media print{body{background:#fff}.rp-btn{display:none}}
 `;
 
-/** The page: Findable wordmark + date on the dark page, the headline, then the one report card. */
-function page(title: string, d: DesignBase, h1: string, rpBody: string, foot: string): string {
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const ENGINE_LABEL = { chatgpt: 'ChatGPT', gemini: 'Gemini' } as const;
+const ENGINE_KEY = { chatgpt: 'gpt', gemini: 'gem' } as const;
+type Eng = 'chatgpt' | 'gemini';
+const ENGS: Eng[] = ['chatgpt', 'gemini'];
+
+const chip = (kind: 'y' | 'a' | 'n' | 'na' | 'b', text: string) => `<span class="rp-chip rp-chip--${kind}">${esc(text)}</span>`;
+const pills = (firms: OppFirm[], max = 4, counts = false) => {
+  const shown = firms.slice(0, max);
+  return `<div class="rp-names">${shown.map((f) => `<span class="rp-name">${esc(f.name)}${counts ? `<b>${f.count}&times;</b>` : ''}</span>`).join('')}${firms.length > shown.length ? `<span class="rp-name-more">+${firms.length - shown.length} more</span>` : ''}</div>`;
+};
+
+/* ── Header and score (shared by all three) ─────────────────────────────────────────────── */
+
+const TYPE_LABEL: Record<ReportKind, string> = { hook: 'AI search quick audit', opportunity: 'AI search opportunity report', baseline: 'AI search report · your tracked searches' };
+
+function whereText(m: ReportModel): string { return `${m.what} in ${m.where}`; }
+
+function headlineText(m: ReportModel): string {
+  const s = m.score;
+  const w = whereText(m);
+  if (s.value === null) return `When people ask AI for ${w}, <em>it names no firms yet.</em>`;
+  if (m.band === 'none') return `When people ask AI for ${w}, <em>it doesn't mention you yet.</em>`;
+  if (m.band === 'some') return `When people ask AI for ${w}, <em>it mentions you in ${s.named} of ${s.denominator} answers.</em>`;
+  return `When people ask AI for ${w}, <em>it names you in ${s.named} of ${s.denominator} answers. Keep it up and grow it.</em>`;
+}
+
+function engineTone(n: number, a: number): string { return !a ? 'grey' : n === 0 ? 'red' : n / a < 0.5 ? 'amber' : 'green'; }
+
+function headBlock(m: ReportModel): string {
+  const searches = m.counts.searches;
+  return `<header class="rp-head"><div class="rp-brand"><div class="rp-wm">Findable<i>.</i></div><div class="rp-sub">${TYPE_LABEL[m.kind]}</div></div>` +
+    `<div class="rp-meta"><div class="rp-meta-top"><span>Report for</span><span class="rp-date">${esc(m.dateLabel)}</span></div>` +
+    `<h1 class="rp-biz">${esc(shortName(m.businessName))}</h1><div class="rp-where">${esc(m.where)}</div>` +
+    `<div class="rp-method">${plural(searches, 'search', 'searches')} &times; 2 AI${m.asks > 1 ? ` &times; ${m.asks} asks` : ''} &middot; ${plural(m.score.answers, 'answer')}${m.overview.shown ? ' &middot; plus Google&#39;s AI Overview, shown for context' : ''}</div></div></header>`;
+}
+
+function scoreBlock(m: ReportModel): string {
+  const s = m.score;
+  const tone = s.value === null ? 'grey' : m.band === 'none' ? 'red' : m.band === 'some' ? 'amber' : 'green';
+  const big = s.value === null
+    ? `<p class="rp-big rp-t-grey"><span class="rp-big-n" style="font-size:36px">No score yet</span></p>`
+    : `<p class="rp-big rp-t-${tone}"><span class="rp-big-n">${s.value}%</span><span class="rp-big-w">of answers</span></p>`;
+  const line = s.value === null ? "AI didn't name any business in these answers." : `${s.named} of ${s.denominator} answers that named a business named you.${m.top ? ` ${esc(m.top.name)}: ${m.top.count}.` : ''}`;
+  const card = (e: Eng) => {
+    const c = m.engines[e];
+    const pct = c.answers ? Math.round((c.named / c.answers) * 100) : 0;
+    return `<div class="rp-eng rp-eng--${ENGINE_KEY[e]}"><div class="rp-eng-h"><span class="rp-dot rp-dot--${ENGINE_KEY[e]}"></span>${ENGINE_LABEL[e]}</div>` +
+      `<b class="rp-eng-v rp-t-${engineTone(c.named, c.answers)}">${c.named} of ${c.answers}</b><span class="rp-eng-s">${pct}% &middot; ${c.named === 0 ? 'named nowhere' : `named in ${plural(c.named, 'answer')}`}</span></div>`;
+  };
+  const o = m.overview;
+  const aio = o.shown
+    ? `<p class="rp-aio-line"><span class="rp-dot rp-dot--aio"></span><b>Google AI Overview</b><span>shown on ${o.shown} of ${plural(o.asked, 'search', 'searches')}, named in ${o.named}</span><em>Shown for context, not scored</em></p>` : '';
+  return `<section class="rp-score"><div class="rp-score-in"><div class="rp-overall"><span class="rp-k"><i></i>AI named you in</span>${big}<span class="rp-overall-s">${line}</span></div>${card('chatgpt')}${card('gemini')}</div>${aio}</section>`;
+}
+
+/* ── The answer boxes (the example's chat cards) ────────────────────────────────────────── */
+
+function answerCard(e: Eng, f: EngineFacts, business: string): string {
+  const named = f.named > 0;
+  const head = `<div class="rp-ans-head"><span class="rp-eng-name"><span class="rp-dot rp-dot--${ENGINE_KEY[e]}"></span>${ENGINE_LABEL[e]}</span>${named ? chip('y', `✓ Named in ${f.named} of ${f.answers}`) : chip('n', `✕ Not named${f.answers > 1 ? ` in ${f.answers} answers` : ''}`)}</div>`;
+  const inst = f.firms.length ? `<div class="rp-inst-k">Named instead of you</div>${pills(f.firms, 4, f.answers > 1)}` : '';
+  const snip = f.snippet
+    ? `<p class="rp-ans-k">Real answer from ${ENGINE_LABEL[e]}</p><p class="rp-snip">${esc(f.snippet)}</p>`
+    : `<p class="rp-snip rp-snip--none">${named ? `${ENGINE_LABEL[e]} named ${esc(business)}.` : `${ENGINE_LABEL[e]} answered without naming ${esc(business)}.`}</p>`;
+  return `<article class="rp-ans">${head}${inst}${snip}</article>`;
+}
+
+function featuredBlock(m: ReportModel, label: string, sub: string, extra = ''): string {
+  const q = m.featured;
+  if (!q) return '';
+  const business = shortName(m.businessName);
+  const aio = q.overview.shown
+    ? `<div class="rp-aio"><div class="rp-aio-head"><span class="rp-eng-name"><span class="rp-dot rp-dot--aio"></span>Google AI Overview</span><span class="rp-aio-ctx">Shown for context, not scored</span>${q.overview.named ? chip('y', '✓ Named') : q.overview.firms.length ? chip('n', '✕ Not named') : chip('na', 'Names no firm')}</div>${q.overview.firms.length ? pills(q.overview.firms.map((n) => ({ name: n, count: 1 })), 4) : ''}</div>` : '';
+  return `<section class="rp-feat"><span class="rp-pill">${esc(label)}</span><h2 class="rp-feat-q">“${esc(q.question)}”</h2><p class="rp-feat-sub">${esc(sub)}</p>${extra}` +
+    `<div class="rp-ans-grid">${ENGS.map((e) => answerCard(e, q.engines[e], business)).join('')}</div>${aio}</section>`;
+}
+
+/* ── The search tables ──────────────────────────────────────────────────────────────────── */
+
+function resultCell(f: EngineFacts): string {
+  if (!f.answers) return chip('na', 'No answer');
+  const c = f.named > 0 ? chip('y', `✓ ${f.named} of ${f.answers}`) : chip('n', `✕ ${f.named} of ${f.answers}`);
+  const top = f.firms[0];
+  return c + (f.named < f.answers && top ? `<span class="rp-np" title="${esc(top.name)}">${esc(top.name)}</span>${f.firms.length > 1 ? `<span class="rp-np-more">+${f.firms.length - 1} more</span>` : ''}` : '');
+}
+
+function tableBlock(m: ReportModel, qs: OppQuestion[], title: string, sub: string, withGroup: boolean, withAfter: boolean): string {
+  if (!qs.length) return `<section class="rp-panel"><h2 class="rp-h">${esc(title)}</h2><p class="rp-h-sub">No searches to show yet.</p></section>`;
+  const head = `<tr><th>Search</th>${ENGS.map((e) => `<th class="rp-te"><span class="rp-dot rp-dot--${ENGINE_KEY[e]}"></span>${ENGINE_LABEL[e]}</th>`).join('')}${withAfter ? '<th class="rp-te">After 4 weeks</th>' : ''}</tr>`;
+  const body = qs.map((q, i) => {
+    const g = GROUP[q.tier];
+    const label = m.mainQuestions.includes(q.question) ? 'Main search, harder to get named' : g.label;
+    return `<tr><td class="rp-tq"><span class="rp-qn">${i + 1}.</span> ${esc(q.question)}${withGroup ? `<small>${chip(g.kind, label)}</small>` : ''}</td>` +
+      ENGS.map((e) => `<td class="rp-tr" data-eng="${ENGINE_LABEL[e]}"><div class="rp-cell">${resultCell(q.engines[e])}</div></td>`).join('') +
+      (withAfter ? `<td class="rp-tr" data-eng="After 4 weeks"><div class="rp-cell"><span class="rp-after">Not checked yet</span></div></td>` : '') + `</tr>`;
+  }).join('');
+  return `<section class="rp-panel"><h2 class="rp-h">${esc(title)}</h2>${sub ? `<p class="rp-h-sub">${esc(sub)}</p>` : ''}<table class="rp-tbl"><thead>${head}</thead><tbody>${body}</tbody></table></section>`;
+}
+
+/* ── Website findings, listing sites, why it matters ────────────────────────────────────── */
+
+function websitePanel(m: ReportModel): string {
+  const w = m.website;
+  const wrap = (inner: string) => `<section class="rp-panel rp-panel--site"><h2 class="rp-h">What we found on your website</h2>${inner}</section>`;
+  if (w.state === 'no_website') return wrap(`<p class="rp-issue-t">You don't have a website AI can read yet.</p><p class="rp-issue-p">A site AI can read is the first thing we'd build.</p>`);
+  if (w.state === 'not_checked') return wrap(`<p class="rp-issue-t">We haven't checked your website yet.</p><p class="rp-issue-p">It's the first thing we'd look at.</p>`);
+  if (w.state === 'clean' || !w.issues.length) return wrap(`<p class="rp-issue-t">We found nothing serious to fix.</p>`);
+  const serious = w.issues.filter((i) => i.serious).length;
+  return wrap(`<p class="rp-issue-p">${serious ? `${plural(serious, 'serious problem')} to fix first.` : `${plural(w.issues.length, 'thing')} to improve.`}</p><div class="rp-rows">${w.issues.slice(0, 5).map((i) =>
+    `<div class="rp-issue"><span class="rp-ic rp-ic--${i.serious ? 'high' : 'low'}">!</span><div class="rp-issue-t">${esc(i.title)} <span class="rp-sev rp-sev--${i.serious ? 'high' : 'low'}">${i.serious ? 'Serious' : 'Minor'}</span></div></div>`).join('')}</div>`);
+}
+
+function listedPanel(m: ReportModel, max = 5): string {
+  const top = m.directories.slice(0, max);
+  return `<section class="rp-panel"><h2 class="rp-h">Get listed on these sites</h2>` + (top.length
+    ? `<p class="rp-h-sub">AI uses them.</p>${top.map((x) => `<div class="rp-row"><b>${esc(x.name)}</b><span>${plural(x.answers, 'answer')}</span></div>`).join('')}`
+    : `<p class="rp-h-sub">No listing sites showed up in these answers yet.</p>`) + `</section>`;
+}
+
+function insteadPanel(m: ReportModel, max = 6): string {
+  const title = m.band === 'high' ? 'AI also recommends' : 'AI recommends these instead';
+  return `<section class="rp-panel"><h2 class="rp-h">${title}</h2>` + (m.rivals.length
+    ? `<p class="rp-h-sub">How often AI named them.</p>${pills(m.rivals, max, true)}`
+    : `<p class="rp-h-sub">AI named no other business in these answers.</p>`) + `</section>`;
+}
+
+function whyPanel(m: ReportModel): string {
+  const misses = Math.max(0, m.score.denominator - m.score.named);
+  const rivals = m.rivals.length;
+  const tiles: string[] = [];
+  if (m.score.value === null) tiles.push(`<div class="rp-tile"><b>0</b><span>businesses named in these answers</span></div>`);
+  else if (misses > 0) tiles.push(`<div class="rp-tile"><b>${misses}/${m.score.denominator}</b><span>answers that named a business did not name ${esc(shortName(m.businessName))}</span></div>`);
+  else tiles.push(`<div class="rp-tile"><b>${m.score.named}/${m.score.denominator}</b><span>answers named ${esc(shortName(m.businessName))}</span></div>`);
+  if (misses > 0 && rivals > 0) tiles.push(`<div class="rp-tile"><b>${rivals}</b><span>different ${rivals === 1 ? 'business' : 'businesses'} named instead</span></div>`);
+  return `<section class="rp-panel"><h2 class="rp-h">Why this matters</h2><div class="rp-tiles">${tiles.join('')}</div></section>`;
+}
+
+/** "AI names different firms each time for 12 of your 31 searches. There's room for you to be one of them." — built from the real counts. */
+export function countsLine(c: ReportModel['counts']): string {
+  const first = c.lots > 0
+    ? `AI names different firms each time for ${c.lots} of your ${plural(c.room, 'search', 'searches')}. There's room for you to be one of them.`
+    : c.some > 0
+      ? `AI repeats a few firms but changes the rest for ${c.some} of your ${plural(c.room, 'search', 'searches')}. There's still room for you to be one of them.`
+      : c.room > 0 ? `AI names the same few firms for most of your ${plural(c.room, 'search', 'searches')}.` : 'No searches to count yet.';
+  const rest: string[] = [];
+  if (c.lots > 0 && c.some > 0) rest.push(`${c.some} with some room`);
+  if (c.little) rest.push(`${c.little} with little room`);
+  if (c.nofirms) rest.push(`${c.nofirms} where AI names no firms yet`);
+  if (c.named) rest.push(`${c.named} to keep and grow`);
+  if (c.notonsite) rest.push(`${c.notonsite} not on your site yet (add a page if you offer them)`);
+  return rest.length ? `${first} ${rest.join(' · ')}` : first;
+}
+
+/* ── The footer: what we'd do + the one button ──────────────────────────────────────────── */
+
+function footBlock(m: ReportModel): string {
+  const w = m.website;
+  const first = m.band === 'high' ? 'Keep your best pages strong and add one for each search below.' : m.counts.lots + m.counts.some > 0 ? 'Make a clear page for each search where you can get named.' : 'Make a clear page for each of your searches.';
+  const second = w.state === 'no_website' ? 'Build a website AI can read.' : w.state === 'issues' && w.issues.length ? 'Fix what stops AI reading your website.' : 'Tidy your website and Google profile.';
+  const third = m.kind === 'baseline' ? `Check again ${m.checkAgainLabel ? `on ${m.checkAgainLabel}` : `in ${REMEASURE_WEEKS_STANDARD} weeks`} and show you.` : `Check again after ${REMEASURE_WEEKS_STANDARD} weeks and show you.`;
+  return `<footer class="rp-foot"><h3>What we'd do</h3><ul class="rp-do"><li>${esc(first)}</li><li>${esc(second)}</li><li>${esc(third)}</li></ul>` +
+    `<a class="rp-btn" href="${esc(waHref(shortName(m.businessName), BUTTON_TEXT[m.kind]))}" target="_blank" rel="noopener noreferrer">${WA_BUTTON}</a>` +
+    `<div class="rp-foot-grid"><div class="rp-foot-card"><span class="rp-fk">Prepared for</span><span class="rp-fv">${esc(shortName(m.businessName))}</span></div>` +
+    `<div class="rp-foot-card"><span class="rp-fk">Report date</span><span class="rp-fv">${esc(m.dateLabel)}</span></div>` +
+    `<div class="rp-foot-card"><span class="rp-fk">Measured on</span><span class="rp-fv">ChatGPT and Gemini${m.overview.shown ? ' · Google AI Overview (not scored)' : ''}</span></div></div>` +
+    `<div class="rp-foot-brand"><span class="rp-foot-name">Findable<i>.</i></span><span class="rp-fk">findable.live</span></div>` +
+    `<div class="rp-foot-note"><p>These are opportunities, not guarantees.</p></div></footer>`;
+}
+
+/* ═══ The three bodies ═══════════════════════════════════════════════════════════════════════ */
+
+function hookBody(m: ReportModel): string {
+  const intro = `We asked AI assistants the searches people make when they look for ${m.what} in ${m.where}, and recorded whether ${esc(shortName(m.businessName))} was named in each answer.`;
+  return `<p class="rp-line">${headlineText(m)}</p><p class="rp-intro">${intro}</p>` +
+    featuredBlock(m, 'Featured search', 'We asked each AI the same search. Here is what each one said.') +
+    `<div class="rp-pair">${websitePanel(m)}${whyPanel(m)}</div>`;
+}
+
+function opportunityBody(m: ReportModel): string {
+  const c = m.counts;
+  const high = m.band === 'high';
+  const room = c.lots + c.some;
+  const label = high ? 'Where to keep and grow' : 'Your best opportunity';
+  const sub = 'Here is what each AI said.';
+  const rest = m.targets.filter((q) => q.question !== m.featured?.question);
+  const flagNote = c.flagged ? ` ${plural(c.flagged, 'search', 'searches')} left out: AI answered for another place.` : '';
+  const line = esc(`${countsLine(c)}${flagNote}`);
+  const targets = rest.length
+    ? `<section class="rp-panel"><h2 class="rp-h">Searches where you can get named</h2><p class="rp-h-sub">${line}</p>${rest.map((q) => {
+        const g = GROUP[q.tier];
+        const firms = q.firms.slice(0, 3);
+        return `<div class="rp-target"><h3>${esc(q.question)}</h3>${firms.length ? pills(firms, 3) : ''}<p>${chip(g.kind, g.label)} ${esc(q.why)}</p></div>`;
+      }).join('')}</section>`
+    : `<section class="rp-panel"><h2 class="rp-h">Searches where you can get named</h2><p class="rp-h-sub">${line}${room ? '' : ' None with room yet.'}</p></section>`;
+  const proof = m.featured ? `<p class="rp-feat-sub" style="margin-top:-8px">${chip(GROUP[m.featured.tier].kind, GROUP[m.featured.tier].label)} ${esc(m.featured.why)}</p>` : '';
+  return `<p class="rp-line">${headlineText(m)}</p>` +
+    (m.featured ? featuredBlock(m, label, sub, proof) : '') +
+    targets + insteadPanel(m) +
+    `<div class="rp-pair">${websitePanel(m)}${listedPanel(m)}</div>` + whyPanel(m);
+}
+
+function baselineBody(m: ReportModel): string {
+  const s = m.score;
+  const tone = s.value === null ? 'grey' : m.band === 'none' ? 'red' : m.band === 'some' ? 'amber' : 'green';
+  const today = `<section class="rp-panel"><h2 class="rp-h">Today and after ${REMEASURE_WEEKS_STANDARD} weeks</h2><div class="rp-today">` +
+    `<div class="rp-card"><span class="rp-k" style="color:#6b6c72"><i></i>AI named you in &middot; ${esc(m.dateLabel)}</span><p class="rp-bigdark rp-t-${tone}" style="margin-top:10px;${tone === 'grey' ? 'color:#5d5e63' : ''}">${s.value === null ? 'No score yet' : `${s.value}%<span style="font-size:18px;color:#6b6c72"> of answers</span>`}</p><p class="rp-h-sub" style="margin:6px 0 0">AI named you ${s.named} ${s.named === 1 ? 'time' : 'times'}.${m.top ? ` ${esc(m.top.name)}: ${m.top.count}.` : ''}</p></div>` +
+    `<div class="rp-card rp-card--next"><span class="rp-k" style="color:#6b6c72"><i></i>${m.checkAgainLabel ? `We check again on ${esc(m.checkAgainLabel)}` : `We check again in ${REMEASURE_WEEKS_STANDARD} weeks`}</span><p class="rp-bigdark" style="margin-top:10px;color:#a3a5ab">&mdash;</p><p class="rp-h-sub" style="margin:6px 0 0">Same ${plural(m.counts.searches, 'search', 'searches')}. Same AI.</p></div></div></section>`;
+  const c = m.counts;
+  const flagNote = c.flagged ? ` ${plural(c.flagged, 'search', 'searches')} left out: AI answered for another place.` : '';
+  return `<p class="rp-line">${headlineText(m)}</p>` + today +
+    tableBlock(m, m.all, 'Your targeted searches', `We chose searches where you have the best chance of being named, plus your main ones. ${countsLine(c)}.${flagNote}`, true, true) +
+    insteadPanel(m) + `<div class="rp-pair">${websitePanel(m)}${listedPanel(m)}</div>`;
+}
+
+/* ═══ The page ═══════════════════════════════════════════════════════════════════════════════ */
+
+export function renderReport(m: ReportModel): string {
+  const body = m.kind === 'hook' ? hookBody(m) : m.kind === 'baseline' ? baselineBody(m) : opportunityBody(m);
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
     `<meta name="viewport" content="width=device-width, initial-scale=1">` +
-    `<meta name="robots" content="noindex, nofollow, noarchive"><title>${esc(title)}</title>` +
-    `<style>${CSS}</style></head><body><div class="wrap">` +
-    `<header class="top"><div class="wm">Findable<i>.</i></div></header>` +
-    h1 +
-    `<main class="rp"><div class="rp-head"><span class="k"><u></u>AI search report</span><div><b>${esc(d.businessName)}</b><small>${esc(d.dateLabel)}</small></div></div>${rpBody}</main>` +
-    foot + `</div></body></html>`;
+    `<meta name="robots" content="noindex, nofollow, noarchive"><title>${esc(shortName(m.businessName))} - AI search report</title>` +
+    `<style>${CSS}</style></head><body><div class="rp-sheet">${headBlock(m)}${scoreBlock(m)}<div class="rp-body">${body}</div>${footBlock(m)}</div></body></html>`;
 }
-
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-/** "a gas engineer or electrician in East London" — what customers type, never the trade label. */
-const where = (d: DesignBase) => `${d.searchWhat || 'a business like yours'} in ${d.searchWhere || d.town || 'your area'}`;
-
-/** 2. The one-line headline. */
-function headline(d: DesignBase, named: number, answers: number): string {
-  return named === 0
-    ? `<h1>When people ask AI for ${esc(where(d))}, <span class="hl">it doesn't mention you yet.</span></h1>`
-    : `<h1>When people ask AI for ${esc(where(d))}, <span class="hl">it mentions you in ${named} of ${answers} answers.</span></h1>`;
-}
-
-/** A numbered section of the card: marker, heading, one short line, body. */
-function blk(n: number, title: string, line: string, body: string): string {
-  return `<section class="blk"><h2><i class="mk">${n}</i><span>${esc(title)}</span></h2>${line ? `<p class="line">${esc(line)}</p>` : ''}${body}</section>`;
-}
-
-/** 8. The one button. */
-function button(d: DesignBase, text: string): string {
-  return `<a class="btn" href="${esc(waHref(d.businessName, text))}" target="_blank" rel="noopener noreferrer">${WA_BUTTON}</a>`;
-}
-
-function footer(): string {
-  return `<footer class="foot"><div class="wm">Findable<i>.</i></div><p>These are opportunities, not guarantees.</p></footer>`;
-}
-
-/** "AI recommends these instead": the top businesses and how often, as the example's gold chips. */
-function insteadBlock(n: number, rivals: OppFirm[], max = 5): string {
-  const top = rivals.slice(0, max);
-  if (!top.length) return '';
-  return blk(n, 'AI recommends these instead', 'How often AI named them.',
-    `<div class="chips">${top.map((r) => `<b>${esc(r.name)}<i>${r.count}&times;</i></b>`).join('')}</div>`);
-}
-
-/** "Get listed on these sites": the top directories AI uses. */
-function listedBlock(n: number, dirs: OppDirectory[], max = 5): string {
-  const top = dirs.slice(0, max);
-  if (!top.length) return '';
-  return blk(n, 'Get listed on these sites', 'AI uses them.',
-    `<div class="pn">${top.map((x) => `<div class="row"><b>${esc(x.name)}</b><span>${plural(x.answers, 'answer')}</span></div>`).join('')}</div>`);
-}
-
-/** "What we'd do": three short bullets — only things Findable does and measures. */
-function doBlock(n: number): string {
-  return blk(n, "What we'd do", '', `<ul class="dots"><li>Make a clear page for each search.</li><li>Tidy your website and Google profile.</li><li>Check again after ${REMEASURE_WEEKS_STANDARD} weeks and show you.</li></ul>`);
-}
-
-const pill = (t: OppTier) => `<span class="pill ${GROUP[t].tone}">${GROUP[t].label}</span>`;
-
-/** "AI names: X, Y" or "AI names nobody". */
-function namesLine(q: OppQuestion): string {
-  return q.firms.length ? `AI names: ${q.firms.slice(0, 2).map((f) => f.name).join(', ')}` : 'AI names nobody';
-}
-
-/* ═══ OPPORTUNITY REPORT ═════════════════════════════════════════════════════════════════ */
-
-export interface OpportunityDesignInput extends DesignBase {
-  summary: OppSummary;
-  /** Kept for callers that still pass them; the page does not print them. */
-  engines?: string;
-  asks?: number;
-  bestCount?: number;
-}
-
-export function renderOpportunityReport(d0: OpportunityDesignInput): string {
-  const d = { ...d0, businessName: shortName(d0.businessName) };
-  const s = d.summary;
-  const named = s.questions.reduce((n, q) => n + q.namedYou, 0);
-  const wins = s.best.filter((q) => q.tier === 'now').slice(0, 10);
-  const tile = (t: OppTier, n: number) =>
-    `<div class="t ${GROUP[t].tone}"><span class="k"><u></u>${GROUP[t].label}</span><b>${n}</b><span>${GROUP[t].sub}</span></div>`;
-  const all = (['now', 'possible', 'hard'] as OppTier[]).map((t) => {
-    const list = s.questions.filter((q) => q.tier === t);
-    if (!list.length) return '';
-    return `<p class="grp">${GROUP[t].label} (${list.length})</p>` +
-      list.map((q) => `<div class="it"><h3>${esc(q.question)}</h3><p>${esc(q.why)}</p></div>`).join('');
-  }).join('');
-  const body =
-    `<div class="blk"><i class="mk c">1</i><div class="tiles">${tile('now', s.now)}${tile('possible', s.possible)}${tile('hard', s.hard)}</div></div>` +
-    insteadBlock(2, s.rivals) +
-    blk(3, s.now > 0 ? `${s.now} searches you could win` : 'Searches you could win', wins.length ? `The first ${wins.length} to go for.` : 'None yet. See all searches below.',
-      wins.length ? `<div class="pn">${wins.map((q) =>
-        `<div class="it"><h3>${esc(q.question)}</h3><p>${esc(namesLine(q))}</p><span class="pill g">${esc(q.why)}</span></div>`).join('')}</div>` : '') +
-    listedBlock(4, s.directories) + doBlock(5) +
-    button(d, 'I saw my AI report and I would like to talk.') +
-    `<details><summary>See all searches</summary><div class="in">${all}</div></details>`;
-  return page(`${d.businessName} - AI search report`, d, headline(d, named, s.answers), body, footer());
-}
-
-/* ═══ HOOK REPORT (first contact) ════════════════════════════════════════════════════════ */
-
-export interface HookQuestion {
-  question: string;
-  answers: { engine: string; namedYou: boolean; rivals: string[] }[];
-}
-export interface HookDesignInput extends DesignBase {
-  questions: HookQuestion[];
-  /** Businesses AI named across these answers, most first. */
-  rivals: OppFirm[];
-}
-
-/** The page says "Google AI", not the product name. */
-const aiLabel = (e: string) => (/gemini/i.test(e) ? 'Google AI' : e);
-
-export function renderHookReport(d0: HookDesignInput): string {
-  const d = { ...d0, businessName: shortName(d0.businessName) };
-  const answers = d.questions.reduce((n, q) => n + q.answers.length, 0);
-  const named = d.questions.reduce((n, q) => n + q.answers.filter((a) => a.namedYou).length, 0);
-  const body =
-    insteadBlock(1, d.rivals) +
-    blk(2, 'Example searches', 'What AI said.', `<div class="pn">` + d.questions.slice(0, 3).map((q) =>
-      `<div class="it"><h3>${esc(q.question)}</h3>` +
-      q.answers.map((a) => `<p><b style="color:#fff">${esc(aiLabel(a.engine))}:</b> ${a.namedYou ? 'names you' : (a.rivals.length ? esc(a.rivals.slice(0, 2).join(', ')) : 'names nobody')}</p>`).join('') +
-      `</div>`).join('') + `</div>`) +
-    button(d, 'I saw my AI report and I would like a call.');
-  return page(`${d.businessName} - AI search report`, d, headline(d, named, answers), body, footer());
-}
-
-/* ═══ CLIENT REPORT (the 20 searches we track) ═══════════════════════════════════════════ */
-
-export interface BaselineDesignInput extends DesignBase {
-  /** The tracked searches, in the order the client sees them. */
-  questions: OppQuestion[];
-  rivals: OppFirm[];
-  /** Answers received across the tracked searches, and how many named the business. */
-  answers: number;
-  namedYou: number;
-  directories?: OppDirectory[];
-  /** "9 Dec 2026" — when we check again. Omitted = the line says "in 4 weeks". */
-  checkAgainLabel?: string;
-  /** Kept for callers that still pass them. */
-  asks?: number;
-  engines?: string;
-}
-
-export function renderBaselineReport(d0: BaselineDesignInput): string {
-  const d = { ...d0, businessName: shortName(d0.businessName) };
-  const n = d.questions.length;
-  const rows = d.questions.map((q, i) =>
-    `<div class="it"><h3>${i + 1}. ${esc(q.question)}</h3><p>AI mentioned you: ${q.namedYou} of ${q.answers}</p>${pill(q.tier)}</div>`).join('');
-  const body =
-    blk(1, 'How often AI mentions you today', '',
-      `<div class="hero"><b><em>${d.namedYou}</em> of ${d.answers}</b><span>AI answers that mentioned you.</span><span class="tag">Checked ${esc(d.dateLabel)}</span></div>`) +
-    blk(2, `The ${n} searches we track`, "Today's result for each.", `<div class="pn">${rows}</div>`) +
-    blk(3, `We check again ${d.checkAgainLabel ? `on ${d.checkAgainLabel}` : `in ${REMEASURE_WEEKS_STANDARD} weeks`}`, `Same ${n} searches. Same AI.`, '') +
-    doBlock(4) + button(d, 'a question about my report.');
-  return page(`${d.businessName} - AI search report`, d, '', body, footer());
-}
+export const renderOpportunityReport = (m: ReportModel): string => renderReport({ ...m, kind: 'opportunity' });
+export const renderHookReport = (m: ReportModel): string => renderReport({ ...m, kind: 'hook' });
+export const renderBaselineReport = (m: ReportModel): string => renderReport({ ...m, kind: 'baseline' });
 
 /* ═══ Which design a stored audit gets ═══════════════════════════════════════════════════ */
 
