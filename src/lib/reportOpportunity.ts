@@ -91,6 +91,10 @@ export interface EngineFacts { answers: number; named: number; firms: OppFirm[];
 export function snippetOf(raw: string | undefined, max = 190): string | null {
   const t = cleanAnswerText(String(raw ?? '')).replace(/[-=_]{3,}/g, ' ').replace(/\|/g, ' ').replace(/\\+/g, '').replace(/\s+/g, ' ').trim();
   if (t.length < 20 || isJunkAnswer(t) || isMapCardAnswer(t)) return null;
+  // Map widgets and listings pasted into an answer, and text in another script, are not a quotable answer.
+  if (/map data|\bstars?\b|\bcloses\b|\bopens\b|\d\.\d\s*\(\d|search results/i.test(t)) return null;
+  const letters = t.replace(/[^\p{L}]/gu, '');
+  if (letters.length && letters.replace(/[A-Za-z]/g, '').length / letters.length > 0.12) return null;
   if (t.length <= max) return t;
   const cut = t.slice(0, max);
   const stop = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('? '));
