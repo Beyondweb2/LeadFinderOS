@@ -42,6 +42,8 @@ export const RULE_WORDS: { key: OppTier; label: string; short: string }[] = [
   { key: 'flagged', label: 'Check this place', short: 'Ambiguous place, left out of the counts' },
 ];
 
+import { cleanAnswerText, isJunkAnswer, isMapCardAnswer } from './answerText.ts';
+
 /** The shape of one stored answer cell this module reads (a subset of auditReport's EngineCell). */
 interface Cell { self_named?: boolean; named?: boolean; competitors?: string[]; citations?: { url?: string }[]; answer_text?: string }
 export interface OppRow { question: string; result: Record<string, unknown> | null }
@@ -78,6 +80,21 @@ export interface OppQuestion {
   dirs: { name: string; answers: number }[];
   /** Names dropped from the firm lists because they are service phrases, not businesses. */
   droppedPhrases: string[];
+  /** Per AI: answers received, answers naming this business, the firms it named (most first) and a real answer snippet. */
+  engines: { chatgpt: EngineFacts; gemini: EngineFacts };
+  /** Google's AI Overview for this search (shown for context, not scored): shown or not, named you, the firms it named. */
+  overview: { shown: boolean; named: boolean; firms: string[]; snippet: string | null };
+}
+export interface EngineFacts { answers: number; named: number; firms: OppFirm[]; snippet: string | null }
+
+/** A real answer, cleaned, cut to about `max` characters at a sentence or word end. null when it is empty, junk or a map card. */
+export function snippetOf(raw: string | undefined, max = 190): string | null {
+  const t = cleanAnswerText(String(raw ?? '')).replace(/[-=_]{3,}/g, ' ').replace(/\|/g, ' ').replace(/\\+/g, '').replace(/\s+/g, ' ').trim();
+  if (t.length < 20 || isJunkAnswer(t) || isMapCardAnswer(t)) return null;
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max);
+  const stop = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('? '));
+  return stop > 80 ? cut.slice(0, stop + 1) : `${cut.slice(0, cut.lastIndexOf(' '))}…`;
 }
 
 export interface OppContext {
@@ -395,6 +412,11 @@ export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): 
   const vocab = ctx.vocab ?? buildVocab([question], ctx.services.map((s) => s.name), [ctx.town ?? '']);
   let answers = 0, empty = 0, namedYou = 0;
   const allNames: string[] = [];
+  const eng: Record<(typeof ENGINES)[number], { answers: number; named: number; counts: Map<string, number>; names: Map<string, string>; snippet: string | null }> = {
+    chatgpt: { answers: 0, named: 0, counts: new Map(), names: new Map(), snippet: null },
+    gemini: { answers: 0, named: 0, counts: new Map(), names: new Map(), snippet: null },
+  };
+  let aioShown = false, aioNamed = false; const aioFirms = new Set<string>(); let aioSnippet: string | null = null;
   for (const row of own) {
     for (const e of ENGINES) {
       const cell = (row.result ?? {})[e] as Cell | undefined;
@@ -404,11 +426,22 @@ export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): 
       for (const n of cell.competitors ?? []) if (typeof n === 'string') allNames.push(n);
       const firms = rivalsOf(cell, ctx, vocab, dropped);
       if (!firms.length) empty++;
+      const ef = eng[e];
+      ef.answers++; if (namedOf(ctx)(cell)) ef.named++;
+      for (const f of firms) { const k = firmKey(f); if (k) { ef.counts.set(k, (ef.counts.get(k) ?? 0) + 1); if (!ef.names.has(k)) ef.names.set(k, f.trim()); } }
+      if (!ef.snippet) ef.snippet = snippetOf(cell.answer_text);
       for (const k of new Set(firms.map(firmKey))) if (k) counts.set(k, (counts.get(k) ?? 0) + 1);
       for (const f of firms) { const k = firmKey(f); if (k) { const m = variants.get(k) ?? new Map<string, number>(); m.set(f.trim(), (m.get(f.trim()) ?? 0) + 1); variants.set(k, m); } }
       for (const d of directoriesInAnswer(cell, ctx)) dirCounts.set(d, (dirCounts.get(d) ?? 0) + 1);
       for (const c of cell.citations ?? []) { const h = hostOf(c.url); if (h) cites.add(h); }
       if (cell.answer_text) texts.push(String(cell.answer_text));
+    }
+    const ao = (row.result ?? {}).ai_overview as Cell | undefined;
+    if (ao && typeof ao === 'object' && String(ao.answer_text ?? '').trim()) {
+      aioShown = true;
+      if (namedOf(ctx)(ao)) aioNamed = true;
+      for (const f of rivalsOf(ao, ctx, vocab)) aioFirms.add(f.trim());
+      if (!aioSnippet) aioSnippet = snippetOf(ao.answer_text);
     }
   }
   const display = new Map<string, string>();
@@ -472,7 +505,16 @@ export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): 
     question, tier, easy: false, why, answers, empty, named, distinct, top, firms: firms.slice(0, 5), namedYou,
     chatgptNamed: per.chatgpt[0], chatgptAnswers: per.chatgpt[1], geminiNamed: per.gemini[0], geminiAnswers: per.gemini[1],
     area, scope, service: svc.offered ? label : null, hasPage: svc.hasPage, reasons, help, intent, dirs, droppedPhrases: [...dropped],
+    engines: {
+      chatgpt: engineFacts(eng.chatgpt), gemini: engineFacts(eng.gemini),
+    },
+    overview: { shown: aioShown, named: aioNamed, firms: [...aioFirms].slice(0, 5), snippet: aioSnippet },
   };
+}
+
+function engineFacts(e: { answers: number; named: number; counts: Map<string, number>; names: Map<string, string>; snippet: string | null }): EngineFacts {
+  const firms = [...e.counts.entries()].map(([k, count]) => ({ name: e.names.get(k) ?? k, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)).slice(0, 5);
+  return { answers: e.answers, named: e.named, firms, snippet: e.snippet };
 }
 
 /** Competitor names from one answer: real businesses only. A directory, review site or service phrase is NEVER a competitor. */

@@ -1,69 +1,136 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow, noarchive"><title>London Domestic Maintenance - AI search report</title><style>
-:root{color-scheme:dark;--page:#0a0a0c;--card:#17181c;--tile:#1e1f24;--line:#2c2d34;--text:#f7f8fa;--mist:#c3c6cd;--muted:#8f939d;
-  --y:#f5b301;--gold:#ffd13f;--on-gold:#2a2100;--green:#4ade80;--amber:#fbbf24;--rose:#fb7185;--blue:#7dd3fc;
-  --sys:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
-*{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%;background:var(--page)}
-body{margin:0;background:var(--page);color:var(--text);font:16px/1.5 var(--sys);-webkit-font-smoothing:antialiased;overflow-x:hidden}
-body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;
-  background:radial-gradient(52rem 34rem at 88% -8%,rgba(245,179,1,.13),transparent 62%),radial-gradient(40rem 30rem at -8% 30%,rgba(42,82,160,.10),transparent 60%)}
-a{color:inherit}
-h1,h2,h3{font-family:var(--sys);font-weight:900;letter-spacing:-.02em;margin:0;color:#fff}
-p{margin:0}
-.wrap{max-width:720px;margin:0 auto;padding:0 14px 40px}
-.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 2px 14px}
-.wm{font-weight:900;font-size:22px;letter-spacing:-.02em;line-height:1}.wm i{font-style:normal;color:var(--y);font-size:1.35em;line-height:0}
-.rp{position:relative;display:grid;gap:26px;padding:18px 16px 22px;border-radius:24px;background:var(--card);border:1px solid var(--line);box-shadow:0 30px 70px -30px #000,0 0 0 1px rgba(255,255,255,.03) inset}
-.rp-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:6px 14px}
-.k{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
-.k u{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--gold)}
-.rp-head b{display:block;font-weight:900;font-size:20px;letter-spacing:-.02em;color:#fff;text-align:right}
-.rp-head small{display:block;font-size:13px;font-weight:500;color:var(--muted);text-align:right}
-.blk{position:relative;display:grid;gap:10px}
-.mk{flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--gold);color:#111;font-weight:900;font-size:13px;font-style:normal;box-shadow:0 0 0 4px rgba(255,209,63,.22)}
-.blk h2{display:flex;align-items:center;gap:12px;font-size:21px;line-height:1.15}
-.blk .line{color:var(--mist);font-size:14.5px;margin:-4px 0 0 38px}
-.score{display:grid;gap:4px;padding:16px;border-radius:16px;background:linear-gradient(160deg,rgba(251,113,133,.14),#17181c 72%);border:1px solid rgba(251,113,133,.36)}
-.score.a{background:linear-gradient(160deg,rgba(251,191,36,.14),#17181c 72%);border-color:rgba(251,191,36,.36)}
-.score.g{background:linear-gradient(160deg,rgba(74,222,128,.15),#17181c 72%);border-color:rgba(74,222,128,.4)}
-.score.m{background:linear-gradient(160deg,rgba(143,147,157,.14),#17181c 72%);border-color:var(--line)}
-.score b{font-weight:900;font-size:clamp(64px,19vw,92px);line-height:.95;letter-spacing:-.04em;color:var(--rose)}
-.score.a b{color:var(--amber)}.score.g b{color:var(--green)}.score.m b{color:var(--mist);font-size:clamp(40px,12vw,56px)}
-.score b small{font-size:.32em;font-weight:800;letter-spacing:-.01em;color:var(--mist);margin-left:6px}
-.score span{font-size:15.5px;color:#fff;font-weight:700}
-.score span em{font-style:normal;color:var(--gold)}
-h1{font-size:clamp(24px,6.2vw,34px);line-height:1.12;letter-spacing:-.025em;margin:0}
-h1 .hl{color:var(--gold)}
-.pn{display:grid;gap:0;padding:4px 14px;border-radius:14px;background:var(--tile);border:1px solid var(--line)}
-.chips{display:flex;flex-wrap:wrap;gap:8px}
-.chips b{display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:14px;color:var(--on-gold);background:var(--gold);border-radius:999px;padding:7px 8px 7px 13px}
-.chips b i{font-style:normal;font-size:12px;font-weight:800;background:rgba(0,0,0,.16);border-radius:999px;padding:1px 8px}
-.row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:12px 0;border-top:1px solid var(--line);font-size:16px}
-.row:first-child{border-top:0}
-.row b{font-weight:800;color:#fff;overflow-wrap:anywhere}.row span{color:var(--mist);white-space:nowrap;font-size:14px}
-.it{padding:13px 0;border-top:1px solid var(--line)}.it:first-child{border-top:0}
-.it h3{font-size:17px;line-height:1.25;font-weight:800;letter-spacing:-.01em}
-.it p{margin-top:3px;color:var(--mist);font-size:14.5px}
-.pill{display:inline-block;margin-top:8px;font-size:11.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:4px 10px}
-.pill.g{color:var(--green);background:rgba(74,222,128,.14);border:1px solid rgba(74,222,128,.35)}
-.pill.a{color:var(--amber);background:rgba(251,191,36,.13);border:1px solid rgba(251,191,36,.34)}
-.pill.r{color:var(--rose);background:rgba(251,113,133,.13);border:1px solid rgba(251,113,133,.34)}
-.pill.m{color:var(--mist);background:rgba(143,147,157,.14);border:1px solid var(--line)}
-.pill.b{color:var(--blue);background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.32)}
-.sub{margin-top:2px;font-size:13px;color:var(--muted)}
-.wc{display:grid;gap:0}
-.wc .it h3{font-size:16px;font-weight:700;letter-spacing:0}
-.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:9px;background:var(--amber)}.dot.s{background:var(--rose)}.dot.ok{background:var(--green)}
-.dots{list-style:none;margin:0;padding:0;display:grid;gap:10px}
-.dots li{position:relative;padding-left:26px;font-size:16.5px;color:#fff}
-.dots li:before{content:"";position:absolute;left:0;top:.42em;width:12px;height:12px;border-radius:50%;background:var(--gold)}
-.btn{display:flex;align-items:center;justify-content:center;width:100%;min-height:56px;border-radius:999px;background:var(--y);color:#0a0a0c;font-weight:800;font-size:18px;text-decoration:none;padding:14px 20px;text-align:center;box-shadow:0 8px 24px -8px rgba(245,179,1,.55)}
-.foot{display:grid;gap:6px;justify-items:center;margin-top:26px;color:var(--muted);font-size:13px;text-align:center}
-.foot .wm{font-size:18px;color:#fff}
-@media (min-width:760px){
-  .wrap{max-width:780px;padding-bottom:64px}
-  .rp{padding:26px 26px 30px;gap:32px}
-  h1{font-size:38px}.blk h2{font-size:24px}
+:root{color-scheme:light;--ink:#101114;--cream:#f7f5f1;--y:#ffd13f;--btn:#f5b301}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--cream);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.45}
+h1,h2,h3,p{margin:0}a{color:inherit}
+.rp-sheet{max-width:960px;margin:0 auto;background:var(--cream)}
+.rp-head{background:var(--ink);color:#fff;padding:24px 32px 18px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px 28px;flex-wrap:wrap}
+.rp-wm{font-size:28px;font-weight:900;letter-spacing:-.03em;line-height:1.05;color:#fff}.rp-wm i{font-style:normal;color:var(--btn);font-size:1.3em;line-height:0}
+.rp-sub{margin-top:8px;font-size:10.5px;font-weight:700;letter-spacing:.24em;text-transform:uppercase;color:#a3a5ab}
+.rp-meta{text-align:right;min-width:0;max-width:100%}
+.rp-meta-top{display:flex;justify-content:flex-end;gap:18px;font-size:10.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#a3a5ab}
+.rp-date{color:#d4d5d9}
+.rp-biz{font-size:20px;font-weight:800;color:#fff;margin-top:4px;letter-spacing:-.01em;overflow-wrap:anywhere}
+.rp-where{font-size:13px;color:#bdbec3;margin-top:2px}
+.rp-method{margin-top:6px;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--y)}
+.rp-score{background:var(--ink);padding:4px 24px 22px}
+.rp-score-in{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:14px;align-items:stretch}
+.rp-overall{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:18px;padding:18px 22px}
+.rp-k{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#dcdde0}
+.rp-k i{width:10px;height:10px;border-radius:3px;background:var(--y);display:inline-block}
+.rp-big{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin-top:10px;color:#fff}
+.rp-big-n{font-size:56px;font-weight:900;letter-spacing:-.05em;line-height:.95;white-space:nowrap}
+.rp-big-w{font-size:22px;font-weight:800;color:#bdbec3}
+.rp-overall-s{display:block;font-size:14px;color:#ebebed;margin-top:8px;line-height:1.35}
+.rp-t-red{color:#ff6b75}.rp-t-amber{color:#ffbe3d}.rp-t-green{color:#4ade80}.rp-t-grey{color:#dcdde0}
+.rp-eng{border-radius:18px;padding:16px 18px;border:1px solid rgba(255,255,255,.09);display:flex;flex-direction:column;justify-content:center;min-width:0}
+.rp-eng--gpt{background:linear-gradient(160deg,rgba(74,222,128,.10),rgba(255,255,255,.03))}
+.rp-eng--gem{background:linear-gradient(160deg,rgba(167,139,250,.16),rgba(255,255,255,.03))}
+.rp-eng-h{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:700;color:#fff}
+.rp-eng-v{font-size:40px;font-weight:900;letter-spacing:-.04em;line-height:1;margin-top:12px}
+.rp-eng-s{font-size:13px;color:#bdbec3;margin-top:6px}
+.rp-dot{display:inline-block;width:10px;height:10px;border-radius:50%;flex:none}
+.rp-dot--gpt{background:#4ade80}.rp-dot--gem{background:#a78bfa}.rp-dot--aio{background:#a3a5ab}
+.rp-aio-line{margin-top:14px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:13px;color:#d4d5d9;padding:10px 14px;border:1px dashed rgba(255,255,255,.18);border-radius:12px}
+.rp-aio-line b{color:#fff}.rp-aio-line em{margin-left:auto;font-size:12px;color:#a3a5ab}
+.rp-body{background:var(--cream);padding:22px 24px 8px}
+.rp-line{font-size:24px;font-weight:900;letter-spacing:-.025em;line-height:1.15;margin:0 2px 8px}
+.rp-line em{font-style:normal;background:var(--y);padding:0 6px;border-radius:6px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.rp-intro{font-size:15px;line-height:1.55;color:#3a3b40;margin:0 2px 18px;max-width:70ch}
+.rp-feat,.rp-panel{background:#fff;border:1px solid #e9e5dc;border-radius:20px;padding:22px 24px;margin-bottom:18px;min-width:0}
+.rp-panel{padding:18px 20px 16px}
+.rp-pill{display:inline-block;background:var(--y);color:var(--ink);font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;padding:6px 12px;border-radius:8px}
+.rp-feat-q{margin:14px 0 6px;font-size:26px;font-weight:850;letter-spacing:-.02em;line-height:1.2}
+.rp-feat-sub{margin:0 0 16px;font-size:14.5px;color:#55565c}
+.rp-ans-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.rp-ans{background:#fff;border:1px solid #e4e0d6;border-radius:16px;padding:16px 18px;min-width:0;display:flex;flex-direction:column}
+.rp-ans-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.rp-eng-name{display:inline-flex;align-items:center;gap:9px;font-size:14.5px;font-weight:800}
+.rp-inst-k{font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#6b6c72;margin:0 0 8px}
+.rp-names{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 12px}
+.rp-name{display:inline-flex;align-items:center;gap:7px;background:var(--y);color:#000;font-weight:800;font-size:14px;line-height:1.25;padding:7px 12px;border-radius:999px;max-width:100%;overflow-wrap:anywhere}
+.rp-name b{font-size:11.5px;background:rgba(0,0,0,.12);border-radius:999px;padding:1px 7px}
+.rp-name-more{display:inline-flex;align-items:center;font-size:12.5px;font-weight:700;color:#6b6c72;padding:0 4px}
+.rp-ans-k{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#8a8b90;margin:0 0 4px}
+.rp-snip{font-size:13.5px;line-height:1.55;color:#3a3b40;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden;overflow-wrap:anywhere}
+.rp-snip--none{display:block;color:#55565c}
+.rp-aio{margin-top:12px;background:#fbfaf7;border:1px dashed #dcd7cc;border-radius:14px;padding:11px 16px}
+.rp-aio-head{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap}
+.rp-aio-ctx{font-size:12px;color:#7a7b80;font-style:italic;flex:1 1 auto}
+.rp-chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:5px 11px;border-radius:999px;white-space:nowrap;border:1px solid}
+.rp-chip--y{background:#e6f5eb;color:#13703a;border-color:#c5e6d1}
+.rp-chip--n{background:#fdebec;color:#c21d2b;border-color:#f6c9cd}
+.rp-chip--a{background:#fdf0d8;color:#8a5200;border-color:#f3dcae}
+.rp-chip--na{background:#efeeea;color:#5d5e63;border-color:#dedbd3}
+.rp-chip--b{background:#e3f1f7;color:#14566f;border-color:#bfdde9}
+.rp-ans-head .rp-chip--y{background:#13703a;color:#fff;border-color:#13703a}
+.rp-h{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase}
+.rp-h::before{content:"";width:18px;height:4px;border-radius:2px;background:var(--y)}
+.rp-h-sub{margin:-6px 0 12px;font-size:14px;color:#55565c}
+.rp-tbl{width:100%;border-collapse:collapse;table-layout:fixed}
+.rp-tbl th{font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#6b6c72;text-align:left;padding:4px 10px 10px;border-bottom:1px solid #ebe8e0}
+.rp-tbl th.rp-te{width:150px;color:var(--ink)}.rp-tbl th .rp-dot{margin-right:7px}
+.rp-tbl td{padding:11px 10px;border-bottom:1px solid #f1eee7;font-size:14.5px;vertical-align:top}
+.rp-tbl tr:last-child td{border-bottom:0}
+.rp-tq{overflow-wrap:anywhere}.rp-qn{color:#8a8b90}
+.rp-tq small{display:block;margin-top:5px}
+.rp-cell{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
+.rp-np{display:inline-block;max-width:100%;font-size:11.5px;font-weight:800;line-height:1.3;padding:3px 9px;border-radius:999px;background:var(--y);color:#000;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rp-np-more{font-size:11.5px;font-weight:700;color:#6b6c72;white-space:nowrap}
+.rp-after{color:#8a8b90;font-size:13px}
+.rp-pair{display:grid;grid-template-columns:1.1fr 1fr;gap:18px}
+.rp-panel--site{background:#fffafa;border-color:#f3e3e3}
+.rp-rows>div+div{border-top:1px solid rgba(16,17,20,.07)}
+.rp-issue{display:grid;grid-template-columns:34px 1fr;gap:12px;align-items:center;padding:9px 0}
+.rp-ic{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px}
+.rp-ic--high{background:#fde4e6;color:#c21d2b}.rp-ic--low{background:#fdf0d8;color:#b86e00}
+.rp-issue-t{font-size:14.5px;font-weight:800;line-height:1.35}
+.rp-sev{display:inline-block;margin-left:6px;font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:999px;vertical-align:2px}
+.rp-sev--high{background:#fde4e6;color:#c21d2b}.rp-sev--low{background:#fdf0d8;color:#8a5200}
+.rp-issue-p{margin:3px 0 0;font-size:13px;color:#4f5056;line-height:1.45}
+.rp-tiles{display:grid;gap:10px}
+.rp-tile{display:grid;grid-template-columns:76px 1fr;align-items:center;gap:12px;background:var(--y);border-radius:16px;padding:12px 16px}
+.rp-tile b{font-size:30px;font-weight:900;letter-spacing:-.04em;line-height:1;text-align:center}
+.rp-tile span{font-size:14.5px;font-weight:750;line-height:1.35}
+.rp-why{margin-top:12px;font-size:14px;line-height:1.55;color:#3a3b40}
+.rp-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:11px 0;border-top:1px solid #f1eee7;font-size:15px}
+.rp-row:first-child{border-top:0}.rp-row b{font-weight:800;overflow-wrap:anywhere}.rp-row span{color:#6b6c72;white-space:nowrap;font-size:13.5px}
+.rp-target{padding:13px 0;border-top:1px solid #f1eee7}.rp-target:first-child{border-top:0}
+.rp-target h3{font-size:16.5px;font-weight:800;line-height:1.3}
+.rp-target p{margin:4px 0 0;font-size:13.5px;color:#55565c}
+.rp-target .rp-names{margin:8px 0 6px}.rp-target .rp-name{font-size:12.5px;padding:5px 10px}
+.rp-today{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.rp-today .rp-card{border-radius:16px;padding:16px 18px;background:#fff;border:1px solid #e4e0d6}
+.rp-today .rp-card--next{background:#fbfaf7;border-style:dashed;border-color:#dcd7cc}
+.rp-today .rp-bigdark{font-size:44px;font-weight:900;letter-spacing:-.04em;line-height:1}
+.rp-foot{background:var(--ink);color:#d4d5d9;padding:26px 28px 22px}
+.rp-foot h3{margin:0 0 10px;font-size:24px;font-weight:900;letter-spacing:-.02em;color:#fff}
+.rp-do{list-style:none;margin:0 0 16px;padding:0;display:grid;gap:8px}
+.rp-do li{position:relative;padding-left:24px;font-size:15.5px;color:#fff}
+.rp-do li:before{content:"";position:absolute;left:0;top:.45em;width:11px;height:11px;border-radius:50%;background:var(--y)}
+.rp-btn{display:inline-flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;padding:13px 24px;border-radius:999px;text-decoration:none;line-height:1.2;background:var(--btn);color:#101114;margin-bottom:18px;min-height:48px}
+.rp-foot-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 18px}
+.rp-foot-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:12px 16px;min-width:0}
+.rp-fk{display:block;font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:#9c9da3}
+.rp-fv{display:block;margin-top:3px;font-size:13.5px;font-weight:600;color:#fff;overflow-wrap:anywhere}
+.rp-foot-brand{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:14px;border-top:1px solid rgba(255,255,255,.10)}
+.rp-foot-name{font-size:19px;font-weight:900;letter-spacing:-.02em;color:#fff}.rp-foot-name i{font-style:normal;color:var(--btn)}
+.rp-foot-note{margin-top:10px;font-size:12px;line-height:1.5;color:#9c9da3}
+@media (max-width:760px){.rp-score-in{grid-template-columns:1fr 1fr}.rp-overall{grid-column:1/-1}}
+@media (max-width:640px){
+  .rp-head{padding:18px 16px 14px;flex-direction:column;gap:12px}.rp-wm{font-size:24px}.rp-meta{text-align:left;width:100%}.rp-meta-top{justify-content:space-between}
+  .rp-score{padding:2px 12px 16px}.rp-score-in{gap:10px}.rp-overall{padding:16px}.rp-big-n{font-size:46px}.rp-eng{padding:13px 14px}.rp-eng-v{font-size:30px;margin-top:8px}.rp-aio-line em{margin-left:0}
+  .rp-body{padding:16px 12px 4px}.rp-line{font-size:21px}
+  .rp-feat{padding:18px 14px;border-radius:18px}.rp-feat-q{font-size:21px}.rp-ans-grid{grid-template-columns:1fr}.rp-ans{padding:14px}.rp-name{font-size:13px;padding:6px 11px}
+  .rp-panel{padding:16px 14px 12px;border-radius:18px}
+  .rp-tbl,.rp-tbl tbody{display:block}.rp-tbl thead{display:none}
+  .rp-tbl tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 10px;border-bottom:1px solid #f1eee7;padding:12px 0}.rp-tbl tr:last-child{border-bottom:0}
+  .rp-tbl td{border:0;padding:0;min-width:0}.rp-tbl td.rp-tq{grid-column:1/-1;font-weight:650}
+  .rp-tbl td.rp-tr::before{content:attr(data-eng);display:block;font-size:11px;color:#6b6c72;font-weight:600;margin-bottom:4px}
+  .rp-pair,.rp-today{grid-template-columns:1fr;gap:0}.rp-today .rp-card+.rp-card{margin-top:10px}
+  .rp-tile{grid-template-columns:62px 1fr;padding:11px 14px}.rp-tile b{font-size:26px}
+  .rp-foot{padding:22px 16px 18px}.rp-foot h3{font-size:21px}.rp-btn{display:flex;width:100%}.rp-foot-grid{grid-template-columns:1fr}
 }
-@media print{body::before{display:none}}
-</style></head><body><div class="wrap"><header class="top"><div class="wm">Findable<i>.</i></div></header><main class="rp"><div class="rp-head"><span class="k"><u></u>AI search report</span><div><b>London Domestic Maintenance</b><small>11 Nov 2026</small></div></div><section class="blk"><h2><i class="mk">1</i><span>Your AI score</span></h2><div class="score "><b>0<small>/ 100</small></b><span>AI named you <em>0</em> times. Gas First Ltd: 21.</span></div><h1>When people ask AI for a plumber or electrician in East London, <span class="hl">it doesn't mention you yet.</span></h1></section><section class="blk"><h2><i class="mk">2</i><span>AI recommends these instead</span></h2><p class="line">How often AI named them.</p><div class="chips"><b>Gas First Ltd<i>21&times;</i></b><b>East End Plumbers<i>17&times;</i></b><b>Lloyd Hallowell Electrics<i>15&times;</i></b><b>UpKeep UK<i>15&times;</i></b><b>Hackney Heating<i>14&times;</i></b></div></section><section class="blk"><h2><i class="mk">3</i><span>Your website check</span></h2><p class="line">2 serious problems to fix first.</p><div class="pn wc"><div class="it"><h3><span class="dot s"></span>We couldn’t find reviews, testimonials or case studies</h3></div><div class="it"><h3><span class="dot s"></span>Some services have no page of their own</h3></div><div class="it"><h3><span class="dot "></span>Long page titles</h3></div><div class="it"><h3><span class="dot "></span>No About page found</h3></div><div class="it"><h3><span class="dot "></span>No reviews or testimonials found on the site</h3></div></div></section><section class="blk"><h2><i class="mk">4</i><span>1 search you could win</span></h2><p class="line">1 you could win · 24 possible with work · 4 hard to win · 8 where AI names no firms yet. 3 searchs left out: the place name is unclear.</p><div class="pn"><div class="it"><h3>plumber in Tower Hamlets</h3><p>AI names: Docklands Plumbing Services, East London Plumbers and Heating</p><span class="pill g">4 answers named 12 firms, no one more than twice</span></div><div class="it"><h3>handyman in Bow</h3><p>AI names: Thompsons Maintenance, Bodin Florin Ltd</p><span class="pill a">Possible with work</span><p class="sub">Not listed on your website yet.</p></div><div class="it"><h3>emergency electrician in Hackney</h3><p>AI names: AC1 Electrical Services, Electricians London 24/7</p><span class="pill a">Possible with work</span><p class="sub">AC1 Electrical Services in 3 of 6 answers</p></div><div class="it"><h3>emergency plumber in Hackney</h3><p>AI names: Benni Plumbers, East End Plumbers</p><span class="pill a">Possible with work</span><p class="sub">Benni Plumbers in 3 of 6 answers</p></div><div class="it"><h3>property maintenance in Mile End</h3><p>AI names: Handyman Services London, Mile End Maintenance</p><span class="pill a">Possible with work</span><p class="sub">Handyman Services London in 3 of 6 answers</p></div><div class="it"><h3>electrician in Bow</h3><p>AI names: Do It All Electrical, Lloyd Hallowell Electrics</p><span class="pill a">Possible with work</span><p class="sub">Do It All Electrical in 3 of 6 answers</p></div><div class="it"><h3>electrician in Mile End</h3><p>AI names: Al-Amin Electrical Contractor, Lloyd Hallowell Electrics</p><span class="pill a">Possible with work</span><p class="sub">Al-Amin Electrical Contractor in 3 of 6 answers</p></div><div class="it"><h3>emergency plumber in Bow</h3><p>AI names: Bromley By Bow Plumbers, Able Group</p><span class="pill a">Possible with work</span><p class="sub">Bromley By Bow Plumbers in 3 of 6 answers</p></div><div class="it"><h3>boiler installation in Hackney</h3><p>AI names: Hackney Heating, East End Plumbers</p><span class="pill a">Possible with work</span><p class="sub">Hackney Heating in 3 of 6 answers</p></div><div class="it"><h3>consumer unit replacement in Hackney</h3><p>AI names: Jema Electrical Ltd, Loring Electrical</p><span class="pill a">Possible with work</span><p class="sub">Jema Electrical Ltd in 3 of 6 answers</p></div></div></section><section class="blk"><h2><i class="mk">5</i><span>Get listed on these sites</span></h2><p class="line">AI uses them.</p><div class="pn"><div class="row"><b>Checkatrade</b><span>56 answers</span></div><div class="row"><b>NICEIC</b><span>50 answers</span></div><div class="row"><b>Gas Safe Register</b><span>49 answers</span></div><div class="row"><b>TrustATrader</b><span>30 answers</span></div><div class="row"><b>Yell</b><span>11 answers</span></div></div></section><section class="blk"><h2><i class="mk">6</i><span>What we'd do</span></h2><ul class="dots"><li>Make a clear page for each search you could win.</li><li>Fix what stops AI reading your website.</li><li>Check again after 4 weeks and show you.</li></ul><a class="btn" style="margin-top:10px" href="https://wa.me/447943262742?text=Hi%2C%20this%20is%20London%20Domestic%20Maintenance%20-%20I%20saw%20my%20AI%20report%20and%20I%20would%20like%20to%20talk." target="_blank" rel="noopener noreferrer">Talk to Paul on WhatsApp</a></section></main><footer class="foot"><div class="wm">Findable<i>.</i></div><p>These are opportunities, not guarantees.</p></footer></div></body></html>
+@media print{body{background:#fff}.rp-btn{display:none}}
+</style></head><body><div class="rp-sheet"><header class="rp-head"><div class="rp-brand"><div class="rp-wm">Findable<i>.</i></div><div class="rp-sub">AI search opportunity report</div></div><div class="rp-meta"><div class="rp-meta-top"><span>Report for</span><span class="rp-date">11 Nov 2026</span></div><h1 class="rp-biz">London Domestic Maintenance</h1><div class="rp-where">East London</div><div class="rp-method">37 searches &times; 2 AI &times; 3 asks &middot; 222 answers &middot; plus Google&#39;s AI Overview, shown for context</div></div></header><section class="rp-score"><div class="rp-score-in"><div class="rp-overall"><span class="rp-k"><i></i>Your AI score</span><p class="rp-big rp-t-red"><span class="rp-big-n">0</span><span class="rp-big-w">/ 100</span></p><span class="rp-overall-s">AI named you 0 times. Gas First Ltd: 21.</span></div><div class="rp-eng rp-eng--gpt"><div class="rp-eng-h"><span class="rp-dot rp-dot--gpt"></span>ChatGPT</div><b class="rp-eng-v rp-t-red">0 of 111</b><span class="rp-eng-s">0% &middot; named nowhere</span></div><div class="rp-eng rp-eng--gem"><div class="rp-eng-h"><span class="rp-dot rp-dot--gem"></span>Gemini</div><b class="rp-eng-v rp-t-red">0 of 111</b><span class="rp-eng-s">0% &middot; named nowhere</span></div></div><p class="rp-aio-line"><span class="rp-dot rp-dot--aio"></span><b>Google AI Overview</b><span>shown on 29 of 37 searches, named in 0</span><em>Shown for context, not scored</em></p></section><div class="rp-body"><p class="rp-line">When people ask AI for a plumber or electrician in East London, <em>it doesn't mention you yet.</em></p><section class="rp-feat"><span class="rp-pill">Your best opportunity</span><h2 class="rp-feat-q">“plumber in Tower Hamlets”</h2><p class="rp-feat-sub">No one stands out for this search yet. Here is what each AI said.</p><p class="rp-feat-sub" style="margin-top:-8px"><span class="rp-chip rp-chip--y">You could win</span> 4 answers named 12 firms, no one more than twice</p><div class="rp-ans-grid"><article class="rp-ans"><div class="rp-ans-head"><span class="rp-eng-name"><span class="rp-dot rp-dot--gpt"></span>ChatGPT</span><span class="rp-chip rp-chip--n">✕ Not named in 3 answers</span></div><div class="rp-inst-k">Named instead of you</div><div class="rp-names"><span class="rp-name">Docklands Plumbing Services<b>2&times;</b></span><span class="rp-name">East London Plumbers and Heating<b>2&times;</b></span><span class="rp-name">BRB Plumbing &amp; Heating<b>1&times;</b></span><span class="rp-name">BRB Plumbing &amp; Heating Tower Hamlets<b>1&times;</b></span><span class="rp-name-more">+1 more</span></div><p class="rp-ans-k">Real answer from ChatGPT</p><p class="rp-snip">Here are some plumbers serving Tower Hamlets, East London, including emergency 24-hour options. Recommended plumbers in Tower Hamlets 1.</p></article><article class="rp-ans"><div class="rp-ans-head"><span class="rp-eng-name"><span class="rp-dot rp-dot--gem"></span>Gemini</span><span class="rp-chip rp-chip--n">✕ Not named in 3 answers</span></div><div class="rp-inst-k">Named instead of you</div><div class="rp-names"><span class="rp-name">247 Rapid Response / Plunger<b>1&times;</b></span><span class="rp-name">Best Gas London Ltd<b>1&times;</b></span><span class="rp-name">Plunger<b>1&times;</b></span><span class="rp-name">TLS Plumbing &amp; Heating<b>1&times;</b></span><span class="rp-name-more">+1 more</span></div><p class="rp-ans-k">Real answer from Gemini</p><p class="rp-snip">If you are looking for a reliable plumber in the London Borough of Tower Hamlets (covering areas like Whitechapel, Bethnal Green, Bow, Canary Wharf, Wapping, and Poplar), you have access to…</p></article></div><div class="rp-aio"><div class="rp-aio-head"><span class="rp-eng-name"><span class="rp-dot rp-dot--aio"></span>Google AI Overview</span><span class="rp-aio-ctx">Shown for context, not scored</span><span class="rp-chip rp-chip--na">Names no firm</span></div></div></section><section class="rp-panel"><h2 class="rp-h">Next closest searches</h2><p class="rp-h-sub">1 you could win · 24 possible with work · 4 hard to win · 8 where AI names no firms yet. 3 searches left out: the place name is unclear.</p><div class="rp-target"><h3>handyman in Bow</h3><div class="rp-names"><span class="rp-name">Thompsons Maintenance</span><span class="rp-name">Bodin Florin Ltd</span><span class="rp-name">Bow Handyman Ltd</span></div><p><span class="rp-chip rp-chip--a">Possible with work</span> Not listed on your website yet.</p></div><div class="rp-target"><h3>emergency electrician in Hackney</h3><div class="rp-names"><span class="rp-name">AC1 Electrical Services</span><span class="rp-name">Electricians London 24/7</span><span class="rp-name">GEM 24/7</span></div><p><span class="rp-chip rp-chip--a">Possible with work</span> AC1 Electrical Services in 3 of 6 answers</p></div><div class="rp-target"><h3>emergency plumber in Hackney</h3><div class="rp-names"><span class="rp-name">Benni Plumbers</span><span class="rp-name">East End Plumbers</span><span class="rp-name">Hackney Plumbers</span></div><p><span class="rp-chip rp-chip--a">Possible with work</span> Benni Plumbers in 3 of 6 answers</p></div><div class="rp-target"><h3>property maintenance in Mile End</h3><div class="rp-names"><span class="rp-name">Handyman Services London</span><span class="rp-name">Mile End Maintenance</span><span class="rp-name">Holton Building Services Mile End</span></div><p><span class="rp-chip rp-chip--a">Possible with work</span> Handyman Services London in 3 of 6 answers</p></div><div class="rp-target"><h3>electrician in Bow</h3><div class="rp-names"><span class="rp-name">Do It All Electrical</span><span class="rp-name">Lloyd Hallowell Electrics</span><span class="rp-name">Power Pros Electrical Ltd</span></div><p><span class="rp-chip rp-chip--a">Possible with work</span> Do It All Electrical in 3 of 6 answers</p></div><div class="rp-target"><h3>electrician in Mile End</h3><div class="rp-names"><span class="rp-name">Al-Amin Electrical Contractor</span><span class="rp-name">Lloyd Hallowell Electrics</span><span class="rp-name">Power Pros Electrical Ltd</span></div><p><span class="rp-chip rp-chip--a">Possible with work</span> Al-Amin Electrical Contractor in 3 of 6 answers</p></div><div class="rp-target"><h3>emergency plumber in Bow</h3><div class="rp-names"><span class="rp-name">Bromley By Bow Plumbers</span><span class="rp-name">Able Group</span><span class="rp-name">Ai Plumbing &amp; Gas</span></div><p><span class="rp-chip rp-chip--a">Possible with work</span> Bromley By Bow Plumbers in 3 of 6 answers</p></div><div class="rp-target"><h3>boiler installation in Hackney</h3><div class="rp-names"><span class="rp-name">Hackney Heating</span><span class="rp-name">East End Plumbers</span><span class="rp-name">Joseph Preston Plumbing &amp; Heating</span></div><p><span class="rp-chip rp-chip--a">Possible with work</span> Hackney Heating in 3 of 6 answers</p></div><div class="rp-target"><h3>consumer unit replacement in Hackney</h3><div class="rp-names"><span class="rp-name">Jema Electrical Ltd</span><span class="rp-name">Loring Electrical</span><span class="rp-name">Mirek Electricals Ltd</span></div><p><span class="rp-chip rp-chip--a">Possible with work</span> Jema Electrical Ltd in 3 of 6 answers</p></div></section><section class="rp-panel"><h2 class="rp-h">AI recommends these instead</h2><p class="rp-h-sub">How often AI named them.</p><div class="rp-names"><span class="rp-name">Gas First Ltd<b>21&times;</b></span><span class="rp-name">East End Plumbers<b>17&times;</b></span><span class="rp-name">Lloyd Hallowell Electrics<b>15&times;</b></span><span class="rp-name">UpKeep UK<b>15&times;</b></span><span class="rp-name">Hackney Heating<b>14&times;</b></span><span class="rp-name">Best Gas London Ltd<b>11&times;</b></span><span class="rp-name-more">+221 more</span></div></section><div class="rp-pair"><section class="rp-panel rp-panel--site"><h2 class="rp-h">What we found on your website</h2><p class="rp-issue-p">2 serious problems to fix first.</p><div class="rp-rows"><div class="rp-issue"><span class="rp-ic rp-ic--high">!</span><div class="rp-issue-t">We couldn’t find reviews, testimonials or case studies <span class="rp-sev rp-sev--high">Serious</span></div></div><div class="rp-issue"><span class="rp-ic rp-ic--high">!</span><div class="rp-issue-t">Some services have no page of their own <span class="rp-sev rp-sev--high">Serious</span></div></div><div class="rp-issue"><span class="rp-ic rp-ic--low">!</span><div class="rp-issue-t">Long page titles <span class="rp-sev rp-sev--low">Minor</span></div></div><div class="rp-issue"><span class="rp-ic rp-ic--low">!</span><div class="rp-issue-t">No About page found <span class="rp-sev rp-sev--low">Minor</span></div></div><div class="rp-issue"><span class="rp-ic rp-ic--low">!</span><div class="rp-issue-t">No reviews or testimonials found on the site <span class="rp-sev rp-sev--low">Minor</span></div></div></div></section><section class="rp-panel"><h2 class="rp-h">Get listed on these sites</h2><p class="rp-h-sub">AI uses them.</p><div class="rp-row"><b>Checkatrade</b><span>56 answers</span></div><div class="rp-row"><b>NICEIC</b><span>50 answers</span></div><div class="rp-row"><b>Gas Safe Register</b><span>49 answers</span></div><div class="rp-row"><b>TrustATrader</b><span>30 answers</span></div><div class="rp-row"><b>Yell</b><span>11 answers</span></div></section></div><section class="rp-panel"><h2 class="rp-h">Why this matters</h2><div class="rp-tiles"><div class="rp-tile"><b>145/145</b><span>answers that named a business did not name London Domestic Maintenance</span></div><div class="rp-tile"><b>227</b><span>different businesses named instead</span></div></div></section></div><footer class="rp-foot"><h3>What we'd do</h3><ul class="rp-do"><li>Make a clear page for each search you could win.</li><li>Fix what stops AI reading your website.</li><li>Check again after 4 weeks and show you.</li></ul><a class="rp-btn" href="https://wa.me/447943262742?text=Hi%2C%20this%20is%20London%20Domestic%20Maintenance%20-%20I%20saw%20my%20AI%20report%20and%20I%20would%20like%20to%20talk." target="_blank" rel="noopener noreferrer">Talk to Paul on WhatsApp</a><div class="rp-foot-grid"><div class="rp-foot-card"><span class="rp-fk">Prepared for</span><span class="rp-fv">London Domestic Maintenance</span></div><div class="rp-foot-card"><span class="rp-fk">Report date</span><span class="rp-fv">11 Nov 2026</span></div><div class="rp-foot-card"><span class="rp-fk">Measured on</span><span class="rp-fv">ChatGPT and Gemini · Google AI Overview (not scored)</span></div></div><div class="rp-foot-brand"><span class="rp-foot-name">Findable<i>.</i></span><span class="rp-fk">findable.live</span></div><div class="rp-foot-note"><p>These are opportunities, not guarantees.</p></div></footer></div></body></html>

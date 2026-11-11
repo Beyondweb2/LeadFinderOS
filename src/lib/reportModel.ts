@@ -40,6 +40,16 @@ export interface ReportModel {
   rivals: OppFirm[];
   website: WebsiteSection;
   counts: { now: number; possible: number; hard: number; nofirms: number; named: number; flagged: number; searches: number };
+  /** The two AI the score is built from, over the searches that count. */
+  engines: { chatgpt: { named: number; answers: number }; gemini: { named: number; answers: number } };
+  /** Google's AI Overview, for context (never scored): searches asked, searches where it showed, and where it named you. */
+  overview: { asked: number; shown: number; named: number };
+  /** How many times each search was asked of each AI. */
+  asks: number;
+  /** The search shown as a chat example: the first-contact report's pick, or the top target of the opportunity report. */
+  featured: OppQuestion | null;
+  /** Every search that counts, in the order shown (client: the tracked order; others: best first). */
+  all: OppQuestion[];
   /** Section 4: the best targets (opportunity), every tracked search (client), or [] (first contact uses `examples`). */
   targets: OppQuestion[];
   examples: HookExample[];
@@ -99,7 +109,18 @@ export function buildReportModel(rows: OppRow[], ctx0: OppContext, o: ReportMode
     examples = hookFromRows(rows, hq, ctx).questions;
   }
 
+  const live = s.questions.filter((q) => q.tier !== 'flagged');
+  const eng = (k: 'chatgpt' | 'gemini') => ({ named: live.reduce((n, q) => n + q.engines[k].named, 0), answers: live.reduce((n, q) => n + q.engines[k].answers, 0) });
+  const overview = { asked: live.length, shown: live.filter((q) => q.overview.shown).length, named: live.filter((q) => q.overview.named).length };
+  const asks = live.length ? Math.max(1, Math.round(sc.answers / (live.length * 2))) : 1;
+  const byQuestion = new Map(s.questions.map((q) => [q.question, q]));
+  const exampleQs = examples.map((e) => byQuestion.get(e.question.trim())).filter((q): q is OppQuestion => !!q);
+  const featured = o.kind === 'hook'
+    ? (exampleQs.find((q) => q.firms.length && q.namedYou === 0) ?? exampleQs.find((q) => q.firms.length) ?? exampleQs[0] ?? null)
+    : (targets.find((q) => q.firms.length) ?? targets[0] ?? null);
+  const all = o.kind === 'hook' ? exampleQs : o.kind === 'baseline' ? targets : [...live].sort((a, b) => a.question.localeCompare(b.question));
   return {
+    engines: { chatgpt: eng('chatgpt'), gemini: eng('gemini') }, overview, asks, featured, all,
     kind: o.kind, businessName: o.businessName, dateLabel: o.dateLabel, shareUrl: o.shareUrl,
     what: phrase.what, where: phrase.where,
     score: { value, named: sc.named, denominator: sc.denominator, answers: sc.answers }, band,

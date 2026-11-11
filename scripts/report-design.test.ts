@@ -122,11 +122,16 @@ const text = (h: string) => h.replace(/<style>[\s\S]*?<\/style>/, "").replace(/ 
 const searches = ["plumber in Bow", "plumber in Hackney", "electrician in Bow", "electrician in Mile End", "boiler servicing in London"];
 const leader = searches.flatMap((s) => rowsFor(s, [["A"], ["A"], ["A"], ["B"], ["C"], ["D"]])); // a firm in 3 of 6 answers on every search: none winnable
 const banned = /\b(discovery|baseline|verdict|engines?|fragment(ed|ation)|citations?|visibility score|geo)\b/i;
-const sections = ["Your AI score", "AI recommends these instead", "Your website check", "Get listed on these sites", "What we'd do"];
+/** Each report type has its own body (hook: featured search + table; opportunity: best opportunity + targets; client: today vs after 4 weeks + the table), the same score on top and the same footer. */
+const SECTIONS: Record<ReportKind, string[]> = {
+  hook: ["Your AI score", "Featured search", "All searches we asked", "What we found on your website", "Why this matters", "What we'd do"],
+  opportunity: ["Your AI score", "closest opportunity", "AI recommends these instead", "What we found on your website", "Get listed on these sites", "Why this matters", "What we'd do"],
+  baseline: ["Your AI score", "Today and after 4 weeks", "Your 5 searches", "AI recommends these instead", "What we found on your website", "Get listed on these sites", "What we'd do"],
+};
 for (const kind of ["opportunity", "hook", "baseline"] as ReportKind[]) {
   const html = renderReport(model(leader, kind));
   const t = text(html);
-  const idx = [...sections, "Talk to Paul on WhatsApp"].map((m) => t.indexOf(m));
+  const idx = [...SECTIONS[kind], "Talk to Paul on WhatsApp"].map((m) => t.indexOf(m));
   ok(idx.every((v, i) => v >= 0 && (i === 0 || v > idx[i - 1])), `${kind}: sections in the one agreed order, ending with the one button`);
   ok(!banned.test(t) && !/\bquestions?\b/i.test(t), `${kind}: plain English, "searches" not "questions", no jargon`);
   ok(/These are opportunities, not guarantees\./.test(t) && !/\b(guarantee[sd]? (you|a|that)|will (rank|recommend)|#1)\b/i.test(t), `${kind}: the not-guarantees line, no ranking or recommendation promise`);
@@ -154,11 +159,11 @@ ok(tIssues.indexOf("No reviews or testimonials found") < tIssues.indexOf("Long p
 ok(websiteSectionFromCheck({ state: "issues", serious: [{ title: "A" }], minor: [{ title: "B" }] }).issues[0].serious && websiteSectionFromCheck(null).state === "not_checked", "the stored check becomes the plain section");
 // edge: nothing winnable -> lead with the closest, never an empty section
 const tNone = text(renderReport(model(leader, "opportunity")));
-ok(mOpp.counts.now === 0 && /The closest searches to win/.test(tNone) && mOpp.targets.length > 0, "edge: 0 could-win -> the closest targets lead, never an empty section");
+ok(mOpp.counts.now === 0 && /Your closest opportunity/.test(tNone) && /None you could win yet/.test(tNone) && mOpp.targets.length > 0, "edge: 0 could-win -> the closest targets lead, never an empty section");
 // edge: a winnable one, count line from real counts, plural
 const winRows = [...rowsFor("plumber in Bow", [["A"], ["A"], ["B"], ["C"], ["D"], ["E"]]), ...leader.filter((r) => r.question !== "plumber in Bow")];
 const mWin = model(winRows, "opportunity");
-ok(mWin.counts.now === 1 && /1 search you could win/.test(text(renderReport(mWin))) && /1 you could win · \d+ possible with work/.test(text(renderReport(mWin))), "a winnable search leads, with the count line built from the real counts");
+ok(mWin.counts.now === 1 && /Your best opportunity/.test(text(renderReport(mWin))) && /1 you could win · \d+ possible with work/.test(text(renderReport(mWin))), "a winnable search leads, with the count line built from the real counts");
 // edge: few / no competitors, no directories, fewer than 10 searches
 const lone = rowsFor("plumber in Bow", [[], [], [], [], [], []]);
 const tLone = text(renderReport(model(lone, "opportunity")));
@@ -173,7 +178,7 @@ const tBase = text(renderReport(model(leader, "baseline")));
 ok(/Your 5 searches/.test(tBase) && /Check again on 9 Dec 2026 and show you\./.test(tBase), "client report: the tracked searches and the stored 'check again' date");
 // hook: example searches
 const mHook = buildReportModel(leader.slice(0, 3 * 1), { ...ctx, town: "London", siteText: undefined }, { kind: "hook", businessName: "Acme Heating Ltd", town: "London", dateLabel: "11 Nov 2026", website: issuesSite });
-ok(/Example searches/.test(text(renderReport(mHook))) && mHook.examples.length === 1, "first-contact report: example searches in the same order of sections");
+ok(/Featured search/.test(text(renderReport(mHook))) && mHook.examples.length === 1, "first-contact report: example searches in the same order of sections");
 // flagged searches are named, not counted
 ok(/left out: the place name is unclear/.test(text(renderReport({ ...mOpp, counts: { ...mOpp.counts, flagged: 2 } }))), "flagged searches are mentioned in plain words");
 // escaping
