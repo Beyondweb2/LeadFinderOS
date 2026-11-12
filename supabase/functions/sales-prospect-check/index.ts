@@ -1,4 +1,4 @@
-// sales-prospect-check — "Check before calling": a salesperson's bulk pre-call check (2026-10-04,
+// sales-prospect-check — "Run AI audit": a salesperson's bulk pre-call check (2026-10-04,
 // fix/07-sales-bulk-audit; master plan M-034 / WS-7; docs/pre-sales-certification/fixes-07-sales-bulk-audit.md).
 //
 // The door only: who is calling, which action, and the real providers wired into the engine
@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
     if (!who.ok) return json(refusalBody(who), who.status);
     /* ⛔ POSITIVE MATCH ON THE SALES ROLE. The admin has the admin bulk runner; this stricter path is the
        salesperson's, and an unknown role is refused. */
-    if (who.actor.role !== "sales") return json({ ok: false, error: "sales_only", detail: "Check before calling is the salesperson's tool." }, 403);
+    if (who.actor.role !== "sales") return json({ ok: false, error: "sales_only", detail: "Run AI audit is the salesperson's tool." }, 403);
     const actor = { id: who.actor.id, role: who.actor.role };
     const deps = depsFor(service, actor.id);
 

@@ -82,7 +82,7 @@ export const DEFAULT_PROTECTION_LIMITS: ProtectionLimits = {
     export_csv: { paid: false, sales_allowed: false },
     whatsapp_send: { paid: false },
     whatsapp_queue: { paid: false },
-    /* "Check before calling" (2026-10-04, fn sales-prospect-check): one guard row per FRESH paid check a
+    /* "Run AI audit" (2026-10-04, fn sales-prospect-check): one guard row per FRESH paid check a
        salesperson's batch starts (reused results are free and never counted). per_day IS the rep's daily
        allowance — src/lib/salesCheck.ts reads it from the live row and falls back to this value.
        Raised 2026-10-06 (Paul, improve/one-click-checks-50): two full batches of SALES_CHECK_BATCH_MAX plus

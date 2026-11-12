@@ -51,7 +51,7 @@ Server functions (SECURITY DEFINER, the owner is always the signed-in account): 
 | | Call campaign | WhatsApp campaign |
 |---|---|---|
 | Sends anything? | **Never.** `campaign_launch` refuses `call_campaign`; no Send / Pause buttons | "Send openers (N)" → the safeguarded queue (`campaign_launch` → `sales_queue_opener`); "Pause sending" = `campaign_stop` |
-| Worked from | Outreach / Check before calling / the Call tab | Inbox replies, then calls |
+| Worked from | Outreach / Run AI audit / the Call tab | Inbox replies, then calls |
 | Stats on the card | Leads · Called · Spoke · Interested · Won | Leads · Messaged · Replied · Interested · Won |
 
 Called = a logged call outcome; Spoke = a logged conversation outcome or an inbound reply; Won = a client

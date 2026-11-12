@@ -10,7 +10,7 @@ Records: `docs/pre-sales-certification/sales-workspace-v2.md`, `fixes-05-call-wo
 Find Leads
   → select a campaign if desired ("Adding to")
   → add to CRM
-  → Outreach: tick leads → "Check before calling"
+  → Outreach: tick leads → "Run AI audit"
   → open the next ready lead → Call tab
   → call (phone's own dialler) → log the outcome
   → one Next Action  — or —  Close (Quick Close → payment link)
@@ -30,9 +30,9 @@ Find Leads; Coverage under More. They can open only `/sales-dashboard`, `/outrea
   "→ <campaign>" to move it in. A website match on add is a WARNING, never a refusal (chains share domains).
 - Rule: a lead's country comes from Google's address, never a form choice.
 
-## 2. Check before calling (Outreach, sales only)
+## 2. Run AI audit (Outreach, sales only)
 
-- Tick leads → **"Check before calling (N)"** — the batch STARTS on that click (no confirm dialog since 2026-10-06). Recent
+- Tick leads → **"Run AI audit (N)"** — the batch STARTS on that click (no confirm dialog since 2026-10-06). Recent
   results are reused free; leads that can't be checked are skipped with a reason on their row; the one-line bar shows
   progress and "Checks left today: N/50" ("Daily check limit reached" at 0).
 - Limits: **50 fresh checks per rep per rolling 24 h (30 until 2026-10-06), 20 per batch**, cached results (<14 days) free — see

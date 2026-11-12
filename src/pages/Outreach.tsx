@@ -96,7 +96,7 @@ const Outreach = () => {
     fetchLeads();
   });
 
-  /* "Check before calling" (sales, fix/07): the batch lives server-side; this reads it and moves it on
+  /* "Run AI audit" (sales, fix/07): the batch lives server-side; this reads it and moves it on
      while the page is open. ⛔ ONE CLICK (Paul, 2026-10-06): the press STARTS the batch — no confirm
      dialog. The server still judges every lead (ownership, archived, client, trade/town, allowance,
      batch maximum, reuse) and the one-line check bar and each row say what happened. */

@@ -2,7 +2,7 @@
    OUTREACH: COMPACT AI CHECK ON THE ROWS (2026-10-05, improve/outreach-compact-audit-rows).
    docs/pre-sales-certification/outreach-compact-audit-rows.md.
 
-   The "Check before calling" results panel is gone; each Outreach row says Waiting / Checking… /
+   The "Run AI audit" results panel is gone; each Outreach row says Waiting / Checking… /
    ChatGPT x · Gemini y / Check failed · Retry, with a "Call screen" button once ready; a one-line bar
    carries the batch counts, checks left today, Stop and "Open next ready".
    Pure rules (src/lib/outreachRowCheck.ts) against the REAL report fold (buildReportData), the real
@@ -121,10 +121,10 @@ console.log('── the big panel is gone; bulk checking stays ──');
   const table = read('src/components/OutreachTable.tsx');
   ok(!existsSync(path.join(ROOT, 'src/components/SalesCheckPanel.tsx')), 'SalesCheckPanel.tsx is deleted');
   ok(!/SalesCheckPanel|sales-check-panel|sales-check-items/.test(outreach + table), 'nothing renders the results panel');
-  ok(/data-testid="sales-check-button"/.test(table) && /onSalesCheck\(Array\.from\(selectedIds\)\)/.test(table), 'select leads → "Check before calling" is still on the selection toolbar');
+  ok(/data-testid="sales-check-button"/.test(table) && /onSalesCheck\(Array\.from\(selectedIds\)\)/.test(table), 'select leads → "Run AI audit" is still on the selection toolbar');
   /* ONE CLICK (Paul, 2026-10-06, improve/one-click-checks-50): the press starts the batch. */
   ok(!existsSync(path.join(ROOT, 'src/components/SalesCheckDialog.tsx')) && !/SalesCheckDialog|checkIds|sales-check-confirm/.test(outreach + table), 'no confirmation dialog: SalesCheckDialog is deleted and nothing renders a second "Check N leads" button');
-  ok(/onSalesCheck=\{perms\.salesChecks \? startSalesCheck : undefined\}/.test(outreach) && /const startSalesCheck = useCallback\(\(ids: string\[\]\) => \{[\s\S]{0,160}void checks\.start\(live\);/.test(code('src/pages/Outreach.tsx')), 'pressing "Check before calling" calls checks.start straight away (demo rows dropped)');
+  ok(/onSalesCheck=\{perms\.salesChecks \? startSalesCheck : undefined\}/.test(outreach) && /const startSalesCheck = useCallback\(\(ids: string\[\]\) => \{[\s\S]{0,160}void checks\.start\(live\);/.test(code('src/pages/Outreach.tsx')), 'pressing "Run AI audit" calls checks.start straight away (demo rows dropped)');
   const hook = code('src/hooks/useSalesChecks.ts');
   ok(/const start = useCallback\(async \(leadIds: string\[\]\)/.test(hook) && /refresh: false/.test(hook) && !/Check again even/.test(read('src/hooks/useSalesChecks.ts') + outreach + table), 'no "Check again even if checked recently" option: refresh is always false, recent results are reused');
   ok(!/<Dialog\b/.test(code('src/components/OutreachAiCheck.tsx')), 'the check bar is not a modal');

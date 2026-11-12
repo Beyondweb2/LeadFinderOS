@@ -19,7 +19,7 @@
    work at APIFY_RESERVE_PCT.client — leaving the last slice of the month for baselines and re-measures.
    The percentage is recomputed from used / cap, never read from a stored usage_pct (CLAUDE.md §4).
 
-   ⛔ PRIMITIVES FOR SESSION 7 (sales "Check before calling"). budgetDecision takes an optional per-rep
+   ⛔ PRIMITIVES FOR SESSION 7 (sales "Run AI audit"). budgetDecision takes an optional per-rep
    allowance ({ spentUsd, capUsd }); the caller works out a rep's spend from its own actor stamps. This
    module never decides who a rep is.
 

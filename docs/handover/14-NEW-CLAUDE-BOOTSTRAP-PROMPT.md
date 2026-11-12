@@ -35,7 +35,7 @@ Do this now, in this order:
    - the production URLs and the branch production is built from — confirm app.leadfinderos.com is production and leadfinderos.pages.dev is stale
    - the WhatsApp hold: what is live, what is held, and the cutover order
    - the AI baseline methodology (Discovery vs the formal 20 × 3 × ChatGPT + Gemini baseline, the 4-week replay, how "gone up" is decided)
-   - the sales workflow (Find Leads → campaign → Check before calling → Call tab → outcome → Next Action / Close)
+   - the sales workflow (Find Leads → campaign → Run AI audit → Call tab → outcome → Next Action / Close)
    - the Website Build workflow (simple flow, one Master Build Prompt, only one template today)
    - my working preferences as you understand them (including: give me a fresh ready-to-paste prompt when I ask for a change and say where to run it; deploy live by default after tests unless I say otherwise; verify on app.leadfinderos.com)
    - anything in the docs that looked inconsistent or out of date to you

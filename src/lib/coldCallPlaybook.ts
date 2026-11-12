@@ -667,7 +667,7 @@ const spokenTown = (town: string | null): string | null => {
    The objections are short, spoken answers built from the same facts and the canonical offer; no
    guarantee, discount or number that findableOffer.ts does not hold. */
 /** THE AI CHECK IN ONE LINE — the call card's headline and website finding, from the stored evidence
- *  only. ONE copy: the call screen (buildColdCallPlaybook) and the "Check before calling" results panel
+ *  only. ONE copy: the call screen (buildColdCallPlaybook) and the "Run AI audit" results panel
  *  (fix/07) both read it, so a bulk result can never say something the call screen does not. */
 /** The finding for a complete six-result check that named the business in every answer (Paul,
  *  2026-10-04): a FACT shown to the rep — never a status change. The lead keeps its status. */

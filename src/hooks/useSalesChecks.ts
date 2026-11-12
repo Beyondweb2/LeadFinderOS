@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
-   "CHECK BEFORE CALLING" — the browser half (2026-10-04, fix/07). The batch lives in the database
+   "RUN AI AUDIT" — the browser half (2026-10-04, fix/07). The batch lives in the database
    (sales_check_batches / _items) and every decision is server-side (fn sales-prospect-check), so a
    refresh, a second tab or a closed laptop never loses it.
 

@@ -5,7 +5,7 @@
 //   budgetState      — each pool's rolling-24h spend against its ceiling, plus the Apify reading, so
 //                      Paid Clients / the baseline screen can SHOW whether client measurement has room.
 //
-// ⛔ PRIMITIVES, NOT A PRODUCT. Session 7's sales "Check before calling" reuses budgetDecision +
+// ⛔ PRIMITIVES, NOT A PRODUCT. Session 7's sales "Run AI audit" reuses budgetDecision +
 // budgetState to refuse a rep's batch with a plain sentence; nothing here knows about reps.
 import { APIFY_RESERVE_PCT, BUDGET_POOLS, POOL_DAILY_CAP_USD, apifyUsedPct, budgetDecision, type ApifyUsage, type BudgetDecision, type BudgetPool } from "../../../src/lib/auditBudget.ts";
 import { rollingSpendUsd } from "./enrichment/runner.ts";
