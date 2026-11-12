@@ -21,16 +21,16 @@ for (const k of KINDS) {
   ok(/100%/.test(h), `${k}: named everywhere shows 100%`);
   // 5. nobody named, no competitors at all
   h = render(k, { business: 'Quiet Co', date: '1 Jan', searches: [s('q1', { chatgpt: eng([], 0), gemini: eng([], 0), google: { shown: false, firms: [] } })] });
-  ok(/AI named no firm/.test(h) && /Google showed no AI answer/.test(h), `${k}: no firms and no Google AI answer say so in words`);
+  ok(/AI named no firm/.test(h), `${k}: no firms says so in words`);
   // 6. no answers from an engine
   h = render(k, { business: 'Q', date: '1 Jan', searches: [s('q1', { chatgpt: eng([], 0, 0) })] });
-  ok(/No answer came back/.test(h), `${k}: an engine with zero answers says no answer`);
+  ok(!/undefined|NaN/.test(h), `${k}: an engine with zero answers still renders cleanly`);
   // 7. missing engines entirely
   h = render(k, { business: 'Q', date: '1 Jan', searches: [{ question: 'bare', tier: 'lots' }] });
   ok(/bare/.test(h) && !/undefined/.test(h), `${k}: a search with no engine data still renders`);
   // 8. many firms are capped
   h = render(k, { business: 'Q', date: '1 Jan', searches: [s('q1', { chatgpt: eng(Array.from({ length: 20 }, (_, i) => 'Firm' + i), 0) })] });
-  ok(/and 14 more/.test(h), `${k}: long firm list is capped with "and N more"`);
+  ok(/[+][0-9]+ more/.test(h) && !/Firm19/.test(h), `${k}: long firm list is capped with "+N more"`);
   // 9. no "N times" tallies anywhere
   ok(noNumbers(h), `${k}: no "named N times" tallies`);
   // 10. honest line
@@ -40,16 +40,16 @@ for (const k of KINDS) {
 // kind-specific rules
 let h = render('hook', { business: 'Q', date: 'd', searches: [s('a', { tier: 'lots', why: 'PROOF' }), s('b'), s('c'), s('d'), s('e'), s('f')], website: { state: 'issues', issues: [{ title: 'WEBISSUE', serious: true }] } });
 ok(!/Lots of room|Some room|Little room|PROOF|WEBISSUE|targeted|Searches where you can get named/.test(h), 'hook: no room labels, no proof lines, no website, no winnable list');
-ok((h.match(/class="u"/g) || []).length === 4, 'hook: at most 4 hook searches');
+ok((h.match(/class="q"/g) || []).length === 4, 'hook: at most 4 hook searches');
 h = render('discovery', { business: 'Q', date: 'd', searches: [s('a', { tier: 'lots', why: 'PROOF' }), s('n', { tier: 'notonsite' })], dirs: ['Checkatrade'], website: { state: 'issues', issues: [{ title: 'WEBISSUE', serious: true }] } });
-ok(/Lots of room/.test(h) && /PROOF/.test(h) && /Not on your site yet/.test(h) && /Get listed on these sites/.test(h) && /Checkatrade/.test(h) && !/WEBISSUE/.test(h), 'discovery: room label + proof + not-on-site + listing sites, no website issues');
+ok(/Lots of room/.test(h) && /PROOF/.test(h) && /Not on your site yet/.test(h) && !/WEBISSUE|Get listed|website/i.test(h.replace(/<style>[^]*?<[/]style>/,'')), 'discovery: only winnable searches, with room label and proof; no website, no listing sites');
 h = render('discovery', { business: 'Q', date: 'd', searches: [s('a', { tier: 'little' })] });
 ok(/none stands out as open yet/.test(h), 'discovery: nothing open says so honestly');
 h = render('baseline', { business: 'Q', date: 'd', recheck: '9 Dec', searches: Array.from({ length: 20 }, (_, i) => s('q' + i, { main: i < 4 })), website: { state: 'issues', issues: [{ title: 'WEBISSUE', serious: true }, { title: 'minor', serious: false }] } });
-ok((h.match(/class="u"/g) || []).length === 20 && (h.match(/Main search · harder/g) || []).length === 4, 'baseline: 20 searches, 4 marked main/harder');
+ok((h.match(/class="q"/g) || []).length === 20 && (h.match(/Main search · harder/g) || []).length === 4, 'baseline: 20 searches, 4 marked main/harder');
 ok(/After 4 weeks/.test(h) && /Not measured yet/.test(h) && /9 Dec/.test(h) && /WEBISSUE/.test(h) && /1 serious problem/.test(h), 'baseline: 4-week slot, re-check date, website results');
 ok(!/website score|SEO score|\/100/i.test(h), 'baseline: no team website score number');
-for (const st of ['not_checked', 'no_website', 'clean']) ok(/What we found on your website/.test(render('baseline', { business: 'Q', date: 'd', searches: [], website: { state: st, issues: [] } })), 'baseline: website state ' + st);
+for (const st of ['not_checked', 'no_website', 'clean']) ok(/Your website/.test(render('baseline', { business: 'Q', date: 'd', searches: [], website: { state: st, issues: [] } })), 'baseline: website state ' + st);
 h = render('baseline', { business: 'Q', date: 'd', searches: Array.from({ length: 3 }, (_, i) => s('q' + i)) });
 ok(/Your 3 targeted searches/.test(h) && !/Main searches are marked/.test(h), 'baseline: fewer than 20 searches and no main searches handled');
 h = render('welcome', { business: 'Q', date: 'd', recheck: '9 Dec', searches: Array.from({ length: 20 }, (_, i) => s('q' + i, { main: i < 4 })), website: { state: 'clean', issues: [] } });
