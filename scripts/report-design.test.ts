@@ -202,7 +202,7 @@ ok(!/<script>x|<img src=x>/.test(evil), "business and firm names are escaped");
 ok(shortName("London Domestic Maintenance Ltd") === "London Domestic Maintenance" && shortName("Ltd") === "Ltd", "shortName drops a trailing Ltd only");
 
 const pick = (o: Partial<Parameters<typeof chooseReportDesign>[0]>) => chooseReportDesign({ hookComplete: false, measuring: false, ...o });
-ok(pick({ auditPurpose: "discovery" }) === "opportunity" && pick({ paidKind: "baseline" }) === "baseline" && pick({ paidKind: "remeasure" }) === null && pick({ hookComplete: true }) === "hook", "which report a stored audit gets");
+ok(pick({ auditPurpose: "discovery" }) === "opportunity" && pick({ paidKind: "baseline" }) === null && pick({ paidKind: "remeasure" }) === null && pick({ hookComplete: true }) === null && pick({ auditPurpose: "audit", hookComplete: true }) === null, "which report a stored audit gets: only a discovery uses this design; the AI check and the baseline use the classic pages (Paul, 2026-11-12)");
 ok(pick({ auditPurpose: "discovery", measuring: true }) === null && pick({ hookComplete: true, nameNotJudgeable: true }) === null && pick({ auditPurpose: "discovery", classic: true }) === null, "measuring, name-unjudgeable and ?design=classic keep the classic page");
 
 console.log(f === 0 ? "\nALL PASS" : `\n${f} FAILURES`);

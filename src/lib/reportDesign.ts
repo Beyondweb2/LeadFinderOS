@@ -439,9 +439,11 @@ export function chooseReportDesign(o: {
   classic?: boolean;
 }): ReportDesignKind | null {
   if (o.classic || o.measuring || o.nameNotJudgeable) return null;
-  if (o.paidKind === 'remeasure') return null;
-  if (o.paidKind === 'baseline') return 'baseline';
+  /* ⛔ BACK TO THE CLASSIC PAGES (Paul, 2026-11-12): the AI check (hook) and the client baseline use the classic report again
+     (the AI check: chat answer, website findings, the closing band with the buttons; the baseline: every search with named /
+     not named per AI and the SEO check from the API, easy to compare month to month). Only the discovery, which is for us,
+     uses this design: the searches where they can get named and why. The hook and baseline bodies stay in this file, unused. */
+  if (o.paidKind) return null;
   if (String(o.auditPurpose ?? '').trim().toLowerCase() === 'discovery') return 'opportunity';
-  if (o.hookComplete) return 'hook';
   return null;
 }
