@@ -201,9 +201,10 @@ type Eng = 'chatgpt' | 'gemini';
 const ENGS: Eng[] = ['chatgpt', 'gemini'];
 
 const chip = (kind: 'y' | 'a' | 'n' | 'na' | 'b', text: string) => `<span class="rp-chip rp-chip--${kind}">${esc(text)}</span>`;
-const pills = (firms: OppFirm[], max = 4, counts = false) => {
+/* ⛔ NO "N×" TALLIES (Paul, 2026-11-12): how often a firm was named is not shown. `_counts` is kept for callers. */
+const pills = (firms: OppFirm[], max = 4, _counts = false) => {
   const shown = firms.slice(0, max);
-  return `<div class="rp-names">${shown.map((f) => `<span class="rp-name">${esc(f.name)}${counts ? `<b>${f.count}&times;</b>` : ''}</span>`).join('')}${firms.length > shown.length ? `<span class="rp-name-more">+${firms.length - shown.length} more</span>` : ''}</div>`;
+  return `<div class="rp-names">${shown.map((f) => `<span class="rp-name">${esc(f.name)}</span>`).join('')}${firms.length > shown.length ? `<span class="rp-name-more">+${firms.length - shown.length} more</span>` : ''}</div>`;
 };
 
 /* ── Header and score (shared by all three) ─────────────────────────────────────────────── */
@@ -228,7 +229,7 @@ function headBlock(m: ReportModel): string {
   return `<header class="rp-head"><div class="rp-brand"><div class="rp-wm">Findable<i>.</i></div><div class="rp-sub">${TYPE_LABEL[m.kind]}</div></div>` +
     `<div class="rp-meta"><div class="rp-meta-top"><span>Report for</span><span class="rp-date">${esc(m.dateLabel)}</span></div>` +
     `<h1 class="rp-biz">${esc(shortName(m.businessName))}</h1><div class="rp-where">${esc(m.where)}</div>` +
-    `<div class="rp-method">${plural(searches, 'search', 'searches')} &times; 2 AI${m.asks > 1 ? ` &times; ${m.asks} asks` : ''} &middot; ${plural(m.score.answers, 'answer')}${m.overview.shown ? ' &middot; plus Google&#39;s AI Overview, shown for context' : ''}</div></div></header>`;
+    `<div class="rp-method">${plural(searches, 'search', 'searches')} &times; 2 AI${m.asks > 1 ? ` &times; ${m.asks} asks` : ''} &middot; ${plural(m.score.answers, 'answer')}${m.overview.shown ? ' &middot; plus Google AI, shown for context' : ''}</div></div></header>`;
 }
 
 function scoreBlock(m: ReportModel): string {
@@ -246,7 +247,7 @@ function scoreBlock(m: ReportModel): string {
   };
   const o = m.overview;
   const aio = o.shown
-    ? `<p class="rp-aio-line"><span class="rp-dot rp-dot--aio"></span><b>Google AI Overview</b><span>shown on ${o.shown} of ${plural(o.asked, 'search', 'searches')}, named in ${o.named}</span><em>Shown for context, not scored</em></p>` : '';
+    ? `<p class="rp-aio-line"><span class="rp-dot rp-dot--aio"></span><b>Google AI</b><span>shown on ${o.shown} of ${plural(o.asked, 'search', 'searches')}, named in ${o.named}</span><em>Shown for context, not scored</em></p>` : '';
   return `<section class="rp-score"><div class="rp-score-in"><div class="rp-overall"><span class="rp-k"><i></i>AI named you in</span>${big}<span class="rp-overall-s">${line}</span></div>${card('chatgpt')}${card('gemini')}</div>${aio}</section>`;
 }
 
@@ -267,7 +268,7 @@ function featuredBlock(m: ReportModel, label: string, sub: string, extra = ''): 
   if (!q) return '';
   const business = shortName(m.businessName);
   const aio = q.overview.shown
-    ? `<div class="rp-aio"><div class="rp-aio-head"><span class="rp-eng-name"><span class="rp-dot rp-dot--aio"></span>Google AI Overview</span><span class="rp-aio-ctx">Shown for context, not scored</span>${q.overview.named ? chip('y', '✓ Named') : q.overview.firms.length ? chip('n', '✕ Not named') : chip('na', 'Names no firm')}</div>${q.overview.firms.length ? pills(q.overview.firms.map((n) => ({ name: n, count: 1 })), 4) : ''}</div>` : '';
+    ? `<div class="rp-aio"><div class="rp-aio-head"><span class="rp-eng-name"><span class="rp-dot rp-dot--aio"></span>Google AI</span><span class="rp-aio-ctx">Shown for context, not scored</span>${q.overview.named ? chip('y', '✓ Named') : q.overview.firms.length ? chip('n', '✕ Not named') : chip('na', 'Names no firm')}</div>${q.overview.firms.length ? pills(q.overview.firms.map((n) => ({ name: n, count: 1 })), 4) : ''}</div>` : '';
   return `<section class="rp-feat"><span class="rp-pill">${esc(label)}</span><h2 class="rp-feat-q">“${esc(q.question)}”</h2><p class="rp-feat-sub">${esc(sub)}</p>${extra}` +
     `<div class="rp-ans-grid">${ENGS.map((e) => answerCard(e, q.engines[e], business)).join('')}</div>${aio}</section>`;
 }
@@ -359,7 +360,7 @@ function footBlock(m: ReportModel): string {
     `<a class="rp-btn" href="${esc(waHref(shortName(m.businessName), BUTTON_TEXT[m.kind]))}" target="_blank" rel="noopener noreferrer">${WA_BUTTON}</a>` +
     `<div class="rp-foot-grid"><div class="rp-foot-card"><span class="rp-fk">Prepared for</span><span class="rp-fv">${esc(shortName(m.businessName))}</span></div>` +
     `<div class="rp-foot-card"><span class="rp-fk">Report date</span><span class="rp-fv">${esc(m.dateLabel)}</span></div>` +
-    `<div class="rp-foot-card"><span class="rp-fk">Measured on</span><span class="rp-fv">ChatGPT and Gemini${m.overview.shown ? ' · Google AI Overview (not scored)' : ''}</span></div></div>` +
+    `<div class="rp-foot-card"><span class="rp-fk">Measured on</span><span class="rp-fv">ChatGPT and Gemini${m.overview.shown ? ' · Google AI (not scored)' : ''}</span></div></div>` +
     `<div class="rp-foot-brand"><span class="rp-foot-name">Findable<i>.</i></span><span class="rp-fk">findable.live</span></div>` +
     `<div class="rp-foot-note"><p>These are opportunities, not guarantees.</p></div></footer>`;
 }
@@ -370,7 +371,7 @@ function hookBody(m: ReportModel): string {
   const intro = `We asked AI assistants the searches people make when they look for ${m.what} in ${m.where}, and recorded whether ${esc(shortName(m.businessName))} was named in each answer.`;
   return `<p class="rp-line">${headlineText(m)}</p><p class="rp-intro">${intro}</p>` +
     featuredBlock(m, 'Featured search', 'We asked each AI the same search. Here is what each one said.') +
-    `<div class="rp-pair">${websitePanel(m)}${whyPanel(m)}</div>`;
+    websitePanel(m);
 }
 
 function opportunityBody(m: ReportModel): string {
@@ -379,7 +380,9 @@ function opportunityBody(m: ReportModel): string {
   const room = c.lots + c.some;
   const label = high ? 'Where to keep and grow' : 'Your best opportunity';
   const sub = 'Here is what each AI said.';
-  const rest = m.targets.filter((q) => q.question !== m.featured?.question);
+  /* ⛔ A DISCOVERY LISTS ITS WINNABLE SEARCHES AND NOTHING ELSE (Paul, 2026-11-12): no featured block, no "AI recommends
+     these instead", no website, no listing sites, no "why this matters". The best search leads the list. */
+  const rest = m.targets;
   const flagNote = c.flagged ? ` ${plural(c.flagged, 'search', 'searches')} left out: AI answered for another place.` : '';
   const line = esc(`${countsLine(c)}${flagNote}`);
   const targets = rest.length
@@ -390,10 +393,8 @@ function opportunityBody(m: ReportModel): string {
       }).join('')}</section>`
     : `<section class="rp-panel"><h2 class="rp-h">Searches where you can get named</h2><p class="rp-h-sub">${line}${room ? '' : ' None with room yet.'}</p></section>`;
   const proof = m.featured ? `<p class="rp-feat-sub" style="margin-top:-8px">${chip(GROUP[m.featured.tier].kind, GROUP[m.featured.tier].label)} ${esc(m.featured.why)}</p>` : '';
-  return `<p class="rp-line">${headlineText(m)}</p>` +
-    (m.featured ? featuredBlock(m, label, sub, proof) : '') +
-    targets + insteadPanel(m) +
-    `<div class="rp-pair">${websitePanel(m)}${listedPanel(m)}</div>` + whyPanel(m);
+  void label; void sub; void proof; void high;
+  return `<p class="rp-line">${headlineText(m)}</p>` + targets;
 }
 
 function baselineBody(m: ReportModel): string {
@@ -406,7 +407,7 @@ function baselineBody(m: ReportModel): string {
   const flagNote = c.flagged ? ` ${plural(c.flagged, 'search', 'searches')} left out: AI answered for another place.` : '';
   return `<p class="rp-line">${headlineText(m)}</p>` + today +
     tableBlock(m, m.all, 'Your targeted searches', `We chose searches where you have the best chance of being named, plus your main ones. ${countsLine(c)}.${flagNote}`, true, true) +
-    insteadPanel(m) + `<div class="rp-pair">${websitePanel(m)}${listedPanel(m)}</div>`;
+    websitePanel(m);
 }
 
 /* ═══ The page ═══════════════════════════════════════════════════════════════════════════════ */
