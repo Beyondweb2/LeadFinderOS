@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { paidMode } from "../_shared/protection.ts";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource, recordCostCorrection } from "../_shared/enrichment/runner.ts";
+import { googleAiModeApplies } from "../../../src/lib/aiOverview.ts";
 import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, captureGoogleSerp, toCountryCode, aiOverviewStamp, AI_OVERVIEW_META_KEY, type AiSearchResult } from "../_shared/enrichment/ai-search.ts";
 import { abortApifyRun } from "../_shared/enrichment/apify.ts";
 import {
@@ -292,7 +293,7 @@ Deno.serve(async (req) => {
        matcher keeps its strict behaviour. */
     /* `pool` — the audit's budget pool, from its STORED purpose (src/lib/auditBudget.ts). A missing
        purpose reads as prospecting: the most restricted pool, never the guarantee's. */
-    const auditCache = new Map<string, { businessName: string; businessType: string; locationText: string; countryCode: string; userId: string; pool: BudgetPool }>();
+    const auditCache = new Map<string, { retryOk?: boolean; aiMode: boolean; businessName: string; businessType: string; locationText: string; countryCode: string; userId: string; pool: BudgetPool }>();
     async function getAudit(auditId: string) {
       if (auditCache.has(auditId)) return auditCache.get(auditId)!;
       const { data: a } = await service
@@ -310,6 +311,8 @@ Deno.serve(async (req) => {
       } catch { methodCreatedAt = null; }
       const v = {
         retryOk: aioRetryAppliesTo(methodCreatedAt),
+        /* Google AI Mode instead of the Overview, decided by the same method date (a re-measure follows its baseline). */
+        aiMode: googleAiModeApplies(methodCreatedAt),
         businessName: a?.business_name ?? "",
         businessType: a?.business_type ?? "",
         locationText: a?.location_text ?? "",
@@ -377,7 +380,7 @@ Deno.serve(async (req) => {
           budgetPool: audit.pool,
           noCacheWrite: () => true,
           run: async () => {
-            const { runId, datasetId } = await startAiSearch(String(row.question), audit.countryCode, apifyToken);
+            const { runId, datasetId } = await startAiSearch(String(row.question), audit.countryCode, apifyToken, { aiMode: audit.aiMode });
             return { result: { runId, datasetId }, costUsd: estCost };
           },
         });
@@ -670,7 +673,7 @@ Deno.serve(async (req) => {
             budgetPool: audit.pool,
             noCacheWrite: () => true, // never cache the start marker (would poison retries)
             run: async () => {
-              const { runId, datasetId } = await startAiSearch(String(row.question), audit.countryCode, apifyToken);
+              const { runId, datasetId } = await startAiSearch(String(row.question), audit.countryCode, apifyToken, { aiMode: audit.aiMode });
               return { result: { runId, datasetId }, costUsd: estCost };
             },
           });

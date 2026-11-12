@@ -42,7 +42,7 @@ export const OVERVIEW_NO_NAMES_TEXT = 'AI answer shown, names could not be read'
 /** The short label on the public report's overview row. */
 export const AI_OVERVIEW_CONTEXT_LABEL = 'Not in score';
 /** Said wherever the overview sits beside a score. */
-export const AI_OVERVIEW_NOT_SCORED = 'Not in score: this audit was run before Google AI was scored.';
+export const AI_OVERVIEW_NOT_SCORED = 'Not in score: Google AI is shown for context.';
 
 /* ══ GOOGLE AI IN THE SCORE — VERSIONED (Paul, 2026-10-19) ═══════════════════════════════════════════
    Renamed "Google AI" (was "Google AI Overview") and counted in the named percentage for audits created on or
@@ -53,10 +53,24 @@ export const AI_OVERVIEW_NOT_SCORED = 'Not in score: this audit was run before G
       a re-measure is judged by its BASELINE's method (scoringMethodFor(baseline)), the other number shown as extra.
    ⛔ The send gates, the hook pick and the 6/6 rule read method 1 (scoreHookRun's own fields) — unchanged. */
 export const GOOGLE_AI_SCORED_SINCE = '2026-10-19T08:57:00Z';
+/* ══ GOOGLE AI = AI MODE, CONTEXT ONLY, FROM GOOGLE_AI_MODE_SINCE (Paul, 2026-11-12) ═══════════════════════════
+   Audits created on or after this time ask Google AI MODE instead of the AI Overview (ai-search.ts
+   buildAiSearchInput). AI Mode names local firms on local searches; the Overview often showed nothing or no firm
+   names. The answer is stored in the SAME slot (`ai_overview`), shown in the Google AI box, and is NOT scored:
+   ChatGPT and Gemini are the scored engines. So scoringMethodFor() is 2 ONLY between GOOGLE_AI_SCORED_SINCE and this
+   date, and 1 (Google AI not in the score) before and after.
+   ⛔ DERIVED, NEVER STORED, like the method itself. A client's re-measure follows its BASELINE's date (queue getAudit,
+      scoringMethodFor(baseline)), so a baseline made with the Overview is re-measured with the Overview and scored the
+      same way. Nothing stored is rewritten and no locked baseline is re-run. Unknown date fails closed to the OLD ask. */
+export const GOOGLE_AI_MODE_SINCE = '2026-11-12T06:59:00Z';
+export function googleAiModeApplies(methodCreatedAt: string | null | undefined): boolean {
+  const t = methodCreatedAt ? Date.parse(methodCreatedAt) : NaN;
+  return Number.isFinite(t) && t >= Date.parse(GOOGLE_AI_MODE_SINCE);
+}
 export type ScoringMethod = 1 | 2;
 export function scoringMethodFor(auditCreatedAt: string | null | undefined): ScoringMethod {
   const t = auditCreatedAt ? Date.parse(auditCreatedAt) : NaN;
-  return Number.isFinite(t) && t >= Date.parse(GOOGLE_AI_SCORED_SINCE) ? 2 : 1;
+  return Number.isFinite(t) && t >= Date.parse(GOOGLE_AI_SCORED_SINCE) && t < Date.parse(GOOGLE_AI_MODE_SINCE) ? 2 : 1;
 }
 export const IN_SCORE_TEXT = 'in score';
 export const NOT_IN_SCORE_TEXT = 'not in score';

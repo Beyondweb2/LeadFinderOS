@@ -77,7 +77,7 @@ export function toCountryCode(country?: string | null): string {
 
 /** Build the actor input for ONE question. countryCode should already be lowercase
  *  ISO-2 (use toCountryCode); we lowercase defensively. */
-export function buildAiSearchInput(query: string, countryCode: string): Record<string, unknown> {
+export function buildAiSearchInput(query: string, countryCode: string, opts: { aiMode?: boolean } = {}): Record<string, unknown> {
   return {
     queries: query,
     countryCode: (countryCode || "gb").toLowerCase(),
@@ -97,7 +97,11 @@ export function buildAiSearchInput(query: string, countryCode: string): Record<s
     // measured per-question cost is in sources.ts. Async start/poll means the extra latency cannot
     // abort an edge call (the old 115s aborts were the sync path). Display only, never scored; the
     // stamp (aiOverviewStamp) still records shown / not shown.
-    aiOverview: { scrapeFullAiOverview: true },
+    /* ⛔ GOOGLE AI MODE REPLACES THE OVERVIEW for audits the queue marks `aiMode` (src/lib/aiOverview.ts
+       googleAiModeApplies, from 2026-11-12). AI Mode is the add-on that names local firms (measured 2026-11-12: 7 of 7
+       local searches named real firms; the Overview named none on 4 of them). Its block (aiModeResult: text + sources)
+       is stored in the same `ai_overview` slot. Billed ~0.8p more per question. Older baselines keep the Overview ask. */
+    ...(opts.aiMode ? { aiModeSearch: { enableAiMode: true } } : { aiOverview: { scrapeFullAiOverview: true } }),
     chatGptSearch: { enableChatGpt: true },
     geminiSearch: { enableGemini: true },
     // Perplexity dropped (kept dormant — flip enablePerplexity:true to re-add):
@@ -126,8 +130,9 @@ export async function startAiSearch(
   query: string,
   countryCode: string,
   token: string,
+  opts: { aiMode?: boolean } = {},
 ): Promise<{ runId: string; datasetId: string | null; status: string }> {
-  return await startApifyRun(AI_SEARCH_ACTOR, buildAiSearchInput(query, countryCode), token);
+  return await startApifyRun(AI_SEARCH_ACTOR, buildAiSearchInput(query, countryCode, opts), token);
 }
 
 /** POLL a started run's status (READY/RUNNING/SUCCEEDED/FAILED/ABORTED/TIMED-OUT). */
@@ -159,7 +164,8 @@ const ENGINE_BLOCK_KEYS: Record<Exclude<AiEngineKey, "google_organic">, string[]
   chatgpt: ["chatGptSearchResult"],
   perplexity: ["perplexitySearchResult"], // DORMANT — not in AI_ENGINES; parsing kept for easy re-add
   gemini: ["geminiSearchResult"],
-  ai_overview: ["aiOverviewResult", "aiOverview", "aiOverviewSearchResult"], // probe until confirmed
+  /* aiModeResult = Google AI Mode (new audits, 2026-11-12); the other keys = the older Overview. Same slot. */
+  ai_overview: ["aiModeResult", "aiOverviewResult", "aiOverview", "aiOverviewSearchResult"],
 };
 const TEXT_KEYS = ["text", "answer", "content", "answer_text", "response"];
 const SOURCES_KEYS = ["sources", "citations", "references"];
@@ -328,6 +334,8 @@ const AIO_FURNITURE_MARKERS = [
   "Report a problem",
 ];
 function stripAiOverviewFurniture(text: string): string {
+  /* AI Mode sometimes opens with Google's settings prompt; it is page furniture, never the answer. */
+  text = text.replace(/^s*to get more features, update your settings.?s*/i, "");
   const hay = text.toLowerCase();
   let cut = -1;
   for (const m of AIO_FURNITURE_MARKERS) {

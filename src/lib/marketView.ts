@@ -39,7 +39,8 @@
    The LEDGER rate (AI_SEARCH_USD_PER_QUESTION, sources.ts) is unchanged: it is what each question
    writes and what the cap pre-check reserves, and the correction rows true it up to Apify's bill.
    scripts/check-cross-repo-sync.mjs now asserts this forecast is AT LEAST that rate. */
-export const AUDIT_EST_USD_PER_QUESTION = 0.014;
+/* 2026-11-12: 0.014 -> 0.022: the observed billed cost plus Google AI Mode (+$0.008 a question, measured). */
+export const AUDIT_EST_USD_PER_QUESTION = 0.022;
 
 /* ── APIFY ON-PAGE SEO SCAN, per audited business that HAS a website ─────────────────────────
    ⛔ WAS 0.12, AND IT WAS THE ONLY CONSTANT IN THE APP DERIVED FROM A PRICE LIST RATHER THAN

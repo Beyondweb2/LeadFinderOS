@@ -35,7 +35,8 @@ export const DISCOVERY_MAX_QUESTIONS = 80;
 /* The Discovery confirm's ESTIMATE only (estimate_usd, shown before a run — it decides nothing).
    Raised 0.0104 → 0.014 on 2026-09-28 to the observed billed cost ($0.0139/question incl. Apify's
    corrections); the ledger rate AI_SEARCH_USD_PER_QUESTION is unchanged. */
-export const DISCOVERY_USD_PER_QUESTION_RUN = 0.014;
+/* 2026-11-12: 0.014 -> 0.022 (Google AI Mode adds about $0.008 a question). */
+export const DISCOVERY_USD_PER_QUESTION_RUN = 0.022;
 
 /** `scope` (2026-10-04): the question's verdict against the client's confirmed services
  *  (src/lib/serviceScope.ts) — 'core' or 'service' only; anything else never enters a pool. Absent on

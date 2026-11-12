@@ -36,10 +36,10 @@ ok(/At the Apify cap/.test(apifyWarningText(1)!), "at 100% it says the cap stops
 ok(apifyWarningText(0.79) === null && apifyWarningText(null) === null && apifyWarningText(NaN) === null, "below 80% or unreadable: nothing");
 
 console.log("── forecasts use the observed cost; the ledger does not move ──");
-ok(AUDIT_EST_USD_PER_QUESTION === 0.014 && RE_AUDIT_EST_USD_PER_QUESTION === 0.014 && DISCOVERY_USD_PER_QUESTION_RUN === 0.014,
-  "Coverage, re-audit and paid-baseline discovery estimates all quote $0.014/question");
+ok(AUDIT_EST_USD_PER_QUESTION === 0.022 && RE_AUDIT_EST_USD_PER_QUESTION === 0.022 && DISCOVERY_USD_PER_QUESTION_RUN === 0.022,
+  "Coverage, re-audit and paid-baseline discovery estimates all quote $0.022/question (Google AI Mode included)");
 ok(Math.abs((17.35 + 5.80) / 1668 - 0.0139) < 0.0001, "provenance: $23.15 billed over 1,668 questions = $0.0139");
-ok(AI_SEARCH_USD_PER_QUESTION === 0.0104, "the ledger/reserve rate is unchanged (charging logic untouched)");
+ok(AI_SEARCH_USD_PER_QUESTION === 0.0184, "the ledger/reserve rate carries Google AI Mode (+$0.008, 2026-11-12); charging logic untouched");
 ok(AUDIT_EST_USD_PER_QUESTION >= AI_SEARCH_USD_PER_QUESTION, "a quote is never below the reserve");
 ok(/rule: 'quote >= reserve'/.test(norm("./check-cross-repo-sync.mjs")), "the sync check enforces quote >= reserve rather than equality");
 
