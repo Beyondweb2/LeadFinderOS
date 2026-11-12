@@ -22,7 +22,8 @@ import { AI_SEARCH_ACTOR } from "./ai-search.ts";
  *  this was left at 0.0125), so the app quoted one price while the server reserved another.
  *  A named export rather than a bare property because the sync check can only read a named const —
  *  and a checker that cannot see a value cannot guard it. */
-export const AI_SEARCH_USD_PER_QUESTION = 0.0104;
+/* 2026-11-12: +$0.008 for Google AI Mode (measured 2026-11-12: $0.0176-$0.0196 per question with everything on, vs $0.0104 before). Apify bills the real figure; recordCostCorrection settles the difference. */
+export const AI_SEARCH_USD_PER_QUESTION = 0.0184;
 
 /** ⛔ MUST EQUAL src/lib/marketView.ts SEO_SCAN_USD. Same reasoning. */
 export const SEO_SCAN_USD_PER_SCAN = 0.04;

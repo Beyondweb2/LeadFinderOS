@@ -76,7 +76,7 @@ type Row = any;
 const ANSWER_ENGINES: Record<string, string> = {
   chatgpt: "ChatGPT",
   gemini: "Gemini",
-  ai_overview: "Google AI Overview",
+  ai_overview: "Google AI (AI Mode or Overview)",
 };
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");

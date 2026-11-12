@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-12-google-ai-mode', date: '2026-11-12', title: 'Google AI now shows Google AI Mode answers', audience: 'all',
+    body: 'New audits show Google AI Mode in the Google AI box. It names local firms far more often than the old AI Overview. It is shown for context and is not part of the score. Older audits keep the answer they stored.',
+    report: {
+      added: ['Google AI Mode answers in the Google AI box for new audits.'],
+      changed: ['New audits cost about 0.8p more per question, and the audit cost estimates now include it.'],
+      removed: [],
+      effect: 'The Google AI box now usually lists real local firms. ChatGPT and Gemini stay the scored engines, and nothing already stored or any locked baseline changes.',
+    } },
   { id: '2026-11-12-run-ai-audit', date: '2026-11-12', title: 'Check before calling is now Run AI audit', audience: 'all',
     body: 'The button that checks selected leads before you ring them is now called Run AI audit. It does exactly the same thing. The two routes are WhatsApp first, or Audit, then call.',
     report: {

@@ -21,7 +21,7 @@ const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "u
 
 console.log("── the method's size and cost ──");
 ok(NICHE_SAMPLE_TOWNS === 3 && NICHE_SAMPLE_QUESTIONS_PER_TOWN === 4 && NICHE_SAMPLE_RUNS === 3 && NICHE_SAMPLE_QUESTION_RUNS === 36, "3 towns × 4 questions × 3 runs = 36 question-runs (Paul, 2026-09-28)");
-ok(Math.abs(NICHE_SAMPLE_USD - (36 * AUDIT_EST_USD_PER_QUESTION + 3 * NICHE_PLACES_USD_PER_TOWN)) < 1e-9 && NICHE_SAMPLE_USD < 0.7, "the price is derived from the audit forecast + three Enterprise text searches (≈50p)");
+ok(Math.abs(NICHE_SAMPLE_USD - (36 * AUDIT_EST_USD_PER_QUESTION + 3 * NICHE_PLACES_USD_PER_TOWN)) < 1e-9 && NICHE_SAMPLE_USD < 1.0, "the price is derived from the audit forecast + three Enterprise text searches (≈90p since Google AI Mode, 2026-11-12)");
 
 console.log("\n── towns: one per band, different regions, random, never London ──");
 const towns: TownRow[] = [

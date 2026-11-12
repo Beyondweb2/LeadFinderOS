@@ -36,7 +36,8 @@ import type { TablesInsert } from '@/integrations/supabase/types';
    The LEDGER rate (AI_SEARCH_USD_PER_QUESTION, sources.ts) is unchanged: it is what each question
    writes and what the cap pre-check reserves, and the correction rows true it up to Apify's bill.
    scripts/check-cross-repo-sync.mjs now asserts this forecast is AT LEAST that rate. */
-export const RE_AUDIT_EST_USD_PER_QUESTION = 0.014;
+/* 2026-11-12: 0.014 -> 0.022 (Google AI Mode adds about $0.008 a question). */
+export const RE_AUDIT_EST_USD_PER_QUESTION = 0.022;
 
 export type ReAuditOutcome =
   | { ok: true; auditId: string; runId: string | null }

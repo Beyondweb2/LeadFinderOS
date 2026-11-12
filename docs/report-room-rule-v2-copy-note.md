@@ -36,3 +36,4 @@ Client report heading: **"Your targeted searches"**, with the line "We chose sea
 - Section titles: "Searches where you can get named" (opportunity), "Your targeted searches" (client).
 - Footer line: "These are opportunities, not guarantees." No ranking, recommendation or citation promise.
 - Wording for ambiguous places: ask with the wider area ("Stratford, East London"), new audits only.
+- **Google AI = Google AI Mode, context only (2026-11-12).** New audits ask Google AI Mode in the Google AI box instead of the AI Overview. It is shown beside the answers but is **not scored**: ChatGPT and Gemini are the scored engines. Its firms go through the same filters (no directories, no service phrases). Older audits and reports keep the Google AI answer they stored; locked baselines are never re-run, and a client's re-measure is asked the same way as its baseline.
