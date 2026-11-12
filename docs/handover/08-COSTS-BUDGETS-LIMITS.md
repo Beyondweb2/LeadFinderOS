@@ -46,7 +46,7 @@ Audit spend is split by purpose so that a busy day of prospecting can never bloc
 - If the Apify reading is missing, the pools do not refuse on that ground; an unreadable POOL refuses (fail closed) for
   sales checks.
 
-## Sales pre-call checks ("Check before calling")
+## Sales pre-call checks ("Run AI audit")
 
 | Rule | Value | Where |
 |---|---|---|

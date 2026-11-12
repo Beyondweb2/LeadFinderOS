@@ -49,7 +49,7 @@ Map: `13-REPOSITORIES-AND-FILE-MAP.md`.
 2. `11-PAUL-WORKING-PREFERENCES.md` — how to work with Paul (read early; it changes how you act).
 3. `01-PRODUCT-AND-BUSINESS.md` — the offer (Build 12 / Optimise 6 payments), the guarantee, what never to promise.
 4. `02-AI-VISIBILITY-METHODOLOGY.md` — Discovery vs the formal baseline, the replay, "gone up", service truth.
-5. `03-SALES-WORKFLOW.md` — Find Leads → Check before calling → Call tab → outcome → Next Action / Close.
+5. `03-SALES-WORKFLOW.md` — Find Leads → Run AI audit → Call tab → outcome → Next Action / Close.
 6. `04-CAMPAIGNS-AND-OUTREACH.md` — campaigns as containers; the one cold-opener contact rule.
 7. `05-WEBSITE-BUILD.md` — the simple flow, the Master Build Prompt, the one-template limitation.
 8. `06-PAYMENTS-CLIENTS-DELIVERY.md` — Quick Close → Stripe → Paid Client → first contact → delivery → remeasure.

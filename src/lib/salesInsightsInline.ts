@@ -1,7 +1,7 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    SALES INSIGHTS FROM THE INLINE (STANDARD) CRAWL (2026-10-07, branch improve/site-crawl-sales-insights).
 
-   The standard crawl (supabase/functions/crawl-check, the one a salesperson's "Check before calling" and
+   The standard crawl (supabase/functions/crawl-check, the one a salesperson's "Run AI audit" and
    every audit finalise run) fetches the homepage and up to MAX_CRAWL_PAGES sampled pages and holds their
    HTML in memory. This turns those same bytes into the same SalesInsights the background (prospect) crawl
    produces — through the SAME page processor (fullCrawl.processPage) and the SAME analysis

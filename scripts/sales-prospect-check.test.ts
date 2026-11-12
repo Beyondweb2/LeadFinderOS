@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
-   "CHECK BEFORE CALLING" — the salesperson's bulk pre-call check (fix/07-sales-bulk-audit, 2026-10-04).
+   "RUN AI AUDIT" — the salesperson's bulk pre-call check (fix/07-sales-bulk-audit, 2026-10-04).
    docs/pre-sales-certification/fixes-07-sales-bulk-audit.md.
 
    THE REAL ENGINE (supabase/functions/_shared/sales-check.ts) against an in-memory database
@@ -607,7 +607,7 @@ console.log('── the screens ──');
   ok(!/invokeEdge\(|functions\.invoke|\.insert\(|\.update\(|\.rpc\(/.test(panel), 'the row summary, the check bar and the dialog call nothing and write nothing');
   ok((hook.match(/invokeEdge/g) ?? []).length >= 1 && !/send-whatsapp|whatsapp|email/i.test(hook.replace(/\/\*[\s\S]*?\*\//g, '')), 'the hook talks to sales-prospect-check only');
   ok(/client_request_id: pressRef\.current\.id/.test(hook) && /e\.status !== null\) throw e;/.test(hook), 'a dropped connection is retried with the SAME request id (never a second batch)');
-  ok(/data-testid="sales-check-button"/.test(table) && /perms\.salesChecks/.test(table), 'the Outreach selection toolbar has "Check before calling" for sales');
+  ok(/data-testid="sales-check-button"/.test(table) && /perms\.salesChecks/.test(table), 'the Outreach selection toolbar has "Run AI audit" for sales');
   ok(!/\$\{?usd|cost|\bspend\b/i.test(panel.replace(/\/\*[\s\S]*?\*\//g, '')), 'no cost is shown to a salesperson');
   ok(/nextReadyLead<OutreachLead>\(filteredAndSortedLeads, rowCheck, nextOpened\)/.test(table) && /rowCheckState\(auditsByLead\[l\.id\], checkItemByLead\.get\(l\.id\)\)/.test(table), 'only leads whose check is ready (a finished audit) are offered by Open next ready');
   ok(/SalesChecksAdminCard/.test(read('src/pages/AdminApiUsage.tsx')), 'the admin sees batches, reps, spend and problems on API Usage & Security');

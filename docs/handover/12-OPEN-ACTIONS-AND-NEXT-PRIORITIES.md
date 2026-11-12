@@ -7,7 +7,7 @@ Paul may have done some of the manual ones since.*
 ## URGENT — manual (Paul; Claude cannot do these)
 
 1. **Raise the Apify monthly cap to about US$150.** Verified still **US$40** (US$29.04 used, cycle ends 16 Oct). At US$40,
-   prospecting stops at 85% (~US$34) — salespeople's "Check before calling" will stop within days, and at 100% every AI
+   prospecting stops at 85% (~US$34) — salespeople's "Run AI audit" will stop within days, and at 100% every AI
    question stops, client baselines included. Apify dashboard → usage limits. Do this **before** reps use bulk checks.
 2. **Open the four admin screens once, signed in, on https://app.leadfinderos.com**: a Paid Client page, Website Build, a
    client's Welcome Pack, Admin → API Usage & Security. They are deployed and marker-verified but nobody has seen them

@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
-   "CHECK BEFORE CALLING" — the salesperson's bulk pre-call check, its RULES (2026-10-04, fix/07,
+   "RUN AI AUDIT" — the salesperson's bulk pre-call check, its RULES (2026-10-04, fix/07,
    master plan M-034 / WS-7, Session E E-04). The engine is supabase/functions/_shared/sales-check.ts;
    the function is fn sales-prospect-check; the record is
    docs/pre-sales-certification/fixes-07-sales-bulk-audit.md.
