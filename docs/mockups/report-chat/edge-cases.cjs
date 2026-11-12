@@ -39,7 +39,9 @@ for (const k of KINDS) {
 }
 // kind-specific rules
 let h = render('hook', { business: 'Q', date: 'd', searches: [s('a', { tier: 'lots', why: 'PROOF' }), s('b'), s('c'), s('d'), s('e'), s('f')], website: { state: 'issues', issues: [{ title: 'WEBISSUE', serious: true }] } });
-ok(!/Lots of room|Some room|Little room|PROOF|WEBISSUE|targeted|Searches where you can get named/.test(h), 'hook: no room labels, no proof lines, no website, no winnable list');
+ok(!/Lots of room|Some room|Little room|PROOF|targeted|Searches where you can get named/.test(h) && /WEBISSUE/.test(h), 'hook: website issues shown; no room labels, no proof lines, no winnable list');
+ok(/Want to be the one AI names/.test(h) && /Request a call/.test(h) && /WhatsApp/.test(h) && /Your guarantee/.test(h) && /Prepared for/.test(h), 'hook: footer has the buttons, guarantee and report details');
+ok(!/Want to be the one AI names|Your guarantee/.test(render('baseline', { business: 'Q', date: 'd', searches: [] })) && /Questions about your report/.test(render('welcome', { business: 'Q', date: 'd', searches: [] })), 'client reports: contact buttons, no sales pitch');
 ok((h.match(/class="q"/g) || []).length === 4, 'hook: at most 4 hook searches');
 h = render('discovery', { business: 'Q', date: 'd', searches: [s('a', { tier: 'lots', why: 'PROOF' }), s('n', { tier: 'notonsite' })], dirs: ['Checkatrade'], website: { state: 'issues', issues: [{ title: 'WEBISSUE', serious: true }] } });
 ok(/Lots of room/.test(h) && /PROOF/.test(h) && /Not on your site yet/.test(h) && !/WEBISSUE|Get listed|website/i.test(h.replace(/<style>[^]*?<[/]style>/,'')), 'discovery: only winnable searches, with room label and proof; no website, no listing sites');

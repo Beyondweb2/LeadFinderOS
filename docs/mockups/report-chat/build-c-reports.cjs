@@ -55,6 +55,18 @@ h2:before{content:"";width:22px;height:2px;background:var(--amb)}
 .note{font-size:13px;color:var(--mut);margin:8px 0 0}
 .ft{background:#000;border-top:1px solid var(--line);padding:28px 0 36px}
 .ft .in{display:block}.ft p{margin:10px 0 0;color:var(--mut);font-size:13px}.ft a{color:var(--amb);text-decoration:none}
+.ft h3{margin:0 0 14px;font-size:clamp(24px,6vw,30px);font-weight:900;letter-spacing:-.03em;color:#fff}
+.btns{display:flex;flex-wrap:wrap;gap:10px}
+.ft .btn{display:inline-flex;align-items:center;justify-content:center;border-radius:99px;padding:12px 20px;font-weight:800;font-size:15px;border:1px solid #3a3e4a;color:#fff}
+.ft .btn.amb{background:var(--amb);border-color:var(--amb);color:#111}.ft .btn.wa{border-color:#25d366;color:#25d366}
+.ft .site{display:inline-block;margin:14px 0 0;font-weight:700;font-size:14px}
+.fcard{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:14px;padding:12px 14px;min-width:0}
+.fcard.g{margin-top:18px}.fcard.g p{color:var(--ink);font-size:14px;margin:4px 0 0}
+.fk{display:block;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
+.fv{display:block;font-size:14.5px;font-weight:700;color:#fff;margin-top:2px}
+.fgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:22px 0 0}
+.fbrand{display:flex;justify-content:space-between;align-items:baseline;margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
+@media(max-width:600px){.fgrid{grid-template-columns:1fr}.ft .btn{width:100%}}
 .page{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px 18px;margin:0 0 16px}
 .page h1{font-size:clamp(26px,7vw,34px);margin-top:12px}
 .pn{font-size:12px;color:var(--mut);text-align:right;margin-top:14px}
@@ -99,11 +111,13 @@ function hero(m, eyebrow, searches) {
   const h = sc.pct === null ? `We couldn’t score ${esc(m.business)} yet.` : `AI named ${esc(m.business)} in <em>${sc.pct}%</em> of answers.`;
   return `<div class="eyebrow">${esc(eyebrow)}</div><h1>${h}</h1><p class="lead">${honestLine(m)}</p>`;
 }
-function websiteBlock(m) {
+/* The website issues our crawl found (what stops AI reading the site), in plain English. Never a score. The deeper SEO
+   check runs on the baseline only. */
+function websiteBlock(m, kind) {
   const w = m.website || { state: 'not_checked', issues: [] };
   let inner;
   if (w.state === 'no_website') inner = '<p><b>No website AI can read yet.</b> A site AI can read is the first thing we’d build.</p>';
-  else if (w.state === 'not_checked') inner = '<p><b>Not checked yet.</b> The baseline runs the website check first if there is no fresh one.</p>';
+  else if (w.state === 'not_checked') inner = kind === 'hook' ? '<p><b>We haven’t checked your website yet.</b> It’s the first thing we’d look at.</p>' : '<p><b>Not checked yet.</b> The baseline runs the website check first if there is no fresh one.</p>';
   else if (w.state === 'clean' || !(w.issues || []).length) inner = '<p><b>We found nothing serious to fix.</b></p>';
   else {
     const serious = w.issues.filter((i) => i.serious).length;
@@ -112,13 +126,23 @@ function websiteBlock(m) {
   return `<h2>Your website</h2><div class="card">${inner}${w.checkedOn ? `<p class="note">Checked on ${esc(w.checkedOn)}.</p>` : ''}</div>`;
 }
 const head = (title, tag) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title><style>${CSS}</style></head><body><header class="hd"><div class="in"><div class="wm">Findable<i>.</i></div><span class="pill-h">${esc(tag)}</span></div></header><main class="main">`;
-const foot = (m) => `</main><footer class="ft"><div class="in"><div class="wm">Findable<i>.</i></div><p>${honestLine(m || { date: '' })} Not guarantees: AI answers change, and nobody can promise to be named.</p><p><a href="https://findable.live">findable.live</a></p></div></footer></body></html>`;
+/* The old reports' closing band, restyled: the buttons (Get started / Request a call / WhatsApp), the site link, the locked
+   guarantee sentence (prospect reports only), then Prepared for / Report date / Measured on, the wordmark and the honest note.
+   A client's own report (baseline, welcome pack) carries no sales pitch: just "Questions about your report?" and the contact buttons. */
+const GUARANTEE = 'Your guarantee is judged on a full 20-question measurement we run after you join, not on this quick check. If that number has not gone up, email us within 7 days of the date we send your four-week audit results and we’ll refund everything you have paid us.';
+const foot = (m, o = {}) => {
+  const pitch = o.pitch !== false;
+  const cta = pitch
+    ? `<h3>Want to be the one AI names?</h3><div class="btns"><a class="btn amb" href="#">Get started</a><a class="btn" href="#">Request a call</a><a class="btn wa" href="#">Ask me anything on WhatsApp</a></div><a class="site" href="https://findable.live">See how it works at findable.live →</a><div class="fcard g"><span class="fk">Your guarantee</span><p>${GUARANTEE}</p></div>`
+    : `<h3>Questions about your report?</h3><div class="btns"><a class="btn wa" href="#">Talk to Paul on WhatsApp</a><a class="btn" href="#">Request a call</a></div>`;
+  return `</main><footer class="ft"><div class="in">${cta}<div class="fgrid"><div class="fcard"><span class="fk">Prepared for</span><span class="fv">${esc(m.business)}</span></div><div class="fcard"><span class="fk">Report date</span><span class="fv">${esc(m.date)}</span></div><div class="fcard"><span class="fk">Measured on</span><span class="fv">ChatGPT and Gemini · Google AI (not scored)</span></div></div><div class="fbrand"><div class="wm">Findable<i>.</i></div><a href="https://findable.live">findable.live</a></div><p>${honestLine(m || { date: '' })} Not guarantees: AI answers change, and nobody can promise to be named.</p></div></footer></body></html>`;
+};
 
 /* ---------- the four reports ---------- */
 function hook(m) {
   const searches = (m.searches || []).slice(0, 4);
   return head('AI check', 'AI check') + hero(m, 'Your AI check', searches) +
-    '<h2>What AI said</h2>' + (searches.length ? searches.map((s) => searchCard(s, m.business, { room: false, max: 5 })).join('') : '<p class="lead">No searches to show yet.</p>') + foot(m);
+    '<h2>What AI said</h2>' + (searches.length ? searches.map((s) => searchCard(s, m.business, { room: false, max: 5 })).join('') : '<p class="lead">No searches to show yet.</p>') + websiteBlock(m, 'hook') + foot(m);
 }
 function discovery(m) {
   const all = m.searches || [];
@@ -136,7 +160,7 @@ function baselineBody(m) {
     (all.length ? [...main, ...other].map((s) => searchCard(s, m.business, { room: true, max: 4 })).join('') : '<p class="lead">No searches frozen yet.</p>') + websiteBlock(m);
 }
 function baseline(m) {
-  return head('Baseline report', 'Your baseline') + hero(m, 'Your starting point', (m.searches || []).slice(0, 20)) + baselineBody(m) + foot(m);
+  return head('Baseline report', 'Your baseline') + hero(m, 'Your starting point', (m.searches || []).slice(0, 20)) + baselineBody(m) + foot(m, { pitch: false });
 }
 function welcome(m) {
   const pg = (n, eyebrow, title, inner) => `<section class="page"><div class="eyebrow">${esc(eyebrow)}</div><h1>${esc(title)}</h1>${inner}<div class="pn">Page ${n}</div></section>`;
@@ -147,7 +171,7 @@ function welcome(m) {
     `<section class="page"><div class="eyebrow">Your baseline<span class="new">New</span></div><h1>Where you stand today.</h1><p class="lead">${honestLine(m)}</p>` +
     baselineBody(m) +
     `<h2>Your re-check</h2><div class="card"><p style="margin:0"><b>${esc(m.recheck || 'In 4 weeks')}</b></p><p class="note">We ask the same ${plural(all.length, 'search', 'searches')} again on the same AI tools and show the two side by side. Nothing here promises a result.</p></div><div class="pn">Page 6</div></section>` +
-    pg(7, 'What happens next', 'From today to your before and after', '<div class="stub">Unchanged: the steps from the baseline to the re-measure.</div>') + foot(m);
+    pg(7, 'What happens next', 'From today to your before and after', '<div class="stub">Unchanged: the steps from the baseline to the re-measure.</div>') + foot(m, { pitch: false });
 }
 function render(kind, model) {
   const m = { business: 'Your business', date: '', searches: [], dirs: [], website: { state: 'not_checked', issues: [] }, ...(model || {}) };
@@ -168,7 +192,7 @@ if (require.main === module) {
 
   const L = data.ldm, A = data.ablm;
   const hookQs = ['plumber in Tower Hamlets', 'emergency plumber in Hackney', 'electrician in East London'].map((t) => L.questions.find((q) => q.question.startsWith(t))).filter(Boolean);
-  const ldmHook = { business: L.businessName, date: '11 Nov 2026', searches: hookQs.map((q) => toSearch(q)) };
+  const ldmHook = { business: L.businessName, date: '11 Nov 2026', searches: hookQs.map((q) => toSearch(q)), website: { state: 'issues', issues: [{ title: 'No dedicated service pages found', serious: true }, { title: 'No business structured data', serious: true }, { title: 'No reviews or testimonials found on the site', serious: false }] } };
   const notOn = new Set(['EICR certificate in Tower Hamlets', 'fire safety certificate for landlords in London']);
   const ldmDisc = { business: L.businessName, date: '11 Nov 2026', dirs: dirsOf(L), searches: L.questions.filter((q) => q.tier !== 'flagged').map((q) => toSearch(q, notOn.has(q.question) ? { tier: 'notonsite' } : {})) };
   const littleIdx = A.questions.filter((q) => q.tier === 'little').slice(0, 4).map((q) => q.question);
