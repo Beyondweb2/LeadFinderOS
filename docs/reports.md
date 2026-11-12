@@ -654,7 +654,7 @@ Tests: `scripts/report-design.test.ts` (rule, places, phrases, score, every edge
   service/place words AND a document noun such as certificate/assessment/testing, no legal suffix); the dropped names are kept in `droppedPhrases`.
 - **Headline:** customer words from the searches' own heads (`headOf` / `searchPhrase`: "a plumber or electrician in East London"), any trade,
   any country; never a trade label.
-- **Website check:** the stored issue list (serious first) in plain English; no website score number (team-only). States: issues / clean / no website
+- **Website check (discovery design only):** the stored issue list (serious first) in plain English; no website score number. States: issues / clean / no website
   ("a site AI can read") / not checked yet.
 - **Page plan etc.:** `ruleVerdict` maps You could win -> open, Possible -> contested, Hard -> locked, AI doesn't name firms yet -> no_local_race
   (the Q&A-page case), flagged -> unmeasured; named in more than half the runs -> named.
@@ -662,3 +662,9 @@ Tests: `scripts/report-design.test.ts` (rule, places, phrases, score, every edge
   says "not named" (no answer text even contains the name): that stored summary was written at finalisation and does not match the answers.
 - `?design=classic` shows the previous report only when sent straight to `render-audit-report` (the findable.live proxy drops it); measuring,
   name-unjudgeable and the day-28 re-measure keep the classic page; a render error falls back to it.
+
+## Which report shows what (Paul, 2026-11-12)
+
+- **AI check (hook audit), client-facing:** the classic page. The AI answer with who it named, the website findings from our crawl, and the closing band (Get started, Request a call, Ask me anything). Competitors are shown here only.
+- **Baseline, client-facing, re-run every month:** the classic page (the 22 Sept 2026 MCLocksmiths style). Every search with named / not named per AI, no room labels, no competitors, so months compare like for like. **The website score IS shown here**, and it comes from the SEO check (the SEO API scan that only a baseline buys, `seoScanAllowed`), never from the website crawl.
+- **Discovery, internal (for us):** the searches where the business can get named, each with its room label and why. It feeds the baseline's searches. Nothing else on the page.
