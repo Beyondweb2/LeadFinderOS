@@ -136,15 +136,17 @@ const searches = ["plumber in Bow", "plumber in Hackney", "electrician in Bow", 
 const mixed = searches.flatMap((s) => rowsFor(s, SOME));
 const banned = /\b(discovery|baseline|verdict|engines?|fragment(ed|ation)|citations?|visibility score|geo|winnable|hard to win|work needed)\b/i;
 const SECTIONS: Record<ReportKind, string[]> = {
-  hook: ["AI named you in", "Featured search", "What we found on your website", "Why this matters", "What we'd do"],
-  opportunity: ["AI named you in", "best opportunity", "Searches where you can get named", "AI recommends these instead", "What we found on your website", "Get listed on these sites", "Why this matters", "What we'd do"],
-  baseline: ["AI named you in", "Today and after 4 weeks", "Your targeted searches", "AI recommends these instead", "What we found on your website", "Get listed on these sites", "What we'd do"],
+  hook: ["AI named you in", "Featured search", "What we found on your website", "What we'd do"],
+  opportunity: ["AI named you in", "Searches where you can get named", "What we'd do"],
+  baseline: ["AI named you in", "Today and after 4 weeks", "Your targeted searches", "What we found on your website", "What we'd do"],
 };
 for (const kind of ["opportunity", "hook", "baseline"] as ReportKind[]) {
   const html = renderReport(model(mixed, kind));
   const t = text(html);
   const idx = [...SECTIONS[kind], "Talk to Paul on WhatsApp"].map((m) => t.indexOf(m));
   ok(idx.every((v, i) => v >= 0 && (i === 0 || v > idx[i - 1])), `${kind}: its own body in order, ending with the one button`);
+  /* ⛔ NO FLUFF (Paul, 2026-11-12): no "AI recommends these instead", "Why this matters" or listing-site panels; a discovery lists its winnable searches only. */
+  ok(!/AI recommends these instead|AI also recommends|Why this matters|Get listed on these sites/.test(t) && (kind !== "opportunity" || !/What we found on your website|best opportunity/.test(t)), `${kind}: no fluff panels; a discovery shows only its searches`);
   ok(!banned.test(t) && !/\bquestions?\b/i.test(t), `${kind}: plain English, "searches" not "questions", no jargon, no "winnable" / "hard" / "work needed" labels`);
   ok(/These are opportunities, not guarantees\./.test(t) && !/\b(guarantee[sd]? (you|a|that)|will (rank|recommend)|#1)\b/i.test(t), `${kind}: the not-guarantees line, no ranking or recommendation promise`);
   ok(/name="viewport"/.test(html) && /noindex/.test(html), `${kind}: phone viewport and noindex`);
@@ -167,12 +169,13 @@ ok(countsLine({ lots: 0, some: 2, little: 1, nofirms: 0, named: 0, flagged: 0, n
 const highRows = ["plumber in Bow", "plumber in Hackney", "electrician in Bow"].flatMap((s) => rowsFor(s, [["YOU", "A"], ["YOU", "B"], ["YOU"], ["YOU", "A"], ["B"], ["YOU"]]));
 const mHigh = model(highRows, "opportunity");
 const tHigh = text(renderReport(mHigh));
-ok(mHigh.band === "high" && /Keep it up and grow it\./.test(tHigh) && /Where to keep and grow/.test(tHigh) && /AI also recommends/.test(tHigh) && !/doesn't mention you/.test(tHigh), "edge: already named a lot -> 'keep and grow' wording, never 'you're missing'");
+ok(mHigh.band === "high" && /Keep it up and grow it\./.test(tHigh) && !/doesn't mention you/.test(tHigh), "edge: already named a lot -> 'keep and grow' wording, never 'you're missing'");
 // edge: website states
-ok(/You don't have a website AI can read yet\./.test(text(renderReport(model(mixed, "opportunity", { website: { state: "no_website", issues: [] } })))) && /Build a website AI can read\./.test(text(renderReport(model(mixed, "opportunity", { website: { state: "no_website", issues: [] } })))), "edge: no website -> the check says so and the pitch is 'a site AI can read'");
-ok(/We haven't checked your website yet\./.test(text(renderReport(model(mixed, "opportunity", { website: { state: "not_checked", issues: [] } })))), "edge: no website check yet -> a plain line, not an empty box");
-ok(/We found nothing serious to fix\./.test(text(renderReport(model(mixed, "opportunity", { website: { state: "clean", issues: [] } })))), "edge: a clean check says so");
-ok(tOpp.indexOf("No reviews or testimonials found") < tOpp.indexOf("Long page titles") && /1 serious problem to fix first/.test(tOpp), "website check: stored issues in plain English, serious first");
+ok(/You don't have a website AI can read yet\./.test(text(renderReport(model(mixed, "baseline", { website: { state: "no_website", issues: [] } })))) && /Build a website AI can read\./.test(text(renderReport(model(mixed, "baseline", { website: { state: "no_website", issues: [] } })))), "edge: no website -> the check says so and the pitch is 'a site AI can read'");
+ok(/We haven't checked your website yet\./.test(text(renderReport(model(mixed, "baseline", { website: { state: "not_checked", issues: [] } })))), "edge: no website check yet -> a plain line, not an empty box");
+ok(/We found nothing serious to fix\./.test(text(renderReport(model(mixed, "baseline", { website: { state: "clean", issues: [] } })))), "edge: a clean check says so");
+const tBaseW = text(renderReport(model(mixed, "baseline")));
+ok(tBaseW.indexOf("No reviews or testimonials found") < tBaseW.indexOf("Long page titles") && /1 serious problem to fix first/.test(tBaseW), "website check: stored issues in plain English, serious first");
 ok(websiteSectionFromCheck({ state: "issues", serious: [{ title: "A" }], minor: [{ title: "B" }] }).issues[0].serious && websiteSectionFromCheck(null).state === "not_checked", "the stored check becomes the plain section");
 // edge: no search with room -> a plain line, never an empty box
 const closedRows = searches.flatMap((s) => rowsFor(s, LITTLE));
@@ -182,7 +185,7 @@ ok(mClosed.targets.length === 0 && /None with room yet\./.test(tClosed) && /AI n
 // edge: few / no firms, no listing sites, fewer than 10 searches
 const lone = rowsFor("plumber in Bow", [[], [], [], [], [], []]);
 const tLone = text(renderReport(model(lone, "opportunity")));
-ok(/AI named no other business in these answers\./.test(tLone) && /No listing sites showed up in these answers yet\./.test(tLone) && /No score yet/.test(tLone), "edge: no firms, no listing sites, no answer naming a business -> plain lines and 'No score yet'");
+ok(/No score yet/.test(tLone), "edge: no answer naming a business -> 'No score yet'");
 ok(mOpp.targets.length === 5, "edge: fewer than 10 searches -> lists what there is");
 // any trade, any country
 const ie = ["accountant in Rathmines", "accountant in Ranelagh", "accountant in Dublin"].flatMap((s) => rowsFor(s, LOTS));
@@ -199,7 +202,7 @@ ok(!/<script>x|<img src=x>/.test(evil), "business and firm names are escaped");
 ok(shortName("London Domestic Maintenance Ltd") === "London Domestic Maintenance" && shortName("Ltd") === "Ltd", "shortName drops a trailing Ltd only");
 
 const pick = (o: Partial<Parameters<typeof chooseReportDesign>[0]>) => chooseReportDesign({ hookComplete: false, measuring: false, ...o });
-ok(pick({ auditPurpose: "discovery" }) === "opportunity" && pick({ paidKind: "baseline" }) === "baseline" && pick({ paidKind: "remeasure" }) === null && pick({ hookComplete: true }) === "hook", "which report a stored audit gets");
+ok(pick({ auditPurpose: "discovery" }) === "opportunity" && pick({ paidKind: "baseline" }) === null && pick({ paidKind: "remeasure" }) === null && pick({ hookComplete: true }) === null && pick({ auditPurpose: "audit", hookComplete: true }) === null, "which report a stored audit gets: only a discovery uses this design; the AI check and the baseline use the classic pages (Paul, 2026-11-12)");
 ok(pick({ auditPurpose: "discovery", measuring: true }) === null && pick({ hookComplete: true, nameNotJudgeable: true }) === null && pick({ auditPurpose: "discovery", classic: true }) === null, "measuring, name-unjudgeable and ?design=classic keep the classic page");
 
 console.log(f === 0 ? "\nALL PASS" : `\n${f} FAILURES`);

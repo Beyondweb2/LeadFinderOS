@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-12-classic-reports-back', date: '2026-11-12', title: 'AI check and baseline reports are back to the classic pages', audience: 'all',
+    body: 'The AI check and the client baseline report use the classic pages again. The baseline lists every search with named or not named for each AI, plus the SEO check. The discovery page is for us and shows only the searches where a business can get named, and why.',
+    report: {
+      added: [],
+      changed: ['AI check and baseline links show the classic report again.', 'The discovery page now lists only the searches where a business can get named, with the reason, and no longer shows the business names counted next to each firm.'],
+      removed: ['The new-style AI check and baseline pages from 11 November.', 'On the discovery page: the featured search, "AI recommends these instead", the website and listing-site panels and "Why this matters".'],
+      effect: 'Clients see the simpler reports again. Nothing stored changed.',
+    } },
   { id: '2026-11-12-google-ai-mode', date: '2026-11-12', title: 'Google AI now shows Google AI Mode answers', audience: 'all',
     body: 'New audits show Google AI Mode in the Google AI box. It names local firms far more often than the old AI Overview. It is shown for context and is not part of the score. Older audits keep the answer they stored.',
     report: {
