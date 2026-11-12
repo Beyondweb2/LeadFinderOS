@@ -1,4 +1,4 @@
-/* "Check before calling" — what the salespeople's bulk pre-call checks did and cost (admin, fix/07).
+/* "Run AI audit" — what the salespeople's bulk pre-call checks did and cost (admin, fix/07).
    Read through fn sales-prospect-check admin_overview (requireAdmin). Spend: the ESTIMATE booked per fresh
    check, and the real Apify cost of those runs (ai_audit_runs.actor_cost_usd) once they have finished.
    Reused results cost nothing and are counted apart. No provider key or secret is ever read here. */
@@ -32,7 +32,7 @@ export function SalesChecksAdminCard() {
     <section data-testid="sales-checks-admin" className={cn('min-w-0 p-4 sm:p-5', SURFACE)}>
       <header className="mb-3 flex min-w-0 items-center gap-3">
         <IconTile icon={SearchCheck} tone="purple" />
-        <h2 className="min-w-0 text-base font-bold leading-tight tracking-tight">Check before calling — salespeople, last 7 days</h2>
+        <h2 className="min-w-0 text-base font-bold leading-tight tracking-tight">Run AI audit — salespeople, last 7 days</h2>
       </header>
       <div className="space-y-3 text-sm">
         <p className="text-xs text-muted-foreground">

@@ -8,7 +8,7 @@
 
    ⛔ THE GATE IS POSITIVE. It shows the script only on every one of:
         · the playbook's AI check reads `ready` (coldCallPlaybook.callCardAudit — the same reading the top of
-          the call screen and the "Check before calling" results use),
+          the call screen and the "Run AI audit" results use),
         · it came from an audit (auditId) and that audit belongs to THIS lead (auditLeadId === leadId),
         · the result holds real evidence (evidence.kind is not 'none').
       Everything else — no playbook yet, no audit, queued, pending, running, failed, cancelled, a run with no

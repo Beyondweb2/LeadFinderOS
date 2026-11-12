@@ -16,7 +16,7 @@ methodology, not WhatsApp. Everything here is deterministic: no model call, no e
 3. **Nothing looked at services.** Nav labels, the headings on a Services page, "which of these has a page of its
    own" — all stored (`d.h2/h3`, `nav`, `l`) and never read. Same for the business name, the phone number, the home
    town on the service pages, and whether the homepage links to the service pages.
-4. **The standard crawl (what "Check before calling" runs) held 12 sampled pages' HTML in memory and kept only
+4. **The standard crawl (what "Run AI audit" runs) held 12 sampled pages' HTML in memory and kept only
    counts from them.** The prospect background crawl read up to 500 pages in discovery order, so a blog could
    crowd out the pages that matter.
 5. **The thin-page signal counted every short page** — a short contact page produced "your service pages are

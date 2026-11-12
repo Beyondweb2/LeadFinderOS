@@ -2,7 +2,7 @@
    THE OUTREACH ROW'S AI CHECK — one compact line per lead (2026-10-05,
    improve/outreach-compact-audit-rows; record docs/pre-sales-certification/outreach-compact-audit-rows.md).
 
-   The big "Check before calling" results panel is gone: it was a second list on top of the first and
+   The big "Run AI audit" results panel is gone: it was a second list on top of the first and
    did not scale past a batch. The Outreach rows are the one working list. Each row says, at most:
        Not checked · Waiting · Checking… · ChatGPT 1/3 · Gemini 0/3 · Check failed · Retry
    and offers "Call screen" once a result is in.

@@ -1,4 +1,4 @@
-// sales-check — the ENGINE of a salesperson's "Check before calling" batch (2026-10-04, fix/07;
+// sales-check — the ENGINE of a salesperson's "Run AI audit" batch (2026-10-04, fix/07;
 // master plan M-034 / WS-7). The rules are src/lib/salesCheck.ts; fn sales-prospect-check is the door;
 // docs/pre-sales-certification/fixes-07-sales-bulk-audit.md is the record.
 //
@@ -483,7 +483,7 @@ export type StartOutcome =
 
 /** Create one batch for one press. Idempotent on the client's request id; one active batch per rep. */
 export async function startBatch(deps: SalesCheckDeps, actor: SalesActor, body: Record<string, unknown>): Promise<StartOutcome> {
-  if (actor.role !== "sales") return { status: 403, body: { ok: false, error: "sales_only", detail: "Check before calling is the salesperson's tool." } };
+  if (actor.role !== "sales") return { status: 403, body: { ok: false, error: "sales_only", detail: "Run AI audit is the salesperson's tool." } };
   const rid = body.client_request_id;
   if (!isRequestId(rid)) return { status: 400, body: { ok: false, error: "bad_request_id", detail: "Refresh the page and try again." } };
 

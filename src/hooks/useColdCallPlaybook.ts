@@ -141,7 +141,7 @@ async function loadPlaybook(leadId: string, callerName: string | null): Promise<
   });
 }
 
-/* ── THE CALL CARD'S ONE LINE FOR MANY LEADS AT ONCE ("Check before calling" results, fix/07) ─────
+/* ── THE CALL CARD'S ONE LINE FOR MANY LEADS AT ONCE ("Run AI audit" results, fix/07) ─────
    The SAME reads and the SAME rules as loadPlaybook above — resolveLeadReportAudit picks the report,
    buildReportData reads it, the crawl sources are ordered the same way, callCardAudit writes the line —
    batched across the leads so twenty finished checks cost four reads, not a hundred and twenty. Reads
@@ -153,7 +153,7 @@ export async function loadCallCardSummaries(leads: CallCardLead[]): Promise<Reco
   const ids = leads.map((l) => l.id);
   if (!ids.length) return {};
   const [auditsRes, crawlRes] = await Promise.all([
-    fetchAllRows<PlaybookAuditRow>('Check before calling (audits)', (from, to) =>
+    fetchAllRows<PlaybookAuditRow>('Run AI audit (audits)', (from, to) =>
       sb.from('ai_audits').select(PLAYBOOK_AUDIT_COLUMNS).in('lead_id', ids)
         .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to)),
     sb.from('lead_crawl_checks').select('lead_id, result, created_at').in('lead_id', ids),
@@ -167,10 +167,10 @@ export async function loadCallCardSummaries(leads: CallCardLead[]): Promise<Reco
   const rowsByAudit = new Map<string, QueueRow[]>();
   if (reportIds.length) {
     const [runRes, rowsRes] = await Promise.all([
-      fetchAllRows<RunRow & { audit_id: string }>('Check before calling (runs)', (from, to) =>
+      fetchAllRows<RunRow & { audit_id: string }>('Run AI audit (runs)', (from, to) =>
         sb.from('ai_audit_runs').select('id, audit_id, run_number, status, mention_rate, results, created_at').in('audit_id', reportIds)
           .order('run_number', { ascending: false }).order('id', { ascending: true }).range(from, to)),
-      fetchAllRows<QueueRow & { audit_id: string }>('Check before calling (queue rows)', (from, to) =>
+      fetchAllRows<QueueRow & { audit_id: string }>('Run AI audit (queue rows)', (from, to) =>
         sb.from('ai_audit_queue').select('id, audit_id, question, status, result').in('audit_id', reportIds)
           .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to)),
     ]);

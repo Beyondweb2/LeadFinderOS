@@ -6,7 +6,7 @@
    words, or "ChatGPT 1/3 · Gemini 0/3" and a "Call screen" button. ⛔ SCORES ONLY — no rival names,
    no answer text, no website findings; those are the call screen's.
    OutreachCheckBar — one line above the list: the rep's batch in counts, checks left today, Stop, and
-   "Open next ready". It replaces the old "Check before calling" results panel.
+   "Open next ready". It replaces the old "Run AI audit" results panel.
    ⛔ NOTHING HERE CONTACTS ANYONE OR WRITES A LEAD. Call screen opens the workspace; Retry starts the
    check straight away like the toolbar press (sales — no confirm dialog since 2026-10-06) or opens the
    single AI check popup (admin); Stop asks the server to skip what has not started.

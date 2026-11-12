@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-12-run-ai-audit', date: '2026-11-12', title: 'Check before calling is now Run AI audit', audience: 'all',
+    body: 'The button that checks selected leads before you ring them is now called Run AI audit. It does exactly the same thing. The two routes are WhatsApp first, or Audit, then call.',
+    report: {
+      added: ['The button tooltip names the two routes: WhatsApp first, or Audit, then call.'],
+      changed: ['The button, the admin card and the help text now say Run AI audit instead of Check before calling.'],
+      removed: [],
+      effect: 'Same button, same checks, same daily allowance. Only the name changed.',
+    } },
   { id: '2026-11-11-room-rule', date: '2026-11-11', title: 'Reports now show how much room AI leaves', audience: 'all',
     body: 'Every search in a report is graded Lots, Some or Little room to be named, with the proof beside it. The score reads "AI named you in X% of answers". A service missing from the current site shows as "Not on your site yet" instead of being left out.',
     report: {

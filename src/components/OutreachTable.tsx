@@ -263,7 +263,7 @@ interface OutreachTableProps {
     channel: 'whatsapp' | 'call' | 'open';
     templateContent?: string | null;
     shareLink?: string | null;
-    /** 'open' only: the workspace tab to land on ("Check before calling" opens the call screen). */
+    /** 'open' only: the workspace tab to land on ("Run AI audit" opens the call screen). */
     tab?: WorkspaceTabInput;
   } | null;
   /** Called once a launchIntent has been acted on, so the parent can clear it. */
@@ -278,11 +278,11 @@ interface OutreachTableProps {
   onBulkJob?: (type: 'enrich' | 'audit', leadIds: string[], params?: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
   /** True while a bulk job is queued/running (or being created) — disables new ones. */
   bulkJobActive?: boolean;
-  /** Sales: "Check before calling" over the selection (fn sales-prospect-check judges every lead). */
+  /** Sales: "Run AI audit" over the selection (fn sales-prospect-check judges every lead). */
   onSalesCheck?: (leadIds: string[]) => void;
   /** Why the button is off right now (a batch still starting), or null. */
   salesCheckBlocked?: string | null;
-  /** Sales: the rep's newest "Check before calling" batch (useSalesChecks view) — each row reads its own
+  /** Sales: the rep's newest "Run AI audit" batch (useSalesChecks view) — each row reads its own
    *  item (Waiting / Checking… / failed), the check bar reads the counts and the allowance. */
   salesCheckView?: SalesCheckView | null;
   /** Sales: Stop the open batch (leads not started yet are skipped). */
@@ -2347,7 +2347,7 @@ export function OutreachTable({
                     {socialBulk ? `Finding socials ${socialBulk}` : `Find socials (${Math.min(selectedIds.size, SOCIAL_BULK_MAX)})`}
                   </Button>
                 )}
-                {/* ── CHECK BEFORE CALLING (sales, fix/07) ── research only: never sends, never writes the lead.
+                {/* ── RUN AI AUDIT (sales, fix/07) ── research only: never sends, never writes the lead.
                     Every selected id goes to the server, which says per lead why one cannot be checked.
                     ONE CLICK (2026-10-06): the press starts the batch — no confirm dialog. */}
                 {!readOnly && onSalesCheck && perms.salesChecks && (
@@ -2356,12 +2356,12 @@ export function OutreachTable({
                     size="sm"
                     className="bg-background text-xs h-8"
                     disabled={!!salesCheckBlocked}
-                    title={salesCheckBlocked ?? 'Run the AI check and a website check on the selected leads before you ring them. Recent results are reused. Nothing is sent.'}
+                    title={salesCheckBlocked ?? 'Run the AI audit and a website check on the selected leads. Then pick a route: WhatsApp first, or Audit, then call. Recent results are reused. Nothing is sent.'}
                     onClick={() => onSalesCheck(Array.from(selectedIds))}
                     data-testid="sales-check-button"
                   >
                     <SearchCheck className="h-3.5 w-3.5 mr-1.5 text-sky-500" />
-                    Check before calling ({selectedIds.size})
+                    Run AI audit ({selectedIds.size})
                   </Button>
                 )}
                 {!readOnly && onBulkJob && perms.bulkAudits && (
