@@ -28,7 +28,9 @@ import { buildWelcomePackHtml } from "../../../src/lib/welcomePackHtml.ts";
 import { buildBaselineSummary } from "../../../src/lib/baselineSummary.ts";
 import { resolveClientFacts, toList } from "../../../src/lib/clientFacts.ts";
 import { welcomePackReadiness } from "../../../src/lib/welcomePackData.ts";
-import { isShortCode } from "../../../src/lib/reportSlug.ts";
+import { isShortCode, shortReportUrl } from "../../../src/lib/reportSlug.ts";
+import { websiteCheckFor } from "../../../src/lib/websiteCheck.ts";
+import { readabilityFromCheck, type AiReadability } from "../../../src/lib/aiReadability.ts";
 import { agreementUrl } from "../../../src/lib/clientAgreement.ts";
 import { resolveAgreementRoute } from "../../../src/lib/agreementRoute.ts";
 import { serviceRouteForTotal } from "../../../src/lib/findableOffer.ts";
@@ -215,7 +217,22 @@ export async function renderWelcomePack(service: any, slug: string): Promise<Wel
     };
   }
 
+  /* 7) "How easy your website is for AI to read" — the same score the baseline report shows, from the ONE stored
+        website check (aiReadability.ts). A failed read leaves it out (the page says it could not be scored), never 0. */
+  let readability: AiReadability | null = null;
+  try {
+    const { data: cc } = await service.from("lead_crawl_checks").select("result, created_at")
+      .eq("lead_id", leadId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (cc) {
+      const wc = websiteCheckFor({ result: (cc as { result?: unknown }).result as never, created_at: (cc as { created_at: string }).created_at }, { website: ownWebsite || null });
+      readability = readabilityFromCheck(wc, (cc as { result?: unknown }).result as never, { services: facts.services.values, areas: facts.areas.values, town: (audit as { location_text?: string | null }).location_text ?? facts.primaryLocation.value ?? null });
+    }
+  } catch { readability = null; }
+  const shortCode = (audit as { short_code?: string | null }).short_code ?? null;
+
   const html = buildWelcomePackHtml({
+    baselineUrl: shortCode ? shortReportUrl(shortCode) : null,
+    readability,
     agreement,
     businessName: facts.businessName.value || (audit as { business_name?: string }).business_name || "your business",
     /* ⚠️ NO REVIEW LINK IS STORED ANYWHERE IN THE SCHEMA, so there is none to print and none to

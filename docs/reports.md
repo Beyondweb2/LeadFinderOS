@@ -668,3 +668,25 @@ Tests: `scripts/report-design.test.ts` (rule, places, phrases, score, every edge
 - **AI check (hook audit), client-facing:** the classic page. The AI answer with who it named, the website findings from our crawl, and the closing band (Get started, Request a call, Ask me anything). Competitors are shown here only.
 - **Baseline, client-facing, re-run every month:** the classic page (the 22 Sept 2026 MCLocksmiths style). Every search with named / not named per AI, no room labels, no competitors, so months compare like for like. **The website score IS shown here**, and it comes from the SEO check (the SEO API scan that only a baseline buys, `seoScanAllowed`), never from the website crawl.
 - **Discovery, internal (for us):** the searches where the business can get named, each with its room label and why. It feeds the baseline's searches. Nothing else on the page.
+
+## Which report shows what — updated (Paul, 2026-11-13, branch client/post-close-flow)
+
+Replaces the baseline line above; the AI check line is unchanged.
+
+- **Baseline, client-facing:** V2's baseline design (`reportDesign.ts` `baselineBody`, `chooseReportDesign` → `'baseline'` for a paid baseline; the day-28 re-measure keeps the classic before/after page). Headline "AI names you in N of M answers" over EVERY ChatGPT + Gemini answer (the welcome pack's and the guarantee's count). Sections: Today and after 4 weeks → **How easy your website is for AI to read** → **Your targeted searches** grouped "Where AI names you" / "Not named yet", each AI "✓ Named n of m" / "Not named · 0 of m". Still no room labels and no competitors (not even the top one in the score card), so months compare like for like.
+- **The website score** is now `aiReadability.ts` (V2 weights: service pages 30, reviews/proof 20, areas 15, details/schema 15, AI crawlers 10, technical 10), read from the ONE stored website check (issue/strength ids, pages read and their crawler type, towns and contact found) plus the client's own services/areas. A part we could not see is left out; under `AI_READABILITY_MIN_JUDGED` (50 of 100) judged there is no number. Never the team-only `siteScore.ts`, never called an SEO score, not part of the guarantee. The SEO grade stays on the classic pages and in the welcome pack's report.
+- **Discovery, internal:** each target with its room label + why, the firms AI named instead (directories never count), one real answer as a chat bubble, then the Little room and "AI doesn't name firms yet" lists. Whole-area searches stay capped at Some room.
+- **In the app**, a discovery or client baseline opens the live page (`AiAuditReport` `liveDesignUrl`); Regenerate reloads it. Internal view and PDF stay the classic renderer.
+
+## Name rule: never a common word (2026-11-13)
+
+`commonWordName.ts` (V2 `notJustCommonWords`), applied inside `cellNamed`'s text branch: a name made only of everyday words + the trade/town counts only when the answer writes the whole name capitalised ("Moments Wedding Content"); a one-word everyday name never counts from the text. V1 addition: a joined name written split ("MC Locksmiths" for "MCLocksmiths centre") still counts — without it MCLocksmiths lost namings. Checked on the four paid baselines' stored answers: named counts identical (MCL 40, SC Plumbing 38, Ronnie's 14, RG 23).
+
+## Post-close walk (2026-11-13) — what was found
+
+- Close → paid → client record → auto-intake: works as built (`quick-close`, `stripe-webhook`, `client-intake`); the call's jobs/areas already reach `services_included` / `service_areas`.
+- Discovery → baseline: the room-split pick already existed (`baselineRecommendation.ts`, 2026-11-12). Fixed: Discovery called a search "already named" when named in ANY run (now more than half, as `ruleVerdict` and V2). Button renamed "Create baseline from this Discovery".
+- Welcome pack: had the baseline summary, next steps and agreement (key points, review/sign link, signed PDF). Added a "Your targeted searches" page with the live link and the website score (`welcomePackHtml.ts` `targetedPage`).
+- Website Build: filled in only after "Prepare website" was pressed; it now prepares on first open (blanks only, no crawl). Services and areas still need a confirm unless the client stated them (`siteServiceTruth.ts` unchanged).
+- Not run live: no fixture has a completed baseline and a real Discovery + baseline costs AI-search spend; the pages were rendered offline from stored rows (MCLocksmiths baseline, London Domestic Maintenance discovery).
+- "Moments" audit: Moments Wedding Content (Mayo, Ireland) was only ever audited in V2. V1 has no audit and no lead for it (only an unrelated, never-audited lead "Yipmage Moments"). Nothing in V1's audits list hides it.

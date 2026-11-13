@@ -31,6 +31,7 @@
    a dependency-free leaf.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { answerProse, nameIsTextJudgeable, nameMatches } from './nameMatch.ts';
+import { notJustCommonWords } from './commonWordName.ts';
 
 export type NamedCell = {
   named?: unknown;
@@ -68,7 +69,10 @@ export function cellNamed(cell: NamedCell, ctx?: NamedContext): boolean {
   if (!cell || typeof cell !== 'object') return false;
   const c = cell as { named?: unknown; self_named?: unknown; answer_text?: unknown };
   if (textCanJudge(cell, ctx)) {
-    return nameMatches(answerProse(String(c.answer_text)), ctx.businessName, { trade: ctx.trade ?? null, town: ctx.town ?? null });
+    const prose = answerProse(String(c.answer_text));
+    const nctx = { trade: ctx.trade ?? null, town: ctx.town ?? null };
+    // V2 rule (2026-11-12): an everyday-word name must appear as the full capitalised name.
+    return nameMatches(prose, ctx.businessName, nctx) && notJustCommonWords(prose, ctx.businessName, nctx);
   }
   if (typeof c.self_named === 'boolean') return c.self_named;
   return c.named === true;

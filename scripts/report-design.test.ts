@@ -11,6 +11,7 @@ import { askPlace, isClashingPlace } from "../src/lib/placeAsk.ts";
 import { buildReportModel, websiteSectionFromCheck, type ReportKind, type WebsiteSection } from "../src/lib/reportModel.ts";
 import { chooseReportDesign, renderReport, shortName, countsLine } from "../src/lib/reportDesign.ts";
 import { readFileSync } from "node:fs";
+import { aiReadability } from "../src/lib/aiReadability.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
@@ -127,9 +128,9 @@ for (const file of ["src/lib/reportOpportunity.ts", "src/lib/reportModel.ts", "s
 
 /* ── WHOLE-PAGE CHECKS ── */
 const issuesSite: WebsiteSection = { state: "issues", issues: [{ title: "No reviews or testimonials found", serious: true }, { title: "Long page titles", serious: false }] };
-function model(rows: OppRow[], kind: ReportKind, o: { website?: WebsiteSection; town?: string } = {}) {
+function model(rows: OppRow[], kind: ReportKind, o: { website?: WebsiteSection; town?: string; readability?: ReturnType<typeof aiReadability> } = {}) {
   const town = o.town ?? "London";
-  return buildReportModel(rows, { ...ctx, town, siteText: undefined }, { kind, businessName: "Acme Heating Ltd", town, dateLabel: "11 Nov 2026", website: o.website ?? issuesSite, checkAgainLabel: "9 Dec 2026" });
+  return buildReportModel(rows, { ...ctx, town, siteText: undefined }, { kind, businessName: "Acme Heating Ltd", town, dateLabel: "11 Nov 2026", website: o.website ?? issuesSite, checkAgainLabel: "9 Dec 2026", readability: o.readability });
 }
 const text = (h: string) => h.replace(/<style>[\s\S]*?<\/style>/, "").replace(/ style="[^"]*"/g, "").replace(/<[^>]+>/g, " ").replace(/&#39;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ");
 const searches = ["plumber in Bow", "plumber in Hackney", "electrician in Bow", "electrician in Mile End", "boiler servicing in London"];
@@ -138,7 +139,7 @@ const banned = /\b(discovery|baseline|verdict|engines?|fragment(ed|ation)|citati
 const SECTIONS: Record<ReportKind, string[]> = {
   hook: ["AI named you in", "Featured search", "What we found on your website", "What we'd do"],
   opportunity: ["AI named you in", "Searches where you can get named", "What we'd do"],
-  baseline: ["AI named you in", "Today and after 4 weeks", "Your targeted searches", "What we found on your website", "What we'd do"],
+  baseline: ["AI named you in", "Today and after 4 weeks", "How easy your website is for AI to read", "Your targeted searches", "What we'd do"],
 };
 for (const kind of ["opportunity", "hook", "baseline"] as ReportKind[]) {
   const html = renderReport(model(mixed, kind));
@@ -172,10 +173,12 @@ const tHigh = text(renderReport(mHigh));
 ok(mHigh.band === "high" && /Keep it up and grow it\./.test(tHigh) && !/doesn't mention you/.test(tHigh), "edge: already named a lot -> 'keep and grow' wording, never 'you're missing'");
 // edge: website states
 ok(/You don't have a website AI can read yet\./.test(text(renderReport(model(mixed, "baseline", { website: { state: "no_website", issues: [] } })))) && /Build a website AI can read\./.test(text(renderReport(model(mixed, "baseline", { website: { state: "no_website", issues: [] } })))), "edge: no website -> the check says so and the pitch is 'a site AI can read'");
-ok(/We haven't checked your website yet\./.test(text(renderReport(model(mixed, "baseline", { website: { state: "not_checked", issues: [] } })))), "edge: no website check yet -> a plain line, not an empty box");
-ok(/We found nothing serious to fix\./.test(text(renderReport(model(mixed, "baseline", { website: { state: "clean", issues: [] } })))), "edge: a clean check says so");
-const tBaseW = text(renderReport(model(mixed, "baseline")));
-ok(tBaseW.indexOf("No reviews or testimonials found") < tBaseW.indexOf("Long page titles") && /1 serious problem to fix first/.test(tBaseW), "website check: stored issues in plain English, serious first");
+ok(/We couldn't read your website well enough to score it yet\./.test(text(renderReport(model(mixed, "baseline", { website: { state: "not_checked", issues: [] } })))), "edge: baseline with no website score -> a plain line, not an empty box or a 0");
+// The baseline's website score (aiReadability.ts): the number, the parts, what is in the way.
+const rd = aiReadability({ state: "issues", issues: [{ id: "no_reviews", severity: "high" }, { id: "long_titles", severity: "low", title: "Long page titles" }], strengths: [{ id: "phone_shown" }, { id: "business_schema" }, { id: "service_pages" }, { id: "town_stated" }] });
+const tBaseW = text(renderReport(model(mixed, "baseline", { readability: rd })));
+ok(new RegExp(`${rd.score} out of 100`).test(tBaseW) && /Service pages/.test(tBaseW) && /Reviews and proof/.test(tBaseW) && tBaseW.indexOf("reviews, testimonials") < tBaseW.indexOf("Long page titles"), "baseline website score: the number, the six parts, AI-reading problems before technical ones");
+ok(/website check: stored issues/.test("website check: stored issues") && /What we found on your website/.test(text(renderReport(model(mixed, "opportunity")))) === false, "discovery keeps no website panel");
 ok(websiteSectionFromCheck({ state: "issues", serious: [{ title: "A" }], minor: [{ title: "B" }] }).issues[0].serious && websiteSectionFromCheck(null).state === "not_checked", "the stored check becomes the plain section");
 // edge: no search with room -> a plain line, never an empty box
 const closedRows = searches.flatMap((s) => rowsFor(s, LITTLE));
@@ -193,7 +196,10 @@ const tIe = text(renderReport(model(ie, "opportunity", { town: "Dublin", website
 ok(/When people ask AI for an accountant in Dublin/.test(tIe) && !/\bUK\b/.test(tIe), "edge: another trade and country (Dublin accountant), nothing UK-specific");
 // client report and first contact
 const tBase = text(renderReport(model(mixed, "baseline")));
-ok(/Your targeted searches/.test(tBase) && /best chance of being named, plus your main ones/.test(tBase) && /Check again on 9 Dec 2026 and show you\./.test(tBase) && /Lots of room|Some room|Little room/.test(tBase), "client report: the tracked searches with their room, and the stored 'check again' date");
+ok(/Your targeted searches/.test(tBase) && /Not named yet/.test(tBase) && /Check again on 9 Dec 2026 and show you\./.test(tBase), "client report: the targeted searches grouped named / not named yet, and the stored 'check again' date");
+ok(!/Lots of room|Some room|Little room|AI doesn't name firms yet|Named instead|AI named instead/.test(tBase), "client baseline: no room labels and no competitors (months compare like for like)");
+const withRival = text(renderReport({ ...model(mixed, "baseline"), rivals: [{ name: "Zedd Plumbing Co", count: 5 }], top: { name: "Zedd Plumbing Co", count: 5 } }));
+ok(!withRival.includes("Zedd Plumbing Co"), "client baseline: a competitor never appears, even the top one");
 const mHook = buildReportModel(mixed.slice(0, 3), { ...ctx, town: "London", siteText: undefined }, { kind: "hook", businessName: "Acme Heating Ltd", town: "London", dateLabel: "11 Nov 2026", website: issuesSite });
 ok(/Featured search/.test(text(renderReport(mHook))) && !/All searches we asked/.test(text(renderReport(mHook))), "first-contact report: the featured search, then the website findings (no all-searches table)");
 ok(/left out: AI answered for another place/.test(text(renderReport({ ...mOpp, counts: { ...mOpp.counts, flagged: 2 } }))), "searches AI answered for the wrong place are named, not counted");
@@ -202,7 +208,7 @@ ok(!/<script>x|<img src=x>/.test(evil), "business and firm names are escaped");
 ok(shortName("London Domestic Maintenance Ltd") === "London Domestic Maintenance" && shortName("Ltd") === "Ltd", "shortName drops a trailing Ltd only");
 
 const pick = (o: Partial<Parameters<typeof chooseReportDesign>[0]>) => chooseReportDesign({ hookComplete: false, measuring: false, ...o });
-ok(pick({ auditPurpose: "discovery" }) === "opportunity" && pick({ paidKind: "baseline" }) === null && pick({ paidKind: "remeasure" }) === null && pick({ hookComplete: true }) === null && pick({ auditPurpose: "audit", hookComplete: true }) === null, "which report a stored audit gets: only a discovery uses this design; the AI check and the baseline use the classic pages (Paul, 2026-11-12)");
+ok(pick({ auditPurpose: "discovery" }) === "opportunity" && pick({ paidKind: "baseline" }) === "baseline" && pick({ paidKind: "remeasure" }) === null && pick({ hookComplete: true }) === null && pick({ auditPurpose: "audit", hookComplete: true }) === null, "which report a stored audit gets: discovery and the client baseline use this design (V2, Paul 2026-11-13); the AI check and the day-28 re-measure keep the classic pages");
 ok(pick({ auditPurpose: "discovery", measuring: true }) === null && pick({ hookComplete: true, nameNotJudgeable: true }) === null && pick({ auditPurpose: "discovery", classic: true }) === null, "measuring, name-unjudgeable and ?design=classic keep the classic page");
 
 console.log(f === 0 ? "\nALL PASS" : `\n${f} FAILURES`);

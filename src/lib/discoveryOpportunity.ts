@@ -102,7 +102,9 @@ export function opportunityFor(question: string, rows: QueueRow[], ctx: Opportun
     isRival: (n) => isRealCompetitor(n, ctx.location),
     isDirectoryHost: (h) => ctx.isAggregatorUrl('https://' + h),
   });
-  const clientNamed = namedRuns > 0;
+  /* "Already named" = named in MORE THAN HALF the runs (the single run when there is one) — the same rule as
+     reportOpportunity.ruleVerdict and V2 (2026-11-13). Named once in three is still a search with room. */
+  const clientNamed = runs >= 2 ? namedRuns * 2 > runs : namedRuns === 1;
   const classification: OpportunityClass = clientNamed || q.tier === 'named' ? 'named' : q.tier === 'lots' ? 'winnable' : q.tier === 'some' ? 'possible' : 'low';
   const verdict = clientNamed || q.tier === 'named' ? 'named' : q.tier === 'lots' ? 'open' : q.tier === 'some' ? 'contested' : q.tier === 'nofirms' ? 'no-local-race' : q.tier === 'flagged' || q.tier === 'notoffered' || q.tier === 'notonsite' ? 'unmeasured' : 'locked';
   const fragmentation = q.tier === 'lots' ? 'highly fragmented' : q.tier === 'little' ? 'dominant competitors' : 'mixed competition';

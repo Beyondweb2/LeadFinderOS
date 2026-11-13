@@ -254,11 +254,11 @@ export function RecommendationStep({ data, busy, frozen, draftIsRecommendation, 
         <p className="mt-0.5 text-sm"><b>{s.total} questions recommended</b>{s.fromHook ? ` · ${s.fromHook} from Hook Audit` : ''} · {s.fromDiscovery} from Discovery{rec.short ? ` · ${rec.short} short — add questions by hand` : ''}</p>
       </div>
       {!frozen && <Button size="sm" disabled={busy || !s.total} variant={draftIsRecommendation ? 'outline' : 'default'} onClick={onUse}>
-        {draftIsRecommendation ? <><CheckCircle2 className="mr-1 h-4 w-4"/>Draft matches — rebuild</> : 'Use recommended baseline'}
+        {draftIsRecommendation ? <><CheckCircle2 className="mr-1 h-4 w-4"/>Draft matches — rebuild</> : 'Create baseline from this Discovery'}
       </Button>}
     </div>
     {s.why.length > 0 && <div className="mt-2 text-xs"><p className="font-medium">Why these:</p><ul className="ml-4 list-disc">{s.why.map((w) => <li key={w}>{w}</li>)}</ul></div>}
-    <p className="mt-2 text-xs text-muted-foreground">Chosen for balance first — services, towns and intent — then, between equals, where the business is not yet named. Never simply the easiest questions.</p>
+    <p className="mt-2 text-xs text-muted-foreground">20 targeted searches: every quick-check search, 3 or 4 main searches (kept even when harder), and the rest with the most room (Lots, then Some) — never one where AI names no firms. Balanced across services, towns and intent. Edit or swap any before you approve. The client sees them as “Your targeted searches”, with the website score.</p>
   </section>;
 }
 

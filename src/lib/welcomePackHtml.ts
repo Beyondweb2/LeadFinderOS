@@ -11,6 +11,7 @@ import type { BaselineSummary } from './baselineSummary.ts';
 import { qrSvg } from './qrSvg.ts';
 import { agreementVersion, ukDate } from './clientAgreement.ts';
 import { storedRemeasureWeeks } from './remeasureFill.ts';
+import type { AiReadability } from './aiReadability.ts';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    WELCOME PACK — ONE printable document for a client who has just paid:
@@ -68,6 +69,11 @@ export interface WelcomePackInput {
    *  "Agreement accepted on … by …". ⛔ Only an AGREEMENT-PAGE acceptance counts here: the checkout tick
    *  is binding, but Paul still asks every client to sign on the page for the fuller record. */
   agreement?: WelcomePackAgreement | null;
+  /** The live baseline report link (findable.live/r/<code>). Absent → the page names no link. */
+  baselineUrl?: string | null;
+  /** "How easy your website is for AI to read" (aiReadability.ts), from the one stored website check. Absent or a
+   *  null score → the page says it could not be scored yet, never a 0. */
+  readability?: AiReadability | null;
 }
 
 export interface WelcomePackAgreement {
@@ -256,7 +262,7 @@ function sheet(bandMeta: string, inner: string, foot: string): string {
    position. A hardcoded list was fine while the pack had one shape; it now has two (with and
    without the client's own details and baseline result), and a contents page that promises a
    section the document does not contain is a worse fault than no contents page at all. */
-function coverPage(name: string, hasDetails: boolean, hasBaseline: boolean, hasAgreement: boolean, agreementTermsKnown = false): string {
+function coverPage(name: string, hasDetails: boolean, hasBaseline: boolean, hasAgreement: boolean, agreementTermsKnown = false, hasTargeted = false): string {
   /* ⚠️ SAME ORDER AS packPages IN buildWelcomePackHtml (Paul, 2026-10-02): what we're doing → why it
      works → where you are now → what happens next → your part → the report. */
   const contents = [
@@ -265,6 +271,7 @@ function coverPage(name: string, hasDetails: boolean, hasBaseline: boolean, hasA
     { title: 'How it works', line: 'Why many local businesses are hard for AI to read, and what we change.' },
     ...(hasBaseline ? [
       { title: 'Where you stand today', line: 'Your starting result, explained in plain English.' },
+      ...(hasTargeted ? [{ title: 'Your targeted searches', line: 'The searches we track for you, your report link and your website score.' }] : []),
       { title: 'What happens next', line: 'The steps from today to your before and after.' },
     ] : []),
     ...(hasAgreement ? [{ title: 'Your agreement', line: agreementTermsKnown ? 'The key points, and where to review and sign it.' : 'How your agreement works from here.' }] : []),
@@ -911,6 +918,49 @@ function baselinePage(name: string, b: BaselineSummary): string {
       </div>`;
 }
 
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   YOUR TARGETED SEARCHES + YOUR WEBSITE (Paul, 2026-11-13). The client's frozen searches, each with what
+   ChatGPT and Gemini said (named n of m), the live baseline link, and "How easy your website is for AI to
+   read". ⛔ Facts only: the searches and counts come from the baseline report itself, the score from the
+   one stored website check. No competitor, no room label, no promise of a ranking or of being named.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+export interface TargetedSearchRow { question: string; engines: Array<{ label: string; named: number; total: number }> }
+
+/** The baseline report's own rows, reduced to the scored engines (ChatGPT, Gemini). */
+export function targetedSearchesOf(report: AiAuditReportData): TargetedSearchRow[] {
+  return (report.questionBreakdown ?? []).map((q) => ({
+    question: q.question,
+    engines: (q.perEngine ?? []).filter((e) => /^(ChatGPT|Gemini)$/i.test(e.label) && e.counted !== false)
+      .map((e) => ({ label: e.label, named: typeof e.named === 'number' ? e.named : e.named ? 1 : 0, total: e.ranCount ?? (e.ran ? 1 : 0) })),
+  })).filter((q) => q.question.trim());
+}
+
+const READ_PART: Record<string, string> = { services: 'Service pages', proof: 'Reviews and proof', areas: 'Areas you cover', details: 'Business details', crawlers: 'AI tools allowed in', technical: 'Technical' };
+
+function targetedPage(rows: TargetedSearchRow[], readability: AiReadability | null | undefined, baselineUrl: string | null | undefined): string {
+  const cell = (e: { label: string; named: number; total: number }) => !e.total ? `${esc(e.label)}: no answer`
+    : e.named > 0 ? `<b>${esc(e.label)}: named ${e.named} of ${e.total}</b>` : `${esc(e.label)}: not named yet (0 of ${e.total})`;
+  const list = rows.map((r, i) => `<div class="wp-row"><div class="wp-num">${i + 1}</div><div class="wp-rowbody">
+          <div class="wp-rowtitle">${esc(r.question)}</div>
+          <p class="wp-rowline">${r.engines.map(cell).join(' &middot; ') || 'Not answered yet'}</p></div></div>`).join('');
+  const r = readability;
+  const site = !r || r.score === null
+    ? `<p>We couldn&rsquo;t read your website well enough to score it yet. We check it again as we work on it.</p>`
+    : `<div class="wp-stats"><div class="wp-stat"><div class="wp-statnum">${r.score} / 100</div><div class="wp-statlab">How easy your website is for AI to read</div></div></div>
+      <ul class="wp-points">${r.parts.map((p) => `<li>${esc(READ_PART[p.part] ?? p.part)}: ${p.got === null ? 'not checked' : `${Math.round(p.got)} of ${p.max}`}</li>`).join('')}</ul>
+      ${r.findings.length ? `<h3 class="wp-h3">What&rsquo;s in the way</h3><ul class="wp-points">${r.findings.slice(0, 6).map((f) => `<li>${esc(f.text)}</li>`).join('')}</ul>` : ''}
+      <p>Parts we couldn&rsquo;t check are left out of the score. This is a measure of your website, not of your AI results, and it is not part of your guarantee.</p>`;
+  return `
+      <div class="wp-eyebrow">Your targeted searches</div>
+      <h1 class="wp-h1">The searches we track for you</h1>
+      <p>These are the ${rows.length} searches we asked AI for your baseline. We ask the same ones again, the same way, every time we
+      measure, so the before and after is like for like.</p>
+      ${baselineUrl ? `<p>See your baseline report online at any time: <a href="${esc(baselineUrl)}">${esc(baselineUrl.replace(/^https?:\/\//, ''))}</a></p>` : ''}
+      <div class="wp-rows wp-rows-tight">${list}</div>
+      <h2 class="wp-h2">Your website</h2>
+      ${site}`;
+}
+
 /* ⛔ THE STEPS NAME THE REAL ORDER: frozen baseline → work → the same questions again → before and
    after. "same frozen questions, the same AI tools, the same method" is pinned by
    welcome-pack-content.test.ts. The guarantee itself is printed once, on the plan page. */
@@ -998,12 +1048,15 @@ export function buildWelcomePackHtml(input: WelcomePackInput): string {
      because the legacy Outreach/Inbox button still builds a pack from a report alone; when they are
      absent the pack is exactly the document it has always been. */
   const remeasure = recordedRemeasure(input.remeasureDueDate, input.baseline?.completedAt ?? null);
+  const targeted = input.baseline ? targetedSearchesOf(input.report) : [];
   const packPages = [
-    coverPage(name, !!input.facts, !!input.baseline, !!input.agreement, !!(input.agreement?.termsKnown || input.agreement?.acceptedAtIso)),
+    coverPage(name, !!input.facts, !!input.baseline, !!input.agreement, !!(input.agreement?.termsKnown || input.agreement?.acceptedAtIso), targeted.length > 0),
     gbpAccessPage(),
     planPage1(name, input.totalPayments, input.amountPaid, remeasure, input.report.googleAiInScore === true, input.paymentPlan ?? null, input.agreement?.version ?? null),
     planPage2(name),
-    ...(input.baseline ? [baselinePage(name, input.baseline), nextPage(input.totalPayments, remeasure, input.paymentPlan ?? null)] : []),
+    ...(input.baseline ? [baselinePage(name, input.baseline)] : []),
+    ...(input.baseline && targeted.length ? [targetedPage(targeted, input.readability, input.baselineUrl)] : []),
+    ...(input.baseline ? [nextPage(input.totalPayments, remeasure, input.paymentPlan ?? null)] : []),
     ...(input.agreement ? [agreementPage({ ...input.agreement, paymentPlan: input.agreement.paymentPlan ?? input.paymentPlan ?? null })] : []),
     ...(input.facts ? [detailsPage(name, input.facts)] : []),
     reviewsPage1(reviewLink),
