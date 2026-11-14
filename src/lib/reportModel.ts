@@ -63,9 +63,13 @@ export interface ReportModel {
   mainQuestions: string[];
   /** Baseline: "How easy your website is for AI to read" (aiReadability.ts). null = no number shown. */
   readability?: AiReadability | null;
+  /** The full sign-up for THIS lead (findable.live/onboarding/…?lead=<id>): questions, agreement, then payment, which makes
+   *  the lead a paid client. Absent = no sign-up button (a paying client, no lead, prospect-only country, no site origin). */
+  signupUrl?: string | null;
 }
 
 export interface ReportModelInput {
+  signupUrl?: string | null;
   kind: ReportKind;
   businessName: string;
   /** The audit's own town or city ("London", "Wisbech"). */
@@ -151,6 +155,7 @@ export function buildReportModel(rows: OppRow[], ctx0: OppContext, o: ReportMode
     checkAgainLabel: o.checkAgainLabel,
     mainQuestions: o.kind === 'baseline' ? mainSearches(targets, o.town) : [],
     readability: o.kind === 'baseline' ? (o.readability ?? null) : null,
+    signupUrl: o.signupUrl ?? null,
   };
 }
 

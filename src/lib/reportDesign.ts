@@ -49,6 +49,8 @@ const GROUP: Record<OppTier, { label: string; kind: 'y' | 'a' | 'n' | 'na' | 'b'
 };
 
 const WA_BUTTON = 'Talk to Paul on WhatsApp';
+export const SIGNUP_BUTTON = 'Start your sign-up';
+const FINDABLE_SITE = 'https://findable.live';
 const waHref = (businessName: string, text: string) =>
   `https://wa.me/${FINDABLE_CONTACT_WHATSAPP}?text=${encodeURIComponent(`Hi, this is ${businessName} - ${text}`)}`;
 const BUTTON_TEXT: Record<ReportKind, string> = {
@@ -175,6 +177,9 @@ h1,h2,h3,p{margin:0}a{color:inherit}
 .rp-foot-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:12px 16px;min-width:0}
 .rp-fk{display:block;font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:#9c9da3}
 .rp-fv{display:block;margin-top:3px;font-size:13.5px;font-weight:600;color:#fff;overflow-wrap:anywhere}
+.rp-ctas{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px}.rp-ctas .rp-btn{margin-bottom:0}
+.rp-btn--ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.35)}
+a.rp-fk{text-decoration:none}
 .rp-foot-brand{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:14px;border-top:1px solid rgba(255,255,255,.10)}
 .rp-foot-name{font-size:19px;font-weight:900;letter-spacing:-.02em;color:#fff}.rp-foot-name i{font-style:normal;color:var(--btn)}
 .rp-foot-note{margin-top:10px;font-size:12px;line-height:1.5;color:#9c9da3}
@@ -402,11 +407,15 @@ function footBlock(m: ReportModel): string {
   const second = w.state === 'no_website' ? 'Build a website AI can read.' : base ? 'Fix what the website check found.' : w.state === 'issues' && w.issues.length ? 'Fix what stops AI reading your website.' : 'Tidy your website and Google profile.';
   const third = m.kind === 'baseline' ? `Check again ${m.checkAgainLabel ? `on ${m.checkAgainLabel}` : `in ${REMEASURE_WEEKS_STANDARD} weeks`} and show you.` : `Check again after ${REMEASURE_WEEKS_STANDARD} weeks and show you.`;
   return `<footer class="rp-foot"><h3>What we'd do</h3><ul class="rp-do"><li>${esc(first)}</li><li>${esc(second)}</li><li>${esc(third)}</li></ul>` +
-    `<a class="rp-btn" href="${esc(waHref(shortName(m.businessName), BUTTON_TEXT[m.kind]))}" target="_blank" rel="noopener noreferrer">${WA_BUTTON}</a>` +
+    /* The full sign-up for this lead (questions, agreement, payment) when there is one; WhatsApp beside it. No price on the
+       button: the sign-up page states the plan and terms (constants own the words). */
+    `<div class="rp-ctas">${m.signupUrl ? `<a class="rp-btn" href="${esc(m.signupUrl)}" target="_blank" rel="noopener noreferrer">${SIGNUP_BUTTON}</a>` : ''}` +
+    `<a class="rp-btn${m.signupUrl ? ' rp-btn--ghost' : ''}" href="${esc(waHref(shortName(m.businessName), BUTTON_TEXT[m.kind]))}" target="_blank" rel="noopener noreferrer">${WA_BUTTON}</a>` +
+    `<a class="rp-btn rp-btn--ghost" href="${FINDABLE_SITE}" target="_blank" rel="noopener noreferrer">How Findable works</a></div>` +
     `<div class="rp-foot-grid"><div class="rp-foot-card"><span class="rp-fk">Prepared for</span><span class="rp-fv">${esc(shortName(m.businessName))}</span></div>` +
     `<div class="rp-foot-card"><span class="rp-fk">Report date</span><span class="rp-fv">${esc(m.dateLabel)}</span></div>` +
     `<div class="rp-foot-card"><span class="rp-fk">Measured on</span><span class="rp-fv">ChatGPT and Gemini${m.overview.shown ? ' · Google AI (not scored)' : ''}</span></div></div>` +
-    `<div class="rp-foot-brand"><span class="rp-foot-name">Findable<i>.</i></span><span class="rp-fk">findable.live</span></div>` +
+    `<div class="rp-foot-brand"><span class="rp-foot-name">Findable<i>.</i></span><a class="rp-fk" href="${FINDABLE_SITE}" target="_blank" rel="noopener noreferrer">findable.live</a></div>` +
     `<div class="rp-foot-note"><p>These are opportunities, not guarantees.</p></div></footer>`;
 }
 

@@ -556,6 +556,9 @@ Deno.serve(async (req) => {
         const model = buildReportModel(hookRows, octx, {
           kind: designKind, businessName: bizName, town, dateLabel: data.generatedAtLabel, shareUrl: data.shareUrl,
           website: websiteSection, order: questions, hookQuestions: hookQs, bestCount: 10, readability,
+          /* The SAME sign-up door the classic report uses (offerUrl: /onboarding/<slug>/?lead=<id>), only when the offer is shown:
+             never to a paying client (showOffer), never in a prospect-only country, never without a lead (no attribution). */
+          signupUrl: data.showOffer === true && data.prospectOnly !== true && data.offerUrl ? data.offerUrl : null,
           /* "We check again on <date>": the lead's stored day-28 date. Absent = the page says "in 4 weeks". */
           /* A baseline built from a Discovery is not the client's guarantee baseline: never show the paid client's re-measure date on it. */
           checkAgainLabel: leadRemeasureDue && String((audit as { audit_purpose?: string | null }).audit_purpose ?? "") !== "targeted" ? new Date(leadRemeasureDue).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : undefined,

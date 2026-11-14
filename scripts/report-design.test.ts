@@ -217,5 +217,18 @@ const pick = (o: Partial<Parameters<typeof chooseReportDesign>[0]>) => chooseRep
 ok(pick({ auditPurpose: "discovery" }) === "opportunity" && pick({ paidKind: "baseline" }) === "baseline" && pick({ paidKind: "remeasure" }) === null && pick({ hookComplete: true }) === null && pick({ auditPurpose: "audit", hookComplete: true }) === null, "which report a stored audit gets: discovery and the client baseline use this design (V2, Paul 2026-11-13); the AI check and the day-28 re-measure keep the classic pages");
 ok(pick({ auditPurpose: "discovery", measuring: true }) === null && pick({ hookComplete: true, nameNotJudgeable: true }) === null && pick({ auditPurpose: "discovery", classic: true }) === null, "measuring, name-unjudgeable and ?design=classic keep the classic page");
 
+// The sign-up and website links (Paul, 2026-11-14): the full sign-up for THIS lead when there is one, never a price.
+const SIGN = "https://findable.live/onboarding/acme-heating/?lead=11111111-2222-4333-8444-555555555555";
+for (const kind of ["opportunity", "baseline"] as ReportKind[]) {
+  const withLink = renderReport({ ...model(mixed, kind), signupUrl: SIGN });
+  const without = renderReport({ ...model(mixed, kind), signupUrl: null });
+  ok(withLink.includes(`href="${SIGN.replace(/&/g, "&amp;")}"`) && /Start your sign-up/.test(withLink), `${kind}: the sign-up button links to this lead's full sign-up`);
+  ok(!/Start your sign-up/.test(without), `${kind}: no sign-up button without a link (paid client, no lead, prospect-only country)`);
+  ok(/href="https:\/\/findable\.live"/.test(without), `${kind}: always links to findable.live`);
+  ok(!/£\s?\d/.test(text(withLink)), `${kind}: the sign-up button names no price`);
+}
+const rar = readFileSync(new URL("../supabase/functions/render-audit-report/index.ts", import.meta.url), "utf8");
+ok(/signupUrl: data\.showOffer === true && data\.prospectOnly !== true && data\.offerUrl/.test(rar), "render-audit-report passes the sign-up link only when the offer is shown, never prospect-only, never without a lead");
+
 console.log(f === 0 ? "\nALL PASS" : `\n${f} FAILURES`);
 if (f) process.exit(1);
