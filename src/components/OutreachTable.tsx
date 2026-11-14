@@ -2571,7 +2571,7 @@ export function OutreachTable({
                       size="sm"
                       onClick={handleDeleteSelected}
                       className="bg-background text-xs h-8 text-destructive hover:text-destructive"
-                      title="Removes these leads but keeps their history, so they won't be re-added or re-contacted on Find Leads. (Use Reset to fully clear and allow re-adding.)"
+                      title="Archives these leads: nothing is deleted, History is kept, Find Leads still counts them as added and they are never contacted. Restore them from the Archived view. (Use Reset to fully clear and allow re-adding.)"
                     >
                       <Trash2 className="h-3.5 w-3.5 mr-1.5" />
                       Remove
