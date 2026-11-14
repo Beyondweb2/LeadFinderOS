@@ -197,6 +197,39 @@ a.rp-fk{text-decoration:none}
 .rp-rd-bar{height:10px;border-radius:999px;background:#efeeea;overflow:hidden}.rp-rd-bar i{display:block;height:100%;background:var(--btn)}
 .rp-parts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0 4px}
 .rp-part{background:#fbfaf7;border:1px solid #ece8de;border-radius:12px;padding:8px 10px;font-size:12.5px;color:#4f5056}.rp-part b{display:block;font-size:15px;color:var(--ink)}
+/* ── DEPTH AND STRONGER COLOUR (Paul, 2026-11-14: "so washed out, stronger colours, not greyed out") ── */
+.rp-body{background:#f3efe6}
+.rp-panel{border-color:#e3ddd0;box-shadow:0 1px 2px rgba(16,17,20,.06),0 10px 28px -12px rgba(16,17,20,.18)}
+.rp-panel--site{background:#fff;border-color:#e3ddd0;border-top:4px solid var(--btn)}
+.rp-h{color:var(--ink)}.rp-h::before{background:var(--btn)}
+.rp-h-sub,.rp-issue-p,.rp-intro{color:#2f3036}
+.rp-line{color:var(--ink)}
+.rp-panel .rp-t-red{color:#dc2626}.rp-panel .rp-t-amber{color:#d97706}.rp-panel .rp-t-green{color:#15803d}.rp-panel .rp-t-grey{color:#52535a}
+.rp-today .rp-card{border-color:#e3ddd0;box-shadow:inset 0 0 0 1px rgba(255,255,255,.6),0 6px 16px -10px rgba(16,17,20,.25)}
+.rp-today .rp-card .rp-k{color:#2f3036!important}
+.rp-today .rp-bigdark span{color:#2f3036!important}
+.rp-today .rp-card--next{background:var(--ink);border:0;color:#fff}
+.rp-today .rp-card--next .rp-k{color:#d4d5d9!important}.rp-today .rp-card--next .rp-k i{background:var(--y)}
+.rp-today .rp-card--next .rp-bigdark{color:var(--y)!important}.rp-today .rp-card--next .rp-h-sub{color:#e6e6ea}
+.rp-rd-n span{color:#2f3036}
+.rp-rd-bar{height:12px;background:#ebe6db}.rp-rd-bar--green i{background:#16a34a}.rp-rd-bar--amber i{background:#f59e0b}.rp-rd-bar--red i{background:#dc2626}
+.rp-part{position:relative;background:#fff;border:1px solid #e3ddd0;border-left-width:5px;border-radius:12px;padding:10px 12px 12px;font-size:13px;color:#2f3036;box-shadow:0 4px 12px -8px rgba(16,17,20,.25)}
+.rp-part-k{display:block;font-weight:600}
+.rp-part b{display:block;font-size:17px;margin-top:2px}
+.rp-part-bar{display:block;height:5px;border-radius:999px;background:#efeae0;margin-top:8px;overflow:hidden}.rp-part-bar i{display:block;height:100%}
+.rp-part--green{border-left-color:#16a34a}.rp-part--green b{color:#15803d}.rp-part--green .rp-part-bar i{background:#16a34a}
+.rp-part--amber{border-left-color:#f59e0b}.rp-part--amber b{color:#b45309}.rp-part--amber .rp-part-bar i{background:#f59e0b}
+.rp-part--red{border-left-color:#dc2626;background:#fff7f7}.rp-part--red b{color:#b91c1c}.rp-part--red .rp-part-bar i{background:#dc2626}
+.rp-part--na{border-left-color:#c9c4b8}.rp-part--na b{color:#6b6c72;font-size:14px}
+.rp-rows>div+div{border-top:0}
+.rp-issue{border-radius:12px;padding:10px 12px;margin-top:8px;border:1px solid transparent}
+.rp-issue--high{background:#fef2f2;border-color:#fecaca}.rp-issue--low{background:#fffbeb;border-color:#fde68a}
+.rp-ic--high{background:#dc2626;color:#fff}.rp-ic--low{background:#f59e0b;color:#fff}
+.rp-chip--y{background:#dcfce7;color:#166534;border-color:#86efac}
+.rp-chip--n{background:#fee2e2;color:#b91c1c;border-color:#fca5a5}
+.rp-chip--a{background:#fef3c7;color:#92400e;border-color:#fcd34d}
+.rp-tbl td{color:#1f2024}.rp-qn{color:#6b6c72}
+.rp-grp{color:var(--ink)}
 @media (max-width:760px){.rp-score-in{grid-template-columns:1fr 1fr}.rp-overall{grid-column:1/-1}.rp-parts{grid-template-columns:1fr 1fr}}
 @media (max-width:640px){
   .rp-head{padding:18px 16px 14px;flex-direction:column;gap:12px}.rp-wm{font-size:24px}.rp-meta{text-align:left;width:100%}.rp-meta-top{justify-content:space-between}
@@ -488,10 +521,16 @@ function readabilityPanel(m: ReportModel): string {
   if (m.website.state === 'no_website') return wrap(`<p class="rp-issue-t">You don't have a website AI can read yet.</p><p class="rp-issue-p">A site AI can read is the first thing we build.</p>`);
   if (!r || r.score === null) return wrap(`<p class="rp-issue-t">We couldn't read your website well enough to score it yet.</p><p class="rp-issue-p">We check it again as we work on it.</p>`);
   const tone = r.score >= 70 ? 'green' : r.score >= 40 ? 'amber' : 'red';
-  const parts = r.parts.map((p) => `<div class="rp-part">${esc(PART_LABEL[p.part] ?? p.part)}<b>${p.got === null ? '&ndash;' : `${Math.round(p.got)} / ${p.max}`}</b></div>`).join('');
+  /* Each part coloured by how it scored (green / amber / red, grey when it could not be checked), with its own bar. */
+  const partTone = (got: number | null, max: number) => got === null ? 'na' : got / max >= 0.8 ? 'green' : got / max >= 0.4 ? 'amber' : 'red';
+  const parts = r.parts.map((p) => {
+    const t = partTone(p.got, p.max);
+    const pct = p.got === null ? 0 : Math.round((p.got / p.max) * 100);
+    return `<div class="rp-part rp-part--${t}"><span class="rp-part-k">${esc(PART_LABEL[p.part] ?? p.part)}</span><b>${p.got === null ? 'Not checked' : `${Math.round(p.got)} / ${p.max}`}</b><span class="rp-part-bar"><i style="width:${pct}%"></i></span></div>`;
+  }).join('');
   const serious = r.findings.filter((f) => f.serious).length;
-  const list = r.findings.slice(0, 6).map((f) => `<div class="rp-issue"><span class="rp-ic rp-ic--${f.serious ? 'high' : 'low'}">!</span><div class="rp-issue-t">${esc(f.text)}</div></div>`).join('');
-  return wrap(`<div class="rp-rd"><p class="rp-rd-n rp-t-${tone}">${r.score}<span> out of 100</span></p><div><div class="rp-rd-bar"><i style="width:${r.score}%"></i></div>` +
+  const list = r.findings.slice(0, 6).map((f) => `<div class="rp-issue rp-issue--${f.serious ? 'high' : 'low'}"><span class="rp-ic rp-ic--${f.serious ? 'high' : 'low'}">!</span><div class="rp-issue-t">${esc(f.text)}</div></div>`).join('');
+  return wrap(`<div class="rp-rd"><p class="rp-rd-n rp-t-${tone}">${r.score}<span> out of 100</span></p><div><div class="rp-rd-bar rp-rd-bar--${tone}"><i style="width:${r.score}%"></i></div>` +
     `<p class="rp-issue-p" style="margin-top:8px">${r.findings.length ? `${serious ? `${plural(serious, 'serious problem')}, ` : ''}${plural(r.findings.length, 'thing')} to fix in all.` : 'Nothing in the way that we could see.'}</p></div></div>` +
     `<div class="rp-parts">${parts}</div>${list ? `<div class="rp-rows">${list}</div>` : ''}` +
     `<p class="rp-issue-p" style="margin-top:10px">Parts we couldn't check are left out of the score.</p>`);
