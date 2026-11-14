@@ -51,6 +51,7 @@ import { explainAuditFailure, shortDate } from '@/lib/auditErrors';
 import { readFunctionErrorBody, functionErrorSentence, functionErrorWrapper } from '@/lib/functionError';
 import { shortReportUrl } from '@/lib/reportSlug';
 import { chooseReportDesign } from '@/lib/reportDesign';
+import { CreateBaselineDialog } from '@/components/audit/CreateBaselineDialog';
 import { paidReportKind } from '@/lib/reportKind';
 import { useApifyUsage, apifyTone, apifyWarningText, type ApifyUsage } from '@/hooks/useApifyUsage';
 import {
@@ -403,6 +404,7 @@ const AiAudit = () => {
   // This only connects an existing audit to an existing outreach lead. It never creates or edits a
   // lead: ai_audits.lead_id is the established relationship used by audits launched from Outreach.
   const [connectBusinessOpen, setConnectBusinessOpen] = useState(false);
+  const [createBaselineOpen, setCreateBaselineOpen] = useState(false);
   const [connectBusinessQuery, setConnectBusinessQuery] = useState('');
   const [connectBusinessResults, setConnectBusinessResults] = useState<LeadOption[]>([]);
   const [connectingLeadId, setConnectingLeadId] = useState<string | null>(null);
@@ -2429,7 +2431,17 @@ const AiAudit = () => {
           paidKind: paidReportKind({ auditId: openAuditRow.id, auditPurpose: openAuditRow.audit_purpose ?? null }),
           hookComplete: false, measuring: !!openReportData?.measuring,
         }) ? shortReportUrl(openAuditRow.short_code) : undefined}
+        onCreateBaseline={openAuditRow?.audit_purpose === 'discovery' && !openReportData?.measuring ? () => setCreateBaselineOpen(true) : undefined}
       />
+      {openAuditRow?.audit_purpose === 'discovery' && (
+        <CreateBaselineDialog
+          open={createBaselineOpen}
+          onOpenChange={setCreateBaselineOpen}
+          audit={{ id: openAuditRow.id, lead_id: openAuditRow.lead_id ?? null, business_name: openAuditRow.business_name, business_type: openAuditRow.business_type ?? null, location_text: openAuditRow.location_text ?? null }}
+          loadRows={loadAuditRows}
+          toast={toast}
+        />
+      )}
       <Dialog open={connectBusinessOpen} onOpenChange={(open) => {
         setConnectBusinessOpen(open);
         if (!open) { setConnectBusinessQuery(''); setConnectBusinessResults([]); }

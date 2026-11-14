@@ -467,7 +467,8 @@ Deno.serve(async (req) => {
       const wc = cc ? websiteCheckFor({ result: stored as never, created_at: (cc as { created_at: string }).created_at }, { website: ownWebsite ?? null }) : null;
       if (wc) websiteSection = websiteSectionFromCheck(wc);
       /* "How easy your website is for AI to read" — the baseline's website score (aiReadability.ts), from this same check. */
-      if (wc && kind === "baseline") readability = readabilityFromCheck(wc, stored as never, { services: leadServices, areas: leadAreas, town: audit.location_text ?? null });
+      const targeted = String((audit as { audit_purpose?: string | null }).audit_purpose ?? "") === "targeted";
+      if (wc && (kind === "baseline" || targeted)) readability = readabilityFromCheck(wc, stored as never, { services: leadServices, areas: leadAreas, town: audit.location_text ?? null });
       if (wc && (wc.state === "issues" || wc.state === "clean")) {
         data.siteChecked = true;
         const lines = wc.serious.map((i) => ({ title: issueLine(i), detail: i.saw, minor: i.severity !== "high", kind: i.id as never }));
@@ -556,9 +557,10 @@ Deno.serve(async (req) => {
           kind: designKind, businessName: bizName, town, dateLabel: data.generatedAtLabel, shareUrl: data.shareUrl,
           website: websiteSection, order: questions, hookQuestions: hookQs, bestCount: 10, readability,
           /* "We check again on <date>": the lead's stored day-28 date. Absent = the page says "in 4 weeks". */
-          checkAgainLabel: leadRemeasureDue ? new Date(leadRemeasureDue).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : undefined,
+          /* A baseline built from a Discovery is not the client's guarantee baseline: never show the paid client's re-measure date on it. */
+          checkAgainLabel: leadRemeasureDue && String((audit as { audit_purpose?: string | null }).audit_purpose ?? "") !== "targeted" ? new Date(leadRemeasureDue).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : undefined,
         });
-        return htmlResponse(renderReport(model), 200);
+        return htmlResponse(renderReport(model, { print: url.searchParams.get("print") === "1" }), 200);
       } catch (e) {
         // A design that cannot render must never cost the reader their report: fall through to the classic page.
         console.error("[render-audit-report] redesign failed, serving classic:", e instanceof Error ? e.message : e);

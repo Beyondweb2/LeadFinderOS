@@ -135,10 +135,13 @@ function model(rows: OppRow[], kind: ReportKind, o: { website?: WebsiteSection; 
 const text = (h: string) => h.replace(/<style>[\s\S]*?<\/style>/, "").replace(/ style="[^"]*"/g, "").replace(/<[^>]+>/g, " ").replace(/&#39;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ");
 const searches = ["plumber in Bow", "plumber in Hackney", "electrician in Bow", "electrician in Mile End", "boiler servicing in London"];
 const mixed = searches.flatMap((s) => rowsFor(s, SOME));
-const banned = /\b(discovery|baseline|verdict|engines?|fragment(ed|ation)|citations?|visibility score|geo|winnable|hard to win|work needed)\b/i;
+/* "Winnable" / "Not winnable" are the discovery's two labels since Paul 2026-11-14; the other report kinds still never say it. */
+const bannedFor = (kind: ReportKind) => kind === "opportunity"
+  ? /\b(discovery|baseline|verdict|engines?|fragment(ed|ation)|citations?|visibility score|geo|hard to win|work needed)\b/i
+  : /\b(discovery|baseline|verdict|engines?|fragment(ed|ation)|citations?|visibility score|geo|winnable|hard to win|work needed)\b/i;
 const SECTIONS: Record<ReportKind, string[]> = {
   hook: ["AI named you in", "Featured search", "What we found on your website", "What we'd do"],
-  opportunity: ["AI named you in", "Searches where you can get named", "What we'd do"],
+  opportunity: ["AI named you in", "Winnable searches", "What we'd do"],
   baseline: ["AI named you in", "Today and after 4 weeks", "How easy your website is for AI to read", "Your targeted searches", "What we'd do"],
 };
 for (const kind of ["opportunity", "hook", "baseline"] as ReportKind[]) {
@@ -148,7 +151,7 @@ for (const kind of ["opportunity", "hook", "baseline"] as ReportKind[]) {
   ok(idx.every((v, i) => v >= 0 && (i === 0 || v > idx[i - 1])), `${kind}: its own body in order, ending with the one button`);
   /* ⛔ NO FLUFF (Paul, 2026-11-12): no "AI recommends these instead", "Why this matters" or listing-site panels; a discovery lists its winnable searches only. */
   ok(!/AI recommends these instead|AI also recommends|Why this matters|Get listed on these sites/.test(t) && (kind !== "opportunity" || !/What we found on your website|best opportunity/.test(t)), `${kind}: no fluff panels; a discovery shows only its searches`);
-  ok(!banned.test(t) && !/\bquestions?\b/i.test(t), `${kind}: plain English, "searches" not "questions", no jargon, no "winnable" / "hard" / "work needed" labels`);
+  ok(!bannedFor(kind).test(t) && !/\bquestions?\b/i.test(t), `${kind}: plain English, "searches" not "questions", no jargon, no "hard" / "work needed" labels ("winnable" only on the discovery)`);
   ok(/These are opportunities, not guarantees\./.test(t) && !/\b(guarantee[sd]? (you|a|that)|will (rank|recommend)|#1)\b/i.test(t), `${kind}: the not-guarantees line, no ranking or recommendation promise`);
   ok(/name="viewport"/.test(html) && /noindex/.test(html), `${kind}: phone viewport and noindex`);
   ok(!/site score|score of \d+ for your (web)?site/i.test(t), `${kind}: no website score number (team-only)`);
@@ -156,14 +159,17 @@ for (const kind of ["opportunity", "hook", "baseline"] as ReportKind[]) {
 const mOpp = model(mixed, "opportunity");
 const tOpp = text(renderReport(mOpp));
 ok(mOpp.score.value === 0 && /0%\s*of answers/.test(tOpp) && /AI named you in/.test(tOpp) && /When people ask AI for a plumber or electrician in London, it doesn't mention you yet\./.test(tOpp), "score first, then the headline in customer words");
-ok(mOpp.top !== null && new RegExp(`${mOpp.top.name}: ${mOpp.top.count}\\.`).test(tOpp), "the score line names the top competitor and its count");
+ok(mOpp.top !== null && !tOpp.includes(`${mOpp.top.name}: ${mOpp.top.count}.`), "the discovery names no competitor, not even the top one in the score line (Paul, 2026-11-14)");
+const withRivalOpp = text(renderReport({ ...mOpp, rivals: [{ name: "Zedd Plumbing Co", count: 5 }], top: { name: "Zedd Plumbing Co", count: 5 } }));
+ok(!withRivalOpp.includes("Zedd Plumbing Co") && !/Not on your site yet|AI named instead|answered/.test(withRivalOpp), "the discovery shows no competitor, no AI answer text and no not-on-your-site section");
 
 // the count line and the proof, from the real counts
 const lotsRows = [...searches.slice(0, 3).flatMap((s) => rowsFor(s, LOTS)), ...rowsFor(searches[3], SOME), ...rowsFor(searches[4], LITTLE)];
 const mLots = model(lotsRows, "opportunity");
 const tLots = text(renderReport(mLots));
 ok(mLots.counts.lots === 3 && mLots.counts.some === 2 && mLots.counts.little === 0 || mLots.counts.lots >= 1, "counts come from the stored answers");
-ok(/AI names different firms each time for \d+ of your 5 searches\. There's room for you to be one of them\./.test(tLots) && /Searches where you can get named/.test(tLots), "the count line and the section title, built from the real counts");
+ok(/\d+ of your 5 searches are winnable\./.test(tLots) && /Winnable searches/.test(tLots) && /Winnable means there's room for you to be named\. It is not a guarantee\./.test(tLots), "the winnable count, the section title and the one-line not-a-guarantee rule");
+ok(/Not winnable for now/.test(tLots) && tLots.indexOf("Winnable searches") < tLots.indexOf("Not winnable for now"), "winnable searches first, then the rest as a compact list");
 ok(/6 answers named 12 different firms/.test(tLots), "each search shows its proof (\"6 answers named 12 different firms\")");
 ok(countsLine({ lots: 0, some: 2, little: 1, nofirms: 0, named: 0, flagged: 0, notoffered: 0, room: 3, searches: 3 }).startsWith("AI repeats a few firms but changes the rest for 2 of your 3 searches.") && countsLine({ lots: 0, some: 0, little: 4, nofirms: 0, named: 0, flagged: 0, notoffered: 0, room: 4, searches: 4 }).startsWith("AI names the same few firms for most of your 4 searches."), "no lots of room: the line says so plainly");
 // edge: already named a lot (keep and grow)
@@ -184,7 +190,7 @@ ok(websiteSectionFromCheck({ state: "issues", serious: [{ title: "A" }], minor: 
 const closedRows = searches.flatMap((s) => rowsFor(s, LITTLE));
 const mClosed = model(closedRows, "opportunity");
 const tClosed = text(renderReport(mClosed));
-ok(mClosed.targets.length === 0 && /None with room yet\./.test(tClosed) && /AI names the same few firms for most of your 5 searches\./.test(tClosed), "edge: no search with room -> a plain line, never an empty section");
+ok(/None of these searches is winnable yet\./.test(tClosed) && /Not winnable for now (·|&middot;) 5/.test(tClosed), "edge: nothing winnable -> a plain line, and all five listed as not winnable");
 // edge: few / no firms, no listing sites, fewer than 10 searches
 const lone = rowsFor("plumber in Bow", [[], [], [], [], [], []]);
 const tLone = text(renderReport(model(lone, "opportunity")));
