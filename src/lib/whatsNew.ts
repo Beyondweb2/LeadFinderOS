@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-14-whole-city-not-winnable', date: '2026-11-14', title: 'Whole-city searches are Not winnable unless AI already names you', audience: 'admin',
+    body: 'A search over a whole city, like "best plumber in London", now counts as Not winnable unless AI already names the business there at least once. Rotating answers in a big city are a lottery among thousands of firms. Local searches (a borough, town or district) keep the same rule. Discovery reports update by themselves; Create baseline uses the new rule too.',
+    report: {
+      added: [],
+      changed: ['Whole-city searches with no naming yet move from Winnable to Not winnable on the discovery report and in Create baseline.'],
+      removed: [],
+      effect: 'Fewer, more local winnable searches. Nothing stored changed; every discovery link shows the new labels the next time it opens.',
+    } },
   { id: '2026-11-14-discovery-winnable-baseline', date: '2026-11-14', title: 'Discovery says Winnable or Not winnable, and Create baseline needs no new searches', audience: 'admin',
     body: 'The discovery report now labels each search Winnable or Not winnable, with no AI answers and no competitor names. Create baseline on a discovery picks the 20 targeted searches from its own answers in a moment, lets you swap any, and makes a baseline report from them without asking AI again. Download PDF now gives a clean A4 document.',
     report: {
