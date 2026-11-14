@@ -108,7 +108,7 @@ ok(internationalPhone('07700 900123', 'Australia') === null, 'a UK number typed 
   const d = read('src/components/AddLeadDialog.tsx');
   ok(/value: 'Australia', label: 'Australia'/.test(d) && /value: 'UK', label: 'United Kingdom'/.test(d) && !/value: 'India'/.test(d) && /country: 'UK', businessName/.test(d),
     'Add a lead offers Australia (UK still the default; India is no longer offered, 2026-10-15)');
-  ok(/if \(f\.country !== 'UK' && f\.phone\.trim\(\)\) \{\n\s+const intl = internationalPhone\(f\.phone, f\.country\);/.test(d), '…and stores an Australian typed number in +61 form through internationalPhone');
+  ok(/if \(f\.country !== 'UK' && phone\.trim\(\)\) \{\r?\n\s+const intl = internationalPhone\(phone, f\.country\);/.test(d),'…and stores an Australian typed number in +61 form through internationalPhone');
 }
 
 console.log('\n── cold WhatsApp is NOT widened to Australia; the words are honest ──');

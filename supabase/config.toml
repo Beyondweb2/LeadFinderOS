@@ -29,6 +29,9 @@ verify_jwt = false
 [functions.extract-email]
 verify_jwt = false
 
+[functions.lead-from-website]
+verify_jwt = false
+
 [functions.enrich-lead]
 verify_jwt = false
 
