@@ -7,7 +7,7 @@ import { forgetOutreachList, markOutreachListSynced, recallOutreachList, remembe
 import { applyLeadDelta, deltaMatchesCounts, deltaSinceIso, DELTA_MAX_ROWS } from '@/lib/outreachDelta';
 import { guardListRows, leadSourceFor } from '@/lib/outreachLeadColumns';
 import { errorMessageOf, leadLoadErrorText, addInFlightKey } from '@/lib/leadLoadError';
-import { leadsSetCampaign, salesPatchLead, salesRemoveLeads } from '@/lib/leadRpc';
+import { leadRpc, leadsSetCampaign, salesPatchLead, salesRemoveLeads } from '@/lib/leadRpc';
 import { markLeadInterested } from '@/lib/leadQuickActions';
 import { saveNextAction, clearNextActionOnNo } from '@/lib/nextActionWrite';
 import { coverageQueryKey, coverageSignature } from '@/lib/coverageFreshness';
@@ -1711,30 +1711,40 @@ export function useOutreach({ history = true, progressive = false, preload = tru
     return true;
   }, [leads]);
 
-  // Delete multiple leads
+  /* REMOVE = ARCHIVE (Paul, 2026-11-14). It used to DELETE the rows: on a lead with a signed agreement the database
+     refused (foreign key), on any other lead it silently threw away the lead, its notes and its History. Now each lead
+     is archived through lead_set_archived — the one archive door, which writes 'archived_set' to History. The lead stays
+     in the database: Find Leads still sees it as already added (isInOutreach reads the archived list), the queue never
+     sends to an archived lead, and it can be restored from the Archived view. Nothing is deleted here any more. */
   const deleteMultiple = useCallback(async (leadIds: string[]) => {
     if (isSales()) { refuseForSales('Removing leads'); return false; }
     if (leadIds.length === 0) return false;
 
-    const { error } = await supabase
-      .from('outreach_leads')
-      .delete()
-      .in('id', leadIds);
+    const done: string[] = [];
+    const failed: string[] = [];
+    for (let i = 0; i < leadIds.length; i += 10) {
+      const batch = leadIds.slice(i, i + 10);
+      const results = await Promise.all(batch.map((id) => leadRpc('lead_set_archived', { _lead_id: id, _archived: true })));
+      results.forEach((r, j) => (r.ok ? done : failed).push(batch[j]));
+    }
 
-    if (error) {
+    if (done.length) {
+      const moved = new Set(done);
+      setLeads((prev) => {
+        const going = prev.filter((l) => moved.has(l.id)).map((l) => ({ ...l, is_archived: true }));
+        setArchivedLeads((a) => [...going, ...a.filter((l) => !moved.has(l.id))]);
+        return prev.filter((l) => !moved.has(l.id));
+      });
+      for (const id of done) notifyLeadChanged(id, syncOriginRef.current);
+    }
+    if (failed.length) {
       toast({
-        title: 'Error removing leads',
-        description: error.message,
+        title: failed.length === leadIds.length ? 'Could not remove the leads' : `${failed.length} of ${leadIds.length} leads could not be removed`,
+        description: 'Nothing was deleted. Try again, or archive them one by one.',
         variant: 'destructive',
       });
       return false;
     }
-
-    setLeads((prev) => prev.filter((l) => !leadIds.includes(l.id)));
-    setArchivedLeads((prev) => prev.filter((l) => !leadIds.includes(l.id)));
-
-    // Leads removed — no toast
-
     return true;
   }, []);
 
