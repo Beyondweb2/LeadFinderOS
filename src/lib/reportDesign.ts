@@ -229,6 +229,7 @@ a.rp-fk{text-decoration:none}
 .rp-chip--n{background:#fee2e2;color:#b91c1c;border-color:#fca5a5}
 .rp-chip--a{background:#fef3c7;color:#92400e;border-color:#fcd34d}
 .rp-tbl td{color:#1f2024}.rp-qn{color:#6b6c72}
+.rp-tbl th.rp-te{width:172px}.rp-tbl .rp-chip{white-space:nowrap;max-width:100%}
 .rp-grp{color:var(--ink)}
 @media (max-width:760px){.rp-score-in{grid-template-columns:1fr 1fr}.rp-overall{grid-column:1/-1}.rp-parts{grid-template-columns:1fr 1fr}}
 @media (max-width:640px){
