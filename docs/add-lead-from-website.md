@@ -13,4 +13,6 @@ Ported in **behaviour** (not code) from V2's add-by-website.
 
 - Works: engines are asked with country `ie` (`_shared/enrichment/ai-search.ts` country map); questions read "Westport, Ireland", never UK (`seedGuard.ts`, `scripts/ireland.test.ts`); Irish leads are never measured against `uk_towns`.
 - Fixed here: the forced-local prompt banned the word "ireland" while also requiring "Westport, Ireland" — now dropped for an Irish audit only (`create-ai-audit`, `FORCED_LOCAL_BANNED`).
-- Open (not changed): no wrong-town distance guard for Ireland (needs an Irish town table with coordinates, like Australia's); Ireland is not prospect-only, so an Irish report shows the £ offer and sign-up under the UK agreement — Paul's call (`src/lib/prospectOnly.ts`).
+- ✅ Decided by Paul (2026-11-14): **Ireland is NOT prospect-only** — an Irish report keeps the £ offer and the sign-up button (UK agreement). Do not add Ireland to `PROSPECT_ONLY_COUNTRIES` (`src/lib/prospectOnly.ts`) without asking him.
+- ⏸ Skipped by Paul (2026-11-14): no wrong-town distance guard for Ireland for now (it would need an Irish town table with coordinates, like Australia's). Not a bug; do not build it unasked.
+- The live Fill check (londondomesticmaintenance.com → "London Domestic Maintenance Ltd") is Paul's to do signed in; the same rules on the real homepage gave that name (2026-11-14).
