@@ -27,7 +27,7 @@
 
 import { FINDABLE_CONTACT_WHATSAPP, REMEASURE_WEEKS_STANDARD } from './findableOffer.ts';
 import type { EngineFacts, OppFirm, OppQuestion, OppTier } from './reportOpportunity.ts';
-import { ROOM_LITTLE_AT, ROOM_LITTLE_TOP_ALL } from './reportOpportunity.ts';
+import { ROOM_LITTLE_AT, ROOM_LITTLE_TOP_ALL, isBigAreaSearch } from './reportOpportunity.ts';
 import type { ReportKind, ReportModel } from './reportModel.ts';
 
 export function esc(s: unknown): string {
@@ -429,9 +429,10 @@ function hookBody(m: ReportModel): string {
    answers in a big city are a lottery among thousands of firms, not room. Local (borough / town / district) searches keep
    the rule above. */
 export type WinnableVerdict = 'winnable' | 'not_winnable' | null;
-export function winnableOf(q: Pick<OppQuestion, 'tier' | 'repeatShare' | 'top' | 'answers'> & Partial<Pick<OppQuestion, 'scope' | 'namedYou'>>): WinnableVerdict {
+export function winnableOf(q: Pick<OppQuestion, 'tier' | 'repeatShare' | 'top' | 'answers'> & Partial<Pick<OppQuestion, 'question' | 'namedYou'>>): WinnableVerdict {
   const verdict = baseWinnable(q);
-  if (verdict === 'winnable' && q.scope === 'wide' && !(Number(q.namedYou ?? 0) > 0)) return 'not_winnable';
+  /* A BIG city / region / country only (isBigAreaSearch): "East London" and a smaller city like Canterbury stay local. */
+  if (verdict === 'winnable' && q.question && isBigAreaSearch(q.question) && !(Number(q.namedYou ?? 0) > 0)) return 'not_winnable';
   return verdict;
 }
 function baseWinnable(q: Pick<OppQuestion, 'tier' | 'repeatShare' | 'top' | 'answers'>): WinnableVerdict {

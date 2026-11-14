@@ -257,6 +257,28 @@ export function areaInfo(question: string): { area: string; prep: string } | nul
 /** "boiler service in Bow" -> "Bow"; "Accountants for small businesses across Fenland?" -> "Fenland". */
 export function areaOf(question: string): string | null { return areaInfo(question)?.area ?? null; }
 
+/* ── WHOLE BIG AREA, for the winnable rule only (Paul, 2026-11-14) ───────────────────────────────────────────
+   Narrower than isWidePlace: a BIG city, a region, a county or a country — where AI picks from thousands of firms.
+   A compass quarter of a city ("East London") and a smaller city (Canterbury, Bath) are local for this rule. */
+const BIG_CITIES = new Set([
+  'london', 'birmingham', 'manchester', 'leeds', 'liverpool', 'sheffield', 'bristol', 'glasgow', 'edinburgh', 'cardiff', 'belfast',
+  'newcastle', 'nottingham', 'leicester', 'coventry', 'bradford', 'dublin', 'sydney', 'melbourne', 'brisbane', 'perth', 'adelaide',
+]);
+const REGIONS_AND_COUNTRIES = new Set([
+  'uk', 'u.k.', 'united kingdom', 'great britain', 'britain', 'england', 'scotland', 'wales', 'northern ireland', 'ireland', 'republic of ireland', 'eire',
+  'australia', 'new south wales', 'nsw', 'victoria', 'queensland', 'tasmania', 'western australia', 'south australia', 'northern territory',
+  'east anglia', 'midlands', 'west midlands', 'east midlands', 'north west', 'north east', 'south east', 'south west', 'yorkshire', 'the north', 'the south',
+  'greater london', 'greater manchester', 'merseyside', 'tyne and wear', 'cornwall', 'devon', 'dorset', 'somerset', 'essex', 'kent', 'surrey', 'sussex',
+  'norfolk', 'suffolk', 'cumbria', 'rutland', 'middlesex', 'cheshire', 'durham', 'northumberland',
+]);
+export function isBigArea(area: string | null | undefined): boolean {
+  if (!area) return false;
+  const a = area.trim().toLowerCase().replace(/[.,]+$/, '');
+  return BIG_CITIES.has(a) || REGIONS_AND_COUNTRIES.has(a) || /^[a-z]+shire$/.test(a) || /^greater\s+/.test(a);
+}
+/** Does this search ask about a whole big city, region or country ("best plumber in London")? */
+export function isBigAreaSearch(question: string): boolean { return isBigArea(areaInfo(question)?.area); }
+
 /** 'specific' (borough/town/district), 'wide' (whole city, region, country, or "across …") or 'none'. */
 export function placeScope(question: string): 'specific' | 'wide' | 'none' {
   const i = areaInfo(question);
