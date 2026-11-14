@@ -154,6 +154,23 @@ Deno.serve(async (req) => {
       .select("id, created_at, business_type, location_text, website, specialism")
       .eq("lead_id", row.lead_id).eq("audit_purpose", "discovery")
       .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    /* THE 20 TARGETED SEARCHES made from a Discovery before the sale (discovery-baseline, Paul 2026-11-14): offered as
+       the draft so the paid flow runs a FRESH baseline on the same 20. Read only; the targeted audit's answers are never
+       the guarantee's — approving still freezes and runs the paid baseline as before. */
+    let targeted: { audit_id: string; short_code: string | null; created_at: string | null; questions: string[] } | null = null;
+    {
+      const { data: t } = await service.from("ai_audits").select("id, short_code, created_at")
+        .eq("lead_id", row.lead_id).eq("audit_purpose", "targeted").is("archived_at", null)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (t?.id) {
+        const { data: firstRun } = await service.from("ai_audit_runs").select("id").eq("audit_id", t.id).order("run_number", { ascending: true }).limit(1).maybeSingle();
+        const { data: qs } = firstRun?.id
+          ? await service.from("ai_audit_queue").select("question, created_at").eq("run_id", firstRun.id).order("created_at", { ascending: true }).limit(200)
+          : { data: [] as Array<{ question: string }> };
+        const list = [...new Set(((qs ?? []) as Array<{ question: string }>).map((x) => String(x.question ?? "").trim()).filter(Boolean))];
+        if (list.length) targeted = { audit_id: String(t.id), short_code: (t.short_code as string | null) ?? null, created_at: (t.created_at as string | null) ?? null, questions: list };
+      }
+    }
     const selectedCrawl = selectClientCrawlContext({
       runCrawls: (recentRuns ?? []).map((run: { results?: { crawl_check?: unknown }; created_at?: string }) => ({ result: run.results?.crawl_check, created_at: run.created_at })),
       leadCrawl: crawlRow as Record<string, unknown> | null,
@@ -227,7 +244,7 @@ Deno.serve(async (req) => {
       crawl_context_source: selectedCrawl?.source ?? null,
       discovery_context: discoveryAudit?.id ? { audit_id: String(discoveryAudit.id), created_at: (discoveryAudit.created_at as string | null) ?? null } : null,
       status, questions, approved_at: row.baseline_approved_at || null,
-      discovery, coverage, hook, recommendation,
+      discovery, coverage, hook, recommendation, targeted,
       meta: (row.baseline_meta && typeof row.baseline_meta === "object") ? row.baseline_meta : null,
       canonical_services: mixCtx.services.map((x) => x.label),
       ...(typeof row.audit_id === "string" && row.audit_id ? { audit_id: row.audit_id } : {}),
