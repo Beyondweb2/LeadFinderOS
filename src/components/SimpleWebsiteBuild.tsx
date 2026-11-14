@@ -139,6 +139,16 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
     if (msg) toast({ title: msg });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pack]);
+  /* OPENS PRE-FILLED (Paul, 2026-11-13): the first time the build is opened with a build type chosen and nothing
+     gathered yet, Prepare runs by itself — the same gather as the button (the salesperson's answers, the client
+     record, the website already read), filling blanks only and starting no crawl. Unknown stays blank. */
+  const autoPrepared = useRef(false);
+  useEffect(() => {
+    if (autoPrepared.current || !type || type === 'optimise' || p.ended || progress.done.gather) return;
+    autoPrepared.current = true;
+    void runPrepare(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type, progress.done.gather, p.ended]);
 
   /* The old site's pages: the stored full crawl, else the quick crawl's pages, else none (the home page only). */
   const readOldSite = async (): Promise<PrepareContext['oldSite']> => {
@@ -186,7 +196,7 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
     setChangeType(false);
     if (t === 'optimise') { toast({ title: 'Improve existing site = Findable Optimise', description: 'That is not a new-site build. Use the page generator for their pages.' }); return; }
     update((s) => applyBuildType(s, t, p.onboarding));
-    if (state.repo_name) pendingPrepare.current = '';
+    pendingPrepare.current = '';
   };
 
   const copyMaster = async () => {

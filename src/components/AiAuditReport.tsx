@@ -16,8 +16,12 @@ import { renderReportHtml, type AiAuditReportData } from '@/lib/aiAuditReportHtm
 // resets to client on every open (the parent gives this component key={reportRunId}, so opening a
 // report remounts it and showInternal falls back to false). onDownload is handed the CURRENT choice
 // so print follows the view. The parent's snapshot may carry internal:true; this override decides.
-export function AiAuditReport({ data, onBack, onDownload, reportUrl, onReportCopied, onRegenerate, regenerating, onCompare, onConnectBusiness, connectedBusinessLabel }: {
+export function AiAuditReport({ data, onBack, onDownload, reportUrl, onReportCopied, onRegenerate, regenerating, onCompare, onConnectBusiness, connectedBusinessLabel, liveDesignUrl }: {
   data: AiAuditReportData;
+  /** The live page in the new design (Discovery / client baseline, reportDesign.ts chooseReportDesign). When set, the
+   *  Client view shows THAT page — exactly what the client's link shows — and Regenerate reloads it from the latest
+   *  data, so the app never shows an old-design copy of a new-design report (2026-11-13). */
+  liveDesignUrl?: string;
   onBack: () => void;
   onDownload: (internal: boolean) => void;
   reportUrl?: string;
@@ -40,6 +44,11 @@ export function AiAuditReport({ data, onBack, onDownload, reportUrl, onReportCop
   const [copied, setCopied] = useState(false);
   const html = renderReportHtml({ ...data, internal: showInternal });
   const frameRef = useRef<HTMLIFrameElement>(null);
+  /* Each Regenerate reloads the live page (the nonce makes the browser fetch it again). */
+  const [liveNonce, setLiveNonce] = useState(0);
+  const live = !!liveDesignUrl && !showInternal;
+  const liveSrc = liveDesignUrl ? `${liveDesignUrl}${liveDesignUrl.includes('?') ? '&' : '?'}preview=1&v=${liveNonce}` : undefined;
+  const regenerate = onRegenerate ? () => { setLiveNonce((n) => n + 1); onRegenerate(); } : undefined;
 
   const fit = () => {
     const doc = frameRef.current?.contentWindow?.document;
@@ -94,8 +103,8 @@ export function AiAuditReport({ data, onBack, onDownload, reportUrl, onReportCop
               <ArrowLeftRight className="mr-2 h-4 w-4" /> Before / after
             </Button>
           )}
-          {onRegenerate && (
-            <Button variant="outline" size="sm" onClick={onRegenerate} disabled={regenerating} title="Rebuild this report from the latest run data">
+          {regenerate && (
+            <Button variant="outline" size="sm" onClick={regenerate} disabled={regenerating} title="Rebuild this report from the latest run data">
               {regenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
               {regenerating ? 'Regenerating…' : 'Regenerate'}
             </Button>
@@ -125,14 +134,24 @@ export function AiAuditReport({ data, onBack, onDownload, reportUrl, onReportCop
         </div>
       </div>
 
-      <iframe
-        ref={frameRef}
-        title="AI Visibility Report preview"
-        srcDoc={html}
-        onLoad={fit}
-        className="w-full rounded-xl border border-border bg-white"
-        style={{ height: 1200 }}
-      />
+      {live ? (
+        <iframe
+          key={liveSrc}
+          title="AI Visibility Report preview"
+          src={liveSrc}
+          className="w-full rounded-xl border border-border bg-white"
+          style={{ height: 2600 }}
+        />
+      ) : (
+        <iframe
+          ref={frameRef}
+          title="AI Visibility Report preview"
+          srcDoc={html}
+          onLoad={fit}
+          className="w-full rounded-xl border border-border bg-white"
+          style={{ height: 1200 }}
+        />
+      )}
     </div>
   );
 }

@@ -11,6 +11,7 @@
 import {
   hookFromRows, scoreAnswers, searchPhrase, summariseOpportunity, buildVocab, type OppContext, type OppDirectory, type OppFirm, type OppQuestion, type OppRow,
 } from './reportOpportunity.ts';
+import type { AiReadability } from './aiReadability.ts';
 
 export type ReportKind = 'opportunity' | 'hook' | 'baseline';
 
@@ -60,6 +61,8 @@ export interface ReportModel {
   checkAgainLabel?: string;
   /** Baseline: the main money searches that have little room, shown as "Main search, harder to get named" (up to 4). */
   mainQuestions: string[];
+  /** Baseline: "How easy your website is for AI to read" (aiReadability.ts). null = no number shown. */
+  readability?: AiReadability | null;
 }
 
 export interface ReportModelInput {
@@ -77,6 +80,8 @@ export interface ReportModelInput {
   order?: string[];
   /** First contact: the searches to show as examples (default: the first three). */
   hookQuestions?: string[];
+  /** Baseline: the website score (aiReadability.ts). */
+  readability?: AiReadability | null;
 }
 
 /** The main money searches of a baseline: the plain "best / recommend a good <trade> in <home town>" ones (up to 4), in the baseline's order.
@@ -92,7 +97,10 @@ export function buildReportModel(rows: OppRow[], ctx0: OppContext, o: ReportMode
   const ctx: OppContext = { ...ctx0, town: ctx0.town ?? o.town, vocab };
   const s = summariseOpportunity(rows, ctx, o.bestCount ?? 10);
   const counted = new Set(s.questions.filter((q) => q.tier !== 'flagged').map((q) => q.question));
-  const sc = scoreAnswers(rows, ctx, counted);
+  const sc0 = scoreAnswers(rows, ctx, counted);
+  /* ⛔ THE CLIENT BASELINE COUNTS EVERY ANSWER (V2, Paul 2026-11-13): "named in N of M answers" over ALL ChatGPT + Gemini
+     answers — the same count the welcome pack and the guarantee use — never only the answers that named a business. */
+  const sc = o.kind === 'baseline' ? { ...sc0, denominator: sc0.answers } : sc0;
   const value = sc.denominator > 0 ? (sc.named > 0 ? Math.max(1, Math.round((100 * sc.named) / sc.denominator)) : 0) : null;
   const band: ReportModel['band'] = !sc.named ? 'none' : value !== null && value >= 50 ? 'high' : 'some';
 
@@ -142,6 +150,7 @@ export function buildReportModel(rows: OppRow[], ctx0: OppContext, o: ReportMode
     flagged: s.questions.filter((q) => q.tier === 'flagged').map((q) => q.question),
     checkAgainLabel: o.checkAgainLabel,
     mainQuestions: o.kind === 'baseline' ? mainSearches(targets, o.town) : [],
+    readability: o.kind === 'baseline' ? (o.readability ?? null) : null,
   };
 }
 

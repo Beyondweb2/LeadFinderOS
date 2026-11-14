@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-13-post-close-flow', date: '2026-11-13', title: 'New baseline report, website score and a fuller welcome pack', audience: 'admin',
+    body: 'The client baseline report has the new look: your targeted searches grouped into named and not named yet, and a score for how easy the website is for AI to read. No competitors on it. The discovery page shows each search with its room label, who AI named instead and a real answer. The welcome pack adds the searches we track, the report link and the website score. Website Build fills itself in when you open it.',
+    report: {
+      added: ['"How easy your website is for AI to read" (out of 100) on the baseline report and in the welcome pack.', 'A "Your targeted searches" page in the welcome pack, with the live report link.', 'On the discovery page: who AI named instead, one real answer per search, and the searches with little room or no firms.'],
+      changed: ['The client baseline uses the new design, counted over every answer.', 'A business name made only of everyday words counts only when AI writes the whole name ("Moments Wedding Content").', 'A search counts as already named only when AI named the business in more than half of the asks.', 'The baseline button now says "Create baseline from this Discovery".', 'Opening Website Build runs Prepare by itself.', 'In the app, Regenerate on a discovery or baseline shows the live new-design page.'],
+      removed: ['The SEO grade on the client baseline page (the classic page and the welcome pack report keep it).'],
+      effect: 'The four paying clients’ named counts are unchanged. Their baseline links show the new page.',
+    } },
   { id: '2026-11-12-classic-reports-back', date: '2026-11-12', title: 'AI check and baseline reports are back to the classic pages', audience: 'all',
     body: 'The AI check and the client baseline report use the classic pages again. The baseline lists every search with named or not named for each AI, plus the SEO check. The discovery page is for us and shows only the searches where a business can get named, and why.',
     report: {

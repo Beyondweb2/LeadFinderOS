@@ -20,7 +20,8 @@
    searches, any trade, any country) with plain wording, and is never an empty box.
 
    Plain English, short lines; never "discovery", "baseline", "verdict", "engines", "fragmented", "citations", "visibility
-   score" or "GEO". PRESENTATION ONLY: no website score number (team-only), no promise of a ranking or of being recommended;
+   score" or "GEO". PRESENTATION ONLY: never the team-only site score (siteScore.ts); the baseline alone shows "How easy
+   your website is for AI to read" (aiReadability.ts, 2026-11-13); no promise of a ranking or of being recommended;
    the page says "These are opportunities, not guarantees."  Pure (no DOM); relative imports carry .ts.
    ═══════════════════════════════════════════════════════════════════════════════════════ */
 
@@ -176,7 +177,21 @@ h1,h2,h3,p{margin:0}a{color:inherit}
 .rp-foot-brand{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:14px;border-top:1px solid rgba(255,255,255,.10)}
 .rp-foot-name{font-size:19px;font-weight:900;letter-spacing:-.02em;color:#fff}.rp-foot-name i{font-style:normal;color:var(--btn)}
 .rp-foot-note{margin-top:10px;font-size:12px;line-height:1.5;color:#9c9da3}
-@media (max-width:760px){.rp-score-in{grid-template-columns:1fr 1fr}.rp-overall{grid-column:1/-1}}
+.rp-chat{display:flex;gap:10px;align-items:flex-start;margin:8px 0 4px}
+.rp-chat-av{flex:none;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:#fff}
+.rp-chat-av--gpt{background:#10a37f}.rp-chat-av--gem{background:#7c5cf0}
+.rp-chat-b{background:#f4f2ec;border:1px solid #e7e3d9;border-radius:4px 16px 16px 16px;padding:9px 13px;font-size:13.5px;line-height:1.5;color:#2d2e33;min-width:0;overflow-wrap:anywhere}
+.rp-chat-b small{display:block;font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#8a8b90;margin-bottom:3px}
+.rp-chat-b mark{background:var(--y);padding:0 3px;border-radius:3px}
+.rp-grp{margin:16px 0 6px;font-size:13px;font-weight:800;color:#3a3b40}
+.rp-grp:first-of-type{margin-top:0}
+.rp-mini{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid #f1eee7;font-size:14px}.rp-mini:first-of-type{border-top:0}
+.rp-rd{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:center;margin-bottom:6px}
+.rp-rd-n{font-size:52px;font-weight:900;letter-spacing:-.05em;line-height:1}.rp-rd-n span{font-size:18px;color:#6b6c72;font-weight:800}
+.rp-rd-bar{height:10px;border-radius:999px;background:#efeeea;overflow:hidden}.rp-rd-bar i{display:block;height:100%;background:var(--btn)}
+.rp-parts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0 4px}
+.rp-part{background:#fbfaf7;border:1px solid #ece8de;border-radius:12px;padding:8px 10px;font-size:12.5px;color:#4f5056}.rp-part b{display:block;font-size:15px;color:var(--ink)}
+@media (max-width:760px){.rp-score-in{grid-template-columns:1fr 1fr}.rp-overall{grid-column:1/-1}.rp-parts{grid-template-columns:1fr 1fr}}
 @media (max-width:640px){
   .rp-head{padding:18px 16px 14px;flex-direction:column;gap:12px}.rp-wm{font-size:24px}.rp-meta{text-align:left;width:100%}.rp-meta-top{justify-content:space-between}
   .rp-score{padding:2px 12px 16px}.rp-score-in{gap:10px}.rp-overall{padding:16px}.rp-big-n{font-size:46px}.rp-eng{padding:13px 14px}.rp-eng-v{font-size:30px;margin-top:8px}.rp-aio-line em{margin-left:0}
@@ -216,6 +231,12 @@ function whereText(m: ReportModel): string { return `${m.what} in ${m.where}`; }
 function headlineText(m: ReportModel): string {
   const s = m.score;
   const w = whereText(m);
+  /* The client baseline: V2's plain headline over every answer (a search-phrase sentence reads badly for question-style searches). */
+  if (m.kind === 'baseline') {
+    if (!s.answers) return 'Your starting point.';
+    if (s.named === 0) return `<em>AI doesn't mention you yet.</em>`;
+    return m.band === 'high' ? `<em>AI names you in most answers.</em>` : `AI names you in <em>${s.named} of ${s.answers} answers.</em>`;
+  }
   if (s.value === null) return `When people ask AI for ${w}, <em>it names no firms yet.</em>`;
   if (m.band === 'none') return `When people ask AI for ${w}, <em>it doesn't mention you yet.</em>`;
   if (m.band === 'some') return `When people ask AI for ${w}, <em>it mentions you in ${s.named} of ${s.denominator} answers.</em>`;
@@ -238,7 +259,11 @@ function scoreBlock(m: ReportModel): string {
   const big = s.value === null
     ? `<p class="rp-big rp-t-grey"><span class="rp-big-n" style="font-size:36px">No score yet</span></p>`
     : `<p class="rp-big rp-t-${tone}"><span class="rp-big-n">${s.value}%</span><span class="rp-big-w">of answers</span></p>`;
-  const line = s.value === null ? "AI didn't name any business in these answers." : `${s.named} of ${s.denominator} answers that named a business named you.${m.top ? ` ${esc(m.top.name)}: ${m.top.count}.` : ''}`;
+  /* ⛔ The client's baseline never names a competitor (Paul 2026-11-12; V2 baseline): months compare like for like. */
+  const top = m.kind === 'baseline' ? null : m.top;
+  const line = s.value === null ? "AI didn't name any business in these answers."
+    : m.kind === 'baseline' ? `AI named you in ${s.named} of ${s.answers} answers.`
+      : `${s.named} of ${s.denominator} answers that named a business named you.${top ? ` ${esc(top.name)}: ${top.count}.` : ''}`;
   const card = (e: Eng) => {
     const c = m.engines[e];
     const pct = c.answers ? Math.round((c.named / c.answers) * 100) : 0;
@@ -353,8 +378,11 @@ export function countsLine(c: ReportModel['counts']): string {
 
 function footBlock(m: ReportModel): string {
   const w = m.website;
-  const first = m.band === 'high' ? 'Keep your best pages strong and add one for each search below.' : m.counts.lots + m.counts.some > 0 ? 'Make a clear page for each search where you can get named.' : 'Make a clear page for each of your searches.';
-  const second = w.state === 'no_website' ? 'Build a website AI can read.' : w.state === 'issues' && w.issues.length ? 'Fix what stops AI reading your website.' : 'Tidy your website and Google profile.';
+  const base = m.kind === 'baseline';
+  const first = base
+    ? (m.band === 'high' ? 'Keep your pages fresh on the searches AI names you for.' : "Make a clear page for each search where you're not named yet.")
+    : m.band === 'high' ? 'Keep your best pages strong and add one for each search below.' : m.counts.lots + m.counts.some > 0 ? 'Make a clear page for each search where you can get named.' : 'Make a clear page for each of your searches.';
+  const second = w.state === 'no_website' ? 'Build a website AI can read.' : base ? 'Fix what the website check found.' : w.state === 'issues' && w.issues.length ? 'Fix what stops AI reading your website.' : 'Tidy your website and Google profile.';
   const third = m.kind === 'baseline' ? `Check again ${m.checkAgainLabel ? `on ${m.checkAgainLabel}` : `in ${REMEASURE_WEEKS_STANDARD} weeks`} and show you.` : `Check again after ${REMEASURE_WEEKS_STANDARD} weeks and show you.`;
   return `<footer class="rp-foot"><h3>What we'd do</h3><ul class="rp-do"><li>${esc(first)}</li><li>${esc(second)}</li><li>${esc(third)}</li></ul>` +
     `<a class="rp-btn" href="${esc(waHref(shortName(m.businessName), BUTTON_TEXT[m.kind]))}" target="_blank" rel="noopener noreferrer">${WA_BUTTON}</a>` +
@@ -374,40 +402,90 @@ function hookBody(m: ReportModel): string {
     websitePanel(m);
 }
 
+/** One AI answer as a chat bubble (the real words, cut short), the business's name marked where it appears. */
+function chatBubble(e: Eng, f: EngineFacts, business: string): string {
+  if (!f.snippet) return '';
+  const safe = esc(f.snippet);
+  const nm = esc(business);
+  const marked = nm && safe.includes(nm) ? safe.split(nm).join(`<mark>${nm}</mark>`) : safe;
+  return `<div class="rp-chat"><span class="rp-chat-av rp-chat-av--${ENGINE_KEY[e]}">${e === 'chatgpt' ? 'C' : 'G'}</span><div class="rp-chat-b"><small>${ENGINE_LABEL[e]} answered</small>${marked}</div></div>`;
+}
+
 function opportunityBody(m: ReportModel): string {
   const c = m.counts;
-  const high = m.band === 'high';
   const room = c.lots + c.some;
-  const label = high ? 'Where to keep and grow' : 'Your best opportunity';
-  const sub = 'Here is what each AI said.';
-  /* ⛔ A DISCOVERY LISTS ITS WINNABLE SEARCHES AND NOTHING ELSE (Paul, 2026-11-12): no featured block, no "AI recommends
-     these instead", no website, no listing sites, no "why this matters". The best search leads the list. */
+  /* A DISCOVERY (internal, Paul 2026-11-12 + 2026-11-13, V2's room labels): the searches where the business can get
+     named, each with its room label, the firms AI named instead, one real answer as a chat bubble, and why. Then the
+     searches with little room and those where AI names no firms yet, so the whole picture is on one page. Directories
+     never count as firms (reportOpportunity.ts); a whole-city search is capped at Some room. */
   const rest = m.targets;
+  const business = shortName(m.businessName);
   const flagNote = c.flagged ? ` ${plural(c.flagged, 'search', 'searches')} left out: AI answered for another place.` : '';
   const line = esc(`${countsLine(c)}${flagNote}`);
+  const target = (q: OppQuestion) => {
+    const g = GROUP[q.tier];
+    const firms = q.firms.slice(0, 4);
+    const bubble = chatBubble('chatgpt', q.engines.chatgpt, business) || chatBubble('gemini', q.engines.gemini, business);
+    return `<div class="rp-target"><h3>${esc(q.question)}</h3><p>${chip(g.kind, g.label)} ${esc(q.why)}</p>` +
+      (firms.length ? `<div class="rp-inst-k" style="margin-top:8px">AI named instead</div>${pills(firms, 4)}` : '') + bubble + `</div>`;
+  };
   const targets = rest.length
-    ? `<section class="rp-panel"><h2 class="rp-h">Searches where you can get named</h2><p class="rp-h-sub">${line}</p>${rest.map((q) => {
-        const g = GROUP[q.tier];
-        const firms = q.firms.slice(0, 3);
-        return `<div class="rp-target"><h3>${esc(q.question)}</h3>${firms.length ? pills(firms, 3) : ''}<p>${chip(g.kind, g.label)} ${esc(q.why)}</p></div>`;
-      }).join('')}</section>`
+    ? `<section class="rp-panel"><h2 class="rp-h">Searches where you can get named</h2><p class="rp-h-sub">${line}</p>${rest.map(target).join('')}</section>`
     : `<section class="rp-panel"><h2 class="rp-h">Searches where you can get named</h2><p class="rp-h-sub">${line}${room ? '' : ' None with room yet.'}</p></section>`;
-  const proof = m.featured ? `<p class="rp-feat-sub" style="margin-top:-8px">${chip(GROUP[m.featured.tier].kind, GROUP[m.featured.tier].label)} ${esc(m.featured.why)}</p>` : '';
-  void label; void sub; void proof; void high;
-  return `<p class="rp-line">${headlineText(m)}</p>` + targets;
+  const listed = new Set(rest.map((q) => q.question));
+  const others = (['little', 'nofirms'] as OppTier[]).map((t) => {
+    const qs = m.all.filter((q) => q.tier === t && !listed.has(q.question));
+    if (!qs.length) return '';
+    const g = GROUP[t];
+    return `<p class="rp-grp">${esc(g.label)} &middot; ${qs.length}</p>` + qs.map((q) =>
+      `<div class="rp-mini"><span>${esc(q.question)}</span>${t !== 'nofirms' && q.firms.length ? `<span class="rp-np" title="${esc(q.firms[0].name)}">${esc(q.firms[0].name)}</span>` : ''}</div>`).join('');
+  }).join('');
+  const otherPanel = others ? `<section class="rp-panel"><h2 class="rp-h">The other searches</h2><p class="rp-h-sub">Left out of the targets for now.</p>${others}</section>` : '';
+  return `<p class="rp-line">${headlineText(m)}</p>` + targets + otherPanel;
+}
+
+/** "How easy your website is for AI to read" (aiReadability.ts): the number, the six parts, what is in the way. */
+const PART_LABEL: Record<string, string> = { services: 'Service pages', proof: 'Reviews and proof', areas: 'Areas you cover', details: 'Business details', crawlers: 'AI tools allowed in', technical: 'Technical' };
+function readabilityPanel(m: ReportModel): string {
+  const r = m.readability;
+  const wrap = (inner: string) => `<section class="rp-panel rp-panel--site"><h2 class="rp-h">How easy your website is for AI to read</h2>${inner}</section>`;
+  if (m.website.state === 'no_website') return wrap(`<p class="rp-issue-t">You don't have a website AI can read yet.</p><p class="rp-issue-p">A site AI can read is the first thing we build.</p>`);
+  if (!r || r.score === null) return wrap(`<p class="rp-issue-t">We couldn't read your website well enough to score it yet.</p><p class="rp-issue-p">We check it again as we work on it.</p>`);
+  const tone = r.score >= 70 ? 'green' : r.score >= 40 ? 'amber' : 'red';
+  const parts = r.parts.map((p) => `<div class="rp-part">${esc(PART_LABEL[p.part] ?? p.part)}<b>${p.got === null ? '&ndash;' : `${Math.round(p.got)} / ${p.max}`}</b></div>`).join('');
+  const serious = r.findings.filter((f) => f.serious).length;
+  const list = r.findings.slice(0, 6).map((f) => `<div class="rp-issue"><span class="rp-ic rp-ic--${f.serious ? 'high' : 'low'}">!</span><div class="rp-issue-t">${esc(f.text)}</div></div>`).join('');
+  return wrap(`<div class="rp-rd"><p class="rp-rd-n rp-t-${tone}">${r.score}<span> out of 100</span></p><div><div class="rp-rd-bar"><i style="width:${r.score}%"></i></div>` +
+    `<p class="rp-issue-p" style="margin-top:8px">${r.findings.length ? `${serious ? `${plural(serious, 'serious problem')}, ` : ''}${plural(r.findings.length, 'thing')} to fix in all.` : 'Nothing in the way that we could see.'}</p></div></div>` +
+    `<div class="rp-parts">${parts}</div>${list ? `<div class="rp-rows">${list}</div>` : ''}` +
+    `<p class="rp-issue-p" style="margin-top:10px">Parts we couldn't check are left out of the score.</p>`);
+}
+
+/** The client's tracked searches (V2 "Your targeted searches"): where AI names you, then not named yet. No competitors, no room labels. */
+function targetedSearchesBlock(m: ReportModel): string {
+  const cell = (f: EngineFacts) => !f.answers ? chip('na', 'No answer') : f.named > 0 ? chip('y', `✓ Named ${f.named} of ${f.answers}`) : chip('n', `Not named · 0 of ${f.answers}`);
+  const row = (q: OppQuestion, i: number) => `<tr><td class="rp-tq"><span class="rp-qn">${i + 1}.</span> ${esc(q.question)}</td>` +
+    ENGS.map((e) => `<td class="rp-tr" data-eng="${ENGINE_LABEL[e]}"><div class="rp-cell">${cell(q.engines[e])}</div></td>`).join('') + `</tr>`;
+  const head = `<tr><th>Search</th>${ENGS.map((e) => `<th class="rp-te"><span class="rp-dot rp-dot--${ENGINE_KEY[e]}"></span>${ENGINE_LABEL[e]}</th>`).join('')}</tr>`;
+  const named = m.all.filter((q) => q.namedYou > 0);
+  const not = m.all.filter((q) => q.namedYou === 0);
+  const group = (title: string, qs: OppQuestion[]) => qs.length ? `<p class="rp-grp">${esc(title)}</p><table class="rp-tbl"><thead>${head}</thead><tbody>${qs.map(row).join('')}</tbody></table>` : '';
+  const asks = m.asks > 1 ? `${m.asks} times` : 'once';
+  return `<section class="rp-panel"><h2 class="rp-h">Your targeted searches</h2><p class="rp-h-sub">${plural(m.all.length, 'search', 'searches')}, each asked ${asks} on ChatGPT and Gemini. We ask the same ones again every ${REMEASURE_WEEKS_STANDARD} weeks.</p>` +
+    (m.all.length ? group(`Where AI names you · ${named.length}`, named) + group(named.length ? `Not named yet · ${not.length}` : `Not named yet · this is where we start`, not) : `<p class="rp-h-sub">No searches to show yet.</p>`) + `</section>`;
 }
 
 function baselineBody(m: ReportModel): string {
   const s = m.score;
   const tone = s.value === null ? 'grey' : m.band === 'none' ? 'red' : m.band === 'some' ? 'amber' : 'green';
+  const lead = m.band === 'none'
+    ? `This is your starting point. Every ${REMEASURE_WEEKS_STANDARD} weeks we ask AI the same searches again and show you what changed.`
+    : m.band === 'some' ? `AI already names you on some of your searches. Every ${REMEASURE_WEEKS_STANDARD} weeks we ask AI the same searches again and show you what changed.`
+      : `AI names you on most of your searches. We keep it there and grow it, and show you every ${REMEASURE_WEEKS_STANDARD} weeks.`;
   const today = `<section class="rp-panel"><h2 class="rp-h">Today and after ${REMEASURE_WEEKS_STANDARD} weeks</h2><div class="rp-today">` +
-    `<div class="rp-card"><span class="rp-k" style="color:#6b6c72"><i></i>AI named you in &middot; ${esc(m.dateLabel)}</span><p class="rp-bigdark rp-t-${tone}" style="margin-top:10px;${tone === 'grey' ? 'color:#5d5e63' : ''}">${s.value === null ? 'No score yet' : `${s.value}%<span style="font-size:18px;color:#6b6c72"> of answers</span>`}</p><p class="rp-h-sub" style="margin:6px 0 0">AI named you ${s.named} ${s.named === 1 ? 'time' : 'times'}.${m.top ? ` ${esc(m.top.name)}: ${m.top.count}.` : ''}</p></div>` +
+    `<div class="rp-card"><span class="rp-k" style="color:#6b6c72"><i></i>AI named you in &middot; ${esc(m.dateLabel)}</span><p class="rp-bigdark rp-t-${tone}" style="margin-top:10px;${tone === 'grey' ? 'color:#5d5e63' : ''}">${s.value === null ? 'No score yet' : `${s.value}%<span style="font-size:18px;color:#6b6c72"> of answers</span>`}</p><p class="rp-h-sub" style="margin:6px 0 0">AI named you in ${s.named} of ${plural(s.denominator, 'answer')}.</p></div>` +
     `<div class="rp-card rp-card--next"><span class="rp-k" style="color:#6b6c72"><i></i>${m.checkAgainLabel ? `We check again on ${esc(m.checkAgainLabel)}` : `We check again in ${REMEASURE_WEEKS_STANDARD} weeks`}</span><p class="rp-bigdark" style="margin-top:10px;color:#a3a5ab">&mdash;</p><p class="rp-h-sub" style="margin:6px 0 0">Same ${plural(m.counts.searches, 'search', 'searches')}. Same AI.</p></div></div></section>`;
-  const c = m.counts;
-  const flagNote = c.flagged ? ` ${plural(c.flagged, 'search', 'searches')} left out: AI answered for another place.` : '';
-  return `<p class="rp-line">${headlineText(m)}</p>` + today +
-    tableBlock(m, m.all, 'Your targeted searches', `We chose searches where you have the best chance of being named, plus your main ones. ${countsLine(c)}.${flagNote}`, true, true) +
-    websitePanel(m);
+  return `<p class="rp-line">${headlineText(m)}</p><p class="rp-intro">${esc(lead)}</p>` + today + readabilityPanel(m) + targetedSearchesBlock(m);
 }
 
 /* ═══ The page ═══════════════════════════════════════════════════════════════════════════════ */
@@ -439,10 +517,11 @@ export function chooseReportDesign(o: {
   classic?: boolean;
 }): ReportDesignKind | null {
   if (o.classic || o.measuring || o.nameNotJudgeable) return null;
-  /* ⛔ BACK TO THE CLASSIC PAGES (Paul, 2026-11-12): the AI check (hook) and the client baseline use the classic report again
-     (the AI check: chat answer, website findings, the closing band with the buttons; the baseline: every search with named /
-     not named per AI and the SEO check from the API, easy to compare month to month). Only the discovery, which is for us,
-     uses this design: the searches where they can get named and why. The hook and baseline bodies stay in this file, unused. */
+  /* The AI check (hook) keeps the classic page (Paul, 2026-11-12). The client baseline uses V2's baseline design
+     (Paul, 2026-11-13): every targeted search with named / not named per AI, grouped, no competitors, no room labels
+     (so months compare like for like), plus "How easy your website is for AI to read". The day-28 re-measure keeps the
+     classic before/after page. The discovery, which is for us, uses the opportunity design. */
+  if (o.paidKind === 'baseline') return 'baseline';
   if (o.paidKind) return null;
   if (String(o.auditPurpose ?? '').trim().toLowerCase() === 'discovery') return 'opportunity';
   return null;

@@ -50,6 +50,8 @@ import { auditMatches, auditSearchTerms } from '@/lib/auditSearch';
 import { explainAuditFailure, shortDate } from '@/lib/auditErrors';
 import { readFunctionErrorBody, functionErrorSentence, functionErrorWrapper } from '@/lib/functionError';
 import { shortReportUrl } from '@/lib/reportSlug';
+import { chooseReportDesign } from '@/lib/reportDesign';
+import { paidReportKind } from '@/lib/reportKind';
 import { useApifyUsage, apifyTone, apifyWarningText, type ApifyUsage } from '@/hooks/useApifyUsage';
 import {
   WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS, FULL_MEASURE_QUESTIONS,
@@ -2421,6 +2423,12 @@ const AiAudit = () => {
         onConnectBusiness={!openAuditRow?.lead_id ? () => setConnectBusinessOpen(true) : undefined}
         onRegenerate={canRegenerate ? regenerateReport : undefined}
         regenerating={regenerating}
+        /* Discovery and the client baseline are drawn in the new design by the live page: show that, never an old-design copy. */
+        liveDesignUrl={openAuditRow?.short_code && chooseReportDesign({
+          auditPurpose: openAuditRow.audit_purpose ?? null,
+          paidKind: paidReportKind({ auditId: openAuditRow.id, auditPurpose: openAuditRow.audit_purpose ?? null }),
+          hookComplete: false, measuring: !!openReportData?.measuring,
+        }) ? shortReportUrl(openAuditRow.short_code) : undefined}
       />
       <Dialog open={connectBusinessOpen} onOpenChange={(open) => {
         setConnectBusinessOpen(open);

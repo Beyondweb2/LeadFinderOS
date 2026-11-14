@@ -31,6 +31,7 @@ import { buildFaultLines, CRAWL_CHECK_VERSION, CRAWL_FRESH_MS, type CrawlSignals
 import { usableSiteEvidence, type SiteEvidence } from "../../../src/lib/siteEvidence.ts";
 import { reportContentIssues } from "../../../src/lib/contentTrust.ts";
 import { issueLine, websiteCheckFor } from "../../../src/lib/websiteCheck.ts";
+import { readabilityFromCheck, type AiReadability } from "../../../src/lib/aiReadability.ts";
 
 /** The stored crawl shape this function reads, from either the run's results or the lead-level row.
  *  `evidence` / `evidenceVersion` are optional because every row written before 2026-09-22 has
@@ -257,8 +258,16 @@ Deno.serve(async (req) => {
     let leadPlaceId: string | null = null;
     /* Australia (prospect-only, src/lib/prospectOnly.ts): read from the lead's country / address. */
     let leadProspectOnly = false;
+    /* The client's own services and areas (client record), for the baseline's website score. */
+    let leadServices: string[] = [];
+    let leadAreas: string[] = [];
+    let readability: AiReadability | null = null;
     const leadId = (audit as { lead_id?: string | null }).lead_id ?? null;
     if (leadId) {
+      const { data: svc } = await service.from("outreach_leads").select("services_included, service_areas").eq("id", leadId).maybeSingle();
+      const asList = (v: unknown) => Array.isArray(v) ? v.map(String).filter(Boolean) : [];
+      leadServices = asList((svc as { services_included?: unknown } | null)?.services_included);
+      leadAreas = asList((svc as { service_areas?: unknown } | null)?.service_areas);
       const { data: lead } = await service
         /* ⚠️ baseline_audit_id / remeasure_audit_id ARE READ FOR ONE REASON: the three clients who
            paid before audit_purpose existed (2026-09-12) carry NULL on their baseline rows, and the
@@ -457,6 +466,8 @@ Deno.serve(async (req) => {
          (high / medium), each the issue's title + what was seen. A clean check says so; no row keeps the old path. */
       const wc = cc ? websiteCheckFor({ result: stored as never, created_at: (cc as { created_at: string }).created_at }, { website: ownWebsite ?? null }) : null;
       if (wc) websiteSection = websiteSectionFromCheck(wc);
+      /* "How easy your website is for AI to read" — the baseline's website score (aiReadability.ts), from this same check. */
+      if (wc && kind === "baseline") readability = readabilityFromCheck(wc, stored as never, { services: leadServices, areas: leadAreas, town: audit.location_text ?? null });
       if (wc && (wc.state === "issues" || wc.state === "clean")) {
         data.siteChecked = true;
         const lines = wc.serious.map((i) => ({ title: issueLine(i), detail: i.saw, minor: i.severity !== "high", kind: i.id as never }));
@@ -543,7 +554,7 @@ Deno.serve(async (req) => {
         const hookRows = designKind === "hook" ? hookQs.map((q) => oppRows.find((r) => r.question.trim() === q)).filter((r): r is OppRow => !!r) : oppRows;
         const model = buildReportModel(hookRows, octx, {
           kind: designKind, businessName: bizName, town, dateLabel: data.generatedAtLabel, shareUrl: data.shareUrl,
-          website: websiteSection, order: questions, hookQuestions: hookQs, bestCount: 10,
+          website: websiteSection, order: questions, hookQuestions: hookQs, bestCount: 10, readability,
           /* "We check again on <date>": the lead's stored day-28 date. Absent = the page says "in 4 weeks". */
           checkAgainLabel: leadRemeasureDue ? new Date(leadRemeasureDue).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : undefined,
         });
