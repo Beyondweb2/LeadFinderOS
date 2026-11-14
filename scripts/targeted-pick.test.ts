@@ -34,6 +34,11 @@ ok(q("lots") === "winnable" && q("some") === "winnable", "Lots and Some room = W
 ok(q("little") === "not_winnable" && q("nofirms") === "not_winnable", "Little room and no firms = Not winnable");
 ok(q("named", 0.2) === "winnable" && q("named", 0.7) === "not_winnable", "already named: winnable unless one or two firms own it");
 ok(q("notonsite") === null && q("flagged") === null && q("notoffered") === null, "not on their site / another place / not their service: left out");
+// Whole-city searches (Paul, 2026-11-14): not winnable unless AI already names the business there.
+const wide = (tier: string, namedYou: number) => winnableOf({ tier: tier as never, repeatShare: 0, top: 2, answers: 6, scope: "wide", namedYou });
+ok(wide("lots", 0) === "not_winnable" && wide("some", 0) === "not_winnable", "a whole-city search with room is NOT winnable when AI never names them");
+ok(wide("some", 1) === "winnable", "a whole-city search IS winnable once AI names them at least once");
+ok(winnableOf({ tier: "some", repeatShare: 0, top: 2, answers: 6, scope: "specific", namedYou: 0 }) === "winnable", "a local search keeps the room rule");
 
 if (f) { console.log(`\n${f} FAILED`); process.exit(1); }
 console.log("\nall passed");

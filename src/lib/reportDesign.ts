@@ -423,9 +423,18 @@ function hookBody(m: ReportModel): string {
    The client-facing discovery says one of two words per search. Winnable = AI names firms and no single firm
    dominates (the room rule's Lots / Some room; a search where they are already named counts unless one firm owns
    it). Not winnable = AI names no firms, or one or two firms own the answer (Little room, "AI doesn't name firms
-   yet"). Searches about a service not on their site, and searches answered for another place, are left out. */
+   yet"). Searches about a service not on their site, and searches answered for another place, are left out.
+   ⛔ WHOLE-CITY SEARCHES (Paul, 2026-11-14): a search over a whole city / region / country ("best plumber in London",
+   reportOpportunity placeScope 'wide') is Not winnable unless AI already names the business there at least once: rotating
+   answers in a big city are a lottery among thousands of firms, not room. Local (borough / town / district) searches keep
+   the rule above. */
 export type WinnableVerdict = 'winnable' | 'not_winnable' | null;
-export function winnableOf(q: Pick<OppQuestion, 'tier' | 'repeatShare' | 'top' | 'answers'>): WinnableVerdict {
+export function winnableOf(q: Pick<OppQuestion, 'tier' | 'repeatShare' | 'top' | 'answers'> & Partial<Pick<OppQuestion, 'scope' | 'namedYou'>>): WinnableVerdict {
+  const verdict = baseWinnable(q);
+  if (verdict === 'winnable' && q.scope === 'wide' && !(Number(q.namedYou ?? 0) > 0)) return 'not_winnable';
+  return verdict;
+}
+function baseWinnable(q: Pick<OppQuestion, 'tier' | 'repeatShare' | 'top' | 'answers'>): WinnableVerdict {
   if (q.tier === 'lots' || q.tier === 'some') return 'winnable';
   if (q.tier === 'little' || q.tier === 'nofirms') return 'not_winnable';
   if (q.tier === 'named') {
@@ -452,7 +461,7 @@ function opportunityBody(m: ReportModel): string {
       ? win.map((q) => `<div class="rp-target"><h3>${esc(q.question)}</h3><p>${chip('y', 'Winnable')} ${esc(q.why)}</p></div>`).join('')
       : `<p class="rp-h-sub">None of these searches is winnable yet.</p>`) + `</section>`;
   const notPanel = not.length
-    ? `<section class="rp-panel"><h2 class="rp-h">Not winnable for now &middot; ${not.length}</h2><p class="rp-h-sub">AI names no firms for these, or one or two firms own the answer.</p>` +
+    ? `<section class="rp-panel"><h2 class="rp-h">Not winnable for now &middot; ${not.length}</h2><p class="rp-h-sub">AI names no firms for these, a few firms own the answer, or it is a whole-city search where AI doesn't name you yet.</p>` +
       not.map((q) => `<div class="rp-mini"><span>${esc(q.question)}</span>${chip('na', 'Not winnable')}</div>`).join('') + `</section>`
     : '';
   return `<p class="rp-line">${headlineText(m)}</p>` + winPanel + notPanel;
