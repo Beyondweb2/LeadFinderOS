@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-14-discovery-winnable-baseline', date: '2026-11-14', title: 'Discovery says Winnable or Not winnable, and Create baseline needs no new searches', audience: 'admin',
+    body: 'The discovery report now labels each search Winnable or Not winnable, with no AI answers and no competitor names. Create baseline on a discovery picks the 20 targeted searches from its own answers in a moment, lets you swap any, and makes a baseline report from them without asking AI again. Download PDF now gives a clean A4 document.',
+    report: {
+      added: ['Create baseline on a discovery: the 20 targeted searches, scored from the answers already collected, plus the website scan if there is no grade yet.', 'A Download PDF button on the report page itself.'],
+      changed: ['Discovery labels are only Winnable or Not winnable, winnable searches first, the rest as a short list.', 'Download PDF prints the new-style report on A4, with no browser header or footer, and keeps each card whole.'],
+      removed: ['From the discovery report: what AI said, competitor names, and the "not on your site yet" section.'],
+      effect: 'A discovery and its baseline can be sent as a link or a 2-4 page PDF. The baseline made this way is not the guarantee baseline: it starts no payment dates.',
+    } },
   { id: '2026-11-13-post-close-flow', date: '2026-11-13', title: 'New baseline report, website score and a fuller welcome pack', audience: 'admin',
     body: 'The client baseline report has the new look: your targeted searches grouped into named and not named yet, and a score for how easy the website is for AI to read. No competitors on it. The discovery page shows each search with its room label, who AI named instead and a real answer. The welcome pack adds the searches we track, the report link and the website score. Website Build fills itself in when you open it.',
     report: {

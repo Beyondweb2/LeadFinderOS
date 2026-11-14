@@ -287,6 +287,9 @@ verify_jwt = false
 # business-summary: the admin-only AI business briefing (release 6). Callers: the cron (Mondays,
 # x-cron-secret + x-internal-job, no JWT — hence false) and the admin (requireAdmin) for an on-demand
 # refresh (at most once an hour). Grounded in the dashboard's own numbers; writes one admin_summaries row.
+[functions.discovery-baseline]
+verify_jwt = false
+
 [functions.business-summary]
 verify_jwt = false
 

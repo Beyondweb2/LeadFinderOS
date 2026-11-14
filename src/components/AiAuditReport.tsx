@@ -16,7 +16,7 @@ import { renderReportHtml, type AiAuditReportData } from '@/lib/aiAuditReportHtm
 // resets to client on every open (the parent gives this component key={reportRunId}, so opening a
 // report remounts it and showInternal falls back to false). onDownload is handed the CURRENT choice
 // so print follows the view. The parent's snapshot may carry internal:true; this override decides.
-export function AiAuditReport({ data, onBack, onDownload, reportUrl, onReportCopied, onRegenerate, regenerating, onCompare, onConnectBusiness, connectedBusinessLabel, liveDesignUrl }: {
+export function AiAuditReport({ data, onBack, onDownload, reportUrl, onReportCopied, onRegenerate, regenerating, onCompare, onConnectBusiness, connectedBusinessLabel, liveDesignUrl, onCreateBaseline }: {
   data: AiAuditReportData;
   /** The live page in the new design (Discovery / client baseline, reportDesign.ts chooseReportDesign). When set, the
    *  Client view shows THAT page — exactly what the client's link shows — and Regenerate reloads it from the latest
@@ -37,6 +37,8 @@ export function AiAuditReport({ data, onBack, onDownload, reportUrl, onReportCop
   onConnectBusiness?: () => void;
   /** Present when this audit already uses the canonical ai_audits.lead_id relationship. */
   connectedBusinessLabel?: string;
+  /** A Discovery: open "Create baseline" (the 20 targeted searches from its own answers, 2026-11-14). */
+  onCreateBaseline?: () => void;
 }) {
   // Default false = CLIENT. Safety: never carry an internal state into the next report — the parent
   // remounts this component per report (key={reportRunId}), so every open starts on Client.
@@ -112,9 +114,16 @@ export function AiAuditReport({ data, onBack, onDownload, reportUrl, onReportCop
           {/* ⛔ NO PDF WHILE A RUN IS IN FLIGHT (2026-09-13). A PDF freezes a number that is about to
               change — AD Locksmithing's read "4 of 12" at 11:40 and "5 of 18" at 11:44. The preview
               itself shows the still-measuring banner; the button says why it is off. */}
+          {onCreateBaseline && (
+            <Button variant="outline" size="sm" onClick={onCreateBaseline} title="The 20 targeted searches from this Discovery's answers — nothing is asked again">
+              Create baseline
+            </Button>
+          )}
           <Button
             size="sm"
-            onClick={() => onDownload(showInternal)}
+            /* The new-design page prints itself (A4, no browser header/footer, cards kept whole): open it with the print
+               dialog up. The classic page and the Internal view keep the old download. */
+            onClick={() => (live && liveDesignUrl ? window.open(`${liveDesignUrl}${liveDesignUrl.includes('?') ? '&' : '?'}preview=1&print=1`, '_blank', 'noopener') : onDownload(showInternal))}
             disabled={!!data.measuring}
             title={data.measuring ? `Still measuring — ${data.measuring.runsDone} of ${data.measuring.runsTarget} runs done. The PDF would carry a number that is about to change.` : undefined}
           >

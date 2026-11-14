@@ -65,6 +65,10 @@ export const DISCOVERY_AUDIT_PURPOSE = 'discovery';
    served publicly since 15634d49, so that refusal is explicit, not inherited. Created only by fn
    weekly-visibility (create-ai-audit accepts it internally). */
 export const WEEKLY_CHECK_AUDIT_PURPOSE = 'weekly_check';
+/** A baseline built from a Discovery's own answers (discovery-baseline, 2026-11-14): the 20 targeted searches, nothing
+ *  asked again. NOT the guarantee baseline: it claims no pointer and starts no clock. Its report uses the baseline design. */
+export const TARGETED_AUDIT_PURPOSE = 'targeted';
+export const TARGETED_LABEL = 'Baseline from Discovery (20 targeted searches, not the guarantee baseline)';
 
 /** The audit kinds a reader can meet. */
 export type AuditKind =
@@ -325,5 +329,6 @@ export function auditRoleLabel(row: AuditKindRow | null | undefined): string {
   if (kind === 'measurement') return INTERNAL_MEASUREMENT_LABEL;
   if (kind === 'discovery') return DISCOVERY_LABEL;
   if (kind === 'free_check') return FREE_CHECK_LABEL;
+  if (purposeOf(row) === TARGETED_AUDIT_PURPOSE) return TARGETED_LABEL;
   return ORDINARY_AUDIT_LABEL;
 }

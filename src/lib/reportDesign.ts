@@ -27,6 +27,7 @@
 
 import { FINDABLE_CONTACT_WHATSAPP, REMEASURE_WEEKS_STANDARD } from './findableOffer.ts';
 import type { EngineFacts, OppFirm, OppQuestion, OppTier } from './reportOpportunity.ts';
+import { ROOM_LITTLE_AT, ROOM_LITTLE_TOP_ALL } from './reportOpportunity.ts';
 import type { ReportKind, ReportModel } from './reportModel.ts';
 
 export function esc(s: unknown): string {
@@ -206,7 +207,22 @@ h1,h2,h3,p{margin:0}a{color:inherit}
   .rp-tile{grid-template-columns:minmax(62px,auto) 1fr;padding:11px 14px}.rp-tile b{font-size:26px}
   .rp-foot{padding:22px 16px 18px}.rp-foot h3{font-size:21px}.rp-btn{display:flex;width:100%}.rp-foot-grid{grid-template-columns:1fr}
 }
-@media print{body{background:#fff}.rp-btn{display:none}}
+.rp-pdf{position:fixed;right:16px;bottom:16px;z-index:5;display:inline-flex;align-items:center;gap:6px;background:#fff;color:var(--ink);border:1px solid #dcd7cc;border-radius:999px;padding:10px 16px;font:700 14px/1 inherit;font-family:inherit;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.12)}
+/* PRINT / PDF (Paul, 2026-11-14): A4, no browser header/footer (zero page margin), no buttons, the sheet's padding
+   repeated on every page, colours kept, a card never split across pages, slightly smaller so a discovery is 2-4 pages
+   and a baseline 2-3. */
+@page{size:A4;margin:0}
+@media print{
+  html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .rp-btn,.rp-pdf{display:none!important}
+  .rp-sheet{max-width:none;zoom:.78;padding:9mm 0;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+  .rp-head,.rp-score,.rp-foot{border-radius:0}
+  .rp-score,.rp-today,.rp-rd,.rp-parts,.rp-target,.rp-mini,.rp-issue,.rp-tbl tr,.rp-foot,.rp-line,.rp-h,.rp-grp{break-inside:avoid;page-break-inside:avoid}
+  .rp-h,.rp-grp,.rp-tbl thead{break-after:avoid;page-break-after:avoid}
+  .rp-panel{break-inside:auto}
+  .rp-tbl th.rp-te{width:24%}.rp-tbl .rp-chip{font-size:10px;padding:4px 8px}
+  .rp-body{padding-top:14px}
+}
 `;
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -260,7 +276,8 @@ function scoreBlock(m: ReportModel): string {
     ? `<p class="rp-big rp-t-grey"><span class="rp-big-n" style="font-size:36px">No score yet</span></p>`
     : `<p class="rp-big rp-t-${tone}"><span class="rp-big-n">${s.value}%</span><span class="rp-big-w">of answers</span></p>`;
   /* ⛔ The client's baseline never names a competitor (Paul 2026-11-12; V2 baseline): months compare like for like. */
-  const top = m.kind === 'baseline' ? null : m.top;
+  /* The discovery is client-facing too now (Paul, 2026-11-14): no competitor is named on it either. */
+  const top = m.kind === 'hook' ? m.top : null;
   const line = s.value === null ? "AI didn't name any business in these answers."
     : m.kind === 'baseline' ? `AI named you in ${s.named} of ${s.answers} answers.`
       : `${s.named} of ${s.denominator} answers that named a business named you.${top ? ` ${esc(top.name)}: ${top.count}.` : ''}`;
@@ -402,46 +419,43 @@ function hookBody(m: ReportModel): string {
     websitePanel(m);
 }
 
-/** One AI answer as a chat bubble (the real words, cut short), the business's name marked where it appears. */
-function chatBubble(e: Eng, f: EngineFacts, business: string): string {
-  if (!f.snippet) return '';
-  const safe = esc(f.snippet);
-  const nm = esc(business);
-  const marked = nm && safe.includes(nm) ? safe.split(nm).join(`<mark>${nm}</mark>`) : safe;
-  return `<div class="rp-chat"><span class="rp-chat-av rp-chat-av--${ENGINE_KEY[e]}">${e === 'chatgpt' ? 'C' : 'G'}</span><div class="rp-chat-b"><small>${ENGINE_LABEL[e]} answered</small>${marked}</div></div>`;
+/* ═══ WINNABLE / NOT WINNABLE (Paul, 2026-11-14) ═══════════════════════════════════════════════
+   The client-facing discovery says one of two words per search. Winnable = AI names firms and no single firm
+   dominates (the room rule's Lots / Some room; a search where they are already named counts unless one firm owns
+   it). Not winnable = AI names no firms, or one or two firms own the answer (Little room, "AI doesn't name firms
+   yet"). Searches about a service not on their site, and searches answered for another place, are left out. */
+export type WinnableVerdict = 'winnable' | 'not_winnable' | null;
+export function winnableOf(q: Pick<OppQuestion, 'tier' | 'repeatShare' | 'top' | 'answers'>): WinnableVerdict {
+  if (q.tier === 'lots' || q.tier === 'some') return 'winnable';
+  if (q.tier === 'little' || q.tier === 'nofirms') return 'not_winnable';
+  if (q.tier === 'named') {
+    const owned = q.repeatShare >= ROOM_LITTLE_AT || (q.top * 6 >= q.answers * 5 && q.repeatShare >= ROOM_LITTLE_TOP_ALL);
+    return owned ? 'not_winnable' : 'winnable';
+  }
+  return null;
 }
+export const WINNABLE_LINE = "Winnable means there's room for you to be named. It is not a guarantee.";
 
 function opportunityBody(m: ReportModel): string {
-  const c = m.counts;
-  const room = c.lots + c.some;
-  /* A DISCOVERY (internal, Paul 2026-11-12 + 2026-11-13, V2's room labels): the searches where the business can get
-     named, each with its room label, the firms AI named instead, one real answer as a chat bubble, and why. Then the
-     searches with little room and those where AI names no firms yet, so the whole picture is on one page. Directories
-     never count as firms (reportOpportunity.ts); a whole-city search is capped at Some room. */
-  const rest = m.targets;
-  const business = shortName(m.businessName);
-  const flagNote = c.flagged ? ` ${plural(c.flagged, 'search', 'searches')} left out: AI answered for another place.` : '';
-  const line = esc(`${countsLine(c)}${flagNote}`);
-  const target = (q: OppQuestion) => {
-    const g = GROUP[q.tier];
-    const firms = q.firms.slice(0, 4);
-    const bubble = chatBubble('chatgpt', q.engines.chatgpt, business) || chatBubble('gemini', q.engines.gemini, business);
-    return `<div class="rp-target"><h3>${esc(q.question)}</h3><p>${chip(g.kind, g.label)} ${esc(q.why)}</p>` +
-      (firms.length ? `<div class="rp-inst-k" style="margin-top:8px">AI named instead</div>${pills(firms, 4)}` : '') + bubble + `</div>`;
-  };
-  const targets = rest.length
-    ? `<section class="rp-panel"><h2 class="rp-h">Searches where you can get named</h2><p class="rp-h-sub">${line}</p>${rest.map(target).join('')}</section>`
-    : `<section class="rp-panel"><h2 class="rp-h">Searches where you can get named</h2><p class="rp-h-sub">${line}${room ? '' : ' None with room yet.'}</p></section>`;
-  const listed = new Set(rest.map((q) => q.question));
-  const others = (['little', 'nofirms'] as OppTier[]).map((t) => {
-    const qs = m.all.filter((q) => q.tier === t && !listed.has(q.question));
-    if (!qs.length) return '';
-    const g = GROUP[t];
-    return `<p class="rp-grp">${esc(g.label)} &middot; ${qs.length}</p>` + qs.map((q) =>
-      `<div class="rp-mini"><span>${esc(q.question)}</span>${t !== 'nofirms' && q.firms.length ? `<span class="rp-np" title="${esc(q.firms[0].name)}">${esc(q.firms[0].name)}</span>` : ''}</div>`).join('');
-  }).join('');
-  const otherPanel = others ? `<section class="rp-panel"><h2 class="rp-h">The other searches</h2><p class="rp-h-sub">Left out of the targets for now.</p>${others}</section>` : '';
-  return `<p class="rp-line">${headlineText(m)}</p>` + targets + otherPanel;
+  /* SHORT AND CLEAN (Paul, 2026-11-14): the score, the winnable searches first, then the rest as a compact list.
+     No AI answer text and no competitor anywhere; each search keeps its one-line evidence (counts only). */
+  const live = m.all.map((q) => ({ q, v: winnableOf(q) })).filter((x) => x.v !== null);
+  const rank = (q: OppQuestion) => (q.tier === 'lots' ? 0 : q.tier === 'some' ? 1 : 2);
+  const win = live.filter((x) => x.v === 'winnable').map((x) => x.q).sort((a, b) => rank(a) - rank(b) || a.question.localeCompare(b.question));
+  const not = live.filter((x) => x.v === 'not_winnable').map((x) => x.q).sort((a, b) => a.question.localeCompare(b.question));
+  const offSite = m.counts.notonsite + m.counts.notoffered;
+  const flagNote = (m.counts.flagged ? ` ${plural(m.counts.flagged, 'search', 'searches')} left out: AI answered for another place.` : '') +
+    (offSite ? ` ${plural(offSite, 'search', 'searches')} about services not on your website left out.` : '');
+  const winPanel = `<section class="rp-panel"><h2 class="rp-h">Winnable searches &middot; ${win.length}</h2>` +
+    `<p class="rp-h-sub">${esc(`${win.length} of your ${plural(live.length, 'search', 'searches')} are winnable. ${WINNABLE_LINE}${flagNote}`)}</p>` +
+    (win.length
+      ? win.map((q) => `<div class="rp-target"><h3>${esc(q.question)}</h3><p>${chip('y', 'Winnable')} ${esc(q.why)}</p></div>`).join('')
+      : `<p class="rp-h-sub">None of these searches is winnable yet.</p>`) + `</section>`;
+  const notPanel = not.length
+    ? `<section class="rp-panel"><h2 class="rp-h">Not winnable for now &middot; ${not.length}</h2><p class="rp-h-sub">AI names no firms for these, or one or two firms own the answer.</p>` +
+      not.map((q) => `<div class="rp-mini"><span>${esc(q.question)}</span>${chip('na', 'Not winnable')}</div>`).join('') + `</section>`
+    : '';
+  return `<p class="rp-line">${headlineText(m)}</p>` + winPanel + notPanel;
 }
 
 /** "How easy your website is for AI to read" (aiReadability.ts): the number, the six parts, what is in the way. */
@@ -490,12 +504,16 @@ function baselineBody(m: ReportModel): string {
 
 /* ═══ The page ═══════════════════════════════════════════════════════════════════════════════ */
 
-export function renderReport(m: ReportModel): string {
+export function renderReport(m: ReportModel, opts: { print?: boolean } = {}): string {
   const body = m.kind === 'hook' ? hookBody(m) : m.kind === 'baseline' ? baselineBody(m) : opportunityBody(m);
+  /* "Download PDF" = the browser's own print-to-PDF of this page, laid out by the print CSS above. ?print=1 opens the
+     print dialog by itself (the app's Download PDF button uses it). */
+  const pdf = `<button class="rp-pdf" type="button" onclick="window.print()">Download PDF</button>`;
+  const auto = opts.print ? `<script>addEventListener('load',function(){setTimeout(function(){window.print()},400)})</script>` : '';
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
     `<meta name="viewport" content="width=device-width, initial-scale=1">` +
     `<meta name="robots" content="noindex, nofollow, noarchive"><title>${esc(shortName(m.businessName))} - AI search report</title>` +
-    `<style>${CSS}</style></head><body><div class="rp-sheet">${headBlock(m)}${scoreBlock(m)}<div class="rp-body">${body}</div>${footBlock(m)}</div></body></html>`;
+    `<style>${CSS}</style></head><body><div class="rp-sheet">${headBlock(m)}${scoreBlock(m)}<div class="rp-body">${body}</div>${footBlock(m)}</div>${pdf}${auto}</body></html>`;
 }
 export const renderOpportunityReport = (m: ReportModel): string => renderReport({ ...m, kind: 'opportunity' });
 export const renderHookReport = (m: ReportModel): string => renderReport({ ...m, kind: 'hook' });
@@ -522,6 +540,8 @@ export function chooseReportDesign(o: {
      (so months compare like for like), plus "How easy your website is for AI to read". The day-28 re-measure keeps the
      classic before/after page. The discovery, which is for us, uses the opportunity design. */
   if (o.paidKind === 'baseline') return 'baseline';
+  /* The baseline built from a Discovery's own answers (auditKind TARGETED_AUDIT_PURPOSE, 2026-11-14): same design. */
+  if (String(o.auditPurpose ?? '').trim().toLowerCase() === 'targeted') return 'baseline';
   if (o.paidKind) return null;
   if (String(o.auditPurpose ?? '').trim().toLowerCase() === 'discovery') return 'opportunity';
   return null;
