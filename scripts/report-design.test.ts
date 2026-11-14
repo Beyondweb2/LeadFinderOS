@@ -170,7 +170,7 @@ const tLots = text(renderReport(mLots));
 ok(mLots.counts.lots === 3 && mLots.counts.some === 2 && mLots.counts.little === 0 || mLots.counts.lots >= 1, "counts come from the stored answers");
 ok(/\d+ of your 5 searches are winnable\./.test(tLots) && /Winnable searches/.test(tLots) && /Winnable means there's room for you to be named\. It is not a guarantee\./.test(tLots), "the winnable count, the section title and the one-line not-a-guarantee rule");
 ok(/Not winnable for now/.test(tLots) && tLots.indexOf("Winnable searches") < tLots.indexOf("Not winnable for now"), "winnable searches first, then the rest as a compact list");
-ok(/6 answers named 12 different firms/.test(tLots), "each search shows its proof (\"6 answers named 12 different firms\")");
+ok(/AI names different firms each time\./.test(tLots) && !/answers named \d+ different firms|come up in most/.test(tLots), "each winnable search says why in plain words, never answer counts (Paul, 2026-11-14)");
 ok(countsLine({ lots: 0, some: 2, little: 1, nofirms: 0, named: 0, flagged: 0, notoffered: 0, room: 3, searches: 3 }).startsWith("AI repeats a few firms but changes the rest for 2 of your 3 searches.") && countsLine({ lots: 0, some: 0, little: 4, nofirms: 0, named: 0, flagged: 0, notoffered: 0, room: 4, searches: 4 }).startsWith("AI names the same few firms for most of your 4 searches."), "no lots of room: the line says so plainly");
 // edge: already named a lot (keep and grow)
 const highRows = ["plumber in Bow", "plumber in Hackney", "electrician in Bow"].flatMap((s) => rowsFor(s, [["YOU", "A"], ["YOU", "B"], ["YOU"], ["YOU", "A"], ["B"], ["YOU"]]));
@@ -208,7 +208,7 @@ const withRival = text(renderReport({ ...model(mixed, "baseline"), rivals: [{ na
 ok(!withRival.includes("Zedd Plumbing Co"), "client baseline: a competitor never appears, even the top one");
 const mHook = buildReportModel(mixed.slice(0, 3), { ...ctx, town: "London", siteText: undefined }, { kind: "hook", businessName: "Acme Heating Ltd", town: "London", dateLabel: "11 Nov 2026", website: issuesSite });
 ok(/Featured search/.test(text(renderReport(mHook))) && !/All searches we asked/.test(text(renderReport(mHook))), "first-contact report: the featured search, then the website findings (no all-searches table)");
-ok(/left out: AI answered for another place/.test(text(renderReport({ ...mOpp, counts: { ...mOpp.counts, flagged: 2 } }))), "searches AI answered for the wrong place are named, not counted");
+ok(!/left out/.test(text(renderReport({ ...mOpp, counts: { ...mOpp.counts, flagged: 2, notonsite: 3 } }))), "the discovery shows no 'left out' note (Paul, 2026-11-14); left-out searches are simply not listed");
 const evil = renderReport({ ...mOpp, businessName: "A<script>x</script>", rivals: [{ name: "<img src=x>", count: 3 }], top: { name: "<img src=x>", count: 3 } });
 ok(!/<script>x|<img src=x>/.test(evil), "business and firm names are escaped");
 ok(shortName("London Domestic Maintenance Ltd") === "London Domestic Maintenance" && shortName("Ltd") === "Ltd", "shortName drops a trailing Ltd only");

@@ -444,7 +444,12 @@ function baseWinnable(q: Pick<OppQuestion, 'tier' | 'repeatShare' | 'top' | 'ans
   }
   return null;
 }
-export const WINNABLE_LINE = "Winnable means there's room for you to be named. It is not a guarantee.";
+/** The one plain line beside a winnable search: why it is open, in words, never counts (Paul, 2026-11-14). */
+export function winnableWhy(q: Pick<OppQuestion, 'tier' | 'namedYou'>): string {
+  if (q.namedYou > 0) return 'AI already names you here.';
+  return q.tier === 'lots' ? 'AI names different firms each time.' : 'A few firms repeat, the rest change.';
+}
+export const WINNABLE_LINE ="Winnable means there's room for you to be named. It is not a guarantee.";
 
 function opportunityBody(m: ReportModel): string {
   /* SHORT AND CLEAN (Paul, 2026-11-14): the score, the winnable searches first, then the rest as a compact list.
@@ -453,13 +458,11 @@ function opportunityBody(m: ReportModel): string {
   const rank = (q: OppQuestion) => (q.tier === 'lots' ? 0 : q.tier === 'some' ? 1 : 2);
   const win = live.filter((x) => x.v === 'winnable').map((x) => x.q).sort((a, b) => rank(a) - rank(b) || a.question.localeCompare(b.question));
   const not = live.filter((x) => x.v === 'not_winnable').map((x) => x.q).sort((a, b) => a.question.localeCompare(b.question));
-  const offSite = m.counts.notonsite + m.counts.notoffered;
-  const flagNote = (m.counts.flagged ? ` ${plural(m.counts.flagged, 'search', 'searches')} left out: AI answered for another place.` : '') +
-    (offSite ? ` ${plural(offSite, 'search', 'searches')} about services not on your website left out.` : '');
+  /* No "left out" note and no answer counts on the page (Paul, 2026-11-14): one plain line per winnable search. */
   const winPanel = `<section class="rp-panel"><h2 class="rp-h">Winnable searches &middot; ${win.length}</h2>` +
-    `<p class="rp-h-sub">${esc(`${win.length} of your ${plural(live.length, 'search', 'searches')} are winnable. ${WINNABLE_LINE}${flagNote}`)}</p>` +
+    `<p class="rp-h-sub">${esc(`${win.length} of your ${plural(live.length, 'search', 'searches')} are winnable. ${WINNABLE_LINE}`)}</p>` +
     (win.length
-      ? win.map((q) => `<div class="rp-target"><h3>${esc(q.question)}</h3><p>${chip('y', 'Winnable')} ${esc(q.why)}</p></div>`).join('')
+      ? win.map((q) => `<div class="rp-target"><h3>${esc(q.question)}</h3><p>${chip('y', 'Winnable')} ${esc(winnableWhy(q))}</p></div>`).join('')
       : `<p class="rp-h-sub">None of these searches is winnable yet.</p>`) + `</section>`;
   const notPanel = not.length
     ? `<section class="rp-panel"><h2 class="rp-h">Not winnable for now &middot; ${not.length}</h2><p class="rp-h-sub">AI names no firms for these, a few firms own the answer, or it is a whole-city search where AI doesn't name you yet.</p>` +
