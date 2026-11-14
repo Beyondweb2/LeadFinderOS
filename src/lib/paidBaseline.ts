@@ -16,6 +16,9 @@ export type PaidBaseline = {
   services_list: string[];
   areas_list: string[];
   website: string;
+  /** The 20 targeted searches of the newest baseline made from a Discovery (discovery-baseline): offered as the draft,
+   *  so the paid flow runs a fresh baseline on the same 20 (Paul, 2026-11-14). Absent = none made. */
+  targeted?: { audit_id: string; short_code: string | null; created_at: string | null; questions: string[] } | null;
   context_sources?: {
     service_sources?: Record<string, string[]>;
     area_sources?: Record<string, string[]>;

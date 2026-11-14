@@ -239,6 +239,16 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
     setHookReasons({});
     void act('generate', 'generate', contextOf(data));
   };
+  /* THE SAME 20 AS BEFORE THE SALE (Paul, 2026-11-14): the targeted searches made from the Discovery become the draft,
+     and Approve, freeze & run measures them FRESH for the guarantee. Saved as a draft; nothing is frozen here. */
+  const useTargeted = () => {
+    const t = data?.targeted;
+    if (!data || !t?.questions.length) return;
+    if (cleanAuditQuestions(questions).length && !window.confirm('Replace the draft on screen with the 20 targeted searches? Nothing is frozen until you approve.')) return;
+    setHookReasons({});
+    setQuestions(t.questions);
+    void act('save', 'save', { questions: t.questions });
+  };
   const generateDiscovery = () => data && act('discovery', 'discovery_generate');
   const runDiscovery = () => {
     if (!data?.discovery) return;
@@ -307,6 +317,12 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
       </CollapsibleBlock>
       <HookAuditStep data={data}/>
       <DiscoverySection data={data} questions={questions} busy={!!busy} frozen={frozen} onGenerate={() => void generateDiscovery()} onRun={runDiscovery} onAdd={addFromDiscovery}/>
+      {!frozen && data.targeted && data.targeted.questions.length > 0 && <section className="rounded-2xl border border-emerald-300 bg-emerald-50 p-3 text-sm dark:border-emerald-800 dark:bg-emerald-950/30">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p><b>{data.targeted.questions.length} targeted searches</b> were chosen from the Discovery before the sale{data.targeted.created_at ? ` (${new Date(data.targeted.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })})` : ''}. Use them, and the paid baseline measures the same searches fresh.</p>
+          <Button size="sm" disabled={!!busy} onClick={useTargeted}>Use the {data.targeted.questions.length} targeted searches</Button>
+        </div>
+      </section>}
       {!frozen && <RecommendationStep data={data} busy={!!busy} frozen={frozen} draftIsRecommendation={draftIsRecommendation} onUse={generate}/>}
       <OfficialBaseline data={data} questions={questions} onChange={setQuestions} frozen={frozen} busy={!!busy} hookReasons={hookReasons}
         onHookReason={(q, reason) => setHookReasons((cur) => ({ ...cur, [q]: reason }))}
