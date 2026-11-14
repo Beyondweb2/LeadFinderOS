@@ -164,5 +164,10 @@ console.log("\n── EXHAUSTIVE: all 3×3×4 fact combinations, and the invaria
   ok(violations === 0, "archivable ONLY when every check ran and every one was negative");
 }
 
+/* A baseline made from a Discovery ('targeted', 2026-11-14) backs no guarantee: its repeat runs do not protect it. */
+ok(!auditProtection({ ...PLAIN, baselineTargetRuns: 3, auditPurpose: "targeted" }).isProtected, "a Discovery-made baseline (targeted) for a prospect can be archived");
+ok(auditProtection({ ...PLAIN, baselineTargetRuns: 3, auditPurpose: "targeted", leadIsPaying: true }).isProtected, "…but not once the lead is paying");
+ok(auditProtection({ ...PLAIN, baselineTargetRuns: 3, auditPurpose: "baseline" }).isProtected && auditProtection({ ...PLAIN, baselineTargetRuns: 3 }).isProtected, "a real baseline, or a multi-run audit with no purpose, stays protected");
+
 console.log(f === 0 ? "\nALL PASS" : `\n${f} FAILURES`);
 process.exit(f === 0 ? 0 : 1);
