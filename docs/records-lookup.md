@@ -22,6 +22,7 @@ Moved verbatim from CLAUDE.md §10 on 2026-10-15. Add a row here when you write 
 | WhatsApp media access for Sales, the Inbox height/header layout, sending an image/video/document | `docs/inbox-media-and-layout.md` |
 | The Sales Dashboard, the prospect workspace, contact logging, sign-up link tracking, the post-payment GBP step | `docs/sales-readiness.md` (+ `supabase/tests/sales-readiness.sql`, re-runnable, always rolled back) |
 | Domain ownership / authority, the domain onboarding pages, ending a service over a dispute, the terms / refunds carve-out | `docs/domain-authority.md` (+ `supabase/tests/domain-authority.sql`) |
+| Add a lead: Fill from website, the short form / More details, Ireland in AI audits | `docs/add-lead-from-website.md` (+ `scripts/lead-from-website.test.ts`) |
 | Add a lead, services/areas on a prospect, the Sales Hook Audit / crawl / report share, sold_by, READY / MISSING, the PAID email's handoff lines | `docs/self-sourced-handoff.md` (+ `supabase/tests/self-sourced-handoff.sql`, re-runnable, always rolled back) |
 | A salesperson's bulk pre-call check, its allowance, reuse windows, the job model | `docs/pre-sales-certification/fixes-07-sales-bulk-audit.md` (+ `fixes-07-rollback-qa.sql`, always rolled back) |
 | Campaigns, the lead popup's four tabs, the Close branching, the sales talking points and their sources, tap ≠ contact | `docs/pre-sales-certification/sales-workspace-v2.md` |

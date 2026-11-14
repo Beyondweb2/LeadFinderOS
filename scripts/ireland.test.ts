@@ -70,6 +70,12 @@ eq(resolveCoverageTown('Ireland', 'Lahinch, Ireland')?.listed, false, 'unlisted 
 eq(townPopulation('Ireland', 'Dublin').population, null, 'no invented population');
 eq(populationFilterShown('Ireland'), false, 'no population filter without figures');
 
+// Forced-local prompt: "ireland" is not a banned word for an Irish audit (its place is "Westport, Ireland"); still banned otherwise
+{
+  const src = (await import("node:fs")).readFileSync("supabase/functions/create-ai-audit/index.ts", "utf8");
+  ok(src.includes('.filter((w) => !(abroadQ === "Ireland" && w === "ireland"))') && src.includes('NEVER use country/region/national terms (${FORCED_LOCAL_BANNED})'), "forced-local ban list drops ireland only for an Irish audit");
+}
+
 // Not a messaging market
 eq(mobileMarketOf('353851234567'), null, 'no cold WhatsApp market for 353');
 eq(callMarketOf('353851234567'), null, 'not callable from the browser');

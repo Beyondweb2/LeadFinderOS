@@ -2181,8 +2181,13 @@ async function generateQuestions(
 
   // 'local'/'national' hard-force the matching rule set (no classification); 'hybrid'/null
   // keep the original "classify from the location" heuristic verbatim.
+  /* ⛔ IRELAND (2026-11-14): an Irish audit's place is written "Westport, Ireland", so "ireland" cannot also be a banned
+     national word there (the ban contradicted the place rule; qualifyPlace re-added the country afterwards). Every other
+     country keeps the full list — "ireland" stays banned for a UK lead (Northern Ireland is UK). */
+  const FORCED_LOCAL_BANNED = ["uk", "united kingdom", "england", "britain", "scotland", "wales", "ireland", "nationwide", "national", "online", "remote"]
+    .filter((w) => !(abroadQ === "Ireland" && w === "ireland")).map((w) => `"${w}"`).join(", ");
   const scopeGuidance = forceLocal
-    ? `SCOPE — FORCED LOCAL: This business is LOCAL to ${locQ}. Generate LOCAL questions ONLY; do NOT classify, and NEVER use country/region/national terms ("uk", "united kingdom", "england", "britain", "scotland", "wales", "ireland", "nationwide", "national", "online", "remote") or the "[service] for [audience] [country]" pattern.
+    ? `SCOPE — FORCED LOCAL: This business is LOCAL to ${locQ}. Generate LOCAL questions ONLY; do NOT classify, and NEVER use country/region/national terms (${FORCED_LOCAL_BANNED}) or the "[service] for [audience] [country]" pattern.
 
 ${ALWAYS_RULES}
 

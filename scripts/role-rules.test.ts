@@ -87,7 +87,7 @@ const ROLE_REQUIRED = [
   "sales-performance", "social-profiles", "ai-reply-drafts",
 ];
 for (const fn of ROLE_REQUIRED) ok(/resolveActor\(req, /.test(read(`supabase/functions/${fn}/index.ts`)), `${fn} resolves the caller's role server-side`);
-for (const fn of ["google-place-details", "check-website", "extract-email", "extract-facebook", "review-reply", "scan-site-details"]) {
+for (const fn of ["google-place-details", "check-website", "extract-email", "extract-facebook", "review-reply", "scan-site-details", "lead-from-website"]) {
   ok(/userTeamRole\(/.test(read(`supabase/functions/${fn}/index.ts`)), `${fn} requires a team role`);
 }
 ok(/pickRole\(roleRows\)/.test(read("supabase/functions/search-leads/index.ts")), "search-leads requires a team role (admin or sales)");

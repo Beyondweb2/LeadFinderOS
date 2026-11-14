@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-14-add-lead-from-website', date: '2026-11-14', title: 'Add a lead you found: paste the website and press Fill from website', audience: 'all',
+    body: 'On Add a lead you found, paste the business website and press Fill from website. It fills the name, trade, phone, email, address, town, services and areas, but only what the site itself says. Anything the site does not say stays blank, and anything you typed is kept. The form is shorter now: Website, Name, Trade, Town, Phone (or a Maps link) and Where found are up front. Everything else is under More details, including Country.',
+    report: {
+      added: ['A Fill from website button on Add a lead you found.', 'If a site blocks automated readers, the form says so, and the lead gets a website finding once it is added.'],
+      changed: ['Only six fields show up front; the rest are under More details.', 'The phone box also takes a Google Maps link.', 'Irish AI audits no longer give the AI a mixed message about writing "Ireland" in local questions.'],
+      removed: [],
+      effect: 'Adding a lead you found takes a paste and a click. Check the filled fields before you add it.',
+    } },
   { id: '2026-11-14-whole-city-not-winnable', date: '2026-11-14', title: 'Whole-city searches are Not winnable unless AI already names you', audience: 'admin',
     body: 'A search over a whole city, like "best plumber in London", now counts as Not winnable unless AI already names the business there at least once. Rotating answers in a big city are a lottery among thousands of firms. Local searches (a borough, town or district) keep the same rule. Discovery reports update by themselves; Create baseline uses the new rule too.',
     report: {

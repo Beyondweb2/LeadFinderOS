@@ -221,7 +221,8 @@ console.log('\n── Add a lead (Sales + Admin share it) asks for the country �
   const d = read('src/components/AddLeadDialog.tsx');
   ok(!/country: 'UK', address/.test(d) && /country: f\.country, address/.test(d), 'no hard-coded UK; the chosen country is sent');
   ok(/data-testid="add-lead-country"/.test(d) && !/value: 'India'/.test(d) && /country: 'UK', businessName/.test(d), 'a Country field, UK by default, India no longer offered (2026-10-15)');
-  ok(/if \(f\.country !== 'UK' && f\.phone\.trim\(\)\)/.test(d) && /internationalPhone\(f\.phone, f\.country\)/.test(d), 'a non-UK number is stored in international form; a UK one exactly as typed');
+  /* 2026-11-14: the phone box may hold a Maps link, so the number is `phone` (the box minus a Maps link). */
+  ok(/if \(f\.country !== 'UK' && phone\.trim\(\)\)/.test(d) && /internationalPhone\(phone, f\.country\)/.test(d),'a non-UK number is stored in international form; a UK one exactly as typed');
 }
 
 console.log('\n── Free-check / backfill place resolver sends a real region code ──');
