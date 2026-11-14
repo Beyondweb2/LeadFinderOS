@@ -1204,6 +1204,7 @@ const AiAudit = () => {
       baselineTargetRuns: a.baseline_target_runs ?? null,
       isMeasurement: a.is_measurement ?? null,
       leadIsPaying,
+      auditPurpose: (a as { audit_purpose?: string | null }).audit_purpose ?? null,
     };
   }, []);
 
@@ -2204,7 +2205,8 @@ const AiAudit = () => {
       ? Math.round((rated.reduce((s, b) => s + (b.latestRun!.mention_rate as number), 0) / rated.length) * 100)
       : null;
     const invisible = businesses.filter((b) => b.latestRun?.mention_rate === 0).length;
-    const baselineAudits = savedAudits.filter((a) => Number(a.baseline_target_runs ?? 0) > 1);
+    /* Paid baselines only: a Discovery and a baseline made from one ('targeted') run several times too but back no guarantee. */
+    const baselineAudits = savedAudits.filter((a) => Number(a.baseline_target_runs ?? 0) > 1 && !['discovery', 'targeted'].includes(String((a as { audit_purpose?: string | null }).audit_purpose ?? '')));
     const baselinesDone = baselineAudits.filter((a) => !!a.baseline_completed_at).length;
     const spend = businesses.reduce((sum, b) => sum + b.cost, 0);
     return {

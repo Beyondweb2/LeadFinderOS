@@ -40,6 +40,9 @@ export interface AuditProtectionFacts {
    *  `null` = the check did not run or failed. An audit with no lead at all is `false`, not
    *  `null` — "no lead" is a known answer, not an unknown one. */
   leadIsPaying: boolean | null;
+  /** ai_audits.audit_purpose. A baseline made from a Discovery ('targeted', discovery-baseline) backs no guarantee, so its
+   *  repeat-run count does NOT make it a paid baseline (2026-11-14). Absent = the old rule. */
+  auditPurpose?: string | null;
 }
 
 export interface ProtectionVerdict {
@@ -78,7 +81,7 @@ export function auditProtection(facts: AuditProtectionFacts): ProtectionVerdict 
      audit row itself. `> 0` rather than merely non-null: a stored 0 would mean no repeat runs
      were ever targeted, and reading that as a baseline would protect every ordinary audit that
      happened to carry a zero. */
-  if (typeof facts.baselineTargetRuns === 'number' && facts.baselineTargetRuns > 0) {
+  if (typeof facts.baselineTargetRuns === 'number' && facts.baselineTargetRuns > 0 && String(facts.auditPurpose ?? '').trim() !== 'targeted') {
     reasons.push('paid_baseline');
   }
 
