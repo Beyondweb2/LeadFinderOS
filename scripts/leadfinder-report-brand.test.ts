@@ -10,7 +10,9 @@ import { resolve } from "node:path";
 import { buildReportModel, type WebsiteSection } from "../src/lib/reportModel.ts";
 import type { OppContext, OppRow } from "../src/lib/reportOpportunity.ts";
 import { renderLeadfinderReport, renderLeadfinderMeasuring, renderLeadfinderUnavailable, LFOS_FAVICON } from "../src/lib/leadfinderReport.ts";
-import { isLfosReportHost, lfosReportUrl, reportStyleOf, LFOS_CTA_LINE } from "../src/lib/reportBrand.ts";
+import { isLfosReportHost, lfosReportUrl, reportStyleOf, LFOS_CTA_LINE, LFOS_EXAMPLE_URL } from "../src/lib/reportBrand.ts";
+import { renderLeadfinderExample } from "../src/lib/leadfinderExample.ts";
+const SHORT_RE = /^[23456789abcdefghjkmnpqrstuvwxyz]{6}$/i;
 import { isWebdevTrade, webdevHookQuestions } from "../src/lib/webdevReport.ts";
 
 let f = 0;
@@ -85,6 +87,25 @@ const wq = webdevHookQuestions("Sutton UK");
 ok(wq.length === 3 && wq[0] === "Who is the best web designer in Sutton UK?" && /SEO/.test(wq[1]) && /website/.test(wq[2]) && wq.every((q) => q.includes("Sutton UK")), "three searches about their trade, in their area");
 const caa = read("supabase/functions/create-ai-audit/index.ts");
 ok(caa.includes("if (isWebdevTrade(ctx.trade) && hookPlace.trim()) return webdevHookQuestions(hookPlace);"), "the hook plan uses them for a web-dev trade");
+
+/* "Where you stand": already named beside not named yet, each with its room label AND evidence, and the not-guarantees line. */
+ok(r.includes("Where you stand") && r.includes("Already named") && r.includes("Not named yet") && /How the room is read[^<]*not guarantees/.test(r), "the already named / not named yet split, with the rule and the not-guarantees line");
+ok(!/winnab/i.test(r), "no winnability wording");
+ok(!pages.notJudgeable.includes("Where you stand"), "no split when the name match cannot be judged");
+
+/* The permanent example at /r/example (src/lib/leadfinderExample.ts). */
+const ex = renderLeadfinderExample(); const exPrint = renderLeadfinderExample({ print: true });
+for (const [k, html] of Object.entries({ example: ex, examplePdf: exPrint })) {
+  ok(!/findable/i.test(html) && !/lovable/i.test(html), `${k}: no Findable, no Lovable`);
+  ok(html.indexOf("Example report · sample data") > -1 && html.indexOf("Example report · sample data") < html.indexOf('class="lf-head"'), `${k}: "Example report · sample data" at the top`);
+}
+ok(!/\.lf-sample[^}]*display:none/.test(ex) && !/@media print\{[^]*lf-sample[^]*\}/.test(ex.replace(/\.lf-pdf,\.lf-btn[^}]*\}/, "")), "the sample band is not hidden in the PDF");
+ok(/Already named[\s\S]*Keep and grow[\s\S]*Not named yet[\s\S]*Lots of room[\s\S]*Little room/.test(ex), "example: already named and room searches, each graded");
+ok(ex.includes("What we found on the website") && ex.includes("lf-serious") && ex.includes("Named instead") && ex.includes("Vale Heating Co") && ex.includes("✓ Named you") && ex.includes("✕ Not named"), "example: website check, competitors named instead, both verdicts");
+ok(ex.includes(LFOS_CTA_LINE) && exPrint.includes("window.print()"), "example: the CTA, and ?print=1 prints");
+ok(LFOS_EXAMPLE_URL === "https://app.leadfinderos.com/r/example", "the example link");
+ok(/if \(code\.toLowerCase\(\) === EXAMPLE_SLUG\) \{/.test(fn) && fn.indexOf("=== EXAMPLE_SLUG") < fn.indexOf("await fetch("), "/r/example is answered before any fetch: no database read, no opens counted");
+ok(!SHORT_RE.test("example"), "\"example\" can never be a real short code");
 
 if (f) { console.log(`\n${f} FAILED`); process.exit(1); }
 console.log("\nall passed");

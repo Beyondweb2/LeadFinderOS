@@ -17,6 +17,7 @@
 
 import { isLfosReportHost } from "../../src/lib/reportBrand.ts";
 import { LFOS_FAVICON } from "../../src/lib/leadfinderReport.ts";
+import { EXAMPLE_SLUG, renderLeadfinderExample } from "../../src/lib/leadfinderExample.ts";
 
 const SUPABASE_URL = "https://ruusxpkkmwtljxxulhbq.supabase.co";
 /* Public anon key — safe to embed (it ships in the SPA bundle and in findable-site's report proxies). render-audit-report is
@@ -60,6 +61,14 @@ export const onRequest = async (context: { request: Request; params: Record<stri
   if (!isLfosReportHost(reqUrl.hostname)) return gone();
   if (context.request.method !== "GET" && context.request.method !== "HEAD") return notFound();
   const code = String(context.params.slug || "").trim();
+  /* /r/example (Paul, 2026-11-15): the permanent sample report, built here from fixed made-up rows (src/lib/leadfinderExample.ts).
+     Answered BEFORE any fetch: no database read, no lead, no opens counted. "example" is 7 letters, so it never matches a code. */
+  if (code.toLowerCase() === EXAMPLE_SLUG) {
+    return new Response(renderLeadfinderExample({ print: reqUrl.searchParams.get("print") === "1" }), {
+      status: 200,
+      headers: { "content-type": "text/html; charset=utf-8", "x-robots-tag": NOINDEX, "cache-control": "public, max-age=300" },
+    });
+  }
   if (!SHORT_CODE_RE.test(code)) return notFound();
   try {
     const qs = new URLSearchParams({ slug: code.toLowerCase(), brand: "leadfinderos" });

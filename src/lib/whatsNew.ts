@@ -31,6 +31,13 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       changed: ['Testimonials, named owners, start years, street addresses and FAQ sections are read more fully, so fewer false "not found" points.', 'Older checks (made before today) no longer show the kinds the test found unreliable, until the lead is checked again.', 'A homepage that times out is tried once more with a longer wait before "couldn\'t check".'],
       removed: ['"This link goes to the wrong page" guesses (right 1 time in 7). Only a phone linked as an email, or the reverse, is still said.', 'Dead links and missing accreditations from client reports, drafted replies and voice notes (team screens still show them).'],
       effect: 'What the website check tells a business about its own site is now almost always true, and the points we are less sure of stay internal.',
+  { id: '2026-11-15-leadfinderos-example-report', date: '2026-11-15', title: 'LeadFinderOS example report, and the Web dev example template', audience: 'all',
+    body: 'There is now a permanent example report at /r/example on the app address: a made-up business, clearly marked "Example report · sample data" on screen and in the PDF. It is never linked to a real lead and never counts opens. The new WhatsApp template "Web dev example" (a follow-up only, like Web dev report) sends the app pitch with that example link. LeadFinderOS reports also gain a "Where you stand" section: the searches AI already names the business on, beside the ones it does not yet, each with its evidence.',
+    report: {
+      added: ['The example report at /r/example (sample data, no lead, no opens counted).', 'WhatsApp template Web dev example, in both pickers, with Put in message box.', '"Where you stand" on LeadFinderOS reports: already named vs not named yet, graded by the room rule with its evidence.'],
+      changed: [],
+      removed: [],
+      effect: 'Web developers can see what their clients would get before they have a report of their own. Findable reports are unchanged.',
     } },
   { id: '2026-11-15-leadfinderos-report-cta', date: '2026-11-15', title: 'LeadFinderOS report: a proper sign-up section and its own icon', audience: 'all',
     body: 'The bottom of the LeadFinderOS report (web-dev campaigns) is now a LeadFinderOS-themed sign-up section: the headline "Run reports like this for your clients", a big "Start free at leadfinderos.com" button, and four steps saying what the app does. There is a "Try it free" button in the header and, on phones, a small bar at the bottom. The page now shows the LeadFinderOS icon in the browser tab instead of the old Lovable one.',
