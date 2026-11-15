@@ -40,6 +40,14 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       removed: [],
       effect: 'You can open a conversation with a short question. Every cold WhatsApp rule (UK mobiles, daily cap, opt-outs) still applies to it.',
     } },
+  { id: '2026-11-15-audit-crowding-rule', date: '2026-11-15', title: 'Audit reports: Already named, Winnable, Not winnable', audience: 'admin',
+    body: 'On reports made with the new audit rules, a search is now Not winnable when the top 3 firms take 70% or more of every firm AI names for it (and most answers name firms). This replaces the closed-list rule, which almost never fired because AI answers always shuffle a little. Each report now shows "Already named X · Winnable Y · Not winnable Z" and lists the searches in those three groups; the Past audits row shows the same three numbers. Older reports are unchanged.',
+    report: {
+      added: ['"Already named X · Winnable Y · Not winnable Z" on new-rules reports and their Past audits rows.', 'An Already named group on the report.'],
+      changed: ['Not winnable now means crowded: the top 3 firms take 70% or more of the mentions.'],
+      removed: ['The closed-list rule.'],
+      effect: 'Moments now reads Already named 13 · Winnable 25 · Not winnable 2 instead of 40 of 40 Winnable. Older reports and links already sent look the same.',
+    } },
   { id: '2026-11-15-past-audits-clear', date: '2026-11-15', title: 'Past audits: one clear row per audit', audience: 'admin',
     body: 'On the AI Audit page, Moments Wedding Content, London Domestic Maintenance and every audit made from now on show the new rows (older audits look as before). Each audit is now its own row with a big coloured type badge (Discovery, Baseline, Quick check, Website check), the pooled result for the whole audit (named % and Winnable X of N, the same numbers as its report), an Open report button and the opened count. Runs are folded under Show runs; older audits of a business fold under N older audits; a running audit shows live progress. Re-scored copies say Re-scored (new rules) and show no cost. The business header shows the named % of the latest audit, matching its report.',
     report: {

@@ -7,9 +7,9 @@
      1. VISIBLE     — the business is named (strict name match, strictName.ts) in ANY answer -> Winnable,
                       "Already visible: X of N". Beats everything below.
      -  left out    — a service they don't offer / not on their site yet (unchanged from before).
-     2. CLOSED      — the list is closed: every answer names firms and the SAME firms fill every spot in every answer, no
-                      other firm ever appears -> Not winnable, the locking firms stored. Winnable means room to be NAMED,
-                      not to come first, so a firm that is always there is only "one to beat" (Paul, 2026-11-15, fix 1).
+     2. CROWDED     — most answers name firms of the right trade and the top 3 firms take at least CROWDED_AT of every
+                      mention -> Not winnable, those firms stored (Paul, 2026-11-15, replaces the closed-list rule:
+                      answers always shuffle a little, so "the same firms in every spot" almost never fired).
      3. OPEN        — any spot rotates -> Winnable; repeat firms stored as "ones to beat" ("Names change" / "A few repeat"),
                       a firm in 5+ of 6 answers marked "always there".
      4. NO LEADER   — nobody named in most answers on BOTH engines -> Winnable "No clear leader" + why
@@ -44,9 +44,16 @@ export function auditRulesFor(o: { createdAt: string | null | undefined; runRule
   return Number.isFinite(t) && t >= Date.parse(AUDIT_RULES_V2_FROM) ? 2 : 1;
 }
 
+/** RULE 2's line: the top 3 firms' share of every firm mention at which a search is crowded (Not winnable). Chosen from
+ *  the stored Moments (ukuarx) and LDM (f7n6d2) answers; the table is in docs/AUDIT_RULES.md. */
+export const CROWDED_AT = 0.7;
+/** How many firms count as "the top". */
+export const CROWD_TOP = 3;
+
+/** 'closed' is the retired rule 2 (kept so an old verdicts_v2 snapshot still reads); new verdicts say 'crowded'. */
 export type VerdictRule =
   | 'rerun' | 'unnatural' | 'left_out'
-  | 'visible' | 'closed' | 'open' | 'no_leader' | 'directory_gap' | 'category_gap' | 'local_gap';
+  | 'visible' | 'crowded' | 'closed' | 'open' | 'no_leader' | 'directory_gap' | 'category_gap' | 'local_gap';
 export type EmptyWhy = 'general advice' | "doesn't know anyone" | 'refused';
 
 /** One answer, already read: who it named, which directories, whether it failed or answered for another place. */
@@ -78,6 +85,19 @@ export interface SearchFacts {
 }
 
 export interface FirmCount { name: string; count: number }
+/** Rule 2's evidence, kept on every verdict: right-trade firms over the answers about the right place. */
+export interface Crowding {
+  /** Answers (of `answers`) that named at least one right-trade firm. */
+  answersWithFirms: number;
+  /** Different firms named. */
+  distinct: number;
+  /** Every firm mention (a firm counted once per answer). */
+  mentions: number;
+  /** The top 3 firms, most first. */
+  top: FirmCount[];
+  /** Their share of every mention, 0..1 (0 when no mentions). */
+  topShare: number;
+}
 export interface EngineCount { answers: number; named: number; near: number; top: FirmCount | null }
 
 export interface AuditVerdict {
@@ -93,7 +113,9 @@ export interface AuditVerdict {
   answers: number;
   nearNames: string[];
   perEngine: { chatgpt: EngineCount; gemini: EngineCount };
-  /** Rule 2: the firms that lock a closed list (each in every answer). Empty otherwise. */
+  /** Rule 2's counts, on every scored verdict (null when not scored). */
+  crowding: Crowding | null;
+  /** Rule 2: the top firms that crowd the list. Empty otherwise. */
   lockedBy: FirmCount[];
   /** Rule 3: firms that repeat (2+ answers), most first; "always there" = in 5+ of 6. */
   toBeat: FirmCount[];
@@ -175,7 +197,7 @@ export function decideVerdict(s: SearchFacts): AuditVerdict {
   const perEngine = { chatgpt: eng('chatgpt'), gemini: eng('gemini') };
   const namedYou = ok.filter((a) => a.you === 'named').length;
   const nearNames = [...new Set(ok.flatMap((a) => a.near))];
-  const base = { rules: AUDIT_RULES_VERSION, namedYou, answers: ok.length, nearNames, perEngine, lockedBy: [], toBeat: [], directories: [], emptyWhy: null } as const;
+  const base = { rules: AUDIT_RULES_VERSION, namedYou, answers: ok.length, nearNames, perEngine, crowding: null as Crowding | null, lockedBy: [], toBeat: [], directories: [], emptyWhy: null };
   const out = (verdict: AuditVerdict['verdict'], rule: VerdictRule, label: string, reason: string, extra: Partial<AuditVerdict> = {}): AuditVerdict =>
     ({ ...base, lockedBy: [], toBeat: [], directories: [], verdict, rule, label, reason, ...extra });
   const nearNote = nearNames.length ? ` Near-name flagged, not counted: ${list(nearNames)}.` : '';
@@ -187,6 +209,19 @@ export function decideVerdict(s: SearchFacts): AuditVerdict {
   const odd = unnaturalReason(s.question);
   if (odd) return out(null, 'unnatural', 'Unnatural question: not scored', `Flagged: ${odd}.${nearNote}`);
 
+  /* Rule 2's counts, worked out once and kept on every verdict from here (so the report and the operator can show them). */
+  const local = ok.filter((a) => !a.wrongPlace);
+  const rightOf = (a: AnswerFacts) => a.firms.filter((f) => !otherTrade(f, s.head));
+  const right = countFirms(local, s.key, rightOf);
+  const mentions = right.reduce((n, f) => n + f.count, 0);
+  const topFirms = right.slice(0, CROWD_TOP);
+  const crowding: Crowding = {
+    answersWithFirms: local.filter((a) => rightOf(a).length > 0).length,
+    distinct: right.length, mentions, top: topFirms,
+    topShare: mentions ? topFirms.reduce((n, f) => n + f.count, 0) / mentions : 0,
+  };
+  base.crowding = crowding;
+
   // 1. Already named anywhere -> winnable. Beats every rule below.
   if (namedYou > 0) {
     return out('winnable', 'visible', `Already visible: ${namedYou} of ${ok.length}`,
@@ -195,22 +230,20 @@ export function decideVerdict(s: SearchFacts): AuditVerdict {
   if (s.leftOut) return out(null, 'left_out', s.leftOut === 'not_offered' ? 'Not their service' : 'Not on their site yet',
     s.leftOut === 'not_offered' ? 'They told us they do not offer this.' : 'Not on their site yet: add a page if they offer it.');
 
-  // 2. A CLOSED list -> Not winnable: every answer names firms, and every firm named appears in every answer (no spot
-  //    ever rotates). One firm that is always there is NOT enough: the other spots still move.
-  const local = ok.filter((a) => !a.wrongPlace);
-  const all = countFirms(local, s.key, (a) => a.firms);
-  if (local.length > 0 && local.length === ok.length && all.length > 0 && local.every((a) => a.firms.length > 0) && all.every((f) => f.count === local.length)) {
-    return out('not_winnable', 'closed', 'Closed list',
-      `The same ${all.length === 1 ? 'firm fills' : `${all.length} firms fill`} every answer (${all.map((f) => f.name).join(', ')}, ${ok.length} of ${ok.length}); no other firm appears.${nearNote}`, { lockedBy: all });
+  // 2. CROWDED -> Not winnable: most answers name firms of the right trade, and the top 3 take CROWDED_AT or more of
+  //    every mention. A search where most answers name nobody is never crowded (that is rule 4).
+  if (crowding.answersWithFirms * 2 > ok.length && crowding.topShare >= CROWDED_AT) {
+    const pct = Math.round(crowding.topShare * 100);
+    return out('not_winnable', 'crowded', 'Crowded',
+      `${crowding.answersWithFirms} of ${ok.length} answers named ${crowding.distinct} different firm${crowding.distinct === 1 ? '' : 's'}; the top ${Math.min(CROWD_TOP, crowding.distinct)} (${topFirms.map((f) => `${f.name} ${f.count}`).join(', ')}) take ${pct}% of the ${mentions} mentions.${nearNote}`, { lockedBy: topFirms });
   }
-  const always = all.filter((f) => f.count * 6 >= ok.length * 5);
+  const always = right.filter((f) => f.count * 6 >= ok.length * 5);
 
   // 3. The right firms are named, nobody at 5/6 -> winnable; repeat firms are the ones to beat. "Named" means firms
   //    come up in most answers on at least one engine; when most answers on BOTH engines name nobody, that is rule 4.
   const nobody = (a: AnswerFacts) => !a.firms.length && !a.dirs.length;
   const mostEmpty = (e: 'chatgpt' | 'gemini') => { const xs = ok.filter((a) => a.engine === e); return xs.filter(nobody).length * 2 > xs.length; };
   const bothEmpty = mostEmpty('chatgpt') && mostEmpty('gemini');
-  const right = countFirms(local, s.key, (a) => a.firms.filter((f) => !otherTrade(f, s.head)));
   if (right.length && !bothEmpty) {
     const toBeat = [...always, ...right.filter((f) => f.count >= 2 && !always.some((x) => s.key(x.name) === s.key(f.name)))].slice(0, 5);
     const few = always.length > 0 || right.some((f) => f.count * 2 >= ok.length);

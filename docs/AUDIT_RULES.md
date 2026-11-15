@@ -7,7 +7,7 @@ The one written rule for **Winnable / Not winnable** on a V1 audit report. Code:
 Not a score (docs/architecture-rules.md): fixed rules over counts. The same answers always give the same verdict.
 
 **Winnable means room to be NAMED, not to come first** (Paul, 2026-11-15). A firm that is in every answer is only a
-firm to beat; a search is Not winnable only when the list is closed.
+firm to beat; a search is Not winnable only when a few firms crowd it (rule 2).
 
 ## Per search, over its answers (3 asks × ChatGPT + Gemini = 6). The first rule that fits wins.
 
@@ -17,8 +17,8 @@ firm to beat; a search is Not winnable only when the list is closed.
 | 0b | Genuinely odd phrasing (a doubled word, a run-on of 15+ words). A missing "in" ("wedding content creator Ireland") is how people search and is **never** flagged | not shown | "Unnatural question: not scored" + why |
 | 1 | The business is named in **any** answer | **Winnable** | "Already visible: X of N", per engine. **Beats every rule below** |
 | – | A service they said they don't offer, or not on their site yet | not shown | as before |
-| 2 | **Closed list**: every answer names firms and the SAME firms fill every spot in every answer; no other firm ever appears | **Not winnable** | "Closed list" + the firms that lock it |
-| 3 | Any spot rotates (some other firm appears, or an answer leaves a spot open) | **Winnable** | "Names change" / "A few repeat" + the ones to beat (firms in 2+ answers); a firm in 5+ of 6 is listed first as "always there" |
+| 2 | **Crowded** (2026-11-15, replaces "closed list"): most answers (more than half) name firms of the right trade, AND the top 3 firms take **70% or more** of every firm mention (`CROWDED_AT`) | **Not winnable** | "Crowded" + the top 3 firms, their counts and the share |
+| 3 | Otherwise, firms named and the list has room | **Winnable** | "Names change" / "A few repeat" + the ones to beat (firms in 2+ answers); a firm in 5+ of 6 is listed first as "always there" |
 | 4 | Nobody named in most answers on **both** engines | **Winnable** | "No clear leader" + why (general advice / doesn't know anyone / refused) |
 | 5 | Only directories named | **Winnable** | "Directory gap" + the directories |
 | 6 | Only firms of another trade → "Category gap". Gemini answered for another place → "Local gap" (Gemini only) | **Winnable** | the label + the evidence |
@@ -31,6 +31,31 @@ firm to beat; a search is Not winnable only when the list is closed.
 - The client sees only Winnable / Not winnable and one plain line (`clientLineOf`), with no counts and no names. The
   internal label and reason (which may name competitors) show in the operator's Create baseline dialog and in the
   `verdicts_v2` snapshot.
+
+## Rule 2: why crowding, and why 70% (Paul, 2026-11-15)
+
+The closed-list rule ("the same firms in every spot of every answer") almost never fired, because answers always
+shuffle a little: Moments came out 40 of 40 Winnable. Crowding asks instead how much of the list the top 3 firms take.
+
+- A firm mention = a firm named in one answer (counted once per answer). Only right-trade firms, only answers about the
+  right place. Directories are not firms.
+- Every scored verdict keeps the counts (`crowding`: answers with firms, different firms, mentions, the top 3, their share).
+- Tested on the stored answers of Moments (`ukuarx`) and LDM (`f7n6d2`), with no new AI searches:
+
+| Line | Moments (40) | LDM (40, 7 not shown) |
+|---|---|---|
+| 70% | Already named 13 · Winnable 25 · Not winnable 2 (Donegal 74%, Waterford 73%) | Winnable 33 · Not winnable 0 |
+| 80% | Already named 13 · Winnable 27 · Not winnable 0 | Winnable 33 · Not winnable 0 |
+| 90% | Already named 13 · Winnable 27 · Not winnable 0 | Winnable 33 · Not winnable 0 |
+
+  70% is the only line that catches anything. Real answers name 5 to 18 different firms per search, so the top 3 rarely
+  pass 60%; the LDM searches over 80% are ones where most answers name nobody (rule 4, never crowded).
+
+## The three groups on the report (Paul, 2026-11-15)
+
+A v2 report and its Past audits row split the searches three ways, from one function (`reportDesign.verdictSplitOf`):
+**Already named** (named in at least one answer, rule 1) · **Winnable** · **Not winnable**. The report shows
+"Already named X · Winnable Y · Not winnable Z" above three panels; an audit before v2 keeps its page.
 
 ## Name match (strict)
 

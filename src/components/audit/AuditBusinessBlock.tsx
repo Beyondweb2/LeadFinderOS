@@ -72,7 +72,13 @@ function PooledResult({ audit, big }: { audit: AuditLite; big?: boolean }) {
     <span className={`inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5 ${big ? '' : ''}`}>
       <MentionPill rate={data.pct / 100} />
       <span className="text-[11px] text-muted-foreground tabular-nums" title="Named answers over all ChatGPT + Gemini answers, every run pooled">{data.named} of {data.answers} answers</span>
-      {data.winnable && data.winnable.n > 0 && (
+      {data.split ? (
+        <span className="inline-flex flex-wrap items-center gap-1 text-[11px] font-medium tabular-nums" title="The report's three groups: named in at least one answer / room to be named / crowded by a few firms">
+          <span className="rounded border border-sky-500/50 bg-sky-500/10 px-1.5 py-0.5 text-sky-700 dark:text-sky-300">Already named {data.split.named}</span>
+          <span className="rounded border border-emerald-500/50 bg-emerald-500/10 px-1.5 py-0.5 text-emerald-700 dark:text-emerald-300">Winnable {data.split.winnable}</span>
+          <span className="rounded border border-border/70 px-1.5 py-0.5 text-muted-foreground">Not winnable {data.split.notWinnable}</span>
+        </span>
+      ) : data.winnable && data.winnable.n > 0 && (
         <span className="rounded border border-border/70 px-1.5 py-0.5 text-[11px] font-medium text-foreground tabular-nums" title="Searches with room to be named (the report's Winnable count)">
           Winnable {data.winnable.x} of {data.winnable.n}
         </span>
