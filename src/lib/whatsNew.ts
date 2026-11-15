@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-15-leadfinderos-report-cta', date: '2026-11-15', title: 'LeadFinderOS report: a proper sign-up section and its own icon', audience: 'all',
+    body: 'The bottom of the LeadFinderOS report (web-dev campaigns) is now a LeadFinderOS-themed sign-up section: the headline "Run reports like this for your clients", a big "Start free at leadfinderos.com" button, and four steps saying what the app does. There is a "Try it free" button in the header and, on phones, a small bar at the bottom. The page now shows the LeadFinderOS icon in the browser tab instead of the old Lovable one.',
+    report: {
+      added: ['Four-step "what the app does" section with a large Start free button.', '"Try it free" in the report header; a Start free bar on phones (not in the PDF).'],
+      changed: ['The closing band is LeadFinderOS-themed instead of a plain light box.', 'Browser tab icon: LeadFinderOS, not Lovable (also the app address’s fallback /favicon.ico).'],
+      removed: [],
+      effect: 'Web developers who open their report see more reasons and more chances to try LeadFinderOS. Findable reports are unchanged.',
+    } },
   { id: '2026-11-15-leadfinderos-report-style', date: '2026-11-15', title: 'LeadFinderOS report style for web-dev campaigns, and the Web dev hook template', audience: 'all',
     body: 'Each campaign now has a "Report style" (Edit campaign, admin only): Findable, the default and unchanged, or LeadFinderOS. Web devs/agencies · WhatsApp is set to LeadFinderOS. Its leads’ reports open on the LeadFinderOS app address (/r/<code>) in the LeadFinderOS look, with no Findable name, price or guarantee, and end with "Run reports like this for your clients. Start free at leadfinderos.com". The Web dev report template and Copy Report Link use that link. Web-dev leads’ audits now ask about web design, SEO and websites in their area. A new WhatsApp follow-up, Web dev hook (the app pitch, no link), is in both pickers.',
     report: {
