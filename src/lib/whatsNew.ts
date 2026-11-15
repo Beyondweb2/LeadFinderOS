@@ -24,6 +24,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-15-campaign-reply-audit', date: '2026-11-15', title: 'Campaigns: "Run audit when they reply" on or off per campaign', audience: 'admin',
+    body: 'Each campaign now has a switch, "Run audit when they reply" (Edit campaign). It is on for every campaign, so nothing changes unless you turn it off. When it is off, a prospect replying in that campaign does not start the website check or AI audit, on WhatsApp or SMS. You can still run an audit by hand. Inbox settings, "Audit after first reply", keeps its main switch and now says which campaigns are skipped, with a link to change them. It is off for Web devs/agencies · WhatsApp.',
+    report: {
+      added: ['"Run audit when they reply" on each campaign (admin).', '"Skipped for: …" under Audit after first reply in Inbox settings.'],
+      changed: ['A reply in a campaign with the switch off starts no website check and no audit.'],
+      removed: [],
+      effect: 'Replies from web developers no longer spend an audit. Every other campaign behaves as before.',
+    } },
+  { id: '2026-11-15-baseline-already-named', date: '2026-11-15', title: 'Baselines: "You\'re already named on X searches" at the top', audience: 'admin',
+    body: 'A baseline used to show only its 20 target searches, so a client AI already names elsewhere saw "0%" and "AI doesn\'t mention you yet". New baselines now open with the searches their Discovery already named them on (from the Discovery\'s stored answers, shown once, not re-checked for the client and not part of the guarantee), then "Here are 20 more we\'re going after". Every headline number says it is "on your 20 target searches". The 20 searches, their re-checks and the guarantee are unchanged. The report header now shows the business\'s real area (its town, its address, or the whole country for a nationwide business) instead of a place picked from the search list. Every quarter you get an internal re-check of the already-named searches; any that dropped is flagged in your bell.',
+    report: {
+      added: ['"You\'re already named on X searches" on new baselines, from the Discovery.', 'A quarterly internal re-check of those searches, with drops flagged to you.'],
+      changed: ['Baseline numbers say what they cover ("on your 20 target searches").', 'Report headers show the real area, never a place guessed from the searches.'],
+      removed: ['"AI doesn\'t mention you yet".'],
+      effect: 'A client named elsewhere no longer reads a false "0%" story. Older paid baselines keep their numbers.',
+    } },
   { id: '2026-11-15-question-generator-fit', date: '2026-11-15', title: 'AI audits: questions use the real trade, real places and natural wording', audience: 'admin',
     body: 'New audit questions are now checked before they are asked. A question is replaced if it asks about a trade the business does not do, names a place outside its town and service areas, or is worded the way no customer types (for example "plumber for stove maintenance" or "who should I switch to for electrical maintenance"). Hybrid businesses keep their mix of local and wider questions. Irish businesses never get "UK" or a Northern Ireland town unless it is in their area. The number of questions is unchanged.',
     report: {

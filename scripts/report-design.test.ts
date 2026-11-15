@@ -158,7 +158,7 @@ for (const kind of ["opportunity", "hook", "baseline"] as ReportKind[]) {
 }
 const mOpp = model(mixed, "opportunity");
 const tOpp = text(renderReport(mOpp));
-ok(mOpp.score.value === 0 && /0%\s*of answers/.test(tOpp) && /AI named you in/.test(tOpp) && /When people ask AI for a plumber or electrician in London, it doesn't mention you yet\./.test(tOpp), "score first, then the headline in customer words");
+ok(mOpp.score.value === 0 && /0%\s*of answers/.test(tOpp) && /AI named you in/.test(tOpp) && /When people ask AI for a plumber or electrician in London, it hasn't named you on these searches yet\./.test(tOpp), "score first, then the headline in customer words");
 ok(mOpp.top !== null && !tOpp.includes(`${mOpp.top.name}: ${mOpp.top.count}.`), "the discovery names no competitor, not even the top one in the score line (Paul, 2026-11-14)");
 const withRivalOpp = text(renderReport({ ...mOpp, rivals: [{ name: "Zedd Plumbing Co", count: 5 }], top: { name: "Zedd Plumbing Co", count: 5 } }));
 ok(!withRivalOpp.includes("Zedd Plumbing Co") && !/Not on your site yet|AI named instead|answered/.test(withRivalOpp), "the discovery shows no competitor, no AI answer text and no not-on-your-site section");

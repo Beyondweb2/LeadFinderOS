@@ -21,14 +21,14 @@ console.log('── separate from the guarantee ──');
   ok(!['baseline', 'measurement', 'remeasure'].includes(WEEKLY_CHECK_AUDIT_PURPOSE), 'the pointer triggers (baseline / measurement / remeasure, read live) can never claim it');
   ok(isInternalMeasurement(row), 'it is internal to the operator app');
   const renderer = read('supabase/functions/render-audit-report/index.ts');
-  ok(/audit_purpose === WEEKLY_CHECK_AUDIT_PURPOSE\) \{\s*console\.log\(`\[render-audit-report\] REFUSED weekly check/.test(renderer),
+  ok(/\[WEEKLY_CHECK_AUDIT_PURPOSE, NAMED_RECHECK_AUDIT_PURPOSE\]\.includes\(.*audit_purpose.*\{\s*console\.log\(`\[render-audit-report\] REFUSED weekly check/.test(renderer),
     'the public renderer refuses it explicitly (measurement audits are served publicly since 15634d49, so nothing is inherited)');
   ok(!isClientBaseline(row), 'it is never the client baseline');
   ok(!seoScanAllowed(WEEKLY_CHECK_AUDIT_PURPOSE), 'it buys no SEO scan');
   ok(!freeCheckSendGate(WEEKLY_CHECK_AUDIT_PURPOSE).send && !freeCheckSendGate(WEEKLY_CHECK_AUDIT_PURPOSE, { forced: true }).send, 'nothing is ever sent for it, even forced');
   const create = read('supabase/functions/create-ai-audit/index.ts');
   ok(/const isWeeklyCheck: boolean = isInternal && body\.purpose === WEEKLY_CHECK_AUDIT_PURPOSE/.test(create), 'create-ai-audit accepts it from internal callers only');
-  ok(/!isRemeasure && !isWeeklyCheck && !freshAudit/.test(create), '…and never bolts it onto an old audit');
+  ok(/!isRemeasure && !isWeeklyCheck && !isNamedRecheck && !freshAudit/.test(create), '…and never bolts it onto an old audit');
   ok(/isWeeklyCheck \? WEEKLY_CHECK_AUDIT_PURPOSE/.test(create), '…and stores it as its purpose');
   const queue = read('supabase/functions/process-ai-audit-queue/index.ts');
   ok(!/functions\/v1\/generate-report/.test(queue), 'the queue never publishes a public report for it (it publishes none at all since 2026-10-01)');

@@ -6,6 +6,11 @@ import { DialogHero } from '@/components/operator/ui';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useCampaignActions } from '@/hooks/useMyCampaigns';
+import { Switch } from '@/components/ui/switch';
+import { useSubscription } from '@/hooks/useSubscription';
+import { useCampaigns } from '@/hooks/useCampaigns';
+import { leadRpc } from '@/lib/leadRpc';
+import { RUN_AUDIT_ON_REPLY_HINT, RUN_AUDIT_ON_REPLY_LABEL } from '@/lib/campaignReplyAudit';
 import {
   CAMPAIGN_FIELD_MAX, CAMPAIGN_NAME_MAX, campaignErrorText, campaignFormError, suggestCampaignName,
   type CampaignMethod, type CampaignSummary,
@@ -17,6 +22,34 @@ import {
    the campaign, then add) or are moved in from Outreach. The same form edits a campaign.
    The name is the person's; a suggestion ("Plumbers · Halifax · Call") fills in until they type their own.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
+/** "Run audit when they reply" (Paul, 2026-11-15): admin only, saved straight away (campaign_set_audit_on_reply). */
+function ReplyAuditSwitch({ campaignId }: { campaignId: string }) {
+  const { isAdmin } = useSubscription();
+  const { allCampaigns, refetch } = useCampaigns();
+  const stored = allCampaigns.find((c) => c.id === campaignId)?.audit_on_reply;
+  const [on, setOn] = useState<boolean>(stored !== false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { setOn(stored !== false); }, [stored]);
+  if (!isAdmin) return null;
+  const flip = async (next: boolean) => {
+    setBusy(true); setErr(null); setOn(next);
+    const r = await leadRpc('campaign_set_audit_on_reply', { _campaign_id: campaignId, _on: next });
+    if (!r.ok) { setOn(!next); setErr(r.error === 'admin_only' ? 'Only the admin can change this.' : `Not saved: ${String(r.error)}`); }
+    else refetch();
+    setBusy(false);
+  };
+  return (
+    <div className="rounded-md border border-input px-3 py-2" data-testid="campaign-reply-audit">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0"><p className="text-sm font-medium">{RUN_AUDIT_ON_REPLY_LABEL}</p><p className="text-xs text-muted-foreground">{RUN_AUDIT_ON_REPLY_HINT}</p></div>
+        <Switch checked={on} disabled={busy} onCheckedChange={(v) => void flip(v)} aria-label={RUN_AUDIT_ON_REPLY_LABEL} data-testid="campaign-reply-audit-switch" />
+      </div>
+      {err && <p role="alert" className="mt-1 text-xs text-destructive">{err}</p>}
+    </div>
+  );
+}
+
 export function CampaignEditDialog({ open, onOpenChange, campaign, onSaved }: {
   open: boolean; onOpenChange: (v: boolean) => void;
   /** Edit this one; absent = a new campaign. */
@@ -97,6 +130,7 @@ export function CampaignEditDialog({ open, onOpenChange, campaign, onSaved }: {
         </label>
         {campaign && campaign.method === 'whatsapp' && method === 'call' && (campaign.queued ?? 0) > 0 &&
           <p className="text-xs text-amber-700 dark:text-amber-300">Openers are waiting to send. Pause sending first, then switch to Call.</p>}
+        {campaign && <ReplyAuditSwitch campaignId={campaign.id} />}
         {error && <p role="alert" className="text-sm text-destructive" data-testid="campaign-form-error">{error}</p>}
       </div>
       <DialogFooter>

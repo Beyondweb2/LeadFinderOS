@@ -39,6 +39,8 @@ export interface Campaign {
   trade?: string | null;
   area?: string | null;
   archived_at?: string | null;
+  /** "Run audit when they reply" (2026-11-15, src/lib/campaignReplyAudit.ts). Default true. */
+  audit_on_reply?: boolean | null;
 }
 
 export interface CampaignInput {

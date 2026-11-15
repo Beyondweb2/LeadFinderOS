@@ -192,6 +192,7 @@ a.rp-fk{text-decoration:none}
 .rp-chat-b mark{background:var(--y);padding:0 3px;border-radius:3px}
 .rp-grp{margin:16px 0 6px;font-size:13px;font-weight:800;color:#3a3b40}
 .rp-grp:first-of-type{margin-top:0}
+.rp-already-l{list-style:none;margin:10px 0 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px}.rp-already-l li{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;padding:6px 0;border-top:1px solid #f1eee7}@media (max-width:640px){.rp-already-l{grid-template-columns:1fr}}
 .rp-split-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.rp-split-i{border-radius:12px;padding:12px 14px;border:1px solid #e6e3db}.rp-split-i b{display:block;font-size:30px;font-weight:900;line-height:1}.rp-split-i span{display:block;margin-top:4px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}.rp-split-i--named{background:#e3f1f7;color:#14566f}.rp-split-i--win{background:#e6f5eb;color:#13703a}.rp-split-i--not{background:#efeeea;color:#5d5e63}.rp-split-line{margin:10px 2px 0;font-size:13px;color:#55565c}
 .rp-mini{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid #f1eee7;font-size:14px}.rp-mini:first-of-type{border-top:0}
 .rp-rd{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:center;margin-bottom:6px}
@@ -284,18 +285,25 @@ const pills = (firms: OppFirm[], max = 4, _counts = false) => {
 const TYPE_LABEL: Record<ReportKind, string> = { hook: 'AI search quick audit', opportunity: 'AI search opportunity report', baseline: 'AI search report · your tracked searches' };
 
 function whereText(m: ReportModel): string { return `${m.what} in ${m.where}`; }
+/** "your 20 target searches" — what a baseline number covers (Paul, 2026-11-15). */
+function targetWords(m: ReportModel): string { return `your ${plural(m.counts.searches, 'target search', 'target searches')}`; }
 
 function headlineText(m: ReportModel): string {
   const s = m.score;
   const w = whereText(m);
   /* The client baseline: V2's plain headline over every answer (a search-phrase sentence reads badly for question-style searches). */
   if (m.kind === 'baseline') {
-    if (!s.answers) return 'Your starting point.';
-    if (s.named === 0) return `<em>AI doesn't mention you yet.</em>`;
-    return m.band === 'high' ? `<em>AI names you in most answers.</em>` : `AI names you in <em>${s.named} of ${s.answers} answers.</em>`;
+    /* Paul, 2026-11-15: never "AI doesn't mention you yet" — a business named elsewhere read it as false. The headline
+       leads with the Discovery's already-named searches, and every number says what it covers. */
+    const tgt = targetWords(m);
+    const an = m.alreadyNamed?.searches.length ?? 0;
+    if (an > 0) return `<em>You're already named on ${plural(an, 'search', 'searches')}.</em> Here are ${m.counts.searches} more we're going after.`;
+    if (!s.answers) return `Your starting point on ${tgt}.`;
+    if (s.named === 0) return `Your starting point on ${tgt}: <em>these are the searches we're going after.</em>`;
+    return m.band === 'high' ? `<em>AI names you in most answers on ${tgt}.</em>` : `AI names you in <em>${s.named} of ${s.answers} answers on ${tgt}.</em>`;
   }
   if (s.value === null) return `When people ask AI for ${w}, <em>it names no firms yet.</em>`;
-  if (m.band === 'none') return `When people ask AI for ${w}, <em>it doesn't mention you yet.</em>`;
+  if (m.band === 'none') return `When people ask AI for ${w}, <em>it hasn't named you on these searches yet.</em>`;
   if (m.band === 'some') return `When people ask AI for ${w}, <em>it mentions you in ${s.named} of ${s.denominator} answers.</em>`;
   return `When people ask AI for ${w}, <em>it names you in ${s.named} of ${s.denominator} answers. Keep it up and grow it.</em>`;
 }
@@ -306,7 +314,7 @@ function headBlock(m: ReportModel): string {
   const searches = m.counts.searches;
   return `<header class="rp-head"><div class="rp-brand"><div class="rp-wm">Findable<i>.</i></div><div class="rp-sub">${TYPE_LABEL[m.kind]}</div></div>` +
     `<div class="rp-meta"><div class="rp-meta-top"><span>Report for</span><span class="rp-date">${esc(m.dateLabel)}</span></div>` +
-    `<h1 class="rp-biz">${esc(shortName(m.businessName))}</h1><div class="rp-where">${esc(m.where)}</div>` +
+    `<h1 class="rp-biz">${esc(shortName(m.businessName))}</h1>${(m.place === undefined ? m.where : m.place) ? `<div class="rp-where">${esc(String(m.place === undefined ? m.where : m.place))}</div>` : ''}` +
     `<div class="rp-method">${plural(searches, 'search', 'searches')} &times; 2 AI${m.asks > 1 ? ` &times; ${m.asks} asks` : ''} &middot; ${plural(m.score.answers, 'answer')}${m.overview.shown ? ' &middot; plus Google AI, shown for context' : ''}</div></div></header>`;
 }
 
@@ -320,18 +328,18 @@ function scoreBlock(m: ReportModel): string {
   /* The discovery is client-facing too now (Paul, 2026-11-14): no competitor is named on it either. */
   const top = m.kind === 'hook' ? m.top : null;
   const line = s.value === null ? "AI didn't name any business in these answers."
-    : m.kind === 'baseline' ? `AI named you in ${s.named} of ${s.answers} answers.`
+    : m.kind === 'baseline' ? `AI named you in ${s.named} of ${s.answers} answers on ${targetWords(m)}.`
       : `${s.named} of ${s.denominator} answers that named a business named you.${top ? ` ${esc(top.name)}: ${top.count}.` : ''}`;
   const card = (e: Eng) => {
     const c = m.engines[e];
     const pct = c.answers ? Math.round((c.named / c.answers) * 100) : 0;
     return `<div class="rp-eng rp-eng--${ENGINE_KEY[e]}"><div class="rp-eng-h"><span class="rp-dot rp-dot--${ENGINE_KEY[e]}"></span>${ENGINE_LABEL[e]}</div>` +
-      `<b class="rp-eng-v rp-t-${engineTone(c.named, c.answers)}">${c.named} of ${c.answers}</b><span class="rp-eng-s">${pct}% &middot; ${c.named === 0 ? 'named nowhere' : `named in ${plural(c.named, 'answer')}`}</span></div>`;
+      `<b class="rp-eng-v rp-t-${engineTone(c.named, c.answers)}">${c.named} of ${c.answers}</b><span class="rp-eng-s">${pct}% &middot; ${c.named === 0 ? (m.kind === 'baseline' ? 'not named on your target searches yet' : 'not named on these searches') : `named in ${plural(c.named, 'answer')}`}</span></div>`;
   };
   const o = m.overview;
   const aio = o.shown
     ? `<p class="rp-aio-line"><span class="rp-dot rp-dot--aio"></span><b>Google AI</b><span>shown on ${o.shown} of ${plural(o.asked, 'search', 'searches')}, named in ${o.named}</span><em>Shown for context, not scored</em></p>` : '';
-  return `<section class="rp-score"><div class="rp-score-in"><div class="rp-overall"><span class="rp-k"><i></i>AI named you in</span>${big}<span class="rp-overall-s">${line}</span></div>${card('chatgpt')}${card('gemini')}</div>${aio}</section>`;
+  return `<section class="rp-score"><div class="rp-score-in"><div class="rp-overall"><span class="rp-k"><i></i>${m.kind === 'baseline' ? `On ${esc(targetWords(m))} &middot; AI named you in` : 'AI named you in'}</span>${big}<span class="rp-overall-s">${line}</span></div>${card('chatgpt')}${card('gemini')}</div>${aio}</section>`;
 }
 
 /* ── The answer boxes (the example's chat cards) ────────────────────────────────────────── */
@@ -611,13 +619,23 @@ function baselineBody(m: ReportModel): string {
   const s = m.score;
   const tone = s.value === null ? 'grey' : m.band === 'none' ? 'red' : m.band === 'some' ? 'amber' : 'green';
   const lead = m.band === 'none'
-    ? `This is your starting point. Every ${REMEASURE_WEEKS_STANDARD} weeks we ask AI the same searches again and show you what changed.`
+    ? `${m.alreadyNamed?.searches.length ? `Your ${plural(m.counts.searches, 'target search', 'target searches')} below are where AI doesn't name you yet, and where we start.` : 'This is your starting point.'} Every ${REMEASURE_WEEKS_STANDARD} weeks we ask AI the same searches again and show you what changed.`
     : m.band === 'some' ? `AI already names you on some of your searches. Every ${REMEASURE_WEEKS_STANDARD} weeks we ask AI the same searches again and show you what changed.`
       : `AI names you on most of your searches. We keep it there and grow it, and show you every ${REMEASURE_WEEKS_STANDARD} weeks.`;
   const today = `<section class="rp-panel"><h2 class="rp-h">Today and after ${REMEASURE_WEEKS_STANDARD} weeks</h2><div class="rp-today">` +
-    `<div class="rp-card"><span class="rp-k" style="color:#6b6c72"><i></i>AI named you in &middot; ${esc(m.dateLabel)}</span><p class="rp-bigdark rp-t-${tone}" style="margin-top:10px;${tone === 'grey' ? 'color:#5d5e63' : ''}">${s.value === null ? 'No score yet' : `${s.value}%<span style="font-size:18px;color:#6b6c72"> of answers</span>`}</p><p class="rp-h-sub" style="margin:6px 0 0">AI named you in ${s.named} of ${plural(s.denominator, 'answer')}.</p></div>` +
+    `<div class="rp-card"><span class="rp-k" style="color:#6b6c72"><i></i>Your target searches &middot; ${esc(m.dateLabel)}</span><p class="rp-bigdark rp-t-${tone}" style="margin-top:10px;${tone === 'grey' ? 'color:#5d5e63' : ''}">${s.value === null ? 'No score yet' : `${s.value}%<span style="font-size:18px;color:#6b6c72"> of answers</span>`}</p><p class="rp-h-sub" style="margin:6px 0 0">AI named you in ${s.named} of ${plural(s.denominator, 'answer')} on ${esc(targetWords(m))}.</p></div>` +
     `<div class="rp-card rp-card--next"><span class="rp-k" style="color:#6b6c72"><i></i>${m.checkAgainLabel ? `We check again on ${esc(m.checkAgainLabel)}` : `We check again in ${REMEASURE_WEEKS_STANDARD} weeks`}</span><p class="rp-bigdark" style="margin-top:10px;color:#a3a5ab">&mdash;</p><p class="rp-h-sub" style="margin:6px 0 0">Same ${plural(m.counts.searches, 'search', 'searches')}. Same AI.</p></div></div></section>`;
-  return `<p class="rp-line">${headlineText(m)}</p><p class="rp-intro">${esc(lead)}</p>` + today + readabilityPanel(m) + targetedSearchesBlock(m);
+  return `<p class="rp-line">${headlineText(m)}</p>` + alreadyNamedPanel(m) + `<p class="rp-intro">${esc(lead)}</p>` + today + readabilityPanel(m) + targetedSearchesBlock(m);
+}
+
+/** "You're already named on X searches" (Paul, 2026-11-15; src/lib/alreadyNamed.ts): from the Discovery's stored answers,
+ *  shown once. Not re-checked for the client and not part of the guarantee — the page says so. */
+function alreadyNamedPanel(m: ReportModel): string {
+  const a = m.alreadyNamed;
+  if (!a || !a.searches.length) return '';
+  return `<section class="rp-panel rp-already"><h2 class="rp-h">You're already named on ${plural(a.searches.length, 'search', 'searches')}</h2>` +
+    `<p class="rp-h-sub">From your Discovery on ${esc(a.dateLabel)}: AI named you in at least one answer for each of these. Shown for context: we don't re-check these for you and they are not part of your guarantee.</p>` +
+    `<ul class="rp-already-l">${a.searches.map((q) => `<li>${chip('b', 'Already named')}<span>${esc(q)}</span></li>`).join('')}</ul></section>`;
 }
 
 /* ═══ The page ═══════════════════════════════════════════════════════════════════════════════ */

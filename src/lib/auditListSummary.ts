@@ -38,6 +38,7 @@ export function auditTypeOf(a: AuditTypeInput): AuditType {
   if (p === 'baseline' || p === 'targeted') return { key: 'baseline', label: 'Baseline', hint: 'Baseline: the targeted searches asked of ChatGPT and Gemini.' };
   if (p === 'measurement' || p === 'remeasure') return { key: 'measurement', label: 'Measurement', hint: 'Full measurement or day-28 re-measure (internal).' };
   if (p === 'weekly_check') return { key: 'weekly', label: 'Weekly check', hint: 'Weekly visibility check (internal).' };
+  if (p === 'named_recheck') return { key: 'weekly', label: 'Named re-check', hint: 'Quarterly re-check of the searches the Discovery already named them on (internal, never shown to the client).' };
   if (!p && Number(a.baseline_target_runs ?? 0) > 1) {
     return a.is_measurement === true
       ? { key: 'measurement', label: 'Measurement', hint: 'Full measurement (internal).' }

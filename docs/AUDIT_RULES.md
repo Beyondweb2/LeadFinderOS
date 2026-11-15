@@ -105,3 +105,20 @@ The old audit and its link are untouched.
 
 2026-11-15 re-scores: Moments Wedding Content `paazz5` → `ukuarx`, LDM Discovery `w9ebxk` → `f7n6d2`, LDM Baseline
 `ew3yvm` → `qgdx4m`. "MC Moments Wedding Content" (Kildare) is treated as a different business.
+
+## The baseline's "already named" searches (Paul, 2026-11-15)
+
+- A rules-v2 baseline (targeted or paid) opens with "You're already named on X searches": the business's Discovery
+  (same lead, else same name + website; a v2 copy preferred, then the newest) scored from its STORED answers, the
+  searches with rule 1 (Already named), minus any of the baseline's own targets. Labelled "from your Discovery on <date>".
+  Not re-measured for the client, not part of the guarantee: nothing in the 20 targets' counts, the frozen day-0 numbers
+  or the guarantee reads it (`src/lib/alreadyNamed.ts`, `_shared/already-named.ts`). Older baselines are unchanged.
+- Headline: "You're already named on 13 searches. Here are 20 more we're going after." Every baseline number says
+  "on your 20 target searches". "AI doesn't mention you yet" is gone everywhere.
+- Header place: the audit's town, else its stored `business_address`, else "All of <country>" for a national business,
+  with "· covers all of <country>" for a national one. Never the commonest place in the searches (Moments said "Clare").
+- Internal quarterly re-check (`weekly-visibility`, purpose `named_recheck`): every 91 days per business,
+  one run of the already-named searches, no lead attached (so it can never arm a WhatsApp pitch), same stop / Apify /
+  cost caps, at most 3 starts per run. Folded onto run 1 (`results.named_recheck`: kept / dropped / unanswered); drops go
+  to Paul's bell. The public renderer refuses it.
+- Moments: new baseline copy `868qnr` (from `hms2vc`, stored answers, business_address "Co. Mayo"); `hms2vc` still works.
