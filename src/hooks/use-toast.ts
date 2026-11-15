@@ -1,6 +1,7 @@
 import * as React from "react";
 
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
+import { pushNotice, dismissInline } from "@/lib/actionNotices";
 
 const TOAST_LIMIT = 1;
 const TOAST_REMOVE_DELAY = 1000000;
@@ -134,42 +135,12 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id"> & { force?: boolean };
 
-function isMobileViewport() {
-  return typeof window !== 'undefined' && window.innerWidth < 640;
-}
-
-function toast({ force, ...props }: Toast) {
-  // On mobile, suppress all non-destructive toasts to save screen space (unless forced)
-  if (isMobileViewport() && props.variant !== 'destructive' && !force) {
-    return { id: '', dismiss: () => {}, update: () => {} };
-  }
-
-  const id = genId();
-
-  const update = (props: ToasterToast) =>
-    dispatch({
-      type: "UPDATE_TOAST",
-      toast: { ...props, id },
-    });
-  const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id });
-
-  dispatch({
-    type: "ADD_TOAST",
-    toast: {
-      ...props,
-      id,
-      open: true,
-      onOpenChange: (open) => {
-        if (!open) dismiss();
-      },
-    },
-  });
-
-  return {
-    id: id,
-    dismiss,
-    update,
-  };
+/* NO POP-UPS (Paul, 2026-11-15): toast() no longer draws a bottom-right pop-up. An error or an Undo shows
+   inline beside the control just used; everything goes into the bell's "This session" list
+   (src/lib/actionNotices.ts, src/components/ActionNotices.tsx). The <Toaster/> is no longer mounted. */
+function toast({ force: _force, ...props }: Toast) {
+  const id = pushNotice({ title: props.title, description: props.description, variant: props.variant, action: props.action });
+  return { id, dismiss: () => dismissInline(id), update: (_p: ToasterToast) => {} };
 }
 
 function useToast() {
