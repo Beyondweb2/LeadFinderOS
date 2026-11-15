@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-15-initial-question-template', date: '2026-11-15', title: 'New WhatsApp opener: "Do you build websites or do SEO or AI visibility?"', audience: 'all',
+    body: 'A new first-message template, Initial question, is in the WhatsApp template pickers. It says: "Hi mate, do you build websites or do SEO or AI visibility?" It has no name or link in it. If Meta has not approved it yet, the send is refused and the app says why.',
+    report: {
+      added: ['Initial question in the WhatsApp template pickers (Outreach and Inbox).'],
+      changed: ['When Meta refuses a WhatsApp send, the message now says why in plain words instead of Meta\'s raw error text.'],
+      removed: [],
+      effect: 'You can open a conversation with a short question. Every cold WhatsApp rule (UK mobiles, daily cap, opt-outs) still applies to it.',
+    } },
   { id: '2026-11-15-audit-rules-v2', date: '2026-11-15', title: 'New Winnable rules: already named always counts as Winnable', audience: 'admin',
     body: 'Audit reports now decide Winnable / Not winnable with the new rules. If AI already names the business in any answer, the search is Winnable. Winnable means room to be named, not to come first: a search is Not winnable only when the list is closed (the same firms fill every spot in every answer and no other firm ever appears). A firm that is always there is just one to beat. Everything else is Winnable: names that change, no clear leader, only directories named, or a category or local gap. The whole-city cap is gone. A name only counts when it is the exact business name, its website or its Google profile; a near-name like "MC Moments Wedding Content" is flagged and not counted. Failed searches are re-run, never given a verdict; only genuinely odd questions are flagged. New baselines count the guarantee with the same strict name match; existing and paid baselines are unchanged. Reports made before today keep the page they showed; new audits and re-scored copies use the new rules.',
     report: {

@@ -136,6 +136,7 @@ const OPENER_PURPOSE: Record<string, string> = {
   initial_contact: 'A short hello that checks it is the right business',
   initial_opener_v2: 'A short hello that checks it is the right business (new wording)',
   initial_contact_short: 'A very short hello that checks it is the right business',
+  initial_question: 'Asks if they build websites or do SEO or AI visibility',
 };
 export function openerPurpose(template: string | null | undefined, fallback: string): string {
   return (template && OPENER_PURPOSE[template]) || fallback;

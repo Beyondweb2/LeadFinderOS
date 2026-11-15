@@ -3,6 +3,7 @@
    (cold vs continuation, opt-outs, the 24-hour window, the opener choice, QA holds, the abuse guard) — is byte-for-byte the same
    from either screen. It was lifted out of useInbox.send unchanged; never add a field here for one caller only. */
 import type { supabase as Supabase } from '@/integrations/supabase/client';
+import { sendErrorMeaning } from './sendErrorMeaning';
 
 export interface WhatsAppSendArgs {
   phone: string;
@@ -56,7 +57,14 @@ export async function sendWhatsAppRequest(sb: { functions: typeof Supabase.funct
     },
   });
   if (error) return { ok: false, error: error.message };
-  if (!data?.ok) return { ok: false, error: data?.error ?? 'send_failed', reason: data?.reason, ...(typeof data?.failCode === 'number' ? { failCode: data.failCode } : {}) };
+  /* A Meta refusal (e.g. 132001: a template Meta has not approved yet) came back with Meta's raw error text only, and every screen
+     showed that text. Meta's code is now worded here (sendErrorMeaning), once, for every caller. */
+  if (!data?.ok) {
+    const failCode = typeof data?.failCode === 'number' ? data.failCode : undefined;
+    const meta = failCode !== undefined ? sendErrorMeaning('whatsapp', failCode) : null;
+    const reason = data?.reason ?? (meta ? `Not sent: ${meta} (Meta error ${failCode})` : undefined);
+    return { ok: false, error: data?.error ?? 'send_failed', reason, ...(failCode !== undefined ? { failCode } : {}) };
+  }
   const shape = {
     /* 'video' = a video template's in-window version (a normal video message, the words as its caption): free-form, like text. */
     ...(data.sent_as === 'text' || data.sent_as === 'template' ? { sentAs: data.sent_as as 'text' | 'template' } : data.sent_as === 'video' ? { sentAs: 'text' as const, withVideo: true } : {}),
