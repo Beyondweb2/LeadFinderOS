@@ -129,7 +129,25 @@ export const CONTINUATION_TEMPLATES: ReadonlySet<string> = new Set([
   "nudge_24h",
   /* pick_up_conversation (2026-10-26): to a lead whose message is the latest — always an existing conversation. */
   "pick_up_conversation",
+  /* initial_question (Paul, 2026-11-15: "initial_question is a follow-up, not an opener"). It goes to a number we have
+     ALREADY messaged on WhatsApp. ⛔ Unlike the accepted exposure of audit_followup / re_engage_49, this one is closed
+     structurally: NEEDS_PRIOR_WHATSAPP below refuses it at both senders when the number has no WhatsApp history. */
+  "initial_question",
 ]);
+
+/** Continuations that must NEVER be a first touch: refused (both senders) for a number with no WhatsApp message yet
+ *  (sent or received, failed sends not counted). Paul, 2026-11-15. */
+export const NEEDS_PRIOR_WHATSAPP: ReadonlySet<string> = new Set(["initial_question"]);
+export const NEEDS_PRIOR_WHATSAPP_REASON = "Initial question is a follow-up: it only goes to a number we have already messaged on WhatsApp. Nothing was sent. Send an opener first.";
+
+/** Cold-opener rules apply only while the prospect has never written to us (Paul, 2026-11-15, the Eon Graphics bug:
+ *  "May not send: phone_already_contacted" on a lead who had replied). Once they have replied — the 24-hour window open
+ *  or not — every template is a message into a live conversation, so the cold rules (phone history, UK-only, already
+ *  texted, logged contact, the cold cap/gap) do not block it. Opt-outs, the mobile check, Meta's approval and the
+ *  repeat-pitch confirm still apply. */
+export function coldRulesApply(templateName: string | null | undefined, prospectHasReplied: boolean): boolean {
+  return isColdOutreachTemplate(templateName) && !prospectHasReplied;
+}
 
 /** True when this template is a COLD approach — a first contact that must never land on a number
  *  we have already messaged, whatever lead row it arrives on. Unknown and blank are cold. */

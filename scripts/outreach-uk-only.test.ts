@@ -65,7 +65,7 @@ console.log('\n── the two cold-send chokepoints refuse a non-UK destination 
   ok(/isColdOutreachTemplate\(templateName\) && !isUkColdDestination\(toNumber\)/.test(q), 'process-whatsapp-queue: cold template + non-UK digits → skipped');
   ok(/skipped: NOT_A_UK_MOBILE/.test(q) && /whatsapp_delivery_status: NOT_A_UK_MOBILE/.test(q), '…with the reason on the row, never sent');
   ok(q.indexOf('!isUkColdDestination(toNumber)') < q.indexOf('await checkSuppressed(service, { phone: `+${toNumber}`'), '…and BEFORE suppression, history and the send');
-  ok(/isColdOutreachTemplate\(templateName\) && !isUkColdDestination\(to\)/.test(m), 'send-whatsapp-message: cold template + non-UK digits → refused');
+  ok(/coldSend && !isUkColdDestination\(to\)/.test(m), 'send-whatsapp-message: cold template + non-UK digits → refused');
   const at = m.indexOf('!isUkColdDestination(to)');
   ok(!/allowResend/.test(m.slice(at, m.indexOf('}', m.indexOf('error: NOT_A_UK_MOBILE', at)))), '…not overridable by allow_resend');
   ok(at < m.indexOf('opener_contact_block'), '…and before the contact guard and the build');

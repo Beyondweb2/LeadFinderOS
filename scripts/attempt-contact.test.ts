@@ -37,7 +37,8 @@ ok(/reached: \(lead\.lastLogged\?\.reached \?\? false\) \|\| REACHED_OUTCOMES\.h
 ok(/c\.kind === 'whatsapp' \|\| REACHED_OUTCOMES\.has\(String\(c\.outcome \?\? ''\)\)\)\);\n\s+if \(first && inP\(first\.at, p\)\)/.test(read('src/lib/adminMetrics.ts')), 'the rep cohort counts the first REACHED contact, like the funnel');
 const NOTSENT = '.or("status.is.null,status.not.in.(failed,failed_temporary,simulated)")';
 const q = read('supabase/functions/process-whatsapp-queue/index.ts');
-ok(q.split(NOTSENT).length - 1 === 2 && !/\.neq\("status", "failed"\)\n\s+\/\*/.test(q), 'the queue\'s contact_check and cold guard ignore sends that never left');
+/* 3 since 2026-11-15: initial_question's NEEDS_PRIOR_WHATSAPP check reads the same "never left" filter. */
+ok(q.split(NOTSENT).length - 1 === 3 && !/\.neq\("status", "failed"\)\n\s+\/\*/.test(q), 'the queue\'s contact_check and cold guard ignore sends that never left');
 ok(read('supabase/functions/send-whatsapp-message/index.ts').includes(NOTSENT), 'the Inbox cold guard too');
 ok(/template_name", "initial_contact"\)\.in\("status", \["sent", "delivered", "read"\]\)/.test(read('supabase/functions/_shared/contact-followup-eligibility.ts'))
   && /template_name", "audit_reply"\)\.in\("status", \["sent", "delivered", "read"\]\)/.test(read('supabase/functions/_shared/hook-followup-eligibility.ts')), 'a follow-up needs a REAL opener / report before it');

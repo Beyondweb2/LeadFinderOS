@@ -16,7 +16,7 @@ import { leadAccess, resolveActor } from "../_shared/access.ts";
 import { paidMode } from "../_shared/protection.ts";
 import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.ts";
 import { checkSuppressed, suppress } from "../_shared/suppression.ts";
-import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
+import { isColdOutreachTemplate, NEEDS_PRIOR_WHATSAPP, NEEDS_PRIOR_WHATSAPP_REASON } from "../../../src/lib/coldOutreach.ts";
 import { rivalHookDecision, templateNeedsRivals } from "../../../src/lib/rivalHook.ts";
 /* ⚠️ templateBodyParams IS DELIBERATELY NOT IMPORTED ANY MORE. This file used to assemble one
    send payload by hand from it, which is how video_template went out without its video header for
@@ -2534,6 +2534,21 @@ Deno.serve(async (req) => {
           reason: `${lead.business_name ?? "That lead"}'s number (+${toNumber}) already has a WhatsApp conversation${(prior[0] as { lead_id?: string | null }).lead_id && (prior[0] as { lead_id?: string | null }).lead_id !== lead.id ? " on another lead row" : ""}. A cold opener never goes to a number we have already messaged — this row is probably a duplicate of the lead that owns the thread.`,
           lead_id: lead.id, business: lead.business_name, ...statusPayload,
         }, 200);
+      }
+    }
+    /* ⛔ A FOLLOW-UP THAT MUST NEVER BE A FIRST TOUCH (Paul, 2026-11-15; NEEDS_PRIOR_WHATSAPP): initial_question is a
+       continuation, so the phone-history seatbelt above does not stop it — this does. A number with no WhatsApp message yet
+       (sent or received; a failed send is not contact) never gets it from the drip. The lead leaves the queue as it was. */
+    if (NEEDS_PRIOR_WHATSAPP.has(templateName)) {
+      const { data: priorWa, error: priorWaErr } = await service.from("whatsapp_messages").select("id").eq("phone", toNumber)
+        .or("status.is.null,status.not.in.(failed,failed_temporary,simulated)").limit(1);
+      if (priorWaErr || !Array.isArray(priorWa) || priorWa.length === 0) {
+        await service.from("outreach_leads").update({
+          status: statusBeforeQueue(lead.previous_status as string | null),
+          whatsapp_delivery_status: "follow_up_needs_contact", contact_method: null, queued_at: null, previous_status: null,
+        }).eq("id", lead.id);
+        return json({ ok: true, skipped: "follow_up_needs_contact", reason: priorWaErr ? "Could not check this number's WhatsApp history, so nothing was sent." : NEEDS_PRIOR_WHATSAPP_REASON,
+          lead_id: lead.id, business: lead.business_name, ...statusPayload }, 200);
       }
     }
     /* ⛔ THE REAL-CONTACT GUARD AT SEND TIME (2026-10-05, opener consistency fix). A COLD template never goes to

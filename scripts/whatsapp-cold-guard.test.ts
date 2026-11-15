@@ -171,7 +171,7 @@ console.log('the gap');
   const q = read('supabase/functions/process-whatsapp-queue/index.ts');
   ok(/if \(sendLive && !qaDrill && !\(await claimColdSlot\(service\)\)\)/.test(q), 'the queue takes the slot right before a live send');
   const s = read('supabase/functions/send-whatsapp-message/index.ts');
-  ok(/isColdOutreachTemplate\(usedTemplate\) && qa\.kind === "live"/.test(s) && /await claimColdSlot\(service\)/.test(s), 'a person’s live cold send takes the same slot');
+  ok(/coldRulesApply\(usedTemplate, lastInboundAt != null\) && qa\.kind === "live"/.test(s) && /await claimColdSlot\(service\)/.test(s), 'a person’s live cold send takes the same slot');
   ok(/!sched && !dryRun && usedTemplate && messageType === "template"/.test(s), 'free text, dry runs and the drain’s own row do not ask here');
 }
 

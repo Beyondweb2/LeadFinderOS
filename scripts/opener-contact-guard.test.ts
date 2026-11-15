@@ -57,7 +57,7 @@ console.log('\n── 2. every cold-opener door asks the SAME function ──');
   ok(/if \(isColdOutreachTemplate\(templateName\)\) \{\s*const \{ data: block, error: blockErr \} = await service\.rpc\("opener_contact_block", \{ _lead_id: lead\.id \}\);/.test(drip), 'the drip, at send time (the server enforcement for EVERY way a lead reaches the queue) → opener_contact_block');
   ok(/skipped: "contact_guard_unreadable"/.test(drip) && drip.indexOf('contact_guard_unreadable') < drip.indexOf('.update('), '…an unreadable answer sends nothing and changes nothing (fails closed)');
   const send = sender.slice(sender.indexOf('THE REAL-CONTACT GUARD (2026-10-05'), sender.indexOf('let tvars'));
-  ok(/if \(isColdOutreachTemplate\(templateName\) && resolvedLeadId\) \{\s*const \{ data: block, error: blockErr \} = await service\.rpc\("opener_contact_block", \{ _lead_id: resolvedLeadId \}\);/.test(send) && !/allowResend/.test(strip(send)), 'the one-off template send (send-whatsapp-message) → opener_contact_block, and allow_resend cannot talk it round');
+  ok(/if \(coldSend && resolvedLeadId\) \{\s*const \{ data: block, error: blockErr \} = await service\.rpc\("opener_contact_block", \{ _lead_id: resolvedLeadId \}\);/.test(send) && !/allowResend/.test(strip(send)), 'the one-off template send (send-whatsapp-message) → opener_contact_block, and allow_resend cannot talk it round');
   ok(/error: "contact_guard_unreadable"/.test(send), '…an unreadable answer refuses the cold send');
   /* The marker moves on with every later change (2026-10-07a: the link templates); the contact guard must still be in it. */
   const buildDate = /BUILD_ID = "(\d{4}-\d{2}-\d{2})[a-z]-[a-z-]+"/.exec(sender)?.[1] ?? '';
@@ -86,7 +86,7 @@ console.log('\n── 4. a real conversation can still continue ──');
   for (const t of ['initial_contact', 'initial_opener_v2', 'video_template', 'competitor_hook'])
     ok(isColdOutreachTemplate(t), `${t} is a cold opener — guarded`);
   const send = sender.slice(sender.indexOf('THE REAL-CONTACT GUARD (2026-10-05'), sender.indexOf('let tvars'));
-  ok(/isColdOutreachTemplate\(templateName\)/.test(send) && /Free-form replies and continuations never reach this/.test(send), 'a free-form reply in the open 24-hour window is not a template — untouched');
+  ok(/coldSend && resolvedLeadId/.test(send) && /coldRulesApply\(templateName, prospectReplied\)/.test(sender) && /Free-form replies and continuations never reach this/.test(send), 'a free-form reply in the open 24-hour window is not a template — untouched');
   ok(!/opener_contact_block/.test(queue.slice(0, queue.indexOf('if (mode === "contact_check") {'))), 'the reply rules / first-reply lane before contact_check do not read the guard');
 }
 
