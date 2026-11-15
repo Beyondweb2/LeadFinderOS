@@ -85,6 +85,10 @@ const initialContactShortBody = (b: string, _u: string) =>
   `Hey, is this ${b || 'your business'}?
 Thanks`;
 
+/* initial_question - Paul, 2026-11-15. The registered body, byte for byte. NO VARIABLES. Mirrors whatsapp-send.ts. */
+const initialQuestionBody = (_b: string, _u: string) =>
+  'Hi mate, do you build websites or do SEO or AI visibility?';
+
 /** What initial_contact said before 2026-09-15 — kept so those transcripts stay true. */
 const initialContactBodyPre20260915 = (b: string, _u: string) =>
   `Hi, is this the right number for ${b || 'your business'}? Cheers`;
@@ -437,6 +441,7 @@ export const READABLE_TEMPLATE_BODIES: Record<string, TemplateBodyFn> = {
   initial_contact: initialContactBody,
   initial_opener_v2: initialOpenerV2Body,
   initial_contact_short: initialContactShortBody,
+  initial_question: initialQuestionBody,
   audit_reply: auditReplyBody,
   video_template: videoTemplateBody,
   competitor_hook: competitorHookBody,

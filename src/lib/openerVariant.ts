@@ -41,12 +41,21 @@ export const INITIAL_OPENER_V2_APPROVED = true;
  */
 export const INITIAL_OPENER_C = 'initial_contact_short';
 
+/**
+ * The QUESTION opener (Paul, 2026-11-15): "Hi mate, do you build websites or do SEO or AI visibility?". English, NO variables,
+ * no header, footer or buttons. Meta approval was in progress when it was added; Paul: treat it as approved.
+ * ⛔ NOT a flag: Meta's LIVE status is the gate (_shared/template-status.ts), exactly as for the short opener — the queue and the
+ * Inbox sender refuse it with Meta's word while Meta says it is pending/rejected, and when Meta cannot be asked (UNKNOWN) Meta
+ * decides on the send and a refusal comes back as the failed message with Meta's reason. WhatsApp-only (not in INITIAL_OPENERS).
+ */
+export const INITIAL_OPENER_D = 'initial_question';
+
 /** The two openers the SMS lane carries (and its parity tests pin), display order: the original first. The short opener is
  *  WhatsApp-only and is NOT here — see WHATSAPP_OPENERS. */
 export const INITIAL_OPENERS = [INITIAL_OPENER_A, INITIAL_OPENER_B] as const;
 
 /** Every cold WhatsApp opener (what isInitialOpener answers for). */
-export const WHATSAPP_OPENERS = [INITIAL_OPENER_A, INITIAL_OPENER_B, INITIAL_OPENER_C] as const;
+export const WHATSAPP_OPENERS = [INITIAL_OPENER_A, INITIAL_OPENER_B, INITIAL_OPENER_C, INITIAL_OPENER_D] as const;
 export type InitialOpener = (typeof INITIAL_OPENERS)[number];
 
 /** ⛔ THE COLD OPENER IS THE ORIGINAL (Paul, 2026-11-02, RED since 25 Oct): the short opener was ramped to about 200 a day just
@@ -69,5 +78,6 @@ export function openerApproved(name: string | null | undefined): boolean {
   if (n === INITIAL_OPENER_A) return true;
   if (n === INITIAL_OPENER_B) return INITIAL_OPENER_V2_APPROVED;
   if (n === INITIAL_OPENER_C) return true;   // Meta's live status decides, server-side — not a constant here
+  if (n === INITIAL_OPENER_D) return true;   // same: Meta's live status decides, server-side
   return false;
 }

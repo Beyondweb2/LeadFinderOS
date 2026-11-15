@@ -113,6 +113,10 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
      sender read Meta's LIVE status first and refuse with Meta's word while it is in review.
      MIRRORS process-whatsapp-queue; change both together. */
   initial_contact_short: { lang: "en", vars: ["name"] },
+  /* initial_question — Paul, 2026-11-15. "Hi mate, do you build websites or do SEO or AI visibility?". English, ZERO
+     variables, no header/footer/buttons: vars MUST stay [] (no parameters). COLD (not a continuation). Meta's LIVE status is
+     read first at both senders (like initial_contact_short). MIRRORS process-whatsapp-queue; change both together. */
+  initial_question: { lang: "en", vars: [] },
   // Reply-to-a-reply: 4 vars — {{1}} trade, {{2}} competitors, {{3}} business name, {{4}} report link.
   // Vars resolved server-side per-lead from the lead's own completed audit (see resolveAuditReplyVars).
   audit_reply: { lang: "en", vars: ["trade", "competitors", "name", "url"] },
@@ -426,6 +430,9 @@ const initialOpenerV2Body = () => "Hey, are you taking on more jobs atm? Cheers"
    CLEAN_NAME_TEMPLATES), so this only places it. Mirrors src/lib/templateBodies.ts. */
 const initialContactShortBody = (b: string, _u: string) => `Hey, is this ${b || "your business"}?
 Thanks`;
+
+/* initial_question — the registered body, byte for byte. No variables. Mirrors src/lib/templateBodies.ts. */
+const initialQuestionBody = () => "Hi mate, do you build websites or do SEO or AI visibility?";
 
 // audit_reply — reply to a lead who replied. b={{3}} business, u={{4}} report link,
 // trade={{1}}, competitors={{2}}. Keep in sync with the Meta-registered audit_reply body.
@@ -822,6 +829,7 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   initial_contact: initialContactBody,
   initial_opener_v2: () => initialOpenerV2Body(),
   initial_contact_short: initialContactShortBody,
+  initial_question: () => initialQuestionBody(),
   audit_reply: auditReplyBody,
   video_template: videoTemplateBody,
   competitor_hook: competitorHookBody,

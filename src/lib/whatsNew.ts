@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-15-initial-question-template', date: '2026-11-15', title: 'New WhatsApp opener: "Do you build websites or do SEO or AI visibility?"', audience: 'all',
+    body: 'A new first-message template, Initial question, is in the WhatsApp template pickers. It says: "Hi mate, do you build websites or do SEO or AI visibility?" It has no name or link in it. If Meta has not approved it yet, the send is refused and the app says why.',
+    report: {
+      added: ['Initial question in the WhatsApp template pickers (Outreach and Inbox).'],
+      changed: ['When Meta refuses a WhatsApp send, the message now says why in plain words instead of Meta\'s raw error text.'],
+      removed: [],
+      effect: 'You can open a conversation with a short question. Every cold WhatsApp rule (UK mobiles, daily cap, opt-outs) still applies to it.',
+    } },
   { id: '2026-11-14-add-lead-from-website', date: '2026-11-14', title: 'Add a lead you found: paste the website and press Fill from website', audience: 'all',
     body: 'On Add a lead you found, paste the business website and press Fill from website. It fills the name, trade, phone, email, address, town, services and areas, but only what the site itself says. Anything the site does not say stays blank, and anything you typed is kept. The form is shorter now: Website, Name, Trade, Town, Phone (or a Maps link) and Where found are up front. Everything else is under More details, including Country.',
     report: {
