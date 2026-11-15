@@ -41,6 +41,8 @@ export interface Campaign {
   archived_at?: string | null;
   /** "Run audit when they reply" (2026-11-15, src/lib/campaignReplyAudit.ts). Default true. */
   audit_on_reply?: boolean | null;
+  /** "Report style" (2026-11-15, src/lib/reportBrand.ts): 'findable' (default) or 'leadfinderos'. */
+  report_style?: string | null;
 }
 
 export interface CampaignInput {

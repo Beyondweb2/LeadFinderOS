@@ -36,3 +36,47 @@ https://leadfinderos.com
 
 Paul✌️`;
 }
+
+/* webdev_hook — Paul, 2026-11-15. WhatsApp template, English, Marketing, NO VARIABLES. The same app pitch to a web developer /
+   SEO person as webdev_report, without their report link. Set up exactly like webdev_report:
+   ⛔ NEVER A FIRST MESSAGE: a continuation (coldOutreach.ts CONTINUATION_TEMPLATES) that NEEDS_PRIOR_WHATSAPP refuses at both
+      senders for a number never messaged. Meta's live status is read first at both senders. Treated as approved.
+   ⛔ vars [] — no parameters go to Meta. */
+export const WEBDEV_HOOK_TEMPLATE = 'webdev_hook';
+
+/* ── WEB-DEV AUDIT QUESTIONS (Paul, 2026-11-15: "Audit questions for web-dev leads are about their trade (web design, SEO,
+   websites) in their area.") A lead whose trade is web design / development / SEO / a web or digital agency gets these three
+   hook searches, in this order, instead of generated ones: the generator could drift onto a client's trade or a generic
+   "marketing" search. Question 1 keeps the shape every hook has used ("Who is the best web designer in <place>?"). */
+const WEBDEV_TRADE_RE = /\b(web\s*-?\s*(design|develop|agenc|studio)|website|seo\b|search engine optimi[sz]|digital (marketing|agenc)|marketing agenc|wordpress|shopify)/i;
+export function isWebdevTrade(trade: string | null | undefined): boolean {
+  return WEBDEV_TRADE_RE.test(String(trade ?? ''));
+}
+/** The three hook searches for a web-dev lead. `place` is the hook place (town, with the UK disambiguation the hook uses). */
+export function webdevHookQuestions(place: string): string[] {
+  const p = String(place ?? '').trim();
+  return [
+    `Who is the best web designer in ${p}?`,
+    `Who is the best SEO agency in ${p}?`,
+    `Who can build a website for a small business in ${p}?`,
+  ];
+}
+
+/** The registered body, byte for byte as submitted to Meta (2026-11-15). No variables. */
+export function webdevHookBody(): string {
+  return `Cool, if you've got space for more clients this might help
+
+I've found going in from the AI visibility angle is very unsaturated atm
+
+When a business finds out AI names their competitors instead, it gets their attention
+
+I use this - It finds local businesses, runs SEO and AI visibility audits on them, then lets you SMS, whatsapp or call them on the app and send them their AI audit report
+
+Then you can pitch an "AI optimised website" and run monthly Audits on them to measure the difference
+
+Just passing it on incase you wanna test it out while its free :)
+
+https://leadfinderos.com
+
+Paul✌️`;
+}

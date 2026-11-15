@@ -33,7 +33,12 @@ console.log('\n── 1. the page route is gone ──');
   const r = code('functions/r/[slug].ts');
   ok(/status:\s*410/.test(r), '/r/[slug] answers 410 Gone');
   ok(/"x-robots-tag":\s*"noindex, nofollow"/.test(r) && /name="robots" content="noindex, nofollow"/.test(r), '…with noindex, nofollow (header and meta)');
-  ok(!/fetch\(|business_reports|SUPABASE|application\/ld\+json|canonical|og:/.test(r), '…and reads nothing: no fetch, no row, no schema, no canonical, no OG tags');
+  /* 2026-11-15: the same file now also serves the LeadFinderOS report link, ONLY on app.leadfinderos.com (src/lib/reportBrand.ts).
+     Every other host is the retired route: 410 before anything is read. */
+  ok(!/business_reports|application\/ld\+json|canonical|og:/.test(r), '…no row, no schema, no canonical, no OG tags');
+  const gate = r.indexOf('if (!isLfosReportHost(reqUrl.hostname)) return gone();');
+  ok(gate > 0 && gate < r.indexOf('fetch('), '…and every non-LeadFinderOS host gets 410 before any fetch');
+  ok(r.includes('brand: "leadfinderos"') && r.includes('SHORT_CODE_RE.test(code)'), 'the LeadFinderOS branch takes short codes only and asks for the LeadFinderOS style');
 }
 
 console.log('\n── 2. the generator is a stub ──');

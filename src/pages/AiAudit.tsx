@@ -51,6 +51,7 @@ import { auditMatches, auditSearchTerms } from '@/lib/auditSearch';
 import { explainAuditFailure, shortDate } from '@/lib/auditErrors';
 import { readFunctionErrorBody, functionErrorSentence, functionErrorWrapper } from '@/lib/functionError';
 import { shortReportUrl } from '@/lib/reportSlug';
+import { reportLinkFor, useLeadReportStyle } from '@/hooks/useReportStyle';
 import { chooseReportDesign } from '@/lib/reportDesign';
 import { CreateBaselineDialog } from '@/components/audit/CreateBaselineDialog';
 import { paidReportKind } from '@/lib/reportKind';
@@ -2000,6 +2001,8 @@ const AiAudit = () => {
   const runAgainVerdict = auditRepeatable(openAuditRow);
   const deleteVerdict = auditDeletable(openAuditRow);
   const runAgainRuns = repeatRunCount(openAuditRow);
+  /* Report style (2026-11-15): Copy Report Link hands over the link this lead's campaign uses (useReportStyle.ts). */
+  const openReportStyle = useLeadReportStyle(openAuditRow?.lead_id ?? null);
   const connectedBusiness = openAuditRow?.lead_id
     ? leads.find((lead) => lead.id === openAuditRow.lead_id) ?? null
     : null;
@@ -2427,7 +2430,7 @@ const AiAudit = () => {
            downloadReportHtml also fails safe to Client if internal is unset. */
         onDownload={(internal) => downloadReportHtml({ ...openReportData, internal })}
         reportUrl={openAuditRow?.short_code
-          ? shortReportUrl(openAuditRow.short_code)
+          ? reportLinkFor(openAuditRow.short_code, openReportStyle)
           : auditId ? `https://findable.live/report/${auditId}` : undefined}
         /* A copied link is recorded on the lead (lead_report_link_event 'generated', channel null) exactly as the
            lead workspace's copy is — it used to record nothing from here (closeout 2026-10-02). No lead → nothing to

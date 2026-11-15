@@ -134,6 +134,8 @@ const EXPECTED_CONTINUATIONS = [
   "initial_question",
   /* Paul, 2026-11-15: webdev_report, "same setup as initial_question" — a follow-up, never a first touch (NEEDS_PRIOR_WHATSAPP). */
   "webdev_report",
+  /* Paul, 2026-11-15: webdev_hook, set up exactly like webdev_report. */
+  "webdev_hook",
 ].sort();
 const actual = [...CONTINUATION_TEMPLATES].sort();
 const added = actual.filter((t) => !EXPECTED_CONTINUATIONS.includes(t));

@@ -24,6 +24,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { REPORT_PUBLIC_ORIGIN } from '@/lib/findableOffer';
 import { isAggregatorUrl } from '@/lib/aggregators';
 import { shortReportUrl } from '@/lib/reportSlug';
+import { reportLinkFor, useCampaignReportStyle } from '@/hooks/useReportStyle';
 import { assessOnboardingLink } from '@/components/OnboardingLinkCard';
 import { LeadDetailFromInbox } from '@/components/LeadDetailFromInbox';
 import { CrawlCheckButton } from '@/components/CrawlCheckButton';
@@ -268,6 +269,7 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
   initial_contact_short: 'Initial contact short ("Hey, is this …?")',
   initial_question: 'Initial question ("Do you build websites…?")',
   webdev_report: 'Web dev report ("I ran one on …")',
+  webdev_hook: 'Web dev hook (app pitch, no link)',
   onboarding_followup: 'Onboarding follow-up',
   book_call: 'Arrange a call',
   re_engage_49: 'Re-engage (gone quiet)',
@@ -1224,8 +1226,10 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
      findable.live/r/<code>, resolving on ai_audits.short_code — present on every audit (backfill +
      insert trigger), unguessable, resolves directly. Falls back to the UUID /report/ form only if a
      code is somehow absent, which also always resolves. */
+  /* Report style (2026-11-15): a LeadFinderOS-style campaign's lead gets the app.leadfinderos.com link (useReportStyle.ts). */
+  const activeReportStyle = useCampaignReportStyle(activeLead?.campaign_id);
   const reportUrl = activeReport?.auditId
-    ? (activeReport.shortCode ? shortReportUrl(activeReport.shortCode) : `${REPORT_PUBLIC_ORIGIN}/report/${activeReport.auditId}`)
+    ? (activeReport.shortCode ? reportLinkFor(activeReport.shortCode, activeReportStyle) : `${REPORT_PUBLIC_ORIGIN}/report/${activeReport.auditId}`)
     : null;
 
   /* Readable body for a thread bubble. Campaign/opener rows are stored as a bare slug

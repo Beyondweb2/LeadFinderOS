@@ -87,6 +87,8 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
   /* webdev_report (2026-11-15) - a FOLLOW-UP whose {{2}} IS the lead's latest report link, so needsAudit: the picker greys it with
      "Run an audit for this lead first." until a report exists, and the server refuses the same way (src/lib/webdevReport.ts). */
   webdev_report:          { needsUrl: false, needsAudit: true,  group: 'audit' },
+  /* webdev_hook (2026-11-15) - the same follow-up pitch with NO variables: no name, no link, no audit needed. */
+  webdev_hook:            { needsUrl: false, needsAudit: false, group: 'opener' },
   // audit_reply is not yet wired into the manual send path; its rule lives here so the guard is
   // ready the moment it's added to the picker + sender (no drift when that happens).
   audit_reply:            { needsUrl: false, needsAudit: true,  group: 'audit' },

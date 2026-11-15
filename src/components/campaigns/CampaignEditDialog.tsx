@@ -11,6 +11,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useCampaigns } from '@/hooks/useCampaigns';
 import { leadRpc } from '@/lib/leadRpc';
 import { RUN_AUDIT_ON_REPLY_HINT, RUN_AUDIT_ON_REPLY_LABEL } from '@/lib/campaignReplyAudit';
+import { REPORT_STYLE_HINT, REPORT_STYLE_LABEL, REPORT_STYLES, reportStyleOf, type ReportStyle } from '@/lib/reportBrand';
 import {
   CAMPAIGN_FIELD_MAX, CAMPAIGN_NAME_MAX, campaignErrorText, campaignFormError, suggestCampaignName,
   type CampaignMethod, type CampaignSummary,
@@ -44,6 +45,43 @@ function ReplyAuditSwitch({ campaignId }: { campaignId: string }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0"><p className="text-sm font-medium">{RUN_AUDIT_ON_REPLY_LABEL}</p><p className="text-xs text-muted-foreground">{RUN_AUDIT_ON_REPLY_HINT}</p></div>
         <Switch checked={on} disabled={busy} onCheckedChange={(v) => void flip(v)} aria-label={RUN_AUDIT_ON_REPLY_LABEL} data-testid="campaign-reply-audit-switch" />
+      </div>
+      {err && <p role="alert" className="mt-1 text-xs text-destructive">{err}</p>}
+    </div>
+  );
+}
+
+/** "Report style" (Paul, 2026-11-15): admin only, saved straight away (campaign_set_report_style). Findable is the default. */
+function ReportStyleSetting({ campaignId }: { campaignId: string }) {
+  const { isAdmin } = useSubscription();
+  const { allCampaigns, refetch } = useCampaigns();
+  const stored = reportStyleOf(allCampaigns.find((c) => c.id === campaignId));
+  const [style, setStyle] = useState<ReportStyle>(stored);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { setStyle(stored); }, [stored]);
+  if (!isAdmin) return null;
+  const pick = async (next: ReportStyle) => {
+    if (next === style) return;
+    const prev = style;
+    setBusy(true); setErr(null); setStyle(next);
+    const r = await leadRpc('campaign_set_report_style', { _campaign_id: campaignId, _style: next });
+    if (!r.ok) { setStyle(prev); setErr(r.error === 'admin_only' ? 'Only the admin can change this.' : `Not saved: ${String(r.error)}`); }
+    else refetch();
+    setBusy(false);
+  };
+  return (
+    <div className="rounded-md border border-input px-3 py-2" data-testid="campaign-report-style">
+      <p className="text-sm font-medium">{REPORT_STYLE_LABEL}</p>
+      <p className="text-xs text-muted-foreground">{REPORT_STYLE_HINT}</p>
+      <div className="mt-2 flex gap-2" role="radiogroup" aria-label={REPORT_STYLE_LABEL}>
+        {REPORT_STYLES.map((s) => (
+          <button key={s.value} type="button" role="radio" aria-checked={style === s.value} disabled={busy}
+            onClick={() => void pick(s.value)} data-testid={`campaign-report-style-${s.value}`}
+            className={cn('rounded-md border px-3 py-1.5 text-sm', style === s.value ? 'border-primary bg-primary/10 font-medium' : 'border-input')}>
+            {s.label}{s.value === 'findable' ? ' (default)' : ''}
+          </button>
+        ))}
       </div>
       {err && <p role="alert" className="mt-1 text-xs text-destructive">{err}</p>}
     </div>
@@ -131,6 +169,7 @@ export function CampaignEditDialog({ open, onOpenChange, campaign, onSaved }: {
         {campaign && campaign.method === 'whatsapp' && method === 'call' && (campaign.queued ?? 0) > 0 &&
           <p className="text-xs text-amber-700 dark:text-amber-300">Openers are waiting to send. Pause sending first, then switch to Call.</p>}
         {campaign && <ReplyAuditSwitch campaignId={campaign.id} />}
+        {campaign && <ReportStyleSetting campaignId={campaign.id} />}
         {error && <p role="alert" className="text-sm text-destructive" data-testid="campaign-form-error">{error}</p>}
       </div>
       <DialogFooter>

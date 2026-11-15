@@ -19,6 +19,7 @@ import { HOOK_SCORE_RESULTS, isHookStateV2, scoreHookRun, type HookScoreContext,
 import { scoringMethodFor } from "../../../src/lib/aiOverview.ts";
 import { worstMiss } from "../../../src/lib/worstMiss.ts";
 import { NO_REPORT_REASON, REPORT_LINK_ONLY_TEMPLATES } from "../../../src/lib/webdevReport.ts";
+import { lfosReportUrl, reportStyleOf } from "../../../src/lib/reportBrand.ts";
 
 /* ── The all-named hook guard ──────────────────────────────────────────────────────────────────────
    ⛔ A HOOK THAT NAMED THEM EVERYWHERE FORBIDS ABSENCE COPY (Paul, 2026-09-21). Several audit-class
@@ -164,8 +165,20 @@ export async function resolveAuditReplyVars(service: any, leadId: string, opts: 
         return { ok: false, reason: "The audit didn't answer any questions, so its report is empty — re-run it. Nothing was sent." };
       }
     }
-    const reportLink = (audit.short_code as string | null | undefined)
-      ? shortReportUrl(audit.short_code as string)
+    /* REPORT STYLE (2026-11-15, src/lib/reportBrand.ts): a lead whose campaign is LeadFinderOS-style gets the LeadFinderOS link
+       (app.leadfinderos.com/r/<code>), the address that renders that brand. A failed read keeps the Findable link. */
+    let style = "findable";
+    try {
+      const { data: ld } = await service.from("outreach_leads").select("campaign_id").eq("id", leadId).maybeSingle();
+      const cid = (ld as { campaign_id?: string | null } | null)?.campaign_id ?? null;
+      if (cid) {
+        const { data: camp } = await service.from("campaigns").select("report_style").eq("id", cid).maybeSingle();
+        style = reportStyleOf(camp as { report_style?: string | null } | null);
+      }
+    } catch { /* Findable link */ }
+    const code = (audit.short_code as string | null | undefined) ?? null;
+    const reportLink = code
+      ? (style === "leadfinderos" ? lfosReportUrl(code) : shortReportUrl(code))
       : `${REPORT_SITE_ORIGIN}/report/${audit.id}`;
     return { ok: true, trade: (audit.business_type ?? "").trim(), competitors: "", rivals: [], business: linkBusiness, link: reportLink,
       town: (audit.location_text ?? "").trim(), auditId: audit.id, siteFault: null, siteFindings: null, siteFindingsKinds: null,
