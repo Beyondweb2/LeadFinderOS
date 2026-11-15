@@ -38,6 +38,7 @@ import { type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml
 import { downloadReportHtml } from '@/lib/aiAuditReportDownload';
 import { isMarketAudit, MARKET_AUDIT_NO_REPORT } from '@/lib/auditReport';
 import { measuringState } from '@/lib/measuringState';
+import { wholeAuditProgress } from '@/lib/auditRunningProgress';
 import { poolRuns, engineSummary, type PooledInput } from '@/lib/pooledRuns';
 import { isPaidLead } from '@/lib/leadPayment';
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells } from '@/lib/competitorCleaning';
@@ -1981,6 +1982,19 @@ const AiAudit = () => {
   }, [savedAudits, searchExtras]);
 
   const openAuditRow = listSource.find((a) => a.id === auditId) ?? null;
+  /* The open audit's progress for the WHOLE audit, the same words and % as its Past audits row
+     ("Run 2 of 3 · 20 of 40 searches · 50%", wholeAuditProgress; Paul, 2026-11-15). The run in flight
+     takes this page's own live queue count, which is fresher than the list's. */
+  const openProgress = useMemo(() => {
+    const base = openAuditRow?.runs?.length
+      ? openAuditRow.runs.map((r) => ({ status: r.status, created_at: r.created_at, done: r.done ?? 0, total: r.total ?? 0 }))
+      : auditRuns.map((r) => ({ status: r.status, created_at: r.created_at, done: 0, total: 0 }));
+    const ids = openAuditRow?.runs?.length ? openAuditRow.runs.map((r) => r.id) : auditRuns.map((r) => r.id);
+    const i = runId ? ids.indexOf(runId) : -1;
+    const live = { status: run?.status ?? 'running', created_at: run?.created_at ?? new Date().toISOString(), done: doneCount, total: queueRows.length };
+    const runs = i >= 0 ? base.map((r, k) => (k === i ? { ...r, ...live } : r)) : runId ? [...base, live] : base;
+    return wholeAuditProgress(runs, openAuditRow?.baseline_target_runs ?? null);
+  }, [openAuditRow, auditRuns, runId, run?.status, run?.created_at, doneCount, queueRows.length]);
   /* ⛔ THE THREE ACTIONS ASK THE SAME MODULE, WHICH ASKS THE STORED PURPOSE. Nothing here reads a
      run count, `is_measurement` on its own, or a question count to decide what this audit is. */
   const runAgainVerdict = auditRepeatable(openAuditRow);
@@ -3424,9 +3438,9 @@ const AiAudit = () => {
               {/* While draining: progress. Once complete: two score tiles side-by-side. */}
               {isDraining ? (
                 <div className="space-y-1.5">
-                  <Progress value={queueRows.length ? (doneCount / queueRows.length) * 100 : 0} />
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Running searches… {doneCount}/{queueRows.length || '…'}
+                  <Progress value={openProgress?.pct ?? 0} />
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground" data-progress="whole-audit">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> {openProgress && openProgress.pct !== null ? `${openProgress.label} · ${openProgress.pct}%` : 'Queued'}
                     {run?.status === 'capped' && <span className="text-amber-500">· cost cap reached</span>}
                   </div>
                 </div>
