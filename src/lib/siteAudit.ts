@@ -32,6 +32,7 @@ import { coverageStatementsIn, FULL_TEXT_MARK, pageTextWasCut, textStatesTown } 
 import { usableVisibilityChecks, VISIBILITY_SUPERSEDES, type VisibilityChecks } from './visibilityChecks.ts';
 import { compareIssues, isBrokenPageStatus, isCrawlerRefusedStatus, usableContentTrust, CONTENT_TRUST_KINDS, type ContentIssue, type ContentTrust, type EvidenceClass } from './contentTrust.ts';
 import { crawlUnreadable, verifiedSearchBlocked } from './crawlCheck.ts';
+import { isCustomerQuestion, looksLikeFaq, PROOF_PAGE_RE, SERVICE_SLUG_RE, UTILITY_PATH_RE } from './siteSignals.ts';
 
 export const SITE_AUDIT_VERSION = 1;
 /** Affected addresses kept per finding. Above it the list is cut and `urlsComplete` is false. */
@@ -139,7 +140,7 @@ export interface SiteAuditInput {
   coverage: CrawlCoverage;
   /** The homepage read crawl-check made. `searchBlocked` is robots.txt's verdict when `blockEvidence` is 'robots'
    *  (2026-10-26); without the marker it came from our own refused fetches and is never used (verifiedSearchBlocked). */
-  probe: { searchBlocked: string[]; blockEvidence?: string | null; readableAs: string | null; clientRendered: { flagged?: boolean } | null };
+  probe: { searchBlocked: string[]; blockEvidence?: string | null; readableAs: string | null; clientRendered: { flagged?: boolean; emptyInBrowser?: boolean } | null };
   /** The engine's near-duplicate check on the biggest templated cluster. */
   duplicates: { clusterSize: number; sampleSize: number; similarityPct: number } | null;
   /** The lead's own name and town (from the CRM), to check the site states them. Optional. */
@@ -167,6 +168,9 @@ export { nameOnPage, significantWords, statesAll };
 
 const BUSINESS_TYPE = /business|organi[sz]ation|contractor|service|plumber|electrician|locksmith|store|dentist|accounting|roofing|hvac|attorney|legal|restaurant|salon|clinic|agent|repair|mover|garage/i;
 const IMPORTANT_FAMILY = new Set(['homepage', 'service', 'location', 'about', 'contact']);
+const pathOnly = (u: string, base: string) => { try { return new URL(u, base).pathname; } catch { return u; } };
+/** Words of a town to take out of a page address before reading what service it names. */
+const townTokens = (town: string | null | undefined) => new Set(String(town ?? '').toLowerCase().split(/[^a-z]+/).filter(Boolean));
 
 /** The crawlers whose robots.txt access is checked, and why each matters. ⛔ GPTBot is a TRAINING
  *  crawler: blocking it is common and does not stop ChatGPT search, so it is never a finding. */
@@ -252,7 +256,13 @@ export function buildSiteAudit(input: SiteAuditInput): SiteAudit {
       saw: `robots.txt ${robots ? 'allows' : 'does not restrict'} OAI-SearchBot, and our check read the homepage.`,
       meaning: 'Nothing in the site’s own rules stops ChatGPT search reading it.', count: 0 }));
   }
-  if (input.probe.clientRendered?.flagged === true) {
+  if (input.probe.clientRendered?.flagged === true && input.probe.clientRendered.emptyInBrowser) {
+    /* Empty in a real browser too (2026-11-15, idriveauto.co.uk): not "built by JavaScript" — just no readable text. */
+    out.push(finding({ id: 'home_no_text', category: 'ai_access', severity: 'medium',
+      title: 'The homepage has almost no readable text',
+      saw: 'The homepage carries almost no readable text, even when read in a real browser — its words may be pictures of words.',
+      meaning: 'Search engines and AI tools read text; a page whose words are pictures gives them almost nothing to work with.', urls: home ? [urlOf(home)] : [] }));
+  } else if (input.probe.clientRendered?.flagged === true) {
     out.push(finding({ id: 'client_rendered', category: 'ai_access', severity: 'medium',
       title: 'Homepage text only appears after JavaScript runs',
       saw: home?.d?.rendered
@@ -318,7 +328,9 @@ export function buildSiteAudit(input: SiteAuditInput): SiteAudit {
       saw: `The homepage carries “${homeNoindex.d!.robots}”.`,
       meaning: 'Search engines that respect it will leave the homepage out of their results.', urls: [urlOf(homeNoindex)] }));
   }
-  const otherNoindex = noindex.filter((p) => fam(p) !== 'homepage');
+  /* A cart, an account, a booking widget, a member profile is RIGHTLY kept out of search: never an issue (2026-11-15 bench —
+     siteSignals.UTILITY_PATH_RE). */
+  const otherNoindex = noindex.filter((p) => fam(p) !== 'homepage' && !UTILITY_PATH_RE.test(`${pathOnly(urlOf(p), servedUrl)}/`));
   if (otherNoindex.length) {
     const important = otherNoindex.some((p) => IMPORTANT_FAMILY.has(fam(p)));
     out.push(finding({ id: 'noindex_pages', category: 'discovery', severity: important ? 'medium' : 'low',
@@ -415,8 +427,14 @@ export function buildSiteAudit(input: SiteAuditInput): SiteAudit {
   const siteNames = biz('names').map((x) => String(x.v));
   const leadName = input.lead?.name?.trim() || '';
   if (home && leadName && significantWords(leadName).length) {
-    const inHead = nameOnPage([home.d!.title, ...(home.d!.h1 ?? []), ...siteNames].join(' '), leadName);
-    const inText = nameOnPage(homeHay, leadName);
+    /* A Google listing name stuffed with keywords ("Ronnoco roofing flat roofing GRP SINGLE PLY FELT LIQUID", 2026-11-15) is judged by
+       its brand: the words before the first trade or service word. */
+    const lw = leadName.split(/\s+/);
+    const brandEnd = lw.findIndex((w, i) => i > 0 && /^(?:roof\w*|electric\w*|plumb\w*|build\w*|heating|gas|driving|school|services?|solutions|ltd|limited|flat|grp|single|felt|liquid|maintenance|construction|contractors?)$/i.test(w));
+    const brand = lw.length >= 5 && brandEnd > 0 ? lw.slice(0, brandEnd).join(' ') : '';
+    const named = (hay: string) => nameOnPage(hay, leadName) || (!!brand && significantWords(brand).length > 0 && nameOnPage(hay, brand));
+    const inHead = named([home.d!.title, ...(home.d!.h1 ?? []), ...siteNames].join(' '));
+    const inText = named(homeHay);
     if (inHead) out.push(finding({ id: 'name_clear', category: 'entity', severity: 'good', title: 'Business name stated clearly', saw: `“${leadName}” appears in the homepage title, main heading or business markup.`, meaning: 'The site says plainly who the business is.', urls: [urlOf(home)] }));
     else out.push(finding({ id: 'name_unclear', category: 'entity', severity: inText ? 'low' : 'medium', absence: !inText,
       title: inText ? 'Business name is not in the homepage title or main heading' : 'Business name not found on the homepage',
@@ -463,7 +481,14 @@ export function buildSiteAudit(input: SiteAuditInput): SiteAudit {
   if (people.length) out.push(finding({ id: 'people', category: 'entity', severity: 'good', title: 'Says who runs the business', saw: `“${String(people[0].v).slice(0, 160)}”`, meaning: 'A named owner or team builds trust.', urls: [...new Set(people.map((p) => p.url))] }));
 
   /* ── Services & content ─────────────────────────────────────────────────────────────────────── */
-  const servicePages = ok.filter((p) => fam(p) === 'service');
+  /* A page whose own address names a service ("/fencing-grantham", "/pat-testing-sevenoaks-kent", "/driving-course/48-hours…")
+     is a service page whatever family the address guess gave it (2026-11-15 bench: "no service pages" said of three sites that
+     have them). The town and the bare trade word are not services. */
+  const notServiceFamily = new Set(['homepage', 'legal', 'contact', 'about', 'blog', 'faq', 'reviews', 'gallery', 'pricing']);
+  const town0 = townTokens(input.lead?.town);
+  const namesAService = (p: SiteAuditPage) => !notServiceFamily.has(fam(p)) && pathOnly(urlOf(p), servedUrl).toLowerCase().split(/[^a-z0-9]+/)
+    .some((t) => t && !town0.has(t) && SERVICE_SLUG_RE.test(t));
+  const servicePages = ok.filter((p) => fam(p) === 'service' || namesAService(p));
   const locationPages = ok.filter((p) => fam(p) === 'location');
   /* "Only the homepage was found" needs that to be so: no other page known from its links or its sitemap (2026-11-03, shorelec.uk
      said it with 212 addresses found). */
@@ -497,7 +522,9 @@ export function buildSiteAudit(input: SiteAuditInput): SiteAudit {
   if (noH1.length) out.push(finding({ id: 'missing_h1', category: 'content', severity: noH1.some((p) => fam(p) === 'homepage') ? 'medium' : 'low', title: 'Pages without a main heading (H1)', saw: `${plural(noH1.length, 'page')} have no H1 heading${noH1.some((p) => fam(p) === 'homepage') ? ', including the homepage' : ''}.`, meaning: 'The main heading is the clearest statement of what a page is about.', urls: noH1.map(urlOf) }));
   const multiH1 = ok.filter((p) => (p.d!.h1?.length ?? 0) > 1);
   if (multiH1.length) out.push(finding({ id: 'multiple_h1', category: 'content', severity: 'low', title: 'Pages with more than one main heading', saw: `${plural(multiH1.length, 'page')} have several H1 headings.`, meaning: 'Minor; one main heading per page reads more clearly.', urls: multiH1.map(urlOf) }));
-  const qPages = ok.filter((p) => [...(p.d!.h2 ?? []), ...(p.d!.h3 ?? [])].some((h) => /\?\s*$/.test(h)));
+  /* A question a customer would ask, or an FAQ heading — never a form label ("How many sockets would you like?"). The same reading
+     the FAQ-markup check uses (siteSignals), so one never says "no questions" while the other quotes one (2026-11-15). */
+  const qPages = ok.filter((p) => { const hs = [...(p.d!.h1 ?? []), ...(p.d!.h2 ?? []), ...(p.d!.h3 ?? [])]; return hs.some(isCustomerQuestion) || looksLikeFaq(hs); });
   const faqPages = ok.filter((p) => fam(p) === 'faq');
   if (qPages.length || faqPages.length) {
     out.push(finding({ id: 'answers_questions', category: 'content', severity: 'good', title: 'Answers customer questions directly', saw: `${plural(new Set([...qPages, ...faqPages].map(urlOf)).size, 'page')} carry question-style headings or an FAQ.`, meaning: 'Direct question-and-answer text is easy to quote.', urls: [...new Set([...faqPages, ...qPages].map(urlOf))] }));
@@ -508,7 +535,7 @@ export function buildSiteAudit(input: SiteAuditInput): SiteAudit {
   /* ── Local & trust evidence ─────────────────────────────────────────────────────────────────── */
   const reviews = biz('reviews');
   /* A page of its own for reviews or testimonials is proof, whatever its wording (2026-11-03, renderplus.co.uk). */
-  const reviewPages = ok.filter((p) => fam(p) === 'reviews').map(urlOf);
+  const reviewPages = ok.filter((p) => fam(p) === 'reviews' || PROOF_PAGE_RE.test(p.d!.title ?? '') || (p.d!.h1 ?? []).some((h) => PROOF_PAGE_RE.test(h))).map(urlOf);
   if (reviews.length) out.push(finding({ id: 'reviews_shown', category: 'local_evidence', severity: 'good', title: 'Reviews or testimonials on the site', saw: `Seen on ${plural(new Set(reviews.map((r) => r.url)).size, 'page')}, e.g. ${String(reviews[0].v).slice(0, 140)}`, meaning: 'Visible proof from real customers.', urls: [...new Set(reviews.map((r) => r.url))] }));
   else if (reviewPages.length) out.push(finding({ id: 'reviews_shown', category: 'local_evidence', severity: 'good', title: 'Reviews or testimonials on the site', saw: `A page of its own: ${reviewPages[0]}`, meaning: 'Visible proof from real customers.', urls: reviewPages }));
   else if (ok.length) out.push(finding({ id: 'no_reviews', category: 'local_evidence', severity: 'low', absence: true, title: 'No reviews or testimonials found on the site', saw: `No customer reviews or testimonials were found${readScope || ' on any page read'} (a reviews widget that loads by JavaScript would not be visible to us).`, meaning: 'Reviews shown on the site are visible proof a customer can check.', count: 0 }));
@@ -599,7 +626,7 @@ export interface StoredCrawlForAudit {
     url?: string | null;
     checked_at?: string | null;
     signals?: {
-      fetchFailed?: boolean; searchBlocked?: string[]; blockEvidence?: string | null; readableAs?: string | null; clientRendered?: { flagged?: boolean } | null;
+      fetchFailed?: boolean; searchBlocked?: string[]; blockEvidence?: string | null; readableAs?: string | null; clientRendered?: { flagged?: boolean; emptyInBrowser?: boolean } | null;
       missingH1?: boolean; noJsonLd?: boolean; duplicates?: { clusterSize: number; sampleSize: number; similarityPct: number } | null;
       pagesChecked?: number; thinPageUrls?: string[]; checkedPages?: Array<{ url: string; readable?: boolean }>;
     } | null;
@@ -653,14 +680,28 @@ export function auditFromStoredCrawl(row: StoredCrawlForAudit | null | undefined
   if (!a) return a;
   const merged = dropUnverifiedBlockFindings(mergeVisibilityChecks(a, usableVisibilityChecks((row?.result as { visibility?: unknown } | null | undefined)?.visibility)));
   if (checksAreCurrent(row)) return merged;
-  const kept = heldOnOlderCheck(merged.findings, !!merged.coverage?.capped);
+  const kept = heldOnOlderCheck(merged.findings, !!merged.coverage?.capped, storedChecksVersion(row));
   return kept.length === merged.findings.length ? merged : { ...merged, findings: kept };
+}
+
+/** The checks version a stored row was made with (0 = before versions). */
+export function storedChecksVersion(row: StoredCrawlForAudit | null | undefined): number {
+  const v = Number((row?.result as { checksVersion?: unknown } | null | undefined)?.checksVersion ?? 0);
+  return Number.isFinite(v) ? v : 0;
 }
 
 /* ⛔ THE CHECKS BEFORE 2026-11-03 (RECON_website-check-accuracy-2026-11-03.md: at least 37 of 127 serious claims false). A row stored
    before WEBSITE_CHECKS_VERSION keeps only what those checks got right, until a new crawl replaces it. Nothing stored is
    rewritten: this is what is SAID about an older row. */
-export const WEBSITE_CHECKS_VERSION = 2;
+/* ⛔ 3 = THE BENCHED CHECKS (2026-11-15, docs/WEBSITE_CHECK_ACCURACY.md): 27 real sites, every finding checked by hand; 81% true
+   under version 2, 99% under version 3. A version-2 row keeps only the kinds version 2 got right at least 90% of the time. */
+export const WEBSITE_CHECKS_VERSION = 3;
+/** Measured under 90% true on version-2 rows (the bench's "before" run): not said from a version-2 row. */
+const UNRELIABLE_ON_V2: ReadonlySet<string> = new Set([
+  'ct_logo_alt_mismatch', 'ct_link_mismatch', 'ct_area_coverage', 'noindex_pages', 'noindex_important_page', 'ct_dead_links', 'name_unclear',
+  'ct_no_proof', 'no_reviews', 'no_service_pages', 'vs_faq_no_schema', 'no_questions_answered', 'ct_schema_mismatch', 'thin_key_pages',
+  'thin_pages', 'ct_no_accreditations', 'ct_areas_not_stated', 'ct_no_people', 'vs_town_swapped_pages', 'no_sitemap', 'vs_key_page_basics',
+]);
 /** The row's own checks are the current ones. */
 export function checksAreCurrent(row: StoredCrawlForAudit | null | undefined): boolean {
   return (row?.result as { checksVersion?: unknown } | null | undefined)?.checksVersion === WEBSITE_CHECKS_VERSION;
@@ -676,7 +717,9 @@ const TRUE_OF_A_SHELL = /^(?:client_rendered|no_https|https_ok|no_robots|no_site
 
 /** What survives on a check stored before the current ones. A capped crawl's "not found" is dropped too: it may never have read
  *  the page (contact, about and reviews were read last). Pure. */
-export function heldOnOlderCheck<T extends { id: string; severity?: string; absence?: boolean }>(findings: readonly T[], capped: boolean): T[] {
+export function heldOnOlderCheck<T extends { id: string; severity?: string; absence?: boolean }>(findings: readonly T[], capped: boolean, fromVersion = 0): T[] {
+  /* A version-2 row (the 2026-11-03 rules: shells and cut pages already unjudged) loses only what the bench measured wrong. */
+  if (fromVersion === 2) return findings.filter((f) => f.severity === 'good' || !UNRELIABLE_ON_V2.has(f.id));
   const shell = findings.some((f) => f.id === 'client_rendered');
   return findings.filter((f) => {
     if (f.severity === 'good') return !shell || TRUE_OF_A_SHELL.test(f.id);

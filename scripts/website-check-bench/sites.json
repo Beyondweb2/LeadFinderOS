@@ -1,0 +1,1213 @@
+{
+ "chosen": "2026-11-15",
+ "note": "Real leads (public business websites). Chosen for a mix: trades, driving schools, web designers; WordPress, Wix, GoDaddy, JavaScript-built, one-page, large, a Facebook page as the website, and three that failed to read (timeout, 404, 403).",
+ "sites": [
+  {
+   "slug": "badgerdesigner.co.uk",
+   "lead": {
+    "id": "5808871c-adcd-4c3f-9d32-c7141770d2f7",
+    "business_name": "Badger Designer – Web Design Milton Keynes",
+    "website": "https://badgerdesigner.co.uk/",
+    "derived_town": "Milton Keynes",
+    "category": null,
+    "search_keyword": "web designers",
+    "services_included": [],
+    "place_id": "ChIJEXASoxx6rywRrrUptYvB9AQ",
+    "coverage_town": "Milton Keynes",
+    "search_location": "Milton Keynes",
+    "country": "UK"
+   },
+   "audit_town": "Milton Keynes",
+   "phone_cache": {
+    "place_id": "ChIJEXASoxx6rywRrrUptYvB9AQ",
+    "created_at": "2026-11-14T10:49:37.379+00:00",
+    "details_version": 2,
+    "website": "https://badgerdesigner.co.uk/"
+   },
+   "stored": {
+    "mode": "standard",
+    "at": "2026-11-14T12:16:23.355+00:00",
+    "issues": []
+   }
+  },
+  {
+   "slug": "bkwservices.co.uk",
+   "lead": {
+    "id": "1f6e09bb-eaeb-42e2-8e69-36357711e27c",
+    "business_name": "BKW Services Ltd",
+    "website": "http://www.bkwservices.co.uk/?utm_source=google&utm_medium=wix_google_business_profile&utm_campaign=10903317557730027550",
+    "derived_town": "Epsom",
+    "category": null,
+    "search_keyword": "Electricians",
+    "services_included": [],
+    "place_id": "ChIJcTNjFH8IdkgRv7lGLkkjwhA",
+    "coverage_town": "Epsom",
+    "search_location": "Epsom",
+    "country": "UK"
+   },
+   "audit_town": "Epsom",
+   "phone_cache": {
+    "place_id": "ChIJcTNjFH8IdkgRv7lGLkkjwhA",
+    "created_at": "2026-11-04T07:59:54.288+00:00",
+    "details_version": 2,
+    "website": "http://www.bkwservices.co.uk/?utm_source=google&utm_medium=wix_google_business_profile&utm_campaign=10903317557730027550"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-04T12:15:00.868+00:00",
+    "issues": [
+     "noindex_pages:medium",
+     "vs_key_page_basics:medium",
+     "thin_key_pages:medium",
+     "vs_town_swapped_pages:medium",
+     "ct_schema_mismatch:medium",
+     "ct_no_proof:medium",
+     "internal_linking:medium",
+     "thin_pages:low",
+     "ct_image_alt:low",
+     "long_titles:low",
+     "ct_areas_not_stated:low",
+     "ct_link_mismatch:low",
+     "ct_dead_links:low",
+     "vs_faq_no_schema:low",
+     "no_reviews:low",
+     "no_breadcrumbs:low",
+     "ct_missing_entity_facts:low",
+     "ct_no_accreditations:low"
+    ]
+   }
+  },
+  {
+   "slug": "corbygas.co.uk",
+   "lead": {
+    "id": "ee867bf6-3b03-44bd-bd5f-572b9079bb0f",
+    "business_name": "Corby Gas",
+    "website": "http://www.corbygas.co.uk/",
+    "derived_town": "Corby",
+    "category": null,
+    "search_keyword": "Plumbers",
+    "services_included": [],
+    "place_id": "ChIJd0nnC-Cdd0gRyg5MhR1nllA",
+    "coverage_town": "Corby",
+    "search_location": "Corby",
+    "country": "UK"
+   },
+   "audit_town": "Corby",
+   "phone_cache": {
+    "place_id": "ChIJd0nnC-Cdd0gRyg5MhR1nllA",
+    "created_at": "2026-10-23T07:16:46.912+00:00",
+    "details_version": 2,
+    "website": "http://www.corbygas.co.uk/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-12T13:59:08.955+00:00",
+    "issues": [
+     "vs_faq_no_schema:low",
+     "redirects_to_other_domain:low",
+     "no_contact_page:low",
+     "no_about_page:low",
+     "ct_area_coverage:low"
+    ]
+   }
+  },
+  {
+   "slug": "dgprinceelectrical.wixsite.com",
+   "lead": {
+    "id": "0900c673-e517-4392-834e-c5e794363be3",
+    "business_name": "D G Prince Electrical & general maintenance",
+    "website": "http://dgprinceelectrical.wixsite.com/my-site-2",
+    "derived_town": "Winchester",
+    "category": null,
+    "search_keyword": "Electricians",
+    "services_included": [],
+    "place_id": "ChIJExhN6cEEdEgRtrgIx0MCnMc",
+    "coverage_town": "Winchester",
+    "search_location": "Winchester",
+    "country": "UK"
+   },
+   "audit_town": "Winchester",
+   "phone_cache": {
+    "place_id": "ChIJExhN6cEEdEgRtrgIx0MCnMc",
+    "created_at": "2026-10-29T07:29:03.002+00:00",
+    "details_version": 2,
+    "website": "http://dgprinceelectrical.wixsite.com/my-site-2"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-06T18:15:08.661+00:00",
+    "issues": [
+     "one_page_site:medium",
+     "no_sitemap:medium",
+     "ct_no_proof:medium",
+     "long_titles:low",
+     "ct_areas_not_stated:low",
+     "ct_image_alt:low",
+     "no_address:low",
+     "no_reviews:low",
+     "no_business_schema:low",
+     "ct_missing_entity_facts:low",
+     "ct_no_people:low",
+     "ct_no_accreditations:low"
+    ]
+   }
+  },
+  {
+   "slug": "facebook.com-fb",
+   "lead": {
+    "id": "e3d978c1-5ed8-40f8-a666-6eb53114f208",
+    "business_name": "pass plus Automatic Driving School",
+    "website": "https://www.facebook.com/share/1J714AZf2Q/?mibextid=wwXIfr",
+    "derived_town": "Horsham",
+    "category": null,
+    "search_keyword": "Driving instructors",
+    "services_included": [],
+    "place_id": "ChIJbURGrLHrdUgRZ9LnnJ6mdUA",
+    "coverage_town": "Horsham",
+    "search_location": "Horsham",
+    "country": "UK"
+   },
+   "audit_town": "Horsham",
+   "phone_cache": {
+    "place_id": "ChIJbURGrLHrdUgRZ9LnnJ6mdUA",
+    "created_at": "2026-11-14T08:06:18.553+00:00",
+    "details_version": 2,
+    "website": "https://www.facebook.com/share/1J714AZf2Q/?mibextid=wwXIfr"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-15T08:49:05.456+00:00",
+    "issues": [
+     "canonical_off_site:high",
+     "robots_blocks_all:high",
+     "name_unclear:medium",
+     "town_missing:medium",
+     "one_page_site:medium",
+     "thin_key_pages:medium",
+     "no_viewport:medium",
+     "ct_areas_not_stated:medium",
+     "vs_key_page_basics:medium",
+     "robots_blocks_perplexitybot:medium",
+     "no_sitemap:medium",
+     "no_phone:medium",
+     "ct_no_proof:medium",
+     "ct_dead_links:low",
+     "no_address:low",
+     "no_reviews:low",
+     "no_business_schema:low",
+     "ct_missing_entity_facts:low",
+     "ct_no_people:low",
+     "ct_no_accreditations:low"
+    ]
+   }
+  },
+  {
+   "slug": "fbsproperties.co.uk",
+   "lead": {
+    "id": "f963bdd1-66f3-469f-a131-f3df1e4168c6",
+    "business_name": "Festo Building & Property Services Ltd",
+    "website": "http://fbsproperties.co.uk/",
+    "derived_town": "Wellingborough",
+    "category": null,
+    "search_keyword": "Electricians",
+    "services_included": [
+     "hh"
+    ],
+    "place_id": "ChIJ8x3NzmIEdkgRRS9AD5mgA1c",
+    "coverage_town": "Wellingborough",
+    "search_location": "Wellingborough",
+    "country": "UK"
+   },
+   "audit_town": "Wellingborough",
+   "phone_cache": {
+    "place_id": "ChIJ8x3NzmIEdkgRRS9AD5mgA1c",
+    "created_at": "2026-10-29T11:12:53.344+00:00",
+    "details_version": 2,
+    "website": "http://fbsproperties.co.uk/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-03T09:19:51.35+00:00",
+    "issues": [
+     "duplicate_titles:medium",
+     "canonical_mismatch:medium",
+     "client_rendered:medium",
+     "no_sitemap:medium",
+     "ct_logo_alt_mismatch:low",
+     "ct_dead_links:low",
+     "no_address:low",
+     "no_business_schema:low",
+     "ct_area_coverage:low",
+     "ct_missing_entity_facts:low"
+    ]
+   }
+  },
+  {
+   "slug": "gbelectrical.godaddysites.com",
+   "lead": {
+    "id": "0388f53a-e59d-4f58-adc4-0c78dffe4732",
+    "business_name": "GB ELECTRICAL",
+    "website": "https://gbelectrical.godaddysites.com/",
+    "derived_town": "Epsom",
+    "category": null,
+    "search_keyword": "Electricians",
+    "services_included": [],
+    "place_id": "ChIJE07rbu0JdkgR2D1BSKBDcLg",
+    "coverage_town": "Epsom",
+    "search_location": "Epsom",
+    "country": "UK"
+   },
+   "audit_town": "Epsom",
+   "phone_cache": {
+    "place_id": "ChIJE07rbu0JdkgR2D1BSKBDcLg",
+    "created_at": "2026-11-04T07:59:52.345+00:00",
+    "details_version": 2,
+    "website": "https://gbelectrical.godaddysites.com/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-04T08:16:05.428+00:00",
+    "issues": [
+     "ct_vague_headings:medium",
+     "ct_areas_not_stated:medium",
+     "vs_key_page_basics:medium",
+     "ct_no_proof:medium",
+     "ct_dead_links:low",
+     "no_reviews:low",
+     "no_business_schema:low",
+     "ct_missing_entity_facts:low",
+     "ct_no_accreditations:low"
+    ]
+   }
+  },
+  {
+   "slug": "granthambuilder.co.uk",
+   "lead": {
+    "id": "74491f1c-242e-41e8-a0b5-c747701a174b",
+    "business_name": "Mark Oakes - Construction & Maintenance",
+    "website": "https://www.granthambuilder.co.uk/",
+    "derived_town": "Grantham",
+    "category": null,
+    "search_keyword": "Roofers",
+    "services_included": [],
+    "place_id": "ChIJU1DwoI0xeEgRcooYXOz03SQ",
+    "coverage_town": "Grantham",
+    "search_location": "Grantham",
+    "country": "UK"
+   },
+   "audit_town": "Grantham",
+   "phone_cache": {
+    "place_id": "ChIJU1DwoI0xeEgRcooYXOz03SQ",
+    "created_at": "2026-11-13T06:26:39.667+00:00",
+    "details_version": 2,
+    "website": "https://www.granthambuilder.co.uk/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-13T08:34:08.066+00:00",
+    "issues": [
+     "vs_town_swapped_pages:medium",
+     "broken_pages:medium",
+     "ct_schema_mismatch:medium",
+     "no_service_pages:medium",
+     "vs_name_inconsistent:medium",
+     "ct_link_mismatch:low",
+     "multiple_h1:low",
+     "long_titles:low",
+     "vs_faq_no_schema:low",
+     "no_about_page:low",
+     "no_breadcrumbs:low",
+     "ct_missing_entity_facts:low",
+     "ct_no_accreditations:low"
+    ]
+   }
+  },
+  {
+   "slug": "highdesignroofing.com",
+   "lead": {
+    "id": "c882be3b-7273-488f-a784-6a4071276912",
+    "business_name": "High Design Roofing",
+    "website": "https://www.highdesignroofing.com/",
+    "derived_town": "Castleford",
+    "category": null,
+    "search_keyword": "Roofers",
+    "services_included": [],
+    "place_id": "ChIJpc9z-2VDeUgRXWVQxLttmbU",
+    "coverage_town": "Castleford",
+    "search_location": "Castleford",
+    "country": "UK"
+   },
+   "audit_town": "Castleford",
+   "phone_cache": {
+    "place_id": "ChIJpc9z-2VDeUgRXWVQxLttmbU",
+    "created_at": "2026-10-28T07:16:29.844+00:00",
+    "details_version": 2,
+    "website": "https://www.highdesignroofing.com/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-03T09:11:22.985+00:00",
+    "issues": [
+     "vs_town_swapped_pages:medium",
+     "vs_key_page_basics:medium",
+     "long_titles:low",
+     "vs_business_schema:low",
+     "ct_dead_links:low",
+     "no_address:low",
+     "no_breadcrumbs:low",
+     "ct_missing_entity_facts:low",
+     "ct_no_accreditations:low"
+    ]
+   }
+  },
+  {
+   "slug": "idriveauto.co.uk",
+   "lead": {
+    "id": "9e778491-181e-414f-8c35-cb9635e381ef",
+    "business_name": "idriveauto Driving School",
+    "website": "https://www.idriveauto.co.uk/",
+    "derived_town": "Durham",
+    "category": null,
+    "search_keyword": "Driving instructors",
+    "services_included": [],
+    "place_id": "ChIJAeNi3A57vwoRd1c5qK1gG7w",
+    "coverage_town": "Durham",
+    "search_location": "Durham",
+    "country": "UK"
+   },
+   "audit_town": "Durham",
+   "phone_cache": {
+    "place_id": "ChIJAeNi3A57vwoRd1c5qK1gG7w",
+    "created_at": "2026-11-14T08:06:18.071+00:00",
+    "details_version": 2,
+    "website": "https://www.idriveauto.co.uk/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-14T10:00:12.489+00:00",
+    "issues": [
+     "client_rendered:medium"
+    ]
+   }
+  },
+  {
+   "slug": "itmelectrical.co.uk",
+   "lead": {
+    "id": "0876cd5f-7453-4bfa-9bfd-fb70d26cd4d8",
+    "business_name": "ITM Electrical",
+    "website": "https://www.itmelectrical.co.uk/",
+    "derived_town": "Wellingborough",
+    "category": null,
+    "search_keyword": "Electricians",
+    "services_included": [],
+    "place_id": "ChIJKTd5kD2jd0gR01utqbwum5Y",
+    "coverage_town": "Wellingborough",
+    "search_location": "Wellingborough",
+    "country": "UK"
+   },
+   "audit_town": "Wellingborough",
+   "phone_cache": {
+    "place_id": "ChIJKTd5kD2jd0gR01utqbwum5Y",
+    "created_at": "2026-10-29T11:12:52.112+00:00",
+    "details_version": 2,
+    "website": "https://www.itmelectrical.co.uk/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-03T09:19:12.246+00:00",
+    "issues": [
+     "vs_key_page_basics:medium",
+     "ct_accreditations_unnamed:medium",
+     "ct_image_alt:low",
+     "duplicate_titles:low",
+     "canonical_mismatch:low",
+     "internal_redirects:low",
+     "thin_pages:low",
+     "ct_link_mismatch:low",
+     "no_address:low",
+     "no_reviews:low",
+     "no_business_schema:low",
+     "no_breadcrumbs:low",
+     "ct_area_coverage:low",
+     "ct_missing_entity_facts:low",
+     "ct_no_people:low"
+    ]
+   }
+  },
+  {
+   "slug": "ladiesfirstdrivingschool.co.uk",
+   "lead": {
+    "id": "ef3bc340-b42a-4d8b-8bbe-3b9523856a40",
+    "business_name": "Ladies first driving school",
+    "website": "https://ladiesfirstdrivingschool.co.uk/",
+    "derived_town": "Wokingham",
+    "category": null,
+    "search_keyword": "Driving instructors",
+    "services_included": [],
+    "place_id": "ChIJnWLCkV6BdkgRA5Hv_Kc-6b8",
+    "coverage_town": "Wokingham",
+    "search_location": "Wokingham",
+    "country": "UK"
+   },
+   "audit_town": "Wokingham",
+   "phone_cache": {
+    "place_id": "ChIJnWLCkV6BdkgRA5Hv_Kc-6b8",
+    "created_at": "2026-11-14T08:06:18.51+00:00",
+    "details_version": 2,
+    "website": "https://ladiesfirstdrivingschool.co.uk/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-14T10:28:21.556+00:00",
+    "issues": [
+     "vs_key_page_basics:medium",
+     "vs_town_swapped_pages:medium",
+     "no_service_pages:medium",
+     "vs_business_schema:low",
+     "ct_dead_links:low",
+     "long_titles:low",
+     "sitemap_only_pages:low",
+     "internal_redirects:low",
+     "ct_link_mismatch:low",
+     "no_address:low"
+    ]
+   }
+  },
+  {
+   "slug": "leighsdrivingschool.co.uk",
+   "lead": {
+    "id": "3010727d-3b67-4516-994c-d573e3d8b7ff",
+    "business_name": "Leigh's Driving School",
+    "website": "https://www.leighsdrivingschool.co.uk/",
+    "derived_town": "Horsham",
+    "category": null,
+    "search_keyword": "Driving instructors",
+    "services_included": [],
+    "place_id": "ChIJfVMJe0_qdUgRoEvjpOvwfSk",
+    "coverage_town": "Horsham",
+    "search_location": "Horsham",
+    "country": "UK"
+   },
+   "audit_town": "Horsham",
+   "phone_cache": {
+    "place_id": "ChIJfVMJe0_qdUgRoEvjpOvwfSk",
+    "created_at": "2026-11-14T08:06:18.769+00:00",
+    "details_version": 2,
+    "website": "https://www.leighsdrivingschool.co.uk/"
+   },
+   "stored": {
+    "mode": "standard",
+    "at": "2026-11-14T13:26:25.7+00:00",
+    "issues": []
+   }
+  },
+  {
+   "slug": "ljmullanelectrical.com",
+   "lead": {
+    "id": "e3e1c26d-9e87-4001-9948-9d039d72a4d2",
+    "business_name": "L J Mullan Electrical",
+    "website": "http://www.ljmullanelectrical.com/",
+    "derived_town": "Banbury",
+    "category": null,
+    "search_keyword": "Electricians",
+    "services_included": [],
+    "place_id": "ChIJkbCDFNjZdkgRjQynn5Bp1HA",
+    "coverage_town": "Banbury",
+    "search_location": "Banbury",
+    "country": "UK"
+   },
+   "audit_town": "Banbury",
+   "phone_cache": {
+    "place_id": "ChIJkbCDFNjZdkgRjQynn5Bp1HA",
+    "created_at": "2026-10-30T07:14:56.862+00:00",
+    "details_version": 2,
+    "website": "http://www.ljmullanelectrical.com/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-03T09:21:20.406+00:00",
+    "issues": [
+     "vs_town_swapped_pages:medium",
+     "vs_key_page_basics:medium",
+     "ct_unsourced_claims:medium",
+     "ct_vague_headings:medium",
+     "no_sitemap:medium",
+     "ct_generic_copy:low",
+     "vs_faq_no_schema:low",
+     "long_titles:low",
+     "multiple_h1:low",
+     "ct_dead_links:low",
+     "no_breadcrumbs:low",
+     "ct_missing_entity_facts:low"
+    ]
+   }
+  },
+  {
+   "slug": "mcdrive.co.uk",
+   "lead": {
+    "id": "dc17f9fc-d464-4d49-b982-d9a9d09861b7",
+    "business_name": "McDrive Driving School",
+    "website": "https://www.mcdrive.co.uk/",
+    "derived_town": "Wokingham",
+    "category": null,
+    "search_keyword": "Driving instructors",
+    "services_included": [],
+    "place_id": "ChIJFd-RdTCBdkgRla7jjaCCeIE",
+    "coverage_town": "Wokingham",
+    "search_location": "Wokingham",
+    "country": "UK"
+   },
+   "audit_town": "Wokingham",
+   "phone_cache": {
+    "place_id": "ChIJFd-RdTCBdkgRla7jjaCCeIE",
+    "created_at": "2026-11-14T08:06:18.529+00:00",
+    "details_version": 2,
+    "website": "https://www.mcdrive.co.uk/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-14T10:22:07.528+00:00",
+    "issues": [
+     "noindex_home:high",
+     "one_page_site:medium",
+     "ct_vague_headings:medium",
+     "vs_key_page_basics:medium",
+     "no_sitemap:medium",
+     "multiple_h1:low",
+     "ct_image_alt:low",
+     "ct_dead_links:low",
+     "no_address:low",
+     "no_business_schema:low",
+     "ct_area_coverage:low",
+     "ct_missing_entity_facts:low",
+     "ct_no_people:low",
+     "ct_no_accreditations:low"
+    ]
+   }
+  },
+  {
+   "slug": "mkdampandtimber.co.uk",
+   "lead": {
+    "id": "98e1810b-45ef-4e26-8a3b-9ae68657b1f1",
+    "business_name": "Mk damp and timber",
+    "website": "http://www.mkdampandtimber.co.uk/",
+    "derived_town": "Milton Keynes",
+    "category": null,
+    "search_keyword": "Roofers",
+    "services_included": [],
+    "place_id": "ChIJEyuSv_lVdkgRDyMgNlKcUuI",
+    "coverage_town": "Bletchley",
+    "search_location": "Bletchley",
+    "country": "UK"
+   },
+   "audit_town": "Bletchley",
+   "phone_cache": {
+    "place_id": "ChIJEyuSv_lVdkgRDyMgNlKcUuI",
+    "created_at": "2026-11-13T06:26:38.685+00:00",
+    "details_version": 2,
+    "website": "http://www.mkdampandtimber.co.uk/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-13T09:12:14.506+00:00",
+    "issues": [
+     "sitemap_only_pages:medium",
+     "ct_ai_images:medium",
+     "vs_duplicate_homepage:medium",
+     "vs_key_page_basics:medium",
+     "ct_no_proof:medium",
+     "vs_business_schema:low",
+     "canonical_mismatch:low",
+     "multiple_h1:low",
+     "no_reviews:low",
+     "ct_no_people:low"
+    ]
+   }
+  },
+  {
+   "slug": "mlgelec.co.uk",
+   "lead": {
+    "id": "2a501eb2-df1b-428e-b612-235ed2024a0f",
+    "business_name": "MLG Electrical",
+    "website": "http://www.mlgelec.co.uk/",
+    "derived_town": "Widnes",
+    "category": null,
+    "search_keyword": "Electricians",
+    "services_included": [],
+    "place_id": "ChIJ0-pQFwPiekgRSJZ7L0OTW4U",
+    "coverage_town": "Widnes",
+    "search_location": "Widnes",
+    "country": "UK"
+   },
+   "audit_town": "Widnes",
+   "phone_cache": {
+    "place_id": "ChIJ0-pQFwPiekgRSJZ7L0OTW4U",
+    "created_at": "2026-11-07T12:35:17.889+00:00",
+    "details_version": 2,
+    "website": "http://www.mlgelec.co.uk/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-07T13:39:05.378+00:00",
+    "issues": [
+     "ct_placeholder_content:high",
+     "vs_address_not_on_key_pages:medium",
+     "vs_key_page_basics:medium",
+     "duplicate_titles:medium",
+     "thin_key_pages:medium",
+     "town_missing:medium",
+     "ct_areas_not_stated:medium",
+     "ct_no_proof:medium",
+     "thin_pages:low",
+     "ct_image_alt:low",
+     "sitemap_only_pages:low",
+     "noindex_pages:low",
+     "no_questions_answered:low",
+     "no_reviews:low",
+     "no_business_schema:low",
+     "no_breadcrumbs:low",
+     "ct_missing_entity_facts:low",
+     "ct_no_people:low",
+     "ct_no_accreditations:low"
+    ]
+   }
+  },
+  {
+   "slug": "nselec.co.uk",
+   "lead": {
+    "id": "a1c0e9a5-5ea8-41e8-9238-e6be6cd83dab",
+    "business_name": "NS Elec LTD",
+    "website": "https://nselec.co.uk/",
+    "derived_town": "Lancaster",
+    "category": null,
+    "search_keyword": "Electricians",
+    "services_included": [],
+    "place_id": "ChIJUbEVNVlje0gRmO5dkCjVNvI",
+    "coverage_town": "Lancaster",
+    "search_location": "Lancaster",
+    "country": "UK"
+   },
+   "audit_town": "Lancaster",
+   "phone_cache": {
+    "place_id": "ChIJUbEVNVlje0gRmO5dkCjVNvI",
+    "created_at": "2026-10-29T11:13:02.66+00:00",
+    "details_version": 2,
+    "website": "https://nselec.co.uk/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-03T09:22:05.577+00:00",
+    "issues": [
+     "one_page_site:medium",
+     "no_sitemap:medium",
+     "redirects_to_other_domain:low",
+     "no_robots:low",
+     "ct_area_coverage:low",
+     "ct_missing_entity_facts:low",
+     "ct_no_people:low"
+    ]
+   }
+  },
+  {
+   "slug": "poesuk.com",
+   "lead": {
+    "id": "f959224d-7d7b-4f71-9fac-8b38015f9d30",
+    "business_name": "Power On Electrical Services UK Ltd",
+    "website": "https://www.poesuk.com/",
+    "derived_town": "Altrincham",
+    "category": null,
+    "search_keyword": "Electricians",
+    "services_included": [],
+    "place_id": "ChIJY34mMOKSN6gRCY5noEdAWzs",
+    "coverage_town": "Altrincham",
+    "search_location": "Altrincham",
+    "country": "UK"
+   },
+   "audit_town": "Altrincham",
+   "phone_cache": {
+    "place_id": "ChIJY34mMOKSN6gRCY5noEdAWzs",
+    "created_at": "2026-10-29T07:28:52.722+00:00",
+    "details_version": 2,
+    "website": "https://www.poesuk.com/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-03T09:15:38.013+00:00",
+    "issues": [
+     "client_rendered:medium",
+     "ct_dead_links:low",
+     "long_titles:low",
+     "no_about_page:low",
+     "ct_missing_entity_facts:low"
+    ]
+   }
+  },
+  {
+   "slug": "protechelectrical.uk",
+   "lead": {
+    "id": "ffe5e3ab-1da2-4ace-9296-9d8de765245e",
+    "business_name": "ProTech Electrical",
+    "website": "http://protechelectrical.uk/",
+    "derived_town": "Warwick",
+    "category": null,
+    "search_keyword": "Electricians",
+    "services_included": [],
+    "place_id": "ChIJYVzgJngHuiQR0IUn-2aPtkw",
+    "coverage_town": "Warwick",
+    "search_location": "Warwick",
+    "country": "UK"
+   },
+   "audit_town": "Warwick",
+   "phone_cache": {
+    "place_id": "ChIJYVzgJngHuiQR0IUn-2aPtkw",
+    "created_at": "2026-11-04T07:59:44.257+00:00",
+    "details_version": 2,
+    "website": "http://protechelectrical.uk/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-04T15:24:06.678+00:00",
+    "issues": [
+     "one_page_site:medium",
+     "ct_accreditations_unnamed:medium",
+     "ct_no_proof:medium",
+     "ct_dead_links:low",
+     "no_address:low",
+     "no_reviews:low",
+     "no_business_schema:low",
+     "ct_area_coverage:low",
+     "ct_missing_entity_facts:low",
+     "ct_no_people:low"
+    ]
+   }
+  },
+  {
+   "slug": "ronnocoroofing.co.uk",
+   "lead": {
+    "id": "b64375f9-e07c-449f-967e-cd9080431059",
+    "business_name": "Ronnoco roofing flat roofing GRP SINGLE PLY FELT LIQUID",
+    "website": "https://ronnocoroofing.co.uk/",
+    "derived_town": "Grays",
+    "category": null,
+    "search_keyword": "Roofers",
+    "services_included": [],
+    "place_id": "ChIJ90X-8dm32EcRTzMiMSMJA8s",
+    "coverage_town": "Grays",
+    "search_location": "Grays",
+    "country": "UK"
+   },
+   "audit_town": "Grays",
+   "phone_cache": {
+    "place_id": "ChIJ90X-8dm32EcRTzMiMSMJA8s",
+    "created_at": "2026-11-13T06:26:43.778+00:00",
+    "details_version": 2,
+    "website": "https://ronnocoroofing.co.uk/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-13T09:48:06.156+00:00",
+    "issues": [
+     "schema_malformed:medium",
+     "ct_conflicting_facts:medium",
+     "sitemap_only_pages:medium",
+     "client_rendered:medium",
+     "name_unclear:medium",
+     "thin_key_pages:medium",
+     "thin_pages:low",
+     "ct_area_coverage:low",
+     "ct_missing_entity_facts:low",
+     "ct_no_accreditations:low"
+    ]
+   }
+  },
+  {
+   "slug": "rooke-trade.co.uk",
+   "lead": {
+    "id": "3c2c22b4-3fed-4916-ad27-a6e2a7d330f9",
+    "business_name": "Rooketrade Electrical",
+    "website": "https://www.rooke-trade.co.uk/",
+    "derived_town": "Nottingham",
+    "category": null,
+    "search_keyword": "Electricians",
+    "services_included": [],
+    "place_id": "ChIJbxK-3O3DeUgRyIE99oKi6Zk",
+    "coverage_town": "West Bridgford",
+    "search_location": "West Bridgford",
+    "country": "UK"
+   },
+   "audit_town": "West Bridgford",
+   "phone_cache": {
+    "place_id": "ChIJbxK-3O3DeUgRyIE99oKi6Zk",
+    "created_at": "2026-11-04T07:59:45.993+00:00",
+    "details_version": 2,
+    "website": "https://www.rooke-trade.co.uk/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-04T10:30:12.577+00:00",
+    "issues": [
+     "canonical_off_site:high",
+     "client_rendered:medium",
+     "no_sitemap:medium",
+     "no_service_pages:medium",
+     "duplicate_titles:low",
+     "long_titles:low",
+     "ct_logo_alt_mismatch:low",
+     "no_robots:low",
+     "no_about_page:low",
+     "no_address:low",
+     "no_questions_answered:low",
+     "no_business_schema:low",
+     "ct_area_coverage:low",
+     "ct_missing_entity_facts:low",
+     "ct_no_people:low"
+    ]
+   }
+  },
+  {
+   "slug": "sparkieelectrical.com",
+   "lead": {
+    "id": "808d715e-43ed-4512-954e-1334448ff65b",
+    "business_name": "Sparkie Electrical",
+    "website": "https://www.sparkieelectrical.com/",
+    "derived_town": "Widnes",
+    "category": null,
+    "search_keyword": "Electricians",
+    "services_included": [],
+    "place_id": "ChIJ-XAyyTkvxIYRpTk6dvGB63E",
+    "coverage_town": "Widnes",
+    "search_location": "Widnes",
+    "country": "UK"
+   },
+   "audit_town": "Widnes",
+   "phone_cache": {
+    "place_id": "ChIJ-XAyyTkvxIYRpTk6dvGB63E",
+    "created_at": "2026-11-07T12:35:17.667+00:00",
+    "details_version": 2,
+    "website": "https://www.sparkieelectrical.com/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-07T14:34:07.055+00:00",
+    "issues": [
+     "vs_key_page_basics:medium",
+     "ct_vague_headings:medium",
+     "vs_duplicate_homepage:medium",
+     "no_sitemap:medium",
+     "no_service_pages:medium",
+     "ct_no_proof:medium",
+     "ct_image_alt:low",
+     "multiple_h1:low",
+     "duplicate_titles:low",
+     "name_unclear:low",
+     "no_robots:low",
+     "no_address:low",
+     "no_questions_answered:low",
+     "no_reviews:low",
+     "no_business_schema:low",
+     "no_breadcrumbs:low",
+     "ct_missing_entity_facts:low",
+     "ct_no_people:low"
+    ]
+   }
+  },
+  {
+   "slug": "st-electric.co.uk",
+   "lead": {
+    "id": "d52ccb14-f4ac-4d3a-bf47-b7e7dd70eaa2",
+    "business_name": "S Thorogood Electrical",
+    "website": "http://www.st-electric.co.uk/",
+    "derived_town": "Torquay",
+    "category": null,
+    "search_keyword": "Electricians",
+    "services_included": [],
+    "place_id": "ChIJ37spptUPbUgRjeUX1_FzZPs",
+    "coverage_town": "Torquay",
+    "search_location": "Torquay",
+    "country": "UK"
+   },
+   "audit_town": "Torquay",
+   "phone_cache": {
+    "place_id": "ChIJ37spptUPbUgRjeUX1_FzZPs",
+    "created_at": "2026-10-30T07:14:58.143+00:00",
+    "details_version": 2,
+    "website": "http://www.st-electric.co.uk/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-03T09:18:05.099+00:00",
+    "issues": [
+     "vs_town_swapped_pages:medium",
+     "vs_key_page_basics:medium",
+     "thin_key_pages:medium",
+     "ct_image_alt:low",
+     "vs_faq_no_schema:low",
+     "no_robots:low",
+     "no_about_page:low",
+     "no_address:low",
+     "no_questions_answered:low",
+     "no_business_schema:low",
+     "no_breadcrumbs:low",
+     "ct_missing_entity_facts:low",
+     "ct_no_people:low"
+    ]
+   }
+  },
+  {
+   "slug": "svgelectricalsolutions.co.uk",
+   "lead": {
+    "id": "47d79a1d-a7e9-4978-ad9d-591bc5b70889",
+    "business_name": "SVG Electrical Solutions Ltd",
+    "website": "https://www.svgelectricalsolutions.co.uk/",
+    "derived_town": "Andover",
+    "category": null,
+    "search_keyword": "Electricians",
+    "services_included": [],
+    "place_id": "ChIJq6ru5IAHdEgRCEjelRhyZTw",
+    "coverage_town": "Andover",
+    "search_location": "Andover",
+    "country": "UK"
+   },
+   "audit_town": "Andover",
+   "phone_cache": {
+    "place_id": "ChIJq6ru5IAHdEgRCEjelRhyZTw",
+    "created_at": "2026-10-29T07:29:00.83+00:00",
+    "details_version": 2,
+    "website": "https://www.svgelectricalsolutions.co.uk/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-03T09:11:13.402+00:00",
+    "issues": [
+     "sitemap_off_site:medium",
+     "vs_key_page_basics:medium",
+     "ct_areas_not_stated:medium",
+     "ct_link_mismatch:medium",
+     "no_service_pages:medium",
+     "ct_image_alt:low",
+     "ct_dead_links:low",
+     "no_address:low",
+     "no_questions_answered:low",
+     "ct_missing_entity_facts:low",
+     "ct_no_people:low"
+    ]
+   }
+  },
+  {
+   "slug": "swarburtonroofingservices.co.uk",
+   "lead": {
+    "id": "9eb0e9a7-cf9b-488a-8d55-6a850175a1c6",
+    "business_name": "S Warburton Roofing Services",
+    "website": "http://www.swarburtonroofingservices.co.uk/",
+    "derived_town": "Wrexham",
+    "category": null,
+    "search_keyword": "Roofers",
+    "services_included": [
+     "uyiog"
+    ],
+    "place_id": "ChIJtaDXe2vGekgRBpFx_OTSirA",
+    "coverage_town": "Wrexham",
+    "search_location": "Wrexham",
+    "country": "UK"
+   },
+   "audit_town": "Wrexham",
+   "phone_cache": {
+    "place_id": "ChIJtaDXe2vGekgRBpFx_OTSirA",
+    "created_at": "2026-11-13T06:26:40.882+00:00",
+    "details_version": 2,
+    "website": "http://www.swarburtonroofingservices.co.uk/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-13T20:36:07.107+00:00",
+    "issues": [
+     "noindex_home:high",
+     "noindex_pages:medium",
+     "vs_key_page_basics:medium",
+     "no_sitemap:medium",
+     "ct_no_proof:medium",
+     "heavy_pages:low",
+     "ct_vague_headings:low",
+     "ct_image_alt:low",
+     "no_about_page:low",
+     "no_reviews:low",
+     "ct_area_coverage:low",
+     "ct_no_people:low",
+     "ct_no_accreditations:low"
+    ]
+   }
+  },
+  {
+   "slug": "thinkingtiger.co.uk",
+   "lead": {
+    "id": "292d1716-a3bc-4e76-9e4e-c78e71bea203",
+    "business_name": "Thinking Tiger",
+    "website": "https://www.thinkingtiger.co.uk/",
+    "derived_town": "Reading",
+    "category": null,
+    "search_keyword": "web designers",
+    "services_included": [],
+    "place_id": "ChIJI4-DCJ1zdkgRLtArmUEmlzo",
+    "coverage_town": "Reading",
+    "search_location": "Reading",
+    "country": "UK"
+   },
+   "audit_town": "Reading",
+   "phone_cache": {
+    "place_id": "ChIJI4-DCJ1zdkgRLtArmUEmlzo",
+    "created_at": "2026-11-14T10:48:53.331+00:00",
+    "details_version": 2,
+    "website": "https://www.thinkingtiger.co.uk/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-14T11:51:58.011+00:00",
+    "issues": [
+     "client_rendered:medium",
+     "no_contact_details:medium",
+     "long_titles:low",
+     "vs_business_schema:low",
+     "vs_faq_no_schema:low",
+     "no_address:low",
+     "no_reviews:low",
+     "no_breadcrumbs:low",
+     "ct_missing_entity_facts:low",
+     "ct_no_accreditations:low"
+    ]
+   }
+  },
+  {
+   "slug": "tinamillerdrivingschool.com",
+   "lead": {
+    "id": "b2c02fe4-132c-41be-836e-a701157f6a2d",
+    "business_name": "Tina Miller Driving School",
+    "website": "https://tinamillerdrivingschool.com/",
+    "derived_town": "Horsham",
+    "category": null,
+    "search_keyword": "Driving instructors",
+    "services_included": [],
+    "place_id": "ChIJOVzbF3TrdUgRHRDnhARHe3s",
+    "coverage_town": "Horsham",
+    "search_location": "Horsham",
+    "country": "UK"
+   },
+   "audit_town": "Horsham",
+   "phone_cache": {
+    "place_id": "ChIJOVzbF3TrdUgRHRDnhARHe3s",
+    "created_at": "2026-11-14T08:06:18.961+00:00",
+    "details_version": 2,
+    "website": "https://tinamillerdrivingschool.com/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-14T11:17:07.409+00:00",
+    "issues": [
+     "vs_address_not_on_key_pages:medium",
+     "vs_key_page_basics:medium",
+     "no_service_pages:medium",
+     "ct_no_proof:medium",
+     "vs_name_inconsistent:medium",
+     "thin_pages:low",
+     "no_contact_page:low",
+     "no_about_page:low",
+     "no_questions_answered:low",
+     "no_reviews:low",
+     "ct_area_coverage:low",
+     "ct_missing_entity_facts:low"
+    ]
+   }
+  },
+  {
+   "slug": "tonbridgepattesting.co.uk",
+   "lead": {
+    "id": "2e5d661c-ae3b-40d5-98da-f519b9f5c549",
+    "business_name": "Tonbridge PAT Testing – Portable Appliance Testing",
+    "website": "https://www.tonbridgepattesting.co.uk/",
+    "derived_town": "Tonbridge",
+    "category": null,
+    "search_keyword": "Electricians",
+    "services_included": [],
+    "place_id": "ChIJRy-NC45AmEYRB8FCf2faTnc",
+    "coverage_town": "Tonbridge",
+    "search_location": "Tonbridge",
+    "country": "UK"
+   },
+   "audit_town": "Tonbridge",
+   "phone_cache": {
+    "place_id": "ChIJRy-NC45AmEYRB8FCf2faTnc",
+    "created_at": "2026-11-04T07:59:52.087+00:00",
+    "details_version": 2,
+    "website": "https://www.tonbridgepattesting.co.uk/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-04T09:26:38.538+00:00",
+    "issues": [
+     "duplicate_titles:medium",
+     "vs_town_swapped_pages:medium",
+     "broken_pages:medium",
+     "sitemap_only_pages:medium",
+     "no_service_pages:medium",
+     "vs_business_schema:low",
+     "ct_link_mismatch:low",
+     "vs_faq_no_schema:low",
+     "long_titles:low",
+     "canonical_mismatch:low",
+     "multiple_h1:low",
+     "no_about_page:low",
+     "no_reviews:low",
+     "no_breadcrumbs:low",
+     "ct_missing_entity_facts:low"
+    ]
+   }
+  },
+  {
+   "slug": "webneon.co.uk",
+   "lead": {
+    "id": "9712383d-b7b9-4610-ac2f-5aeb6f6222ee",
+    "business_name": "Webneon",
+    "website": "https://webneon.co.uk/",
+    "derived_town": "Reading",
+    "category": null,
+    "search_keyword": "web designers",
+    "services_included": [],
+    "place_id": "ChIJifEuhmCbdkgRGR8z0H6CtTE",
+    "coverage_town": "Reading",
+    "search_location": "Reading",
+    "country": "UK"
+   },
+   "audit_town": "Reading",
+   "phone_cache": {
+    "place_id": "ChIJifEuhmCbdkgRGR8z0H6CtTE",
+    "created_at": "2026-11-14T10:48:50.292+00:00",
+    "details_version": 2,
+    "website": "https://webneon.co.uk/"
+   },
+   "stored": {
+    "mode": "full",
+    "at": "2026-11-14T16:29:28.213+00:00",
+    "issues": [
+     "ct_conflicting_facts:medium",
+     "ct_ai_images:medium",
+     "vs_key_page_basics:medium",
+     "duplicate_titles:medium",
+     "vs_town_swapped_pages:medium",
+     "broken_pages:medium",
+     "vs_business_schema:low",
+     "ct_dead_links:low",
+     "multiple_h1:low",
+     "vs_faq_no_schema:low",
+     "ct_link_mismatch:low",
+     "long_titles:low",
+     "internal_redirects:low"
+    ]
+   }
+  }
+ ],
+ "dropped": [
+  {
+   "slug": "eongraphics.co.uk",
+   "why": "its pages take 2-9 s each; a real-browser read for the answer key timed out, so it could not be labelled. Its saved copy (7 MB) is not kept."
+  }
+ ]
+}

@@ -131,7 +131,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
 /* 2026-11-15c: webdev_report follow-up ({{1}} name, {{2}} the latest report link, link-only audit resolve; needs prior WhatsApp). */
 /* 2026-11-15d: webdev_hook follow-up (no variables; needs prior WhatsApp; Meta live status first). */
 /* 2026-11-15e: webdev_example follow-up (no variables, fixed sample report link; needs prior WhatsApp; Meta live status first). */
-const BUILD_ID = "2026-11-15e-webdev-example";
+const BUILD_ID = "2026-11-15f-website-check-accuracy";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

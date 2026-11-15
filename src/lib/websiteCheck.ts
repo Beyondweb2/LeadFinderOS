@@ -25,12 +25,13 @@
    Pure; no I/O. IMPORTED BY EDGE FUNCTIONS: relative imports with an explicit .ts only.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-import { auditFromStoredCrawl, checksAreCurrent, heldOnOlderCheck, HOME_FETCH_LABELS, storedCrawlUnread, UNVERIFIED_BLOCK_FINDING_IDS, WEBSITE_CHECKS_VERSION, type AuditFinding, type StoredCrawlForAudit, type SiteAudit } from './siteAudit.ts';
+import { auditFromStoredCrawl, checksAreCurrent, heldOnOlderCheck, storedChecksVersion, HOME_FETCH_LABELS, storedCrawlUnread, UNVERIFIED_BLOCK_FINDING_IDS, WEBSITE_CHECKS_VERSION, type AuditFinding, type StoredCrawlForAudit, type SiteAudit } from './siteAudit.ts';
 import { isBrokenPageStatus, usableContentTrust, type SiteOwner } from './contentTrust.ts';
 import { classifyLeadWebsite } from './leadWebsiteKind.ts';
 import { emptyGreetingIn } from './pitchIssueWords.ts';
 import { usableSiteEvidence, type EvidenceKind, type SiteEvidence } from './siteEvidence.ts';
 import { SPEAK_MIN_PRIORITY, usableInsights, type InsightKind } from './salesInsights.ts';
+import { clientReportIssues } from './websiteCheckAccuracy.ts';
 
 export const WEBSITE_CHECK_VERSION = 1;
 /** A check older than this is shown with an "may be out of date" note (the same 30 days the call script used). */
@@ -287,7 +288,7 @@ export function summariseWebsiteCheck(row: StoredCrawlForAudit | null | undefine
   return {
     version: WEBSITE_CHECK_VERSION, depth: deep ? 'deep' : 'quick', checkedAt,
     pagesRead, pagesFound: audit.coverage?.urlsDiscovered ?? null, capped,
-    issues: (current ? issues : heldOnOlderCheck(issues, capped)).slice(0, WEBSITE_CHECK_MAX_ISSUES), strengths, notChecked: audit.notChecked.slice(0, 8), failure: null,
+    issues: (current ? issues : heldOnOlderCheck(issues, capped, storedChecksVersion(row))).slice(0, WEBSITE_CHECK_MAX_ISSUES), strengths, notChecked: audit.notChecked.slice(0, 8), failure: null,
     ...(current ? { checksVersion: WEBSITE_CHECKS_VERSION } : {}),
     ...ownerField(row),
   };
@@ -338,7 +339,7 @@ export function usableWebsiteCheck(v: unknown): WebsiteCheckSummary | null {
   /* ⛔ A summary stored before 2026-10-26 can carry "the site refused AI crawlers" from our impostor fetch: never shown. */
   const shown = s.issues.some((i) => UNVERIFIED_BLOCK_FINDING_IDS.has(i.id)) ? { ...s, issues: s.issues.filter((i) => !UNVERIFIED_BLOCK_FINDING_IDS.has(i.id)) } : s;
   /* ⛔ A summary from before the current checks says only what those checks got right (siteAudit.heldOnOlderCheck). */
-  return shown.checksVersion === WEBSITE_CHECKS_VERSION ? shown : { ...shown, issues: heldOnOlderCheck(shown.issues, shown.capped === true) };
+  return shown.checksVersion === WEBSITE_CHECKS_VERSION ? shown : { ...shown, issues: heldOnOlderCheck(shown.issues, shown.capped === true, Number(shown.checksVersion ?? 0)) };
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString('en-GB')} ${n === 1 ? one : many}`;
@@ -367,7 +368,9 @@ export function coverageLineFor(s: WebsiteCheckSummary, stale = false): string {
  *  has it); `website` is the lead's website (none → the no-website words; a directory / social profile → said as one). */
 export function websiteCheckFor(
   row: (StoredCrawlForAudit & { result?: (StoredCrawlForAudit['result'] & { websiteCheck?: unknown }) | null }) | null | undefined,
-  opts: { website: string | null | undefined; nowMs?: number },
+  /** audience 'client': anything said to the business itself (a report, a welcome pack, a drafted reply, a voice note). The kinds
+   *  measured under the accuracy bar are left out (websiteCheckAccuracy.ts, docs/WEBSITE_CHECK_ACCURACY.md); team screens see all. */
+  opts: { website: string | null | undefined; nowMs?: number; audience?: 'team' | 'client' },
 ): WebsiteCheckView {
   const empty = (state: WebsiteCheckState, headline: string): WebsiteCheckView =>
     ({ state, summary: null, serious: [], minor: [], headline, coverageLine: null, stale: false, ageDays: null, checkedDay: null });
@@ -378,7 +381,8 @@ export function websiteCheckFor(
   }
   /* An unread homepage is summarised afresh (→ couldn't check): its stored summary may say "clean" or "blocked". */
   const stored = storedCrawlUnread(row) ? null : usableWebsiteCheck(row?.result?.websiteCheck);
-  const summary = stored ? placeholderPagesOnce(stored) : summariseWebsiteCheck(row);
+  const whole = stored ? placeholderPagesOnce(stored) : summariseWebsiteCheck(row);
+  const summary = whole && opts.audience === 'client' ? { ...whole, issues: clientReportIssues(whole.issues) } : whole;
   if (!summary) return empty('not_checked', NOT_CHECKED_LINE);
   const now = opts.nowMs ?? Date.now();
   const at = summary.checkedAt ? Date.parse(summary.checkedAt) : NaN;
@@ -414,6 +418,7 @@ const PLAIN_LINE: Record<string, string> = {
   deep_pages: 'Some important pages are hard to reach from your homepage',
   sitemap_only_pages: 'Some important pages are not linked from anywhere on your site',
   client_rendered: 'Your homepage text only appears after the page code runs, so some tools may see an almost empty page',
+  home_no_text: 'Your homepage has almost no readable text, so search and AI tools have little to read',
   no_https: 'Your site is not secure (no padlock)',
   no_sitemap: 'There is no page list for Google to follow',
   sitemap_off_site: 'The list of your pages that Google reads points at a different website',

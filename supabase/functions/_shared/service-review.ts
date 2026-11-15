@@ -5,10 +5,12 @@
 import { logOpenAiUsage } from "./openai-usage.ts";
 import type { ServiceReview } from "../../../src/lib/salesInsights.ts";
 
-/** The model that reads service names (chosen on the bench, docs/WEBSITE_CHECK_ACCURACY.md). */
-export const SERVICE_REVIEW_MODEL = "gpt-4o-mini";
+/** The model that reads service names, chosen on the bench (docs/WEBSITE_CHECK_ACCURACY.md, 2026-11-15): of six models on the
+ *  same 13 sites, gpt-5.5 classified 91% of headings right (gpt-4o-mini 83%) and called the fewest non-services services. */
+export const SERVICE_REVIEW_MODEL = "gpt-5.5";
 const MODEL = SERVICE_REVIEW_MODEL;
-const REVIEW_TIMEOUT_MS = 20_000;
+/** gpt-5.5 averaged 6.6 s on the bench; a reasoning model's slow call must not cost the claim. */
+const REVIEW_TIMEOUT_MS = 30_000;
 /** What the model is told — one copy: the crawl and the bench (fn website-check-bench) send exactly this. */
 export const SERVICE_REVIEW_PROMPT =
   "You read headings taken from a small UK business's website. Decide which are services a customer could buy from this business. " +
@@ -54,7 +56,8 @@ export async function reviewServices(service: any, input: {
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       signal: controller.signal,
       body: JSON.stringify({
-        model: MODEL, temperature: 0, response_format: { type: "json_object" },
+        /* A reasoning model takes no temperature; the least reasoning that answers well (bench, 2026-11-15). */
+        model: MODEL, reasoning_effort: "low", response_format: { type: "json_object" },
         messages: [
           { role: "system", content: SERVICE_REVIEW_PROMPT },
           { role: "user", content: JSON.stringify({ business: input.business, trade: input.trade, headings: names, pages }) },

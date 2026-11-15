@@ -16,6 +16,9 @@
 const RATES: Record<string, { input: number; output: number }> = {
   "gpt-4o": { input: 2.50, output: 10.00 },
   "gpt-4o-mini": { input: 0.15, output: 0.60 },
+  /* 2026-11-15, the website check's service read (service-review.ts). Published standard rate as read on 2026-11-15 — a guess
+     until a billed month agrees (docs/WEBSITE_CHECK_ACCURACY.md). Without it the gpt-4o fallback would UNDER-state this model. */
+  "gpt-5.5": { input: 5.00, output: 30.00 },
 };
 
 /** USD for a call, from the model and its token counts. Unknown model → gpt-4o rate (over-state). */

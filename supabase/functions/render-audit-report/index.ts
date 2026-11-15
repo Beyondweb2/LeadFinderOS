@@ -491,7 +491,7 @@ Deno.serve(async (req) => {
          check says — the same issues the call script, the Inbox and the lead's audit show — so it REPLACES the three
          older picks above (the run's quick-crawl faults, the evidence tiers, the content issues). Serious issues only
          (high / medium), each the issue's title + what was seen. A clean check says so; no row keeps the old path. */
-      const wc = cc ? websiteCheckFor({ result: stored as never, created_at: (cc as { created_at: string }).created_at }, { website: ownWebsite ?? null }) : null;
+      const wc = cc ? websiteCheckFor({ result: stored as never, created_at: (cc as { created_at: string }).created_at }, { website: ownWebsite ?? null, audience: "client" }) : null;
       if (wc) websiteSection = websiteSectionFromCheck(wc);
       /* "How easy your website is for AI to read" — the baseline's website score (aiReadability.ts), from this same check. */
       const targeted = String((audit as { audit_purpose?: string | null }).audit_purpose ?? "") === "targeted";
@@ -569,7 +569,7 @@ Deno.serve(async (req) => {
         const questions = [...new Set(oppRows.map((r) => r.question.trim()))];
         /* A standalone audit (no lead) has no lead-level check: use the website check stored with its own run. */
         if (websiteSection.state === "not_checked" && runCrawl?.status === "complete") {
-          websiteSection = websiteSectionFromCheck(websiteCheckFor({ result: runCrawl as never, created_at: runCrawl.checked_at ?? new Date().toISOString() }, { website: ownWebsite || null }));
+          websiteSection = websiteSectionFromCheck(websiteCheckFor({ result: runCrawl as never, created_at: runCrawl.checked_at ?? new Date().toISOString() }, { website: ownWebsite || null, audience: "client" }));
         }
         /* No website at all (Google was asked and found none): the page says so and pitches "a site AI can read". */
         if (!ownWebsite && hasWebsite === false) websiteSection = { state: "no_website", issues: [] };

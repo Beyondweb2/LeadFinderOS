@@ -1,0 +1,3054 @@
+{
+ "f294cdd18aad1bf54427ce68": {
+  "id": "chatcmpl-EkU5kGFCrzU0pnQu0bY6CEWVIcqGK",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4o-mini-2024-07-18",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Boiler repair\",\n      \"page\": \"https://corbygasman.co.uk/boiler-repair/\"\n    },\n    {\n      \"name\": \"New boilers\",\n      \"page\": \"https://corbygasman.co.uk/new-boiler/\"\n    },\n    {\n      \"name\": \"Gas safety certificates (CP12)\",\n      \"page\": \"https://corbygasman.co.uk/landlord-gas-safety/\"\n    },\n    {\n      \"name\": \"Gas hob fitting\",\n      \"page\": \"https://corbygasman.co.uk/plumbing/\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 535,
+   "completion_tokens": 136,
+   "total_tokens": 671,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_9400314673",
+  "bench_ms": 2296
+ },
+ "a86e4da172087f2dad5e154f": {
+  "id": "chatcmpl-EkU5kQ8ttc6tvpHCEKOjmwsP2VjnM",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4.1-mini-2025-04-14",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Boiler repair\",\"page\":\"https://corbygasman.co.uk/boiler-repair/\"},{\"name\":\"New boilers\",\"page\":\"https://corbygasman.co.uk/new-boiler/\"},{\"name\":\"Gas safety certificates (CP12)\",\"page\":\"https://corbygasman.co.uk/landlord-gas-safety/\"},{\"name\":\"Gas hob fitting\",\"page\":\"https://corbygasman.co.uk/plumbing/\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 535,
+   "completion_tokens": 97,
+   "total_tokens": 632,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_5dbffc98b2",
+  "bench_ms": 1701
+ },
+ "afb4e0b546c4d88cecf23704": {
+  "id": "chatcmpl-EkU5kHhw72siqJRhoSaQvqY9MSBxB",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5-mini-2025-08-07",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Boiler repair\",\n      \"page\": \"https://corbygasman.co.uk/boiler-repair/\"\n    },\n    {\n      \"name\": \"New boilers\",\n      \"page\": \"https://corbygasman.co.uk/new-boiler/\"\n    },\n    {\n      \"name\": \"Gas safety certificates (CP12)\",\n      \"page\": \"https://corbygasman.co.uk/landlord-gas-safety/\"\n    },\n    {\n      \"name\": \"Gas hob fitting\",\n      \"page\": \"https://corbygasman.co.uk/plumbing/\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 534,
+   "completion_tokens": 337,
+   "total_tokens": 871,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 192,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 4608
+ },
+ "46cc162496d0c5436aeab7cf": {
+  "id": "chatcmpl-EkU5kohAUhqwVZNHEGxG60b5ZT1zf",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-mini-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Boiler repair\",\"page\":\"https://corbygasman.co.uk/boiler-repair/\"},{\"name\":\"New boilers\",\"page\":\"https://corbygasman.co.uk/new-boiler/\"},{\"name\":\"Gas safety certificates (CP12)\",\"page\":\"https://corbygasman.co.uk/landlord-gas-safety/\"},{\"name\":\"Gas hob fitting\",\"page\":\"https://corbygasman.co.uk/plumbing/\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 534,
+   "completion_tokens": 160,
+   "total_tokens": 694,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 51,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 1550
+ },
+ "d6c6684005635bd49676277a": {
+  "id": "chatcmpl-EkU5kF6H1uZjzRLYQpewPbLFj89D9",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-nano-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Boiler repair\",\"page\":\"https://corbygasman.co.uk/boiler-repair/\"},{\"name\":\"New boilers\",\"page\":\"https://corbygasman.co.uk/new-boiler/\"},{\"name\":\"Gas safety certificates (CP12)\",\"page\":\"https://corbygasman.co.uk/landlord-gas-safety/\"},{\"name\":\"Gas hob fitting\",\"page\":\"https://corbygasman.co.uk/plumbing/\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 534,
+   "completion_tokens": 146,
+   "total_tokens": 680,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 37,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 1929
+ },
+ "3388e3b32f43d8c3e6b24277": {
+  "id": "chatcmpl-EkU5kWiJBJY1TErWt9n9Pq9bDO4Uj",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.5-2026-04-23",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Boiler repair\",\"page\":\"https://corbygasman.co.uk/boiler-repair/\"},{\"name\":\"New boilers\",\"page\":\"https://corbygasman.co.uk/new-boiler/\"},{\"name\":\"Gas safety certificates (CP12)\",\"page\":\"https://corbygasman.co.uk/landlord-gas-safety/\"},{\"name\":\"Gas hob fitting\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 534,
+   "completion_tokens": 188,
+   "total_tokens": 722,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 89,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 3238
+ },
+ "f450245b9eb4acb8532db969": {
+  "id": "chatcmpl-EkU5kg8cZA6vdodFd1pBD8TyDZYef",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4o-mini-2024-07-18",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"New Roofs\",\n      \"page\": \"https://www.highdesignroofing.com/services/new-roof-services/\"\n    },\n    {\n      \"name\": \"UPVC Facias & Soffits\",\n      \"page\": \"https://www.highdesignroofing.com/services/upvc-facias-and-soffits/\"\n    },\n    {\n      \"name\": \"Cast Iron Guttering\",\n      \"page\": \"https://www.highdesignroofing.com/services/cast-iron-guttering/\"\n    },\n    {\n      \"name\": \"Emergency Roofing Repairs\",\n      \"page\": \"https://www.highdesignroofing.com/services/emergency-roof-repairs/\"\n    },\n    {\n      \"name\": \"Flat Roof Repairs\",\n      \"page\": \"https://www.highdesignroofing.com/services/flat-roofs-repairs/\"\n    },\n    {\n      \"name\": \"Leaking Roof Repairs\",\n      \"page\": \"https://www.highdesignroofing.com/services/leaking-roof-repairs/\"\n    },\n    {\n      \"name\": \"Chimney Repairs\",\n      \"page\": \"https://www.highdesignroofing.com/services/chimney-repairs/\"\n    },\n    {\n      \"name\": \"Roof Cleaning & Roof Repairs\",\n      \"page\": \"https://www.highdesignroofing.com/services/roof-cleaning-roof-repairs/\"\n    },\n    {\n      \"name\": \"Maintenance\",\n      \"page\": \"null\"\n    },\n    {\n      \"name\": \"Roof Painting & Sealing\",\n      \"page\": \"https://www.highdesignroofing.com/services/roof-painting-and-sealing/\"\n    },\n    {\n      \"name\": \"UPVC Cleaning\",\n      \"page\": \"https://www.highdesignroofing.com/services/upvc-cleaning/\"\n    },\n    {\n      \"name\": \"Ridge Tile Re-bedding\",\n      \"page\": \"https://www.highdesignroofing.com/services/ridge-tile-rebedding/\"\n    },\n    {\n      \"name\": \"Roof Cladding\",\n      \"page\": \"https://www.highdesignroofing.com/services/cladding/\"\n    },\n    {\n      \"name\": \"Power Clean Driveways\",\n      \"page\": \"null\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 3040,
+   "completion_tokens": 469,
+   "total_tokens": 3509,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_9400314673",
+  "bench_ms": 6223
+ },
+ "c3b11332867969da6ac3d0d3": {
+  "id": "chatcmpl-EkU5k6z0DcMQRDXJnhZxdfuaoIKpL",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4.1-mini-2025-04-14",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"UPVC Facias & Soffits\",\"page\":\"https://www.highdesignroofing.com/services/upvc-facias-and-soffits/\"},{\"name\":\"Cast Iron Guttering\",\"page\":\"https://www.highdesignroofing.com/services/cast-iron-guttering/\"},{\"name\":\"Emergency Roofing Repairs\",\"page\":\"https://www.highdesignroofing.com/services/emergency-roof-repairs/\"},{\"name\":\"Flat Roof Repairs\",\"page\":\"https://www.highdesignroofing.com/services/flat-roofs-repairs/\"},{\"name\":\"Leaking Roof Repairs\",\"page\":\"https://www.highdesignroofing.com/services/leaking-roof-repairs/\"},{\"name\":\"Chimney Repairs\",\"page\":\"https://www.highdesignroofing.com/services/chimney-repairs/\"},{\"name\":\"Roof Cleaning & Roof Repairs\",\"page\":\"https://www.highdesignroofing.com/services/roof-cleaning-roof-repairs/\"},{\"name\":\"Roof Painting & Sealing\",\"page\":\"https://www.highdesignroofing.com/services/roof-painting-and-sealing/\"},{\"name\":\"UPVC Cleaning\",\"page\":\"https://www.highdesignroofing.com/services/upvc-cleaning/\"},{\"name\":\"Ridge Tile Re-bedding\",\"page\":\"https://www.highdesignroofing.com/services/ridge-tile-rebedding/\"},{\"name\":\"Roof Cladding\",\"page\":\"https://www.highdesignroofing.com/services/cladding/\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 3040,
+   "completion_tokens": 295,
+   "total_tokens": 3335,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_5dbffc98b2",
+  "bench_ms": 2946
+ },
+ "3f475c4bd3eba5bdf770ee48": {
+  "id": "chatcmpl-EkU5kIGrGYGd3pGXnWHIziPUtoSj6",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5-mini-2025-08-07",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"New Roofs\",\"page\":\"https://www.highdesignroofing.com/castleford/new-roof-services/\"},{\"name\":\"UPVC Facias & Soffits\",\"page\":\"https://www.highdesignroofing.com/services/upvc-facias-and-soffits/\"},{\"name\":\"Cast Iron Guttering\",\"page\":\"https://www.highdesignroofing.com/services/cast-iron-guttering/\"},{\"name\":\"Emergency Roofing Repairs\",\"page\":\"https://www.highdesignroofing.com/services/emergency-roof-repairs/\"},{\"name\":\"Flat Roof Repairs\",\"page\":\"https://www.highdesignroofing.com/services/flat-roofs-repairs/\"},{\"name\":\"Leaking Roof Repairs\",\"page\":\"https://www.highdesignroofing.com/services/leaking-roof-repairs/\"},{\"name\":\"Chimney Repairs\",\"page\":\"https://www.highdesignroofing.com/services/chimney-repairs/\"},{\"name\":\"Roof Cleaning & Roof Repairs\",\"page\":\"https://www.highdesignroofing.com/services/roof-cleaning-roof-repairs/\"},{\"name\":\"Roof Painting & Sealing\",\"page\":\"https://www.highdesignroofing.com/services/roof-painting-and-sealing/\"},{\"name\":\"UPVC Cleaning\",\"page\":\"https://www.highdesignroofing.com/services/upvc-cleaning/\"},{\"name\":\"Ridge Tile Re-bedding\",\"page\":\"https://www.highdesignroofing.com/services/ridge-tile-rebedding/\"},{\"name\":\"Roof Cladding\",\"page\":\"https://www.highdesignroofing.com/services/cladding/\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 3039,
+   "completion_tokens": 1162,
+   "total_tokens": 4201,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 832,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 11427
+ },
+ "ac1a42b4fd22d8e68aff42b1": {
+  "id": "chatcmpl-EkU5k8VQsBFM0PEGbQspTj6G8c6Z3",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-mini-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"New Roofs\",\"page\":\"https://www.highdesignroofing.com/castleford/new-roof-services/\"},{\"name\":\"UPVC Facias & Soffits\",\"page\":\"https://www.highdesignroofing.com/services/upvc-facias-and-soffits/\"},{\"name\":\"Cast Iron Guttering\",\"page\":\"https://www.highdesignroofing.com/services/cast-iron-guttering/\"},{\"name\":\"Emergency Roofing Repairs\",\"page\":\"https://www.highdesignroofing.com/services/emergency-roof-repairs/\"},{\"name\":\"Flat Roof Repairs\",\"page\":\"https://www.highdesignroofing.com/services/flat-roofs-repairs/\"},{\"name\":\"Leaking Roof Repairs\",\"page\":\"https://www.highdesignroofing.com/services/leaking-roof-repairs/\"},{\"name\":\"Chimney Repairs\",\"page\":\"https://www.highdesignroofing.com/services/chimney-repairs/\"},{\"name\":\"Roof Cleaning & Roof Repairs\",\"page\":\"https://www.highdesignroofing.com/services/roof-cleaning-roof-repairs/\"},{\"name\":\"Roof Painting & Sealing\",\"page\":\"https://www.highdesignroofing.com/services/roof-painting-and-sealing/\"},{\"name\":\"UPVC Cleaning\",\"page\":\"https://www.highdesignroofing.com/services/upvc-cleaning/\"},{\"name\":\"Ridge Tile Re-bedding\",\"page\":\"https://www.highdesignroofing.com/services/ridge-tile-rebedding/\"},{\"name\":\"Roof Cladding\",\"page\":\"https://www.highdesignroofing.com/services/cladding/\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 3039,
+   "completion_tokens": 438,
+   "total_tokens": 3477,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 105,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 2753
+ },
+ "1adbc160dba53eb762b8fed2": {
+  "id": "chatcmpl-EkU5kJBdjUpJQGXC4z1GYYN4xgR1C",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-nano-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"New Roofs\",\"page\":\"https://www.highdesignroofing.com/castleford/new-roof-services/\"},{\"name\":\"UPVC Facias & Soffits\",\"page\":\"https://www.highdesignroofing.com/services/upvc-facias-and-soffits/\"},{\"name\":\"Cast Iron Guttering\",\"page\":\"https://www.highdesignroofing.com/services/cast-iron-guttering/\"},{\"name\":\"Emergency Roofing Repairs\",\"page\":\"https://www.highdesignroofing.com/services/emergency-roof-repairs/\"},{\"name\":\"Flat Roof Repairs\",\"page\":\"https://www.highdesignroofing.com/services/flat-roofs-repairs/\"},{\"name\":\"Leaking Roof Repairs\",\"page\":\"https://www.highdesignroofing.com/services/leaking-roof-repairs/\"},{\"name\":\"Chimney Repairs\",\"page\":\"https://www.highdesignroofing.com/services/chimney-repairs/\"},{\"name\":\"Roof Cleaning & Roof Repairs\",\"page\":\"https://www.highdesignroofing.com/services/roof-cleaning-roof-repairs/\"},{\"name\":\"Roof Painting & Sealing\",\"page\":\"https://www.highdesignroofing.com/services/roof-painting-and-sealing/\"},{\"name\":\"UPVC Cleaning\",\"page\":\"https://www.highdesignroofing.com/services/upvc-cleaning/\"},{\"name\":\"Ridge Tile Re-bedding\",\"page\":\"https://www.highdesignroofing.com/services/ridge-tile-rebedding/\"},{\"name\":\"Roof Cladding\",\"page\":\"https://www.highdesignroofing.com/services/cladding/\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 3039,
+   "completion_tokens": 508,
+   "total_tokens": 3547,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 175,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 3987
+ },
+ "e65572cf73dc8f0d26eb36b0": {
+  "id": "chatcmpl-EkU5kgx7QKmuHi9CpDg8lTLOJs7pi",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.5-2026-04-23",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"New Roofs\",\"page\":null},{\"name\":\"UPVC Facias & Soffits\",\"page\":\"https://www.highdesignroofing.com/services/upvc-facias-and-soffits/\"},{\"name\":\"Cast Iron Guttering\",\"page\":\"https://www.highdesignroofing.com/services/cast-iron-guttering/\"},{\"name\":\"Emergency Roofing Repairs\",\"page\":\"https://www.highdesignroofing.com/services/emergency-roof-repairs/\"},{\"name\":\"Flat Roof Repairs\",\"page\":\"https://www.highdesignroofing.com/services/flat-roofs-repairs/\"},{\"name\":\"Leaking Roof Repairs\",\"page\":\"https://www.highdesignroofing.com/services/leaking-roof-repairs/\"},{\"name\":\"Chimney Repairs\",\"page\":\"https://www.highdesignroofing.com/services/chimney-repairs/\"},{\"name\":\"Roof Cleaning & Roof Repairs\",\"page\":\"https://www.highdesignroofing.com/services/roof-cleaning-roof-repairs/\"},{\"name\":\"Roof Painting & Sealing\",\"page\":\"https://www.highdesignroofing.com/services/roof-painting-and-sealing/\"},{\"name\":\"UPVC Cleaning\",\"page\":\"https://www.highdesignroofing.com/services/upvc-cleaning/\"},{\"name\":\"Ridge Tile Re-bedding\",\"page\":\"https://www.highdesignroofing.com/services/ridge-tile-rebedding/\"},{\"name\":\"Roof Cladding\",\"page\":\"https://www.highdesignroofing.com/services/cladding/\"},{\"name\":\"Power Clean Driveways\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 3039,
+   "completion_tokens": 480,
+   "total_tokens": 3519,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 152,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 6222
+ },
+ "3415a595d51fdbf2cdd8cf8f": {
+  "id": "chatcmpl-EkU5kJWPJWgLYYDSKheYC20KGVMOT",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4o-mini-2024-07-18",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Washing Machine Installtion\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/washing-machine-installtion\"\n    },\n    {\n      \"name\": \"Tumble Dryer Installation\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/tumble-dryer-installation\"\n    },\n    {\n      \"name\": \"Fridge Freezer Installation\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/fridge-freezer-installation\"\n    },\n    {\n      \"name\": \"Range Cooker Installation\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/range-cooker-installation\"\n    },\n    {\n      \"name\": \"Oven Installation\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/oven-installation\"\n    },\n    {\n      \"name\": \"Kitchen Tap Installation\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/kitchen-tap-installation\"\n    },\n    {\n      \"name\": \"Fridge Freezer Repair\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/fridge-freezer-repair\"\n    },\n    {\n      \"name\": \"Range Cooker Repair\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/range-cooker-repair\"\n    },\n    {\n      \"name\": \"Oven Repair\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/oven-repair\"\n    },\n    {\n      \"name\": \"Tumble Dryer Repair\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/tumble-dryer-repair\"\n    },\n    {\n      \"name\": \"Washing Machine Repair\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/washing-machine-repair-1\"\n    },\n    {\n      \"name\": \"Dishwasher repair\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/dishwasher-repair\"\n    },\n    {\n      \"name\": \"Microwave Repair\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/microwave-repair\"\n    },\n    {\n      \"name\": \"Stove Repair\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/stove-repair\"\n    },\n    {\n      \"name\": \"Hood repair\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/hood-repair\"\n    },\n    {\n      \"name\": \"Bathroom Installations\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/bathroom-installations\"\n    },\n    {\n      \"name\": \"Boiler Repair\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/boiler-repair\"\n    },\n    {\n      \"name\": \"Boiler Installation\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/boiler-installation\"\n    },\n    {\n      \"name\": \"Taps replacement\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/taps-replacement\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2301,
+   "completion_tokens": 668,
+   "total_tokens": 2969,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_9400314673",
+  "bench_ms": 7499
+ },
+ "caea599a4f4cf636de98288e": {
+  "id": "chatcmpl-EkU5k4DiXL31Z8X21zcy5rk7O0Gu4",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4.1-mini-2025-04-14",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Washing Machine Installtion\",\"page\":\"https://www.bkwservices.co.uk/service-page/washing-machine-installtion\"},{\"name\":\"Tumble Dryer Installation\",\"page\":\"https://www.bkwservices.co.uk/service-page/tumble-dryer-installation\"},{\"name\":\"Fridge Freezer Installation\",\"page\":\"https://www.bkwservices.co.uk/service-page/fridge-freezer-installation\"},{\"name\":\"Range Cooker Installation\",\"page\":\"https://www.bkwservices.co.uk/service-page/range-cooker-installation\"},{\"name\":\"Oven Installation\",\"page\":\"https://www.bkwservices.co.uk/service-page/oven-installation\"},{\"name\":\"Kitchen Tap Installation\",\"page\":\"https://www.bkwservices.co.uk/service-page/kitchen-tap-installation\"},{\"name\":\"Fridge Freezer Repair\",\"page\":\"https://www.bkwservices.co.uk/service-page/fridge-freezer-repair\"},{\"name\":\"Range Cooker Repair\",\"page\":\"https://www.bkwservices.co.uk/service-page/range-cooker-repair\"},{\"name\":\"Oven Repair\",\"page\":\"https://www.bkwservices.co.uk/service-page/oven-repair\"},{\"name\":\"Tumble Dryer Repair\",\"page\":\"https://www.bkwservices.co.uk/service-page/tumble-dryer-repair\"},{\"name\":\"Washing Machine Repair\",\"page\":\"https://www.bkwservices.co.uk/service-page/washing-machine-repair-1\"},{\"name\":\"Sink Pipe Repair\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2301,
+   "completion_tokens": 295,
+   "total_tokens": 2596,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_5dbffc98b2",
+  "bench_ms": 3782
+ },
+ "7de59d1ebd573262f70c5cbb": {
+  "id": "chatcmpl-EkU5kK6cvO52XOlMyb42Zaayt10Pt",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5-mini-2025-08-07",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Washing Machine Installtion\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/washing-machine-installtion\"\n    },\n    {\n      \"name\": \"Tumble Dryer Installation\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/tumble-dryer-installation\"\n    },\n    {\n      \"name\": \"Fridge Freezer Installation\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/fridge-freezer-installation\"\n    },\n    {\n      \"name\": \"Range Cooker Installation\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/range-cooker-installation\"\n    },\n    {\n      \"name\": \"Oven Installation\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/oven-installation\"\n    },\n    {\n      \"name\": \"Kitchen Tap Installation\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/kitchen-tap-installation\"\n    },\n    {\n      \"name\": \"Fridge Freezer Repair\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/fridge-freezer-repair\"\n    },\n    {\n      \"name\": \"Range Cooker Repair\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/range-cooker-repair\"\n    },\n    {\n      \"name\": \"Oven Repair\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/oven-repair\"\n    },\n    {\n      \"name\": \"Tumble Dryer Repair\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/tumble-dryer-repair\"\n    },\n    {\n      \"name\": \"Washing Machine Repair\",\n      \"page\": \"https://www.bkwservices.co.uk/service-page/washing-machine-repair-1\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2300,
+   "completion_tokens": 728,
+   "total_tokens": 3028,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 320,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 8316
+ },
+ "ad07049b3a871a89f3ffe041": {
+  "id": "chatcmpl-EkU5kd2KUBkDJmCJp9U8BkSFuR9Tx",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-mini-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Washing Machine Installtion\",\"page\":\"https://www.bkwservices.co.uk/service-page/washing-machine-installtion\"},{\"name\":\"Tumble Dryer Installation\",\"page\":\"https://www.bkwservices.co.uk/service-page/tumble-dryer-installation\"},{\"name\":\"Fridge Freezer Installation\",\"page\":\"https://www.bkwservices.co.uk/service-page/fridge-freezer-installation\"},{\"name\":\"Range Cooker Installation\",\"page\":\"https://www.bkwservices.co.uk/service-page/range-cooker-installation\"},{\"name\":\"Oven Installation\",\"page\":\"https://www.bkwservices.co.uk/service-page/oven-installation\"},{\"name\":\"Kitchen Tap Installation\",\"page\":\"https://www.bkwservices.co.uk/service-page/kitchen-tap-installation\"},{\"name\":\"Fridge Freezer Repair\",\"page\":\"https://www.bkwservices.co.uk/service-page/fridge-freezer-repair\"},{\"name\":\"Range Cooker Repair\",\"page\":\"https://www.bkwservices.co.uk/service-page/range-cooker-repair\"},{\"name\":\"Oven Repair\",\"page\":\"https://www.bkwservices.co.uk/service-page/oven-repair\"},{\"name\":\"Tumble Dryer Repair\",\"page\":\"https://www.bkwservices.co.uk/service-page/tumble-dryer-repair\"},{\"name\":\"Washing Machine Repair\",\"page\":\"https://www.bkwservices.co.uk/service-page/washing-machine-repair-1\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2300,
+   "completion_tokens": 441,
+   "total_tokens": 2741,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 144,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 2809
+ },
+ "9333c2bf059095b5a60ab519": {
+  "id": "chatcmpl-EkU5k7wHwfwNcNaQvnW2E1Uvbgciu",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-nano-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Washing Machine Installtion\",\"page\":\"https://www.bkwservices.co.uk/service-page/washing-machine-installtion\"},{\"name\":\"Tumble Dryer Installation\",\"page\":\"https://www.bkwservices.co.uk/service-page/tumble-dryer-installation\"},{\"name\":\"Fridge Freezer Installation\",\"page\":\"https://www.bkwservices.co.uk/service-page/fridge-freezer-installation\"},{\"name\":\"Range Cooker Installation\",\"page\":\"https://www.bkwservices.co.uk/service-page/range-cooker-installation\"},{\"name\":\"Oven Installation\",\"page\":\"https://www.bkwservices.co.uk/service-page/oven-installation\"},{\"name\":\"Kitchen Tap Installation\",\"page\":\"https://www.bkwservices.co.uk/service-page/kitchen-tap-installation\"},{\"name\":\"Fridge Freezer Repair\",\"page\":\"https://www.bkwservices.co.uk/service-page/fridge-freezer-repair\"},{\"name\":\"Range Cooker Repair\",\"page\":\"https://www.bkwservices.co.uk/service-page/range-cooker-repair\"},{\"name\":\"Oven Repair\",\"page\":\"https://www.bkwservices.co.uk/service-page/oven-repair\"},{\"name\":\"Tumble Dryer Repair\",\"page\":\"https://www.bkwservices.co.uk/service-page/tumble-dryer-repair\"},{\"name\":\"Washing Machine Repair\",\"page\":\"https://www.bkwservices.co.uk/service-page/washing-machine-repair-1\"},{\"name\":\"Sink Pipe Repair\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2300,
+   "completion_tokens": 363,
+   "total_tokens": 2663,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 56,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 3310
+ },
+ "b8825ff641d75c9821523ebc": {
+  "id": "chatcmpl-EkU5k8VVQCEDhNRWVrou8NrBiilu9",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.5-2026-04-23",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Washing Machine Installtion\",\"page\":\"https://www.bkwservices.co.uk/service-page/washing-machine-installtion\"},{\"name\":\"Tumble Dryer Installation\",\"page\":\"https://www.bkwservices.co.uk/service-page/tumble-dryer-installation\"},{\"name\":\"Fridge Freezer Installation\",\"page\":\"https://www.bkwservices.co.uk/service-page/fridge-freezer-installation\"},{\"name\":\"Range Cooker Installation\",\"page\":\"https://www.bkwservices.co.uk/service-page/range-cooker-installation\"},{\"name\":\"Oven Installation\",\"page\":\"https://www.bkwservices.co.uk/service-page/oven-installation\"},{\"name\":\"Kitchen Tap Installation\",\"page\":\"https://www.bkwservices.co.uk/service-page/kitchen-tap-installation\"},{\"name\":\"Fridge Freezer Repair\",\"page\":\"https://www.bkwservices.co.uk/service-page/fridge-freezer-repair\"},{\"name\":\"Range Cooker Repair\",\"page\":\"https://www.bkwservices.co.uk/service-page/range-cooker-repair\"},{\"name\":\"Oven Repair\",\"page\":\"https://www.bkwservices.co.uk/service-page/oven-repair\"},{\"name\":\"Tumble Dryer Repair\",\"page\":\"https://www.bkwservices.co.uk/service-page/tumble-dryer-repair\"},{\"name\":\"Washing Machine Repair\",\"page\":\"https://www.bkwservices.co.uk/service-page/washing-machine-repair-1\"},{\"name\":\"Sink Pipe Repair\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2300,
+   "completion_tokens": 370,
+   "total_tokens": 2670,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 63,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 3958
+ },
+ "52f37b7f388da80efbc4dd48": {
+  "id": "chatcmpl-EkU5kFUlyNpTXkf0QHIAgvto9nqCZ",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4o-mini-2024-07-18",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Additional Socket Outlet\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/additional-socket-outlet\"\n    },\n    {\n      \"name\": \"Car Charger installation\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/car-charger-installation\"\n    },\n    {\n      \"name\": \"Decorative lighting\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/decorative-lighting\"\n    },\n    {\n      \"name\": \"Decorative Sockets and Switches\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/decorative-sockets-and-switches\"\n    },\n    {\n      \"name\": \"Electric Radiator Installation\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/electric-radiator-installation\"\n    },\n    {\n      \"name\": \"Electric Toothbrush Charger Installation\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/electric-toothbrush-charger-installation\"\n    },\n    {\n      \"name\": \"Extractor Fan Installation\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/extractor-fan-installation\"\n    },\n    {\n      \"name\": \"Fault Finding & Repair\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/fault-finding-repair\"\n    },\n    {\n      \"name\": \"Garage Electrics\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/garage-electrics\"\n    },\n    {\n      \"name\": \"EICR Electrician\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/eicr\"\n    },\n    {\n      \"name\": \"Fuse Board Upgrade Electrician\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/fuse-board-upgrade\"\n    },\n    {\n      \"name\": \"Small Electrical Jobs Electrician\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/small-electrical-jobs\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2528,
+   "completion_tokens": 453,
+   "total_tokens": 2981,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_9400314673",
+  "bench_ms": 6200
+ },
+ "30f73c2925ebe2f855633280": {
+  "id": "chatcmpl-EkU5koUqlwhoUAG6miX4rRypLkWKF",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4.1-mini-2025-04-14",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Additional Socket Outlet\",\"page\":\"https://www.ljmullanelectrical.com/service/additional-socket-outlet\"},{\"name\":\"Car Charger installation\",\"page\":\"https://www.ljmullanelectrical.com/service/car-charger-installation\"},{\"name\":\"Decorative lighting\",\"page\":\"https://www.ljmullanelectrical.com/service/decorative-lighting\"},{\"name\":\"Decorative Sockets and Switches\",\"page\":\"https://www.ljmullanelectrical.com/service/decorative-sockets-and-switches\"},{\"name\":\"Electric Radiator Installation\",\"page\":\"https://www.ljmullanelectrical.com/service/electric-radiator-installation\"},{\"name\":\"Electric Toothbrush Charger Installation\",\"page\":\"https://www.ljmullanelectrical.com/service/electric-toothbrush-charger-installation\"},{\"name\":\"Extractor Fan Installation\",\"page\":\"https://www.ljmullanelectrical.com/service/extractor-fan-installation\"},{\"name\":\"Fault Finding & Repair\",\"page\":\"https://www.ljmullanelectrical.com/service/fault-finding-repair\"},{\"name\":\"Garage Electrics\",\"page\":\"https://www.ljmullanelectrical.com/service/garage-electrics\"},{\"name\":\"Outdoor lighting\",\"page\":null},{\"name\":\"Outdoor Socket\",\"page\":null},{\"name\":\"Ring Doorbell Installation\",\"page\":null},{\"name\":\"Security Lighting\",\"page\":null},{\"name\":\"Smart Home Install\",\"page\":null},{\"name\":\"Smoke Alarm Installation\",\"page\":null},{\"name\":\"Storage Heater Installation\",\"page\":null},{\"name\":\"TV Wall Mounting Set Up\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2528,
+   "completion_tokens": 330,
+   "total_tokens": 2858,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_5dbffc98b2",
+  "bench_ms": 3224
+ },
+ "cb3e1bb2505ecc301948e4ad": {
+  "id": "chatcmpl-EkU5k5b0H4pyMHF59qESz1sd2oPc4",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5-mini-2025-08-07",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Additional Socket Outlet\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/additional-socket-outlet\"\n    },\n    {\n      \"name\": \"Car Charger installation\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/car-charger-installation\"\n    },\n    {\n      \"name\": \"Decorative lighting\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/decorative-lighting\"\n    },\n    {\n      \"name\": \"Decorative Sockets and Switches\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/decorative-sockets-and-switches\"\n    },\n    {\n      \"name\": \"Electric Radiator Installation\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/electric-radiator-installation\"\n    },\n    {\n      \"name\": \"Electric Toothbrush Charger Installation\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/electric-toothbrush-charger-installation\"\n    },\n    {\n      \"name\": \"Extractor Fan Installation\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/extractor-fan-installation\"\n    },\n    {\n      \"name\": \"Fault Finding & Repair\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/fault-finding-repair\"\n    },\n    {\n      \"name\": \"Garage Electrics\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/garage-electrics\"\n    },\n    {\n      \"name\": \"Outdoor lighting\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Outdoor Socket\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Ring Doorbell Installation\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Security Lighting\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Smart Home Install\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Smoke Alarm Installation\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Storage Heater Installation\",\n      \"page\": null\n    },\n    {\n      \"name\": \"TV Wall Mounting Set Up\",\n      \"page\": null\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2527,
+   "completion_tokens": 1337,
+   "total_tokens": 3864,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 832,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 13429
+ },
+ "fe9162b0aa68974103eb86e5": {
+  "id": "chatcmpl-EkU5kh7kEyrtnb4lfdKbbLF8r9Egs",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-mini-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Additional Socket Outlet\",\"page\":\"https://www.ljmullanelectrical.com/service/additional-socket-outlet\"},{\"name\":\"Car Charger installation\",\"page\":\"https://www.ljmullanelectrical.com/service/car-charger-installation\"},{\"name\":\"Decorative lighting\",\"page\":\"https://www.ljmullanelectrical.com/service/decorative-lighting\"},{\"name\":\"Decorative Sockets and Switches\",\"page\":\"https://www.ljmullanelectrical.com/service/decorative-sockets-and-switches\"},{\"name\":\"Electric Radiator Installation\",\"page\":\"https://www.ljmullanelectrical.com/service/electric-radiator-installation\"},{\"name\":\"Electric Toothbrush Charger Installation\",\"page\":\"https://www.ljmullanelectrical.com/service/electric-toothbrush-charger-installation\"},{\"name\":\"Extractor Fan Installation\",\"page\":\"https://www.ljmullanelectrical.com/service/extractor-fan-installation\"},{\"name\":\"Fault Finding & Repair\",\"page\":\"https://www.ljmullanelectrical.com/service/fault-finding-repair\"},{\"name\":\"Garage Electrics\",\"page\":\"https://www.ljmullanelectrical.com/service/garage-electrics\"},{\"name\":\"1) Additional Sockets Installation in Banbury\",\"page\":\"https://www.ljmullanelectrical.com/service/additional-socket-outlet\"},{\"name\":\"Outdoor lighting\",\"page\":null},{\"name\":\"Outdoor Socket\",\"page\":null},{\"name\":\"Ring Doorbell Installation\",\"page\":null},{\"name\":\"Security Lighting\",\"page\":null},{\"name\":\"Smart Home Install\",\"page\":null},{\"name\":\"Smoke Alarm Installation\",\"page\":null},{\"name\":\"Storage Heater Installation\",\"page\":null},{\"name\":\"TV Wall Mounting Set Up\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2527,
+   "completion_tokens": 598,
+   "total_tokens": 3125,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 224,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 3380
+ },
+ "7fa16c562c09dbf6cd9b1a1f": {
+  "id": "chatcmpl-EkU5kPWt7DkzCvPMuR6u1xMtrmqf2",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-nano-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Additional Socket Outlet\",\"page\":\"https://www.ljmullanelectrical.com/service/additional-socket-outlet\"},{\"name\":\"Car Charger installation\",\"page\":\"https://www.ljmullanelectrical.com/service/car-charger-installation\"},{\"name\":\"Decorative lighting\",\"page\":\"https://www.ljmullanelectrical.com/service/decorative-lighting\"},{\"name\":\"Decorative Sockets and Switches\",\"page\":\"https://www.ljmullanelectrical.com/service/decorative-sockets-and-switches\"},{\"name\":\"Electric Radiator Installation\",\"page\":\"https://www.ljmullanelectrical.com/service/electric-radiator-installation\"},{\"name\":\"Electric Toothbrush Charger Installation\",\"page\":\"https://www.ljmullanelectrical.com/service/electric-toothbrush-charger-installation\"},{\"name\":\"Extractor Fan Installation\",\"page\":\"https://www.ljmullanelectrical.com/service/extractor-fan-installation\"},{\"name\":\"Fault Finding & Repair\",\"page\":\"https://www.ljmullanelectrical.com/service/fault-finding-repair\"},{\"name\":\"Garage Electrics\",\"page\":\"https://www.ljmullanelectrical.com/service/garage-electrics\"},{\"name\":\"8) EV Charger Installation Pricing\",\"page\":\"https://www.ljmullanelectrical.com/service/ev-charger\"},{\"name\":\"Outdoor lighting\",\"page\":null},{\"name\":\"Outdoor Socket\",\"page\":null},{\"name\":\"Ring Doorbell Installation\",\"page\":null},{\"name\":\"Security Lighting\",\"page\":null},{\"name\":\"Smart Home Install\",\"page\":null},{\"name\":\"Smoke Alarm Installation\",\"page\":null},{\"name\":\"Storage Heater Installation\",\"page\":null},{\"name\":\"TV Wall Mounting Set Up\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2527,
+   "completion_tokens": 467,
+   "total_tokens": 2994,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 98,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 3802
+ },
+ "c92b0d03bddbcebbd8eedcad": {
+  "id": "chatcmpl-EkU5jJOQVPXVaS6wqaZ1PP2zTMh9o",
+  "object": "chat.completion",
+  "created": 1794747467,
+  "model": "gpt-5.5-2026-04-23",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Additional Socket Outlet\",\"page\":\"https://www.ljmullanelectrical.com/service/additional-socket-outlet\"},{\"name\":\"Car Charger installation\",\"page\":\"https://www.ljmullanelectrical.com/service/car-charger-installation\"},{\"name\":\"Decorative lighting\",\"page\":\"https://www.ljmullanelectrical.com/service/decorative-lighting\"},{\"name\":\"Decorative Sockets and Switches\",\"page\":\"https://www.ljmullanelectrical.com/service/decorative-sockets-and-switches\"},{\"name\":\"Electric Radiator Installation\",\"page\":\"https://www.ljmullanelectrical.com/service/electric-radiator-installation\"},{\"name\":\"Electric Toothbrush Charger Installation\",\"page\":\"https://www.ljmullanelectrical.com/service/electric-toothbrush-charger-installation\"},{\"name\":\"Extractor Fan Installation\",\"page\":\"https://www.ljmullanelectrical.com/service/extractor-fan-installation\"},{\"name\":\"Fault Finding & Repair\",\"page\":\"https://www.ljmullanelectrical.com/service/fault-finding-repair\"},{\"name\":\"Garage Electrics\",\"page\":\"https://www.ljmullanelectrical.com/service/garage-electrics\"},{\"name\":\"Outdoor lighting\",\"page\":null},{\"name\":\"Outdoor Socket\",\"page\":null},{\"name\":\"Ring Doorbell Installation\",\"page\":null},{\"name\":\"Security Lighting\",\"page\":null},{\"name\":\"Smart Home Install\",\"page\":null},{\"name\":\"Smoke Alarm Installation\",\"page\":null},{\"name\":\"Storage Heater Installation\",\"page\":null},{\"name\":\"TV Wall Mounting Set Up\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2527,
+   "completion_tokens": 461,
+   "total_tokens": 2988,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 119,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 4621
+ },
+ "c19ed8e15cfb4e84914d012c": {
+  "id": "chatcmpl-EkU5kJgSnQMCGDAozK9NobfxJmGju",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4o-mini-2024-07-18",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"DAMP PROOFING SERVICES\",\n      \"page\": \"https://mkdampandtimber.co.uk/services/damp-proofing-services-milton-keynes-watford-london/\"\n    },\n    {\n      \"name\": \"DAMP SURVEY\",\n      \"page\": \"https://mkdampandtimber.co.uk/services/damp-surveys-milton-keynes-watford-north-london/\"\n    },\n    {\n      \"name\": \"PITCHED & FLAT ROOFING\",\n      \"page\": \"https://mkdampandtimber.co.uk/services/pitched-flat-roofing/\"\n    },\n    {\n      \"name\": \"Wet Rot and Dry Rot Treatment\",\n      \"page\": \"https://mkdampandtimber.co.uk/services/wet-rot-and-dry-rot-treatment/\"\n    },\n    {\n      \"name\": \"Structural Repairs\",\n      \"page\": \"https://mkdampandtimber.co.uk/services/structural-repairs-brickwork-stitching-mk-damp-timber/\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 671,
+   "completion_tokens": 235,
+   "total_tokens": 906,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_9400314673",
+  "bench_ms": 3205
+ },
+ "8c2cd7b78630d721425ff09c": {
+  "id": "chatcmpl-EkU5kE7bchOUPDpZ7ZY1CEr4TtKRN",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4.1-mini-2025-04-14",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"DAMP PROOFING SERVICES\",\"page\":\"https://mkdampandtimber.co.uk/services/damp-proofing-services-milton-keynes-watford-london/\"},{\"name\":\"DAMP SURVEY\",\"page\":\"https://mkdampandtimber.co.uk/services/damp-surveys-milton-keynes-watford-north-london/\"},{\"name\":\"PITCHED & FLAT ROOFING\",\"page\":\"https://mkdampandtimber.co.uk/services/pitched-flat-roofing/\"},{\"name\":\"Brickwork Stitching and Crack Repair\",\"page\":\"https://mkdampandtimber.co.uk/services/structural-repairs-brickwork-stitching-mk-damp-timber/\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 671,
+   "completion_tokens": 157,
+   "total_tokens": 828,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_5dbffc98b2",
+  "bench_ms": 2285
+ },
+ "9ac589077731745759f64b89": {
+  "id": "chatcmpl-EkU5kYsoVvkNKv7tnKLNkQ0fsTY0H",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5-mini-2025-08-07",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"DAMP PROOFING SERVICES\",\n      \"page\": \"https://mkdampandtimber.co.uk/services/damp-proofing-services-milton-keynes-watford-london/\"\n    },\n    {\n      \"name\": \"DAMP SURVEY\",\n      \"page\": \"https://mkdampandtimber.co.uk/services/damp-surveys-milton-keynes-watford-north-london/\"\n    },\n    {\n      \"name\": \"PITCHED & FLAT ROOFING\",\n      \"page\": \"https://mkdampandtimber.co.uk/services/pitched-flat-roofing/\"\n    },\n    {\n      \"name\": \"Brickwork Stitching and Crack Repair\",\n      \"page\": \"https://mkdampandtimber.co.uk/services/structural-repairs-brickwork-stitching-mk-damp-timber/\"\n    },\n    {\n      \"name\": \"Structural Timber Repairs\",\n      \"page\": \"https://mkdampandtimber.co.uk/services/wet-rot-and-dry-rot-treatment/\"\n    },\n    {\n      \"name\": \"Roof Repairs & Water Ingress\",\n      \"page\": \"https://mkdampandtimber.co.uk/services/pitched-flat-roofing/\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 670,
+   "completion_tokens": 733,
+   "total_tokens": 1403,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 448,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 8775
+ },
+ "73d640ea5580a8e9958f5a47": {
+  "id": "chatcmpl-EkU5kLNzFgxnnA1ILjeliSO6jkmMC",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-mini-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"DAMP PROOFING SERVICES\",\"page\":\"https://mkdampandtimber.co.uk/services/damp-proofing-services-milton-keynes-watford-london/\"},{\"name\":\"DAMP SURVEY\",\"page\":\"https://mkdampandtimber.co.uk/services/damp-surveys-milton-keynes-watford-north-london/\"},{\"name\":\"PITCHED & FLAT ROOFING\",\"page\":\"https://mkdampandtimber.co.uk/services/pitched-flat-roofing/\"},{\"name\":\"Brickwork Stitching and Crack Repair\",\"page\":\"https://mkdampandtimber.co.uk/services/structural-repairs-brickwork-stitching-mk-damp-timber/\"},{\"name\":\"Roof Repairs & Water Ingress\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 670,
+   "completion_tokens": 610,
+   "total_tokens": 1280,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 428,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 4055
+ },
+ "134539c67fe9cb0db33f0066": {
+  "id": "chatcmpl-EkU5kNAEScRzQAUivbzNcNngrzWOd",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-nano-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"DAMP PROOFING SERVICES\",\"page\":\"https://mkdampandtimber.co.uk/services/damp-proofing-services-milton-keynes-watford-london/\"},{\"name\":\"DAMP SURVEY\",\"page\":\"https://mkdampandtimber.co.uk/services/damp-surveys-milton-keynes-watford-north-london/\"},{\"name\":\"PITCHED & FLAT ROOFING\",\"page\":\"https://mkdampandtimber.co.uk/services/pitched-flat-roofing/\"},{\"name\":\"Brickwork Stitching and Crack Repair\",\"page\":\"https://mkdampandtimber.co.uk/services/structural-repairs-brickwork-stitching-mk-damp-timber/\"},{\"name\":\"Structural Timber Repairs\",\"page\":\"https://mkdampandtimber.co.uk/services/wet-rot-and-dry-rot-treatment/\"},{\"name\":\"Roof Repairs & Water Ingress\",\"page\":\"https://mkdampandtimber.co.uk/services/pitched-flat-roofing/\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 670,
+   "completion_tokens": 373,
+   "total_tokens": 1043,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 143,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 3438
+ },
+ "46c9ab099aa31d6874b635ec": {
+  "id": "chatcmpl-EkU5ktLQdjD1z0PhdRDqys3uw0rdw",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.5-2026-04-23",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"DAMP PROOFING SERVICES\",\"page\":\"https://mkdampandtimber.co.uk/services/damp-proofing-services-milton-keynes-watford-london/\"},{\"name\":\"DAMP SURVEY\",\"page\":\"https://mkdampandtimber.co.uk/services/damp-surveys-milton-keynes-watford-north-london/\"},{\"name\":\"PITCHED & FLAT ROOFING\",\"page\":\"https://mkdampandtimber.co.uk/services/pitched-flat-roofing/\"},{\"name\":\"Brickwork Stitching and Crack Repair\",\"page\":null},{\"name\":\"Structural Timber Repairs\",\"page\":null},{\"name\":\"Roof Repairs & Water Ingress\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 670,
+   "completion_tokens": 371,
+   "total_tokens": 1041,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 207,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 6198
+ },
+ "9186018425dda395a1fb5ad8": {
+  "id": "chatcmpl-EkU5kvbhbo15gog10MWxwHabmsV5L",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4o-mini-2024-07-18",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Pat Testing Southborough Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-southborough-kent\"\n    },\n    {\n      \"name\": \"Pat Testing London\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-london\"\n    },\n    {\n      \"name\": \"Pat Testing Aylesford Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-aylesford-kent\"\n    },\n    {\n      \"name\": \"Pat Testing Staplehurst Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-staplehurst-kent\"\n    },\n    {\n      \"name\": \"Pat Testing Cranbrook Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-cranbrook-kent\"\n    },\n    {\n      \"name\": \"Pat Testing Snodland Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-snodland-kent\"\n    },\n    {\n      \"name\": \"Pat Testing Hadlow Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-hadlow-kent\"\n    },\n    {\n      \"name\": \"Pat Testing East Peckham Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-east-peckham-kent\"\n    },\n    {\n      \"name\": \"Pat Testing West Mailing Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-west-malling-kent\"\n    },\n    {\n      \"name\": \"Pat Testing Hildenborough Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-hildenborough-kent\"\n    },\n    {\n      \"name\": \"Pat Testing Kings Hill Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-kings-hill-kent\"\n    },\n    {\n      \"name\": \"Pat Testing Paddock Wood Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-paddock-wood-kent\"\n    },\n    {\n      \"name\": \"Pat Testing Sevenoaks Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-sevenoaks-kent\"\n    },\n    {\n      \"name\": \"Pat Testing Tunbridge Wells Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-tunbridge-wells\"\n    },\n    {\n      \"name\": \"Pat Testing Maidstone Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/portable-appliance-testing-maidstone-kent\"\n    },\n    {\n      \"name\": \"Pat Testing Borough Green Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-borough-green-kent\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2485,
+   "completion_tokens": 660,
+   "total_tokens": 3145,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_9400314673",
+  "bench_ms": 6721
+ },
+ "bf2780dfc0c3e7211395452c": {
+  "id": "chatcmpl-EkU5kCUrecNe5AfGIvDo2DblpZFNE",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4.1-mini-2025-04-14",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"PAT Testing by Appointment in Tonbridge: A Cost-Effective Option for Smaller Jobs\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-kent-blog/pat-testing-by-appointment-in-tonbridge-a-cost-effective-option-for-smaller-jobs\"},{\"name\":\"Pat Testing in Southborough, Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-southborough-kent\"},{\"name\":\"Pat Testing in London\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-london\"},{\"name\":\"Pat Testing in Aylesford, Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-aylesford-kent\"},{\"name\":\"Pat Testing in Staplehurst, Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-staplehurst-kent\"},{\"name\":\"Pat Testing in Cranbrook, Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-cranbrook-kent\"},{\"name\":\"Pat Testing in Snodland, Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-snodland-kent\"},{\"name\":\"Pat Testing in Hadlow, Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-hadlow-kent\"},{\"name\":\"Pat Testing in East Peckham, Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-east-peckham-kent\"},{\"name\":\"Pat Testing in West Mailing, Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-west-malling-kent\"},{\"name\":\"Pat Testing In Hildenborough, Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-hildenborough-kent\"},{\"name\":\"Pat Testing in Kings Hill, Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-kings-hill-kent\"},{\"name\":\"Pat Testing in Paddock Wood, Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-paddock-wood-kent\"},{\"name\":\"Pat Testing in Sevenoaks, Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-sevenoaks-kent\"},{\"name\":\"Pat Testing in Tunbridge Wells, Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-tunbridge-wells\"},{\"name\":\"Pat Testing in Maidstone, Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/portable-appliance-testing-maidstone-kent\"},{\"name\":\"Pat Testing in Borough Green, Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-borough-green-kent\"},{\"name\":\"PAT Testing in Tonbridge & Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/kent-pat-testing-tonbridge\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2485,
+   "completion_tokens": 615,
+   "total_tokens": 3100,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_5dbffc98b2",
+  "bench_ms": 6195
+ },
+ "74982c28e3a870064c3eaad2": {
+  "id": "chatcmpl-EkU5kW9855INypsGXVkq49oXmIAv4",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5-mini-2025-08-07",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Pat Testing Southborough Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-southborough-kent\"\n    },\n    {\n      \"name\": \"Pat Testing London\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-london\"\n    },\n    {\n      \"name\": \"Pat Testing Aylesford Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-aylesford-kent\"\n    },\n    {\n      \"name\": \"Pat Testing Staplehurst Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-staplehurst-kent\"\n    },\n    {\n      \"name\": \"Pat Testing Cranbrook Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-cranbrook-kent\"\n    },\n    {\n      \"name\": \"Pat Testing Snodland Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-snodland-kent\"\n    },\n    {\n      \"name\": \"Pat Testing Hadlow Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-hadlow-kent\"\n    },\n    {\n      \"name\": \"Pat Testing East Peckham Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-east-peckham-kent\"\n    },\n    {\n      \"name\": \"Pat Testing West Mailing Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-west-malling-kent\"\n    },\n    {\n      \"name\": \"Pat Testing Hildenborough Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-hildenborough-kent\"\n    },\n    {\n      \"name\": \"Pat Testing Kings Hill Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-kings-hill-kent\"\n    },\n    {\n      \"name\": \"Pat Testing Paddock Wood Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-paddock-wood-kent\"\n    },\n    {\n      \"name\": \"Pat Testing Sevenoaks Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-sevenoaks-kent\"\n    },\n    {\n      \"name\": \"Pat Testing Tunbridge Wells Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-tunbridge-wells\"\n    },\n    {\n      \"name\": \"Pat Testing Maidstone Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/portable-appliance-testing-maidstone-kent\"\n    },\n    {\n      \"name\": \"Pat Testing Borough Green Kent\",\n      \"page\": \"https://www.tonbridgepattesting.co.uk/pat-testing-borough-green-kent\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2484,
+   "completion_tokens": 989,
+   "total_tokens": 3473,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 320,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 9860
+ },
+ "733d11d2d41f1a39d863fadf": {
+  "id": "chatcmpl-EkU5knvC8ATQTGF5v6b9q5A4skICV",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-mini-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Pat Testing Southborough Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-southborough-kent\"},{\"name\":\"Pat Testing London\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-london\"},{\"name\":\"Pat Testing Aylesford Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-aylesford-kent\"},{\"name\":\"Pat Testing Staplehurst Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-staplehurst-kent\"},{\"name\":\"Pat Testing Cranbrook Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-cranbrook-kent\"},{\"name\":\"Pat Testing Snodland Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-snodland-kent\"},{\"name\":\"Pat Testing Hadlow Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-hadlow-kent\"},{\"name\":\"Pat Testing East Peckham Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-east-peckham-kent\"},{\"name\":\"Pat Testing West Mailing Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-west-malling-kent\"},{\"name\":\"Pat Testing Hildenborough Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-hildenborough-kent\"},{\"name\":\"Pat Testing Kings Hill Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-kings-hill-kent\"},{\"name\":\"Pat Testing Paddock Wood Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-paddock-wood-kent\"},{\"name\":\"Pat Testing Sevenoaks Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-sevenoaks-kent\"},{\"name\":\"Pat Testing Tunbridge Wells Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-tunbridge-wells\"},{\"name\":\"Pat Testing Maidstone Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/portable-appliance-testing-maidstone-kent\"},{\"name\":\"Pat Testing Borough Green Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-borough-green-kent\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2484,
+   "completion_tokens": 818,
+   "total_tokens": 3302,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 310,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 4586
+ },
+ "4eaaef76efd87a6eeee88a2a": {
+  "id": "chatcmpl-EkU5kt2Ee5L8Yp3ZsOBIu8qiy60E1",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-nano-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Pat Testing Southborough Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-southborough-kent\"},{\"name\":\"Pat Testing London\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-london\"},{\"name\":\"Pat Testing Aylesford Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-aylesford-kent\"},{\"name\":\"Pat Testing Staplehurst Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-staplehurst-kent\"},{\"name\":\"Pat Testing Cranbrook Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-cranbrook-kent\"},{\"name\":\"Pat Testing Snodland Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-snodland-kent\"},{\"name\":\"Pat Testing Hadlow Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-hadlow-kent\"},{\"name\":\"Pat Testing East Peckham Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-east-peckham-kent\"},{\"name\":\"Pat Testing West Mailing Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-west-malling-kent\"},{\"name\":\"Pat Testing Hildenborough Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-hildenborough-kent\"},{\"name\":\"Pat Testing Kings Hill Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-kings-hill-kent\"},{\"name\":\"Pat Testing Paddock Wood Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-paddock-wood-kent\"},{\"name\":\"Pat Testing Sevenoaks Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-sevenoaks-kent\"},{\"name\":\"Pat Testing Tunbridge Wells Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-tunbridge-wells\"},{\"name\":\"Pat Testing Maidstone Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/portable-appliance-testing-maidstone-kent\"},{\"name\":\"Pat Testing Borough Green Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-borough-green-kent\"},{\"name\":\"Pat Testing Southborough Kent\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2484,
+   "completion_tokens": 608,
+   "total_tokens": 3092,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 88,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 4904
+ },
+ "1ff9d88d251e5207e6403475": {
+  "id": "chatcmpl-EkU5kKf7Vx96BAwCmIB8kzBnQuydh",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.5-2026-04-23",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Pat Testing Southborough Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-southborough-kent\"},{\"name\":\"Pat Testing London\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-london\"},{\"name\":\"Pat Testing Aylesford Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-aylesford-kent\"},{\"name\":\"Pat Testing Staplehurst Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-staplehurst-kent\"},{\"name\":\"Pat Testing Cranbrook Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-cranbrook-kent\"},{\"name\":\"Pat Testing Snodland Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-snodland-kent\"},{\"name\":\"Pat Testing Hadlow Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-hadlow-kent\"},{\"name\":\"Pat Testing East Peckham Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-east-peckham-kent\"},{\"name\":\"Pat Testing West Mailing Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-west-malling-kent\"},{\"name\":\"Pat Testing Hildenborough Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-hildenborough-kent\"},{\"name\":\"Pat Testing Kings Hill Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-kings-hill-kent\"},{\"name\":\"Pat Testing Paddock Wood Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-paddock-wood-kent\"},{\"name\":\"Pat Testing Sevenoaks Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-sevenoaks-kent\"},{\"name\":\"Pat Testing Tunbridge Wells Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-tunbridge-wells\"},{\"name\":\"Pat Testing Maidstone Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/portable-appliance-testing-maidstone-kent\"},{\"name\":\"Pat Testing Borough Green Kent\",\"page\":\"https://www.tonbridgepattesting.co.uk/pat-testing-borough-green-kent\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2484,
+   "completion_tokens": 953,
+   "total_tokens": 3437,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 445,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 11272
+ },
+ "ea22db2677bc557bb7dc0812": {
+  "id": "chatcmpl-EkU5kVf1P7v0lmszukgwDdRGteiGa",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4o-mini-2024-07-18",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Google Ads for Mobile Tyre Fitting\",\n      \"page\": \"https://webneon.co.uk/google-ads-for-mobile-tyre-fitting/\"\n    },\n    {\n      \"name\": \"Google Ads For Auto Body Repair\",\n      \"page\": \"https://webneon.co.uk/google-ads-for-auto-body-repair/\"\n    },\n    {\n      \"name\": \"Google Ads For Accountant\",\n      \"page\": \"https://webneon.co.uk/google-ads-for-accountant/\"\n    },\n    {\n      \"name\": \"Google Ads For Roof Repair\",\n      \"page\": \"https://webneon.co.uk/google-ads-for-roof-repair/\"\n    },\n    {\n      \"name\": \"Locksmith Google Ads UK\",\n      \"page\": \"https://webneon.co.uk/google-ads-for-locksmiths/\"\n    },\n    {\n      \"name\": \"Facebook Advertising\",\n      \"page\": \"https://webneon.co.uk/facebook-advertising/\"\n    },\n    {\n      \"name\": \"Instagram Advertising\",\n      \"page\": \"https://webneon.co.uk/instagram-advertising/\"\n    },\n    {\n      \"name\": \"Tiktok Advertising\",\n      \"page\": \"https://webneon.co.uk/tiktok-advertising/\"\n    },\n    {\n      \"name\": \"Social Media Management\",\n      \"page\": \"https://webneon.co.uk/social-media-management/\"\n    },\n    {\n      \"name\": \"Search Engine Optimization\",\n      \"page\": \"https://webneon.co.uk/search-engine-optimization/\"\n    },\n    {\n      \"name\": \"Ecommerce Website Design\",\n      \"page\": \"https://webneon.co.uk/ecommerce-solution/\"\n    },\n    {\n      \"name\": \"Mobile App Development\",\n      \"page\": \"https://webneon.co.uk/mobile-app-development-company-in-uk/\"\n    },\n    {\n      \"name\": \"Graphic Design\",\n      \"page\": \"https://webneon.co.uk/graphic-design-company-in-reading/\"\n    },\n    {\n      \"name\": \"Software Development\",\n      \"page\": \"https://webneon.co.uk/software-development-company-in-uk/\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2828,
+   "completion_tokens": 465,
+   "total_tokens": 3293,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_9400314673",
+  "bench_ms": 6196
+ },
+ "7fa13eb1eaa76af381baeabe": {
+  "id": "chatcmpl-EkU5kAYPXmegHc5S9VPW1pgU9dfqN",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4.1-mini-2025-04-14",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Google Ads for Mobile Tyre Fitting\",\"page\":\"https://webneon.co.uk/google-ads-for-mobile-tyre-fitting/\"},{\"name\":\"Google Ads For Auto Body Repair\",\"page\":\"https://webneon.co.uk/google-ads-for-auto-body-repair/\"},{\"name\":\"Google Ads For Accountant\",\"page\":\"https://webneon.co.uk/google-ads-for-accountant/\"},{\"name\":\"Google Ads For Roof Repair\",\"page\":\"https://webneon.co.uk/google-ads-for-roof-repair/\"},{\"name\":\"Locksmith Google Ads UK\",\"page\":\"https://webneon.co.uk/google-ads-for-locksmiths/\"},{\"name\":\"Shop Designs\",\"page\":null},{\"name\":\"Type Of Website Design By WebNeon\",\"page\":null},{\"name\":\"Mobile-First Responsive Design\",\"page\":null},{\"name\":\"Design & UX\",\"page\":null},{\"name\":\"Conversion-Focused Design\",\"page\":null},{\"name\":\"Best Graphic Designing Company In UK\",\"page\":\"https://webneon.co.uk/graphic-design-company-in-reading/\"},{\"name\":\"High-Quality Creative Design\",\"page\":\"https://webneon.co.uk/graphic-design-company-in-reading/\"},{\"name\":\"Google Ads Solutions for Locksmiths\",\"page\":\"https://webneon.co.uk/google-ads-for-locksmiths/\"},{\"name\":\"Online Advertising For Accountants\",\"page\":\"https://webneon.co.uk/google-ads-for-accountant/\"},{\"name\":\"Graphic & Video Design\",\"page\":\"https://webneon.co.uk/graphic-design-company-in-reading/\"},{\"name\":\"Roof Replacement\",\"page\":null},{\"name\":\"Roof Miantenance\",\"page\":null},{\"name\":\"Gutter Cleaning\",\"page\":null},{\"name\":\"Garage MOT Services\",\"page\":null},{\"name\":\"Social Media Builds Brand Awareness\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2828,
+   "completion_tokens": 377,
+   "total_tokens": 3205,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_5dbffc98b2",
+  "bench_ms": 3571
+ },
+ "6ca73524d1b0fe403a3c02d8": {
+  "id": "chatcmpl-EkU5kAWOGC5fa7fK96gwFYATpLgXb",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5-mini-2025-08-07",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Google Ads for Mobile Tyre Fitting\",\n      \"page\": \"https://webneon.co.uk/google-ads-for-mobile-tyre-fitting/\"\n    },\n    {\n      \"name\": \"Google Ads For Auto Body Repair\",\n      \"page\": \"https://webneon.co.uk/google-ads-for-auto-body-repair/\"\n    },\n    {\n      \"name\": \"Google Ads For Accountant\",\n      \"page\": \"https://webneon.co.uk/google-ads-for-accountant/\"\n    },\n    {\n      \"name\": \"Google Ads For Roof Repair\",\n      \"page\": \"https://webneon.co.uk/google-ads-for-roof-repair/\"\n    },\n    {\n      \"name\": \"Locksmith Google Ads UK\",\n      \"page\": \"https://webneon.co.uk/google-ads-for-locksmiths/\"\n    },\n    {\n      \"name\": \"Google Ads Solutions for Locksmiths\",\n      \"page\": \"https://webneon.co.uk/google-ads-for-locksmiths/\"\n    },\n    {\n      \"name\": \"Online Advertising For Accountants\",\n      \"page\": \"https://webneon.co.uk/google-ads-for-accountant/\"\n    },\n    {\n      \"name\": \"Mobile Advertising for Garage Businesses\",\n      \"page\": \"https://webneon.co.uk/google-ads-expert-for-garage-business/\"\n    },\n    {\n      \"name\": \"Graphic & Video Design\",\n      \"page\": \"https://webneon.co.uk/graphic-design-company-in-reading/\"\n    },\n    {\n      \"name\": \"Shop Designs\",\n      \"page\": \"https://webneon.co.uk/e-commerce-website-design-agency-in-uk/\"\n    },\n    {\n      \"name\": \"Mobile-First Responsive Design\",\n      \"page\": \"https://webneon.co.uk/website-design-company-reading/\"\n    },\n    {\n      \"name\": \"Design & UX\",\n      \"page\": \"https://webneon.co.uk/website-design-company-reading/\"\n    },\n    {\n      \"name\": \"Conversion-Focused Design\",\n      \"page\": \"https://webneon.co.uk/website-design-company-reading/\"\n    },\n    {\n      \"name\": \"Social Media Builds Brand Awareness\",\n      \"page\": \"https://webneon.co.uk/social-media-management/\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2827,
+   "completion_tokens": 2358,
+   "total_tokens": 5185,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 1856,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 20316
+ },
+ "780e494cb996b274adc4b3b0": {
+  "id": "chatcmpl-EkU5kObRYb3ANSA5WiIejHoQlJMoV",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-mini-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Google Ads for Mobile Tyre Fitting\",\"page\":\"https://webneon.co.uk/google-ads-for-mobile-tyre-fitting/\"},{\"name\":\"Google Ads For Auto Body Repair\",\"page\":\"https://webneon.co.uk/google-ads-for-auto-body-repair/\"},{\"name\":\"Google Ads For Accountant\",\"page\":\"https://webneon.co.uk/google-ads-for-accountant/\"},{\"name\":\"Google Ads For Roof Repair\",\"page\":\"https://webneon.co.uk/google-ads-for-roof-repair/\"},{\"name\":\"Locksmith Google Ads UK\",\"page\":\"https://webneon.co.uk/google-ads-for-locksmiths/\"},{\"name\":\"Google Ads Solutions for Locksmiths\",\"page\":\"https://webneon.co.uk/google-ads-for-locksmiths/\"},{\"name\":\"Online Advertising For Accountants\",\"page\":\"https://webneon.co.uk/google-ads-for-accountant/\"},{\"name\":\"Graphic & Video Design\",\"page\":\"https://webneon.co.uk/graphic-design-company-in-reading/\"},{\"name\":\"Mobile Advertising for Garage Businesses\",\"page\":\"https://webneon.co.uk/google-ads-expert-for-garage-business/\"},{\"name\":\"Cyber Security\",\"page\":\"null\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2827,
+   "completion_tokens": 657,
+   "total_tokens": 3484,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 390,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 3685
+ },
+ "69b68052de0f7cd5b10f178c": {
+  "id": "chatcmpl-EkU5jdxV83eoefRUtH7mXCpAJLy0J",
+  "object": "chat.completion",
+  "created": 1794747467,
+  "model": "gpt-5.4-nano-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Google Ads for Mobile Tyre Fitting\",\n      \"page\": \"https://webneon.co.uk/google-ads-for-mobile-tyre-fitting/\"\n    },\n    {\n      \"name\": \"Google Ads For Auto Body Repair\",\n      \"page\": \"https://webneon.co.uk/google-ads-for-auto-body-repair/\"\n    },\n    {\n      \"name\": \"Google Ads For Accountant\",\n      \"page\": \"https://webneon.co.uk/google-ads-for-accountant/\"\n    },\n    {\n      \"name\": \"Google Ads For Roof Repair\",\n      \"page\": \"https://webneon.co.uk/google-ads-for-roof-repair/\"\n    },\n    {\n      \"name\": \"Locksmith Google Ads UK\",\n      \"page\": \"https://webneon.co.uk/google-ads-for-locksmiths/\"\n    },\n    {\n      \"name\": \"Social Media Builds Brand Awareness\",\n      \"page\": \"https://webneon.co.uk/social-media-management/\"\n    },\n    {\n      \"name\": \"Social Media Builds Brand Awareness\",\n      \"page\": \"https://webneon.co.uk/social-media-management/\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2827,
+   "completion_tokens": 563,
+   "total_tokens": 3390,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 299,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 4465
+ },
+ "f3dc828bc04a9dc699d2a386": {
+  "id": "chatcmpl-EkU5kotUjxdkHWw6Avr0JpmvrZ2oK",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.5-2026-04-23",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Google Ads for Mobile Tyre Fitting\",\"page\":\"https://webneon.co.uk/google-ads-for-mobile-tyre-fitting/\"},{\"name\":\"Google Ads For Auto Body Repair\",\"page\":\"https://webneon.co.uk/google-ads-for-auto-body-repair/\"},{\"name\":\"Google Ads For Accountant\",\"page\":\"https://webneon.co.uk/google-ads-for-accountant/\"},{\"name\":\"Google Ads For Roof Repair\",\"page\":\"https://webneon.co.uk/google-ads-for-roof-repair/\"},{\"name\":\"Locksmith Google Ads UK\",\"page\":\"https://webneon.co.uk/google-ads-for-locksmiths/\"},{\"name\":\"Best Graphic Designing Company In UK\",\"page\":\"https://webneon.co.uk/graphic-design-company-in-reading/\"},{\"name\":\"Google Ads Solutions for Locksmiths\",\"page\":\"https://webneon.co.uk/google-ads-for-locksmiths/\"},{\"name\":\"Online Advertising For Accountants\",\"page\":null},{\"name\":\"Conversion Tracking & Pixel Setup\",\"page\":null},{\"name\":\"Graphic & Video Design\",\"page\":null},{\"name\":\"Mobile Advertising for Garage Businesses\",\"page\":\"https://webneon.co.uk/google-ads-expert-for-garage-business/\"},{\"name\":\"Cyber Security\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2827,
+   "completion_tokens": 791,
+   "total_tokens": 3618,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 512,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 9242
+ },
+ "fc5e59af7f273db4c7177f4f": {
+  "id": "chatcmpl-EkU5kB613rV5HdOKMhc1b0xWFrff1",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4o-mini-2024-07-18",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Website design & development\",\n      \"page\": \"https://eongraphics.co.uk/websites/\"\n    },\n    {\n      \"name\": \"Ongoing Graphic Design\",\n      \"page\": \"https://eongraphics.co.uk/graphic-design/\"\n    },\n    {\n      \"name\": \"Essential Branding Design\",\n      \"page\": \"https://eongraphics.co.uk/brand-design-services/\"\n    },\n    {\n      \"name\": \"Pro Branding Design\",\n      \"page\": \"https://eongraphics.co.uk/brand-design-project/\"\n    },\n    {\n      \"name\": \"Premium Branding Design\",\n      \"page\": \"https://eongraphics.co.uk/brand-design-services/\"\n    },\n    {\n      \"name\": \"Design & Print\",\n      \"page\": \"https://eongraphics.co.uk/graphic-design/\"\n    },\n    {\n      \"name\": \"Website design and SEO services UK\",\n      \"page\": \"https://eongraphics.co.uk/website-design-and-seo-services-uk/\"\n    },\n    {\n      \"name\": \"Branding and Graphic Design\",\n      \"page\": \"https://eongraphics.co.uk/graphic-design/\"\n    },\n    {\n      \"name\": \"Strategic Brand Design That Works\",\n      \"page\": \"https://eongraphics.co.uk/brand-design-services/\"\n    },\n    {\n      \"name\": \"SEO Services\",\n      \"page\": \"https://eongraphics.co.uk/seo-services/\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2212,
+   "completion_tokens": 317,
+   "total_tokens": 2529,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_9400314673",
+  "bench_ms": 4011
+ },
+ "362649403f9b36b6015e41c5": {
+  "id": "chatcmpl-EkU5kjHYZFtdhw3PMV2KbDgdMg3a1",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4.1-mini-2025-04-14",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Website design & development\",\"page\":\"https://eongraphics.co.uk/websites/\"},{\"name\":\"Ongoing Graphic Design\",\"page\":\"https://eongraphics.co.uk/graphic-design/\"},{\"name\":\"Essential Branding Design\",\"page\":\"https://eongraphics.co.uk/brand-design-services/\"},{\"name\":\"Pro Branding Design\",\"page\":\"https://eongraphics.co.uk/brand-design-services/\"},{\"name\":\"Premium Branding Design\",\"page\":\"https://eongraphics.co.uk/brand-design-services/\"},{\"name\":\"Design & Print\",\"page\":null},{\"name\":\"Website design and SEO services UK\",\"page\":\"https://eongraphics.co.uk/website-design-and-seo-services-uk/\"},{\"name\":\"Branding and Graphic Design\",\"page\":\"https://eongraphics.co.uk/graphic-design/\"},{\"name\":\"Website Design in Gambia\",\"page\":\"https://eongraphics.co.uk/website-design-services-in-gambia/\"},{\"name\":\"Professional Website Design Services in Milton Keynes\",\"page\":\"https://eongraphics.co.uk/website-design-in-milton-keynes/\"},{\"name\":\"SEO Services\",\"page\":\"https://eongraphics.co.uk/seo-services/\"},{\"name\":\"Graphic Design Services\",\"page\":\"https://eongraphics.co.uk/graphic-design/\"},{\"name\":\"Affordable Graphic Design Packages & Prices\",\"page\":\"https://eongraphics.co.uk/affordable-graphic-design-packages/\"},{\"name\":\"Professional Brand Design Services for Businesses | Eon Graphics\",\"page\":\"https://eongraphics.co.uk/brand-design-services/\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2212,
+   "completion_tokens": 321,
+   "total_tokens": 2533,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_5dbffc98b2",
+  "bench_ms": 3232
+ },
+ "198f3cddb960b179fe878d2c": {
+  "id": "chatcmpl-EkU5kNPCPHYOpZvl7drwqfPleyhiW",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5-mini-2025-08-07",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Website design & development\",\n      \"page\": \"https://eongraphics.co.uk/websites/\"\n    },\n    {\n      \"name\": \"Ongoing Graphic Design\",\n      \"page\": \"https://eongraphics.co.uk/graphic-design/\"\n    },\n    {\n      \"name\": \"Essential Branding Design\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Pro Branding Design\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Premium Branding Design\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Design & Print\",\n      \"page\": \"https://eongraphics.co.uk/stationary-business-cards-letterheads-printing-leaflets-flyers-brochures/\"\n    },\n    {\n      \"name\": \"Website design and SEO services UK\",\n      \"page\": \"https://eongraphics.co.uk/website-design-and-seo-services-uk/\"\n    },\n    {\n      \"name\": \"Website Design in Gambia\",\n      \"page\": \"https://eongraphics.co.uk/website-design-services-in-gambia/\"\n    },\n    {\n      \"name\": \"Branding and Graphic Design\",\n      \"page\": \"https://eongraphics.co.uk/brand-design-services/\"\n    },\n    {\n      \"name\": \"Strategic Brand Design That Works\",\n      \"page\": \"https://eongraphics.co.uk/design-strategy/\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2211,
+   "completion_tokens": 1468,
+   "total_tokens": 3679,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 1152,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 13610
+ },
+ "743aab707342ec72edbae750": {
+  "id": "chatcmpl-EkU5k7Y7Wpoar92Qizs98jn9iU0pR",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-mini-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Website design & development\",\"page\":\"https://eongraphics.co.uk/websites/\"},{\"name\":\"Ongoing Graphic Design\",\"page\":\"https://eongraphics.co.uk/graphic-design/\"},{\"name\":\"Essential Branding Design\",\"page\":\"https://eongraphics.co.uk/brand-design-services/\"},{\"name\":\"Pro Branding Design\",\"page\":\"https://eongraphics.co.uk/brand-design-services/\"},{\"name\":\"Premium Branding Design\",\"page\":\"https://eongraphics.co.uk/brand-design-services/\"},{\"name\":\"Design & Print\",\"page\":\"https://eongraphics.co.uk/about-websites-print-motion-graphics/\"},{\"name\":\"Website design and SEO services UK\",\"page\":\"https://eongraphics.co.uk/website-design-and-seo-services-uk/\"},{\"name\":\"Website Design in Gambia\",\"page\":\"https://eongraphics.co.uk/website-design-services-in-gambia/\"},{\"name\":\"Branding and Graphic Design\",\"page\":\"https://eongraphics.co.uk/graphic-design/\"},{\"name\":\"Strategic Brand Design That Works\",\"page\":\"https://eongraphics.co.uk/design-strategy/\"},{\"name\":\"Milton Keynes Graphic Design Agency\",\"page\":\"https://eongraphics.co.uk/graphic-design/\"},{\"name\":\"Website Design in Milton Keynes\",\"page\":\"https://eongraphics.co.uk/website-design-in-milton-keynes/\"},{\"name\":\"Design strategy\",\"page\":\"https://eongraphics.co.uk/design-strategy/\"},{\"name\":\"SEO Services\",\"page\":\"https://eongraphics.co.uk/seo-services/\"},{\"name\":\"Graphic Design Services\",\"page\":\"https://eongraphics.co.uk/graphic-design/\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2211,
+   "completion_tokens": 549,
+   "total_tokens": 2760,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 195,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 3120
+ },
+ "d742d2b511de39440034b005": {
+  "id": "chatcmpl-EkU5k3Cy82CkGSOd5ARYoUhzzzoBH",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-nano-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Website design & development\",\n      \"page\": \"https://eongraphics.co.uk/websites/\"\n    },\n    {\n      \"name\": \"Ongoing Graphic Design\",\n      \"page\": \"https://eongraphics.co.uk/graphic-design/\"\n    },\n    {\n      \"name\": \"Essential Branding Design\",\n      \"page\": \"https://eongraphics.co.uk/brand-design-services/\"\n    },\n    {\n      \"name\": \"Pro Branding Design\",\n      \"page\": \"https://eongraphics.co.uk/brand-design-services/\"\n    },\n    {\n      \"name\": \"Premium Branding Design\",\n      \"page\": \"https://eongraphics.co.uk/brand-design-services/\"\n    },\n    {\n      \"name\": \"Design & Print\",\n      \"page\": \"https://eongraphics.co.uk/stationary-business-cards-letterheads-printing-leaflets-flyers-brochures/\"\n    },\n    {\n      \"name\": \"A to Z London Design Strategy\",\n      \"page\": \"https://eongraphics.co.uk/design-strategy/\"\n    },\n    {\n      \"name\": \"Brand Design project\",\n      \"page\": \"https://eongraphics.co.uk/brand-design-project/\"\n    },\n    {\n      \"name\": \"Website design and SEO services UK\",\n      \"page\": \"https://eongraphics.co.uk/website-design-and-seo-services-uk/\"\n    },\n    {\n      \"name\": \"Branding and Graphic Design\",\n      \"page\": \"https://eongraphics.co.uk/graphic-design/\"\n    },\n    {\n      \"name\": \"Strategic Brand Design That Works\",\n      \"page\": \"https://eongraphics.co.uk/brand-design-services/\"\n    },\n    {\n      \"name\": \"Conversion & Sales Impact\",\n      \"page\": null\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2211,
+   "completion_tokens": 736,
+   "total_tokens": 2947,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 337,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 6155
+ },
+ "eaca0c295e0bb90379140cf7": {
+  "id": "chatcmpl-EkU5knBJbps2AB7FfOanuQkjI8Ldd",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.5-2026-04-23",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Website design & development\",\"page\":\"https://eongraphics.co.uk/websites/\"},{\"name\":\"Ongoing Graphic Design\",\"page\":null},{\"name\":\"Essential Branding Design\",\"page\":null},{\"name\":\"Pro Branding Design\",\"page\":null},{\"name\":\"Premium Branding Design\",\"page\":null},{\"name\":\"Design & Print\",\"page\":null},{\"name\":\"Website design and SEO services UK\",\"page\":\"https://eongraphics.co.uk/website-design-and-seo-services-uk/\"},{\"name\":\"Website Design in Gambia\",\"page\":\"https://eongraphics.co.uk/website-design-services-in-gambia/\"},{\"name\":\"Branding and Graphic Design\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2211,
+   "completion_tokens": 667,
+   "total_tokens": 2878,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 512,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 8779
+ },
+ "5da71f79c5eb1105e062114d": {
+  "id": "chatcmpl-EkU5knAW07tP1DoPgg7SPqozNMAnL",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4o-mini-2024-07-18",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Installation & Upgrades\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Commercial Electrical Installations\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Full & Partial Rewiring\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Industrial Lighting Installation\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Socket & Power Installation\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"High-End Residential Installations\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"EV Charger Installation\",\n      \"page\": \"https://poesuk.com/services/renewables-energy\"\n    },\n    {\n      \"name\": \"Battery Storage Systems\",\n      \"page\": \"https://poesuk.com/services/renewables-energy\"\n    },\n    {\n      \"name\": \"LED Lighting Upgrades\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"EICR Inspections\",\n      \"page\": \"https://poesuk.com/services/safety-compliance\"\n    },\n    {\n      \"name\": \"Emergency Lighting Testing\",\n      \"page\": \"https://poesuk.com/services/safety-compliance\"\n    },\n    {\n      \"name\": \"Fire Alarm Testing\",\n      \"page\": \"https://poesuk.com/services/fire-security\"\n    },\n    {\n      \"name\": \"Heating Controls\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Intelligent Lighting\",\n      \"page\": \"https://poesuk.com/services/smart-automation\"\n    },\n    {\n      \"name\": \"Commercial Electrical Repairs\",\n      \"page\": \"https://poesuk.com/services/repairs\"\n    },\n    {\n      \"name\": \"Fuse Box Repairs\",\n      \"page\": \"https://poesuk.com/services/repairs\"\n    },\n    {\n      \"name\": \"Lighting Repairs\",\n      \"page\": \"https://poesuk.com/services/repairs\"\n    },\n    {\n      \"name\": \"Socket & Power Repairs\",\n      \"page\": \"https://poesuk.com/services/repairs\"\n    },\n    {\n      \"name\": \"High-End Residential Repairs\",\n      \"page\": \"https://poesuk.com/services/repairs\"\n    },\n    {\n      \"name\": \"Fire & Security\",\n      \"page\": \"https://poesuk.com/services/fire-security\"\n    },\n    {\n      \"name\": \"Fire Alarm Systems\",\n      \"page\": \"https://poesuk.com/services/fire-security\"\n    },\n    {\n      \"name\": \"CCTV Systems\",\n      \"page\": \"https://poesuk.com/services/fire-security\"\n    },\n    {\n      \"name\": \"House Rewiring\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Electrical Fault Finding\",\n      \"page\": \"https://poesuk.com/services/repairs\"\n    },\n    {\n      \"name\": \"Commercial Electrical Work\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Planned Electrical Maintenance\",\n      \"page\": \"https://poesuk.com/services/maintenance\"\n    },\n    {\n      \"name\": \"Repairs, Rewiring and Electrical Upgrades\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Installation, Repairs and Planned Maintenance\",\n      \"page\": \"https://poesuk.com/services/maintenance\"\n    },\n    {\n      \"name\": \"Electrical Installation Projects in Altrincham\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Office Fit-Out Electrical Work\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Three-Phase Power Installations\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Electrical Energy Upgrades in Altrincham\",\n      \"page\": \"https://poesuk.com/services/renewables-energy\"\n    },\n    {\n      \"name\": \"Landlord Electrical Certificates\",\n      \"page\": \"https://poesuk.com/services/safety-compliance\"\n    },\n    {\n      \"name\": \"Scheduled Electrical Inspections\",\n      \"page\": \"https://poesuk.com/services/safety-compliance\"\n    },\n    {\n      \"name\": \"Emergency Lighting Maintenance\",\n      \"page\": \"https://poesuk.com/services/maintenance\"\n    },\n    {\n      \"name\": \"Repeat PAT Testing Programmes\",\n      \"page\": \"https://poesuk.com/services/safety-compliance\"\n    },\n    {\n      \"name\": \"CCTV and Intruder Detection\",\n      \"page\": \"https://poesuk.com/services/fire-security\"\n    },\n    {\n      \"name\": \"Intruder Alarm Systems\",\n      \"page\": \"https://poesuk.com/services/fire-security\"\n    },\n    {\n      \"name\": \"Installation and Commissioning\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Design and Quotation\",\n      \"page\": \"null\"\n    },\n    {\n      \"name\": \"Installation, Servicing, Repairs and Maintenance\",\n      \"page\": \"https://poesuk.com/services/maintenance\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 1053,
+   "completion_tokens": 1257,
+   "total_tokens": 2310,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_9400314673",
+  "bench_ms": 16861
+ },
+ "bd525049d7766b20cf54c026": {
+  "id": "chatcmpl-EkU5kg60vFmG73BC7MU3JrPgmqhos",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4.1-mini-2025-04-14",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Installation & Upgrades\",\"page\":\"https://poesuk.com/services/installation-upgrades\"},{\"name\":\"Commercial Electrical Installations\",\"page\":\"https://poesuk.com/services/installation-upgrades\"},{\"name\":\"Full & Partial Rewiring\",\"page\":\"https://poesuk.com/services/installation-upgrades\"},{\"name\":\"Industrial Lighting Installation\",\"page\":\"https://poesuk.com/services/installation-upgrades\"},{\"name\":\"Socket & Power Installation\",\"page\":\"https://poesuk.com/services/installation-upgrades\"},{\"name\":\"High-End Residential Installations\",\"page\":\"https://poesuk.com/services/installation-upgrades\"},{\"name\":\"EV Charger Installation\",\"page\":\"https://poesuk.com/services/renewables-energy\"},{\"name\":\"Battery Storage Systems\",\"page\":\"https://poesuk.com/services/renewables-energy\"},{\"name\":\"LED Lighting Upgrades\",\"page\":\"https://poesuk.com/services/renewables-energy\"},{\"name\":\"EICR Inspections\",\"page\":\"https://poesuk.com/services/safety-compliance\"},{\"name\":\"Emergency Lighting Testing\",\"page\":\"https://poesuk.com/services/safety-compliance\"},{\"name\":\"Fire Alarm Testing\",\"page\":\"https://poesuk.com/services/safety-compliance\"},{\"name\":\"Heating Controls\",\"page\":\"https://poesuk.com/services/smart-automation\"},{\"name\":\"Intelligent Lighting\",\"page\":\"https://poesuk.com/services/smart-automation\"},{\"name\":\"Commercial Electrical Repairs\",\"page\":\"https://poesuk.com/services/repairs\"},{\"name\":\"Fuse Box Repairs\",\"page\":\"https://poesuk.com/services/repairs\"},{\"name\":\"Lighting Repairs\",\"page\":\"https://poesuk.com/services/repairs\"},{\"name\":\"Socket & Power Repairs\",\"page\":\"https://poesuk.com/services/repairs\"},{\"name\":\"High-End Residential Repairs\",\"page\":\"https://poesuk.com/services/repairs\"},{\"name\":\"Fire Alarm Systems\",\"page\":\"https://poesuk.com/services/fire-security\"},{\"name\":\"CCTV Systems\",\"page\":\"https://poesuk.com/services/fire-security\"},{\"name\":\"House Rewiring\",\"page\":\"https://poesuk.com/services/installation-upgrades\"},{\"name\":\"Electrical Fault Finding\",\"page\":\"https://poesuk.com/services/repairs\"},{\"name\":\"Commercial Electrical Work\",\"page\":\"https://poesuk.com/services/installation-upgrades\"},{\"name\":\"Planned Electrical Maintenance\",\"page\":\"https://poesuk.com/services/maintenance\"},{\"name\":\"Electrical Repairs in Altrincham and Manchester\",\"page\":\"https://poesuk.com/services/repairs\"},{\"name\":\"Emergency Lighting Maintenance\",\"page\":\"https://poesuk.com/services/maintenance\"},{\"name\":\"Intruder Alarm Systems\",\"page\":\"https://poesuk.com/services/fire-security\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 1053,
+   "completion_tokens": 568,
+   "total_tokens": 1621,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_5dbffc98b2",
+  "bench_ms": 6270
+ },
+ "8df2d14d1a08c41df83a1d0a": {
+  "id": "chatcmpl-EkU5kcjainlCkLiyixJ93LhQw3Pgl",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5-mini-2025-08-07",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Installation & Upgrades\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Commercial Electrical Installations\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Full & Partial Rewiring\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Industrial Lighting Installation\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Socket & Power Installation\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"High-End Residential Installations\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"EV Charger Installation\",\n      \"page\": \"https://poesuk.com/services/renewables-energy\"\n    },\n    {\n      \"name\": \"Battery Storage Systems\",\n      \"page\": \"https://poesuk.com/services/renewables-energy\"\n    },\n    {\n      \"name\": \"LED Lighting Upgrades\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"EICR Inspections\",\n      \"page\": \"https://poesuk.com/services/safety-compliance\"\n    },\n    {\n      \"name\": \"Emergency Lighting Testing\",\n      \"page\": \"https://poesuk.com/services/safety-compliance\"\n    },\n    {\n      \"name\": \"Fire Alarm Testing\",\n      \"page\": \"https://poesuk.com/services/fire-security\"\n    },\n    {\n      \"name\": \"Heating Controls\",\n      \"page\": \"https://poesuk.com/services/smart-automation\"\n    },\n    {\n      \"name\": \"Intelligent Lighting\",\n      \"page\": \"https://poesuk.com/services/smart-automation\"\n    },\n    {\n      \"name\": \"Commercial Electrical Repairs\",\n      \"page\": \"https://poesuk.com/services/repairs\"\n    },\n    {\n      \"name\": \"Fuse Box Repairs\",\n      \"page\": \"https://poesuk.com/services/repairs\"\n    },\n    {\n      \"name\": \"Lighting Repairs\",\n      \"page\": \"https://poesuk.com/services/repairs\"\n    },\n    {\n      \"name\": \"Socket & Power Repairs\",\n      \"page\": \"https://poesuk.com/services/repairs\"\n    },\n    {\n      \"name\": \"High-End Residential Repairs\",\n      \"page\": \"https://poesuk.com/services/repairs\"\n    },\n    {\n      \"name\": \"Fire & Security\",\n      \"page\": \"https://poesuk.com/services/fire-security\"\n    },\n    {\n      \"name\": \"Fire Alarm Systems\",\n      \"page\": \"https://poesuk.com/services/fire-security\"\n    },\n    {\n      \"name\": \"CCTV Systems\",\n      \"page\": \"https://poesuk.com/services/fire-security\"\n    },\n    {\n      \"name\": \"House Rewiring\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Electrical Fault Finding\",\n      \"page\": \"https://poesuk.com/services/repairs\"\n    },\n    {\n      \"name\": \"Commercial Electrical Work\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Planned Electrical Maintenance\",\n      \"page\": \"https://poesuk.com/services/maintenance\"\n    },\n    {\n      \"name\": \"Office Fit-Out Electrical Work\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Three-Phase Power Installations\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Electrical Energy Upgrades in Altrincham\",\n      \"page\": \"https://poesuk.com/services/renewables-energy\"\n    },\n    {\n      \"name\": \"Energy Site Survey\",\n      \"page\": \"https://poesuk.com/services/renewables-energy\"\n    },\n    {\n      \"name\": \"Electrical Testing and Compliance in Altrincham\",\n      \"page\": \"https://poesuk.com/services/safety-compliance\"\n    },\n    {\n      \"name\": \"Landlord Electrical Certificates\",\n      \"page\": \"https://poesuk.com/services/safety-compliance\"\n    },\n    {\n      \"name\": \"Home Cinema Installation\",\n      \"page\": \"https://poesuk.com/services/smart-automation\"\n    },\n    {\n      \"name\": \"Loxone Installation\",\n      \"page\": \"https://poesuk.com/services/smart-automation\"\n    },\n    {\n      \"name\": \"Electrical Repairs in Altrincham and Manchester\",\n      \"page\": \"https://poesuk.com/services/repairs\"\n    },\n    {\n      \"name\": \"Electrical Maintenance for Altrincham Premises\",\n      \"page\": \"https://poesuk.com/services/maintenance\"\n    },\n    {\n      \"name\": \"Scheduled Electrical Inspections\",\n      \"page\": \"https://poesuk.com/services/maintenance\"\n    },\n    {\n      \"name\": \"Emergency Lighting Maintenance\",\n      \"page\": \"https://poesuk.com/services/maintenance\"\n    },\n    {\n      \"name\": \"Repeat PAT Testing Programmes\",\n      \"page\": \"https://poesuk.com/services/maintenance\"\n    },\n    {\n      \"name\": \"CCTV and Intruder Detection\",\n      \"page\": \"https://poesuk.com/services/fire-security\"\n    },\n    {\n      \"name\": \"Intruder Alarm Systems\",\n      \"page\": \"https://poesuk.com/services/fire-security\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 1052,
+   "completion_tokens": 1910,
+   "total_tokens": 2962,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 640,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 17121
+ },
+ "e5930db84da79ce74714bc59": {
+  "id": "chatcmpl-EkU5kp2C7nbEwSKDasjs6lE9BBGeG",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-mini-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Installation & Upgrades\",\"page\":\"https://poesuk.com/services/installation-upgrades\"},{\"name\":\"Commercial Electrical Installations\",\"page\":\"https://poesuk.com/services/installation-upgrades\"},{\"name\":\"Full & Partial Rewiring\",\"page\":\"https://poesuk.com/services/installation-upgrades\"},{\"name\":\"Industrial Lighting Installation\",\"page\":\"https://poesuk.com/services/installation-upgrades\"},{\"name\":\"Socket & Power Installation\",\"page\":\"https://poesuk.com/services/installation-upgrades\"},{\"name\":\"High-End Residential Installations\",\"page\":\"https://poesuk.com/services/installation-upgrades\"},{\"name\":\"EV Charger Installation\",\"page\":\"https://poesuk.com/services/renewables-energy\"},{\"name\":\"Battery Storage Systems\",\"page\":\"https://poesuk.com/services/renewables-energy\"},{\"name\":\"LED Lighting Upgrades\",\"page\":\"https://poesuk.com/services/installation-upgrades\"},{\"name\":\"EICR Inspections\",\"page\":\"https://poesuk.com/services/safety-compliance\"},{\"name\":\"Emergency Lighting Testing\",\"page\":\"https://poesuk.com/services/safety-compliance\"},{\"name\":\"Fire Alarm Testing\",\"page\":\"https://poesuk.com/services/fire-security\"},{\"name\":\"Heating Controls\",\"page\":\"https://poesuk.com/services/smart-automation\"},{\"name\":\"Intelligent Lighting\",\"page\":\"https://poesuk.com/services/smart-automation\"},{\"name\":\"Commercial Electrical Repairs\",\"page\":\"https://poesuk.com/services/repairs\"},{\"name\":\"Fuse Box Repairs\",\"page\":\"https://poesuk.com/services/repairs\"},{\"name\":\"Lighting Repairs\",\"page\":\"https://poesuk.com/services/repairs\"},{\"name\":\"Socket & Power Repairs\",\"page\":\"https://poesuk.com/services/repairs\"},{\"name\":\"High-End Residential Repairs\",\"page\":\"https://poesuk.com/services/repairs\"},{\"name\":\"Fire & Security\",\"page\":\"https://poesuk.com/services/fire-security\"},{\"name\":\"Fire Alarm Systems\",\"page\":\"https://poesuk.com/services/fire-security\"},{\"name\":\"CCTV Systems\",\"page\":\"https://poesuk.com/services/fire-security\"},{\"name\":\"House Rewiring\",\"page\":\"https://poesuk.com/services/installation-upgrades\"},{\"name\":\"Electrical Fault Finding\",\"page\":\"https://poesuk.com/services/repairs\"},{\"name\":\"Commercial Electrical Work\",\"page\":\"https://poesuk.com/services\"},{\"name\":\"Planned Electrical Maintenance\",\"page\":\"https://poesuk.com/services/maintenance\"},{\"name\":\"Office Fit-Out Electrical Work\",\"page\":\"https://poesuk.com/services/installation-upgrades\"},{\"name\":\"Three-Phase Power Installations\",\"page\":\"https://poesuk.com/services/installation-upgrades\"},{\"name\":\"Landlord Electrical Certificates\",\"page\":\"https://poesuk.com/services/safety-compliance\"},{\"name\":\"Electrical Repairs in Altrincham and Manchester\",\"page\":\"https://poesuk.com/services/repairs\"},{\"name\":\"Electrical Maintenance for Altrincham Premises\",\"page\":\"https://poesuk.com/services/maintenance\"},{\"name\":\"Scheduled Electrical Inspections\",\"page\":\"https://poesuk.com/services/maintenance\"},{\"name\":\"Emergency Lighting Maintenance\",\"page\":\"https://poesuk.com/services/maintenance\"},{\"name\":\"Repeat PAT Testing Programmes\",\"page\":\"https://poesuk.com/services/safety-compliance\"},{\"name\":\"CCTV and Intruder Detection\",\"page\":\"https://poesuk.com/services/fire-security\"},{\"name\":\"Intruder Alarm Systems\",\"page\":\"https://poesuk.com/services/fire-security\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 1052,
+   "completion_tokens": 1459,
+   "total_tokens": 2511,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 709,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 6613
+ },
+ "44f874337fed8c94358fa713": {
+  "id": "chatcmpl-EkU5k1AhsyNNAqMtxMBWVN3Jo0zq9",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-nano-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Installation & Upgrades\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Commercial Electrical Installations\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Full & Partial Rewiring\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Industrial Lighting Installation\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Socket & Power Installation\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"High-End Residential Installations\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"EV Charger Installation\",\n      \"page\": \"https://poesuk.com/services/renewables-energy\"\n    },\n    {\n      \"name\": \"Battery Storage Systems\",\n      \"page\": \"https://poesuk.com/services/renewables-energy\"\n    },\n    {\n      \"name\": \"LED Lighting Upgrades\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"EICR Inspections\",\n      \"page\": \"https://poesuk.com/services/safety-compliance\"\n    },\n    {\n      \"name\": \"Emergency Lighting Testing\",\n      \"page\": \"https://poesuk.com/services/safety-compliance\"\n    },\n    {\n      \"name\": \"Fire Alarm Testing\",\n      \"page\": \"https://poesuk.com/services/safety-compliance\"\n    },\n    {\n      \"name\": \"Heating Controls\",\n      \"page\": \"https://poesuk.com/services/smart-automation\"\n    },\n    {\n      \"name\": \"Intelligent Lighting\",\n      \"page\": \"https://poesuk.com/services/smart-automation\"\n    },\n    {\n      \"name\": \"Commercial Electrical Repairs\",\n      \"page\": \"https://poesuk.com/services/repairs\"\n    },\n    {\n      \"name\": \"Fuse Box Repairs\",\n      \"page\": \"https://poesuk.com/services/repairs\"\n    },\n    {\n      \"name\": \"Lighting Repairs\",\n      \"page\": \"https://poesuk.com/services/repairs\"\n    },\n    {\n      \"name\": \"Socket & Power Repairs\",\n      \"page\": \"https://poesuk.com/services/repairs\"\n    },\n    {\n      \"name\": \"High-End Residential Repairs\",\n      \"page\": \"https://poesuk.com/services/repairs\"\n    },\n    {\n      \"name\": \"Fire & Security\",\n      \"page\": \"https://poesuk.com/services/fire-security\"\n    },\n    {\n      \"name\": \"Fire Alarm Systems\",\n      \"page\": \"https://poesuk.com/services/fire-security\"\n    },\n    {\n      \"name\": \"CCTV Systems\",\n      \"page\": \"https://poesuk.com/services/fire-security\"\n    },\n    {\n      \"name\": \"Intruder Alarm Systems\",\n      \"page\": \"https://poesuk.com/services/fire-security\"\n    },\n    {\n      \"name\": \"Planned Electrical Maintenance\",\n      \"page\": \"https://poesuk.com/services/maintenance\"\n    },\n    {\n      \"name\": \"Repairs, Rewiring and Electrical Upgrades\",\n      \"page\": \"https://poesuk.com/services/installation-upgrades\"\n    },\n    {\n      \"name\": \"Installation, Repairs and Planned Maintenance\",\n      \"page\": \"https://poesuk.com/services\"\n    },\n    {\n      \"name\": \"Scheduled Electrical Inspections\",\n      \"page\": \"https://poesuk.com/services/maintenance\"\n    },\n    {\n      \"name\": \"Emergency Lighting Maintenance\",\n      \"page\": \"https://poesuk.com/services/maintenance\"\n    },\n    {\n      \"name\": \"Repeat PAT Testing Programmes\",\n      \"page\": \"https://poesuk.com/services/maintenance\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 1052,
+   "completion_tokens": 1397,
+   "total_tokens": 2449,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 505,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 9109
+ },
+ "15118c595bbda34c6c2c44c4": {
+  "id": "chatcmpl-EkU5kaXORNLHpjoTnN8NHiW5yfNcp",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.5-2026-04-23",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Installation & Upgrades\",\"page\":\"https://poesuk.com/services/installation-upgrades\"},{\"name\":\"Commercial Electrical Installations\",\"page\":null},{\"name\":\"Full & Partial Rewiring\",\"page\":null},{\"name\":\"Industrial Lighting Installation\",\"page\":null},{\"name\":\"Socket & Power Installation\",\"page\":null},{\"name\":\"High-End Residential Installations\",\"page\":null},{\"name\":\"EV Charger Installation\",\"page\":null},{\"name\":\"Battery Storage Systems\",\"page\":null},{\"name\":\"LED Lighting Upgrades\",\"page\":null},{\"name\":\"EICR Inspections\",\"page\":null},{\"name\":\"Emergency Lighting Testing\",\"page\":null},{\"name\":\"Fire Alarm Testing\",\"page\":null},{\"name\":\"Heating Controls\",\"page\":null},{\"name\":\"Intelligent Lighting\",\"page\":null},{\"name\":\"Commercial Electrical Repairs\",\"page\":null},{\"name\":\"Fuse Box Repairs\",\"page\":null},{\"name\":\"Lighting Repairs\",\"page\":null},{\"name\":\"Socket & Power Repairs\",\"page\":null},{\"name\":\"High-End Residential Repairs\",\"page\":null},{\"name\":\"Fire & Security\",\"page\":\"https://poesuk.com/services/fire-security\"},{\"name\":\"Fire Alarm Systems\",\"page\":null},{\"name\":\"CCTV Systems\",\"page\":null},{\"name\":\"House Rewiring\",\"page\":null},{\"name\":\"Electrical Fault Finding\",\"page\":null},{\"name\":\"Commercial Electrical Work\",\"page\":null},{\"name\":\"Planned Electrical Maintenance\",\"page\":null},{\"name\":\"Office Fit-Out Electrical Work\",\"page\":null},{\"name\":\"Three-Phase Power Installations\",\"page\":null},{\"name\":\"Electrical Testing and Compliance in Altrincham\",\"page\":\"https://poesuk.com/services/safety-compliance\"},{\"name\":\"Landlord Electrical Certificates\",\"page\":null},{\"name\":\"Home Cinema Installation\",\"page\":null},{\"name\":\"Loxone Installation\",\"page\":null},{\"name\":\"Electrical Repairs in Altrincham and Manchester\",\"page\":\"https://poesuk.com/services/repairs\"},{\"name\":\"Electrical Maintenance for Altrincham Premises\",\"page\":\"https://poesuk.com/services/maintenance\"},{\"name\":\"Scheduled Electrical Inspections\",\"page\":null},{\"name\":\"Emergency Lighting Maintenance\",\"page\":null},{\"name\":\"Repeat PAT Testing Programmes\",\"page\":null},{\"name\":\"CCTV and Intruder Detection\",\"page\":null},{\"name\":\"Intruder Alarm Systems\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 1052,
+   "completion_tokens": 1290,
+   "total_tokens": 2342,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 788,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 13938
+ },
+ "e1b87efe4cc2f1bd09e2c4cc": {
+  "id": "chatcmpl-EkU5ks4cBT4vawe8um1qYeW13aveZ",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4o-mini-2024-07-18",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Domestic electrical services\",\"page\":\"null\"},{\"name\":\"Commercial electrical installations\",\"page\":\"null\"},{\"name\":\"Industrial electrical solutions\",\"page\":\"null\"},{\"name\":\"EICR, PAT testing and certification\",\"page\":\"null\"},{\"name\":\"Lighting, security and garden systems\",\"page\":\"null\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 293,
+   "completion_tokens": 63,
+   "total_tokens": 356,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_9400314673",
+  "bench_ms": 1479
+ },
+ "d933cb6b37ae33662013a048": {
+  "id": "chatcmpl-EkU5kipw7B1tytMhxUlZR3iq8J3vk",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4.1-mini-2025-04-14",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Domestic electrical services\",\"page\":null},{\"name\":\"Commercial electrical installations\",\"page\":null},{\"name\":\"Industrial electrical solutions\",\"page\":null},{\"name\":\"EICR, PAT testing and certification\",\"page\":null},{\"name\":\"Lighting, security and garden systems\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 293,
+   "completion_tokens": 63,
+   "total_tokens": 356,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_5dbffc98b2",
+  "bench_ms": 1139
+ },
+ "786c0edd92e3e4bc7a4c556a": {
+  "id": "chatcmpl-EkU5kwKjw2iNOGSGI5dnCvVS4q0Tr",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5-mini-2025-08-07",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Domestic electrical services\",\"page\":null},{\"name\":\"Commercial electrical installations\",\"page\":null},{\"name\":\"Industrial electrical solutions\",\"page\":null},{\"name\":\"EICR, PAT testing and certification\",\"page\":null},{\"name\":\"Lighting, security and garden systems\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 292,
+   "completion_tokens": 136,
+   "total_tokens": 428,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 64,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 2603
+ },
+ "e7a28c6ab9ef37ef09f76cf3": {
+  "id": "chatcmpl-EkU5ky8X51bvaic14AqiSPt2ImVIv",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-mini-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Domestic electrical services\",\"page\":null},{\"name\":\"Commercial electrical installations\",\"page\":null},{\"name\":\"Industrial electrical solutions\",\"page\":null},{\"name\":\"EICR, PAT testing and certification\",\"page\":null},{\"name\":\"Lighting, security and garden systems\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 292,
+   "completion_tokens": 114,
+   "total_tokens": 406,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 39,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 1229
+ },
+ "c489a2d9f3046b79fd75799c": {
+  "id": "chatcmpl-EkU5k0y66Pw7OXfWNDSkIhhkPPM1O",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-nano-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Domestic electrical services\",\"page\":\"https://www.rooke-trade.co.uk/quote\"},{\"name\":\"Commercial electrical installations\",\"page\":\"https://www.rooke-trade.co.uk/quote\"},{\"name\":\"Industrial electrical solutions\",\"page\":\"https://www.rooke-trade.co.uk/quote\"},{\"name\":\"EICR, PAT testing and certification\",\"page\":\"https://www.rooke-trade.co.uk/quote\"},{\"name\":\"Lighting, security and garden systems\",\"page\":\"https://www.rooke-trade.co.uk/quote\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 292,
+   "completion_tokens": 233,
+   "total_tokens": 525,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 108,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 2352
+ },
+ "d92ee76219934c66ad738b5c": {
+  "id": "chatcmpl-EkU5kd8i7rXbWqMVSLWaHwrXJkY1t",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.5-2026-04-23",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Domestic electrical services\",\"page\":null},{\"name\":\"Commercial electrical installations\",\"page\":null},{\"name\":\"Industrial electrical solutions\",\"page\":null},{\"name\":\"EICR, PAT testing and certification\",\"page\":null},{\"name\":\"Lighting, security and garden systems\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 292,
+   "completion_tokens": 98,
+   "total_tokens": 390,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 23,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 1927
+ },
+ "9ec8b5d5a81b77b78dda28e2": {
+  "id": "chatcmpl-EkU5khfUHY0QufK8Rpni8Qcboaoim",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4o-mini-2024-07-18",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Build Internal Apps\",\n      \"page\": \"https://www.thinkingtiger.co.uk/solutions/internal-apps\"\n    },\n    {\n      \"name\": \"Automate Processes\",\n      \"page\": \"https://www.thinkingtiger.co.uk/solutions/automate-processes\"\n    },\n    {\n      \"name\": \"Dashboards We Build\",\n      \"page\": \"https://www.thinkingtiger.co.uk/solutions/dashboards-reporting\"\n    },\n    {\n      \"name\": \"Customer & Partner Portals\",\n      \"page\": \"https://www.thinkingtiger.co.uk/solutions/portals\"\n    },\n    {\n      \"name\": \"Governance & Scale\",\n      \"page\": \"https://www.thinkingtiger.co.uk/solutions/governance-scale\"\n    },\n    {\n      \"name\": \"Modernise SharePoint & Forms\",\n      \"page\": \"https://www.thinkingtiger.co.uk/solutions/modernise-sharepoint\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 709,
+   "completion_tokens": 221,
+   "total_tokens": 930,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_9400314673",
+  "bench_ms": 2998
+ },
+ "c73abb0285a856811354d5a7": {
+  "id": "chatcmpl-EkU5kls5JPIhHQy00o9MsFNeTrnHA",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-4.1-mini-2025-04-14",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Build Internal Apps\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/internal-apps\"},{\"name\":\"Dashboards We Build\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/dashboards-reporting\"},{\"name\":\"SharePoint Designer Workflows → Power Automate\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/modernise-sharepoint\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 709,
+   "completion_tokens": 85,
+   "total_tokens": 794,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_5dbffc98b2",
+  "bench_ms": 1340
+ },
+ "c0c81674165ecb7f24e92a3f": {
+  "id": "chatcmpl-EkU5kyWxMy9eES1UWWFNp0VYHpIPa",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5-mini-2025-08-07",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Adoption by Design\",\"page\":\"https://www.thinkingtiger.co.uk/insights/power-platform-adoption-playbook\"},{\"name\":\"Build Internal Apps\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/internal-apps\"},{\"name\":\"Dashboards We Build\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/dashboards-reporting\"},{\"name\":\"Security & Compliance\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/governance-scale\"},{\"name\":\"SharePoint Designer Workflows → Power Automate\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/automate-processes\"},{\"name\":\"Replace spreadsheets with internal apps\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/internal-apps\"},{\"name\":\"Secure Data Sharing\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/portals\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 708,
+   "completion_tokens": 899,
+   "total_tokens": 1607,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 704,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 9938
+ },
+ "a33a4fc03ccfbd03c5a62cd7": {
+  "id": "chatcmpl-EkU5kIpo1TkHTUvyQ0M1k6fr2ia95",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-mini-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Build Internal Apps\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/internal-apps\"},{\"name\":\"Dashboards We Build\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/dashboards-reporting\"},{\"name\":\"SharePoint Designer Workflows → Power Automate\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/modernise-sharepoint\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 708,
+   "completion_tokens": 555,
+   "total_tokens": 1263,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 458,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 3712
+ },
+ "ca249ceb99bf2cb5f63b890c": {
+  "id": "chatcmpl-EkU5kqk3hXnl81JvFnaELs5lYfe3T",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.4-nano-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Build Internal Apps\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/internal-apps\"},{\"name\":\"Dashboards We Build\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/dashboards-reporting\"},{\"name\":\"Security and Access\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/governance-scale\"},{\"name\":\"Secure Data Sharing\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/governance-scale\"},{\"name\":\"Security & Compliance\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/governance-scale\"},{\"name\":\"SharePoint Designer Workflows → Power Automate\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/modernise-sharepoint\"},{\"name\":\"Replace spreadsheets with internal apps\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/internal-apps\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 708,
+   "completion_tokens": 468,
+   "total_tokens": 1176,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 274,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 3974
+ },
+ "0a749bbf2a303f641099c9da": {
+  "id": "chatcmpl-EkU5kgvm0oUzTLvqjKGMGbp6OI5dk",
+  "object": "chat.completion",
+  "created": 1794747468,
+  "model": "gpt-5.5-2026-04-23",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Build Internal Apps\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/internal-apps\"},{\"name\":\"Dashboards We Build\",\"page\":\"https://www.thinkingtiger.co.uk/solutions/dashboards-reporting\"},{\"name\":\"SharePoint Designer Workflows → Power Automate\",\"page\":null},{\"name\":\"Replace spreadsheets with internal apps\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 708,
+   "completion_tokens": 606,
+   "total_tokens": 1314,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 512,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 8220
+ },
+ "4463946e231b50343a7c7034": {
+  "id": "chatcmpl-EkVimmwU0L4ch6vKxXZQMBF2KrI2O",
+  "object": "chat.completion",
+  "created": 1794753732,
+  "model": "gpt-4o-mini-2024-07-18",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Boiler Installation\",\n      \"page\": \"null\"\n    },\n    {\n      \"name\": \"Bathroom Installation\",\n      \"page\": \"null\"\n    },\n    {\n      \"name\": \"Kitchen Installation\",\n      \"page\": \"null\"\n    },\n    {\n      \"name\": \"General Electrical Services\",\n      \"page\": \"null\"\n    },\n    {\n      \"name\": \"Garage Conversion and Extension\",\n      \"page\": \"null\"\n    },\n    {\n      \"name\": \"Property Maintenance and Management\",\n      \"page\": \"null\"\n    },\n    {\n      \"name\": \"Plumbing and Heating\",\n      \"page\": \"null\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 461,
+   "completion_tokens": 150,
+   "total_tokens": 611,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_9400314673",
+  "bench_ms": 2375
+ },
+ "0541bf06fa6a9b71d7abce06": {
+  "id": "chatcmpl-EkVimi9riynTsQyi2uMNLIhtTrBQw",
+  "object": "chat.completion",
+  "created": 1794753732,
+  "model": "gpt-4.1-mini-2025-04-14",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Boiler Installation\",\"page\":\"https://fbsproperties.co.uk/services\"},{\"name\":\"Bathroom Installation\",\"page\":\"https://fbsproperties.co.uk/services\"},{\"name\":\"Kitchen Installation\",\"page\":\"https://fbsproperties.co.uk/services\"},{\"name\":\"General Electrical Services\",\"page\":\"https://fbsproperties.co.uk/services\"},{\"name\":\"Garage Conversion and Extension\",\"page\":\"https://fbsproperties.co.uk/services\"},{\"name\":\"Property Maintenance and Management\",\"page\":\"https://fbsproperties.co.uk/services\"},{\"name\":\"Plumbing and Heating\",\"page\":\"https://fbsproperties.co.uk/services\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 461,
+   "completion_tokens": 125,
+   "total_tokens": 586,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_5dbffc98b2",
+  "bench_ms": 1684
+ },
+ "29a6b0c0ab78ee9d483153e8": {
+  "id": "chatcmpl-EkVimW2HzbCI8hyinT5KJ35gXnOgS",
+  "object": "chat.completion",
+  "created": 1794753732,
+  "model": "gpt-5-mini-2025-08-07",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Boiler Installation\",\"page\":null},{\"name\":\"Bathroom Installation\",\"page\":null},{\"name\":\"Kitchen Installation\",\"page\":null},{\"name\":\"General Electrical Services\",\"page\":null},{\"name\":\"Garage Conversion and Extension\",\"page\":null},{\"name\":\"Property Maintenance and Management\",\"page\":null},{\"name\":\"Plumbing and Heating\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 460,
+   "completion_tokens": 469,
+   "total_tokens": 929,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 384,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 4862
+ },
+ "28efd1e12d3a01198bb746a6": {
+  "id": "chatcmpl-EkVimdST0dnmXVDHkJQ0L51AyFtYH",
+  "object": "chat.completion",
+  "created": 1794753732,
+  "model": "gpt-5.4-mini-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Boiler Installation\",\"page\":\"https://fbsproperties.co.uk/services\"},{\"name\":\"Bathroom Installation\",\"page\":\"https://fbsproperties.co.uk/services\"},{\"name\":\"Kitchen Installation\",\"page\":\"https://fbsproperties.co.uk/services\"},{\"name\":\"General Electrical Services\",\"page\":\"https://fbsproperties.co.uk/services\"},{\"name\":\"Garage Conversion and Extension\",\"page\":\"https://fbsproperties.co.uk/services\"},{\"name\":\"Property Maintenance and Management\",\"page\":\"https://fbsproperties.co.uk/services\"},{\"name\":\"Plumbing and Heating\",\"page\":\"https://fbsproperties.co.uk/services\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 460,
+   "completion_tokens": 262,
+   "total_tokens": 722,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 125,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 2020
+ },
+ "323a4645849917e37f00a688": {
+  "id": "chatcmpl-EkVimnnuOZQxTDDNYxyF4uwt1QnKZ",
+  "object": "chat.completion",
+  "created": 1794753732,
+  "model": "gpt-5.4-nano-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Boiler Installation\",\"page\":\"https://fbsproperties.co.uk/services\"},{\"name\":\"Bathroom Installation\",\"page\":\"https://fbsproperties.co.uk/services\"},{\"name\":\"Kitchen Installation\",\"page\":\"https://fbsproperties.co.uk/services\"},{\"name\":\"General Electrical Services\",\"page\":\"https://fbsproperties.co.uk/services\"},{\"name\":\"Garage Conversion and Extension\",\"page\":\"https://fbsproperties.co.uk/services\"},{\"name\":\"Property Maintenance and Management\",\"page\":\"https://fbsproperties.co.uk/services\"},{\"name\":\"Plumbing and Heating\",\"page\":\"https://fbsproperties.co.uk/services\"},{\"name\":\"Exterior Wall & Brickwork Care\",\"page\":\"https://fbsproperties.co.uk/services\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 460,
+   "completion_tokens": 282,
+   "total_tokens": 742,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 125,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 2425
+ },
+ "0731dc942d04c904ab449ace": {
+  "id": "chatcmpl-EkVil6Stnz1pc5YVtGkUEsGDWPDVe",
+  "object": "chat.completion",
+  "created": 1794753731,
+  "model": "gpt-5.5-2026-04-23",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Boiler Installation\",\"page\":null},{\"name\":\"Bathroom Installation\",\"page\":null},{\"name\":\"Kitchen Installation\",\"page\":null},{\"name\":\"General Electrical Services\",\"page\":null},{\"name\":\"Garage Conversion and Extension\",\"page\":null},{\"name\":\"Property Maintenance and Management\",\"page\":null},{\"name\":\"Plumbing and Heating\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 460,
+   "completion_tokens": 240,
+   "total_tokens": 700,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 152,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 3417
+ },
+ "8a3e75143dff1a7b1bcb4b30": {
+  "id": "chatcmpl-EkVim7ZCmPUeeIaRpnTKJ70VnZh6b",
+  "object": "chat.completion",
+  "created": 1794753732,
+  "model": "gpt-4o-mini-2024-07-18",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Flat Roofing, Done Right\",\n      \"page\": \"https://ronnocoroofing.co.uk/services\"\n    },\n    {\n      \"name\": \"Domestic Flat Roofs\",\n      \"page\": \"https://ronnocoroofing.co.uk/services\"\n    },\n    {\n      \"name\": \"Liquid Roofing Systems\",\n      \"page\": \"https://ronnocoroofing.co.uk/services\"\n    },\n    {\n      \"name\": \"Extensions, Dormers & Garages\",\n      \"page\": \"https://ronnocoroofing.co.uk/services\"\n    },\n    {\n      \"name\": \"Refurbishments & Repairs\",\n      \"page\": \"https://ronnocoroofing.co.uk/services\"\n    },\n    {\n      \"name\": \"Commercial Flat Roofing\",\n      \"page\": \"https://ronnocoroofing.co.uk/services\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 605,
+   "completion_tokens": 192,
+   "total_tokens": 797,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_9400314673",
+  "bench_ms": 2766
+ },
+ "6d3772872f5f944868c267fe": {
+  "id": "chatcmpl-EkVil1deOUIU54Y7bNhKy2dW0gzkX",
+  "object": "chat.completion",
+  "created": 1794753731,
+  "model": "gpt-4.1-mini-2025-04-14",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Domestic Flat Roofs\",\"page\":\"https://ronnocoroofing.co.uk/services\"},{\"name\":\"Liquid Roofing Systems\",\"page\":\"https://ronnocoroofing.co.uk/services\"},{\"name\":\"Extensions, Dormers & Garages\",\"page\":\"https://ronnocoroofing.co.uk/services\"},{\"name\":\"Refurbishments & Repairs\",\"page\":\"https://ronnocoroofing.co.uk/services\"},{\"name\":\"Commercial Flat Roofing\",\"page\":\"https://ronnocoroofing.co.uk/services\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 605,
+   "completion_tokens": 107,
+   "total_tokens": 712,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_5dbffc98b2",
+  "bench_ms": 1397
+ },
+ "5d4b90f545e5167974a96db8": {
+  "id": "chatcmpl-EkVimTXQaePkAjDnvxwJ00QBfGtVR",
+  "object": "chat.completion",
+  "created": 1794753732,
+  "model": "gpt-5-mini-2025-08-07",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Domestic Flat Roofs\",\"page\":null},{\"name\":\"Liquid Roofing Systems\",\"page\":null},{\"name\":\"Extensions, Dormers & Garages\",\"page\":null},{\"name\":\"Refurbishments & Repairs\",\"page\":null},{\"name\":\"Commercial Flat Roofing\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 604,
+   "completion_tokens": 391,
+   "total_tokens": 995,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 320,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 4908
+ },
+ "454ae7a8ccfbfb2c35e2727a": {
+  "id": "chatcmpl-EkVileWgp36KLSRfwA7WRQdATiv6C",
+  "object": "chat.completion",
+  "created": 1794753731,
+  "model": "gpt-5.4-mini-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Flat Roofing, Done Right\",\"page\":null},{\"name\":\"Domestic Flat Roofs\",\"page\":\"https://ronnocoroofing.co.uk/services\"},{\"name\":\"Liquid Roofing Systems\",\"page\":\"https://ronnocoroofing.co.uk/services\"},{\"name\":\"Extensions, Dormers & Garages\",\"page\":\"https://ronnocoroofing.co.uk/services\"},{\"name\":\"Refurbishments & Repairs\",\"page\":\"https://ronnocoroofing.co.uk/services\"},{\"name\":\"Commercial Flat Roofing\",\"page\":\"https://ronnocoroofing.co.uk/services\"},{\"name\":\"Flat Entrance Doors\",\"page\":null},{\"name\":\"Services & Installations\",\"page\":\"https://ronnocoroofing.co.uk/services\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 604,
+   "completion_tokens": 320,
+   "total_tokens": 924,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 159,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 1990
+ },
+ "ac844c908387ffe7495a0b2a": {
+  "id": "chatcmpl-EkVillni4HrjghmNvY2LWENG0Jh8s",
+  "object": "chat.completion",
+  "created": 1794753731,
+  "model": "gpt-5.4-nano-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Domestic Flat Roofs\",\"page\":\"https://ronnocoroofing.co.uk/services\"},{\"name\":\"Liquid Roofing Systems\",\"page\":\"https://ronnocoroofing.co.uk/services\"},{\"name\":\"Extensions, Dormers & Garages\",\"page\":\"https://ronnocoroofing.co.uk/services\"},{\"name\":\"Refurbishments & Repairs\",\"page\":\"https://ronnocoroofing.co.uk/services\"},{\"name\":\"Commercial Flat Roofing\",\"page\":\"https://ronnocoroofing.co.uk/services\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 604,
+   "completion_tokens": 237,
+   "total_tokens": 841,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 118,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 2290
+ },
+ "7e65334a3f83fbc513607465": {
+  "id": "chatcmpl-EkVil7jFPdGi9OGkd541WVhOzY1g0",
+  "object": "chat.completion",
+  "created": 1794753731,
+  "model": "gpt-5.5-2026-04-23",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Domestic Flat Roofs\",\"page\":null},{\"name\":\"Liquid Roofing Systems\",\"page\":null},{\"name\":\"Extensions, Dormers & Garages\",\"page\":null},{\"name\":\"Refurbishments & Repairs\",\"page\":null},{\"name\":\"Commercial Flat Roofing\",\"page\":null}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 604,
+   "completion_tokens": 306,
+   "total_tokens": 910,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 232,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 5221
+ },
+ "a828d20f2e3ad774bb82bfd8": {
+  "id": "chatcmpl-EkVim9yy6A1ycmHoodMcdeh7PUVvA",
+  "object": "chat.completion",
+  "created": 1794753732,
+  "model": "gpt-4o-mini-2024-07-18",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Additional Socket Outlet\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/additional-socket-outlet\"\n    },\n    {\n      \"name\": \"Car Charger installation\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/car-charger-installation\"\n    },\n    {\n      \"name\": \"Decorative lighting\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/decorative-lighting\"\n    },\n    {\n      \"name\": \"Decorative Sockets and Switches\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/decorative-sockets-and-switches\"\n    },\n    {\n      \"name\": \"Electric Radiator Installation\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/electric-radiator-installation\"\n    },\n    {\n      \"name\": \"Electric Toothbrush Charger Installation\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/electric-toothbrush-charger-installation\"\n    },\n    {\n      \"name\": \"Domestic Extractor Fan Installation Electrician\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/extractor-fan-installation\"\n    },\n    {\n      \"name\": \"Outdoor lighting\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Outdoor Socket\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Ring Doorbell Installation\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Security Lighting\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Smart Home Install\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Smoke Alarm Installation\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Storage Heater Installation\",\n      \"page\": null\n    },\n    {\n      \"name\": \"TV Wall Mounting Set Up\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Domestic Fault Finding & Repair Electrician\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/fault-finding-repair\"\n    },\n    {\n      \"name\": \"Domestic Garage Electrics Electrician\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/garage-electrics\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2538,
+   "completion_tokens": 506,
+   "total_tokens": 3044,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_9400314673",
+  "bench_ms": 6728
+ },
+ "88f9944c1ae8bf8be14f3a38": {
+  "id": "chatcmpl-EkVilbPgm7xxYioj7IuwDkPzUhsJ4",
+  "object": "chat.completion",
+  "created": 1794753731,
+  "model": "gpt-4.1-mini-2025-04-14",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Additional Socket Outlet\",\"page\":\"https://www.ljmullanelectrical.com/service/additional-socket-outlet\"},{\"name\":\"Car Charger installation\",\"page\":\"https://www.ljmullanelectrical.com/service/car-charger-installation\"},{\"name\":\"Decorative lighting\",\"page\":\"https://www.ljmullanelectrical.com/service/decorative-lighting\"},{\"name\":\"Decorative Sockets and Switches\",\"page\":\"https://www.ljmullanelectrical.com/service/decorative-sockets-and-switches\"},{\"name\":\"Electric Radiator Installation\",\"page\":\"https://www.ljmullanelectrical.com/service/electric-radiator-installation\"},{\"name\":\"Electric Toothbrush Charger Installation\",\"page\":\"https://www.ljmullanelectrical.com/service/electric-toothbrush-charger-installation\"},{\"name\":\"Domestic Extractor Fan Installation Electrician\",\"page\":\"https://www.ljmullanelectrical.com/service/extractor-fan-installation\"},{\"name\":\"Outdoor lighting\",\"page\":\"https://www.ljmullanelectrical.com/service/decorative-lighting\"},{\"name\":\"Outdoor Socket\",\"page\":\"https://www.ljmullanelectrical.com/service/additional-socket-outlet\"},{\"name\":\"Ring Doorbell Installation\",\"page\":null},{\"name\":\"Security Lighting\",\"page\":\"https://www.ljmullanelectrical.com/service/decorative-lighting\"},{\"name\":\"Smart Home Install\",\"page\":null},{\"name\":\"Smoke Alarm Installation\",\"page\":null},{\"name\":\"Storage Heater Installation\",\"page\":null},{\"name\":\"TV Wall Mounting Set Up\",\"page\":null},{\"name\":\"Domestic Fault Finding & Repair Electrician\",\"page\":\"https://www.ljmullanelectrical.com/service/fault-finding-repair\"},{\"name\":\"Domestic Garage Electrics Electrician\",\"page\":\"https://www.ljmullanelectrical.com/service/garage-electrics\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "logprobs": null,
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2538,
+   "completion_tokens": 386,
+   "total_tokens": 2924,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 0,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_5dbffc98b2",
+  "bench_ms": 3441
+ },
+ "8bbb915c12be355873e27090": {
+  "id": "chatcmpl-EkVim39JUiaAWjfA46xKkP7oOEk64",
+  "object": "chat.completion",
+  "created": 1794753732,
+  "model": "gpt-5-mini-2025-08-07",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Additional Socket Outlet\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/additional-socket-outlet\"\n    },\n    {\n      \"name\": \"Car Charger installation\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/car-charger-installation\"\n    },\n    {\n      \"name\": \"Decorative lighting\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/decorative-lighting\"\n    },\n    {\n      \"name\": \"Decorative Sockets and Switches\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/decorative-sockets-and-switches\"\n    },\n    {\n      \"name\": \"Electric Radiator Installation\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/electric-radiator-installation\"\n    },\n    {\n      \"name\": \"Electric Toothbrush Charger Installation\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/electric-toothbrush-charger-installation\"\n    },\n    {\n      \"name\": \"1) Additional Sockets Installation in Banbury\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/additional-socket-outlet\"\n    },\n    {\n      \"name\": \"8) EV Charger Installation Pricing\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/ev-charger\"\n    },\n    {\n      \"name\": \"Domestic Extractor Fan Installation Electrician\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/extractor-fan-installation\"\n    },\n    {\n      \"name\": \"Outdoor lighting\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Outdoor Socket\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Ring Doorbell Installation\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Security Lighting\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Smart Home Install\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Smoke Alarm Installation\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Storage Heater Installation\",\n      \"page\": null\n    },\n    {\n      \"name\": \"TV Wall Mounting Set Up\",\n      \"page\": null\n    },\n    {\n      \"name\": \"Domestic Fault Finding & Repair Electrician\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/fault-finding-repair\"\n    },\n    {\n      \"name\": \"Domestic Garage Electrics Electrician\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/garage-electrics\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2537,
+   "completion_tokens": 1106,
+   "total_tokens": 3643,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 512,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 10105
+ },
+ "6de1c39b2d0e0f280fc32edf": {
+  "id": "chatcmpl-EkVimMxTEyTnT78GzIh2ltQbWb1yZ",
+  "object": "chat.completion",
+  "created": 1794753732,
+  "model": "gpt-5.4-mini-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Additional Socket Outlet\",\"page\":\"https://www.ljmullanelectrical.com/service/additional-socket-outlet\"},{\"name\":\"Car Charger installation\",\"page\":\"https://www.ljmullanelectrical.com/service/car-charger-installation\"},{\"name\":\"Decorative lighting\",\"page\":\"https://www.ljmullanelectrical.com/service/decorative-lighting\"},{\"name\":\"Decorative Sockets and Switches\",\"page\":\"https://www.ljmullanelectrical.com/service/decorative-sockets-and-switches\"},{\"name\":\"Electric Radiator Installation\",\"page\":\"https://www.ljmullanelectrical.com/service/electric-radiator-installation\"},{\"name\":\"Electric Toothbrush Charger Installation\",\"page\":\"https://www.ljmullanelectrical.com/service/electric-toothbrush-charger-installation\"},{\"name\":\"Domestic Extractor Fan Installation Electrician\",\"page\":\"https://www.ljmullanelectrical.com/service/extractor-fan-installation\"},{\"name\":\"Domestic Fault Finding & Repair Electrician\",\"page\":\"https://www.ljmullanelectrical.com/service/fault-finding-repair\"},{\"name\":\"Domestic Garage Electrics Electrician\",\"page\":\"https://www.ljmullanelectrical.com/service/garage-electrics\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2537,
+   "completion_tokens": 556,
+   "total_tokens": 3093,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 285,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 3117
+ },
+ "f31b6fc4da9ab57dbdbad04a": {
+  "id": "chatcmpl-EkVimZXrH7h9r0NDv5xiO0xsPDYke",
+  "object": "chat.completion",
+  "created": 1794753732,
+  "model": "gpt-5.4-nano-2026-03-17",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\n  \"services\": [\n    {\n      \"name\": \"Additional Socket Outlet\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/additional-socket-outlet\"\n    },\n    {\n      \"name\": \"Car Charger installation\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/car-charger-installation\"\n    },\n    {\n      \"name\": \"Decorative lighting\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/decorative-lighting\"\n    },\n    {\n      \"name\": \"Decorative Sockets and Switches\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/decorative-sockets-and-switches\"\n    },\n    {\n      \"name\": \"Electric Radiator Installation\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/electric-radiator-installation\"\n    },\n    {\n      \"name\": \"Electric Toothbrush Charger Installation\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/electric-toothbrush-charger-installation\"\n    },\n    {\n      \"name\": \"EV Charger Installation Pricing\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/ev-charger\"\n    },\n    {\n      \"name\": \"Domestic Extractor Fan Installation Electrician\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/extractor-fan-installation\"\n    },\n    {\n      \"name\": \"Domestic Fault Finding & Repair Electrician\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/fault-finding-repair\"\n    },\n    {\n      \"name\": \"Domestic Garage Electrics Electrician\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/garage-electrics\"\n    },\n    {\n      \"name\": \"1) Additional Sockets Installation in Banbury\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/additional-socket-outlet\"\n    },\n    {\n      \"name\": \"8) EV Charger Installation Pricing\",\n      \"page\": \"https://www.ljmullanelectrical.com/service/ev-charger\"\n    }\n  ]\n}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2537,
+   "completion_tokens": 668,
+   "total_tokens": 3205,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 189,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 6280
+ },
+ "25d2bfc8d756ac52d54148f1": {
+  "id": "chatcmpl-EkVilhiMSJ8InjDUoDaMO0B9Uoab1",
+  "object": "chat.completion",
+  "created": 1794753731,
+  "model": "gpt-5.5-2026-04-23",
+  "choices": [
+   {
+    "index": 0,
+    "message": {
+     "role": "assistant",
+     "content": "{\"services\":[{\"name\":\"Additional Socket Outlet\",\"page\":\"https://www.ljmullanelectrical.com/service/additional-socket-outlet\"},{\"name\":\"Car Charger installation\",\"page\":\"https://www.ljmullanelectrical.com/service/car-charger-installation\"},{\"name\":\"Decorative lighting\",\"page\":\"https://www.ljmullanelectrical.com/service/decorative-lighting\"},{\"name\":\"Decorative Sockets and Switches\",\"page\":\"https://www.ljmullanelectrical.com/service/decorative-sockets-and-switches\"},{\"name\":\"Electric Radiator Installation\",\"page\":\"https://www.ljmullanelectrical.com/service/electric-radiator-installation\"},{\"name\":\"Electric Toothbrush Charger Installation\",\"page\":\"https://www.ljmullanelectrical.com/service/electric-toothbrush-charger-installation\"},{\"name\":\"Domestic Extractor Fan Installation Electrician\",\"page\":\"https://www.ljmullanelectrical.com/service/extractor-fan-installation\"},{\"name\":\"Outdoor lighting\",\"page\":null},{\"name\":\"Outdoor Socket\",\"page\":null},{\"name\":\"Ring Doorbell Installation\",\"page\":null},{\"name\":\"Security Lighting\",\"page\":null},{\"name\":\"Smart Home Install\",\"page\":null},{\"name\":\"Smoke Alarm Installation\",\"page\":null},{\"name\":\"Storage Heater Installation\",\"page\":null},{\"name\":\"TV Wall Mounting Set Up\",\"page\":null},{\"name\":\"Domestic Fault Finding & Repair Electrician\",\"page\":\"https://www.ljmullanelectrical.com/service/fault-finding-repair\"},{\"name\":\"Domestic Garage Electrics Electrician\",\"page\":\"https://www.ljmullanelectrical.com/service/garage-electrics\"}]}",
+     "refusal": null,
+     "annotations": []
+    },
+    "finish_reason": "stop"
+   }
+  ],
+  "usage": {
+   "prompt_tokens": 2537,
+   "completion_tokens": 458,
+   "total_tokens": 2995,
+   "prompt_tokens_details": {
+    "cached_tokens": 0,
+    "audio_tokens": 0
+   },
+   "completion_tokens_details": {
+    "reasoning_tokens": 106,
+    "audio_tokens": 0,
+    "accepted_prediction_tokens": 0,
+    "rejected_prediction_tokens": 0
+   }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "bench_ms": 4616
+ }
+}

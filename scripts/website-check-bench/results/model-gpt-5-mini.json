@@ -1,0 +1,4073 @@
+[
+ {
+  "slug": "badgerdesigner.co.uk",
+  "state": "unreadable",
+  "headline": "We could not read the website: The website answered with an error instead of a page.",
+  "pagesRead": 0,
+  "capped": false,
+  "issues": [],
+  "misses": 0,
+  "ms": 38839,
+  "serviceReview": null
+ },
+ {
+  "slug": "bkwservices.co.uk",
+  "state": "issues",
+  "headline": "7 website issues found on the 59 pages checked.",
+  "pagesRead": 59,
+  "capped": false,
+  "issues": [
+   {
+    "id": "noindex_pages",
+    "severity": "medium",
+    "title": "Pages that ask not to be listed (noindex)",
+    "line": "Some of your pages ask Google not to show them (24 pages)",
+    "saw": "24 pages carry a noindex instruction, including service, area, about or contact pages.",
+    "pages": [
+     "https://www.bkwservices.co.uk/booking-calendar/washing-machine-installtion",
+     "https://www.bkwservices.co.uk/booking-calendar/tumble-dryer-installation",
+     "https://www.bkwservices.co.uk/booking-calendar/fridge-freezer-installation"
+    ],
+    "count": 24,
+    "clientShown": true
+   },
+   {
+    "id": "vs_key_page_basics",
+    "severity": "medium",
+    "title": "Key pages have no main heading (H1) or meta description",
+    "line": "Some main pages have no main heading or description (24 pages)",
+    "saw": "/recent-work: no H1; /meet-the-team: no meta description; /clients: no meta description; /service-page/boiler-installation: no meta description and 20 more key pages.",
+    "pages": [
+     "https://www.bkwservices.co.uk/recent-work",
+     "https://www.bkwservices.co.uk/meet-the-team",
+     "https://www.bkwservices.co.uk/clients"
+    ],
+    "count": 24,
+    "clientShown": true
+   },
+   {
+    "id": "thin_key_pages",
+    "severity": "medium",
+    "title": "Thin service, area or home pages",
+    "line": "Your service, area or home pages have very little text on them (22 pages)",
+    "saw": "22 pages have under 120 words of readable text.",
+    "pages": [
+     "https://www.bkwservices.co.uk/services",
+     "https://www.bkwservices.co.uk/profile/services46/profile",
+     "https://www.bkwservices.co.uk/service-page/boiler-installation"
+    ],
+    "count": 22,
+    "clientShown": true
+   },
+   {
+    "id": "vs_town_swapped_pages",
+    "severity": "medium",
+    "title": "Area or service pages are the same text with only the town or service name changed",
+    "line": "Several of your pages are the same text with only the town or service swapped (20 pages)",
+    "saw": "20 pages read the same once the town or service name in their address is taken out — e.g. /booking-calendar/washing-machine-installtion and /booking-calendar/tumble-dryer-installation are 89% the same.",
+    "pages": [
+     "https://www.bkwservices.co.uk/booking-calendar/washing-machine-installtion",
+     "https://www.bkwservices.co.uk/booking-calendar/tumble-dryer-installation",
+     "https://www.bkwservices.co.uk/booking-calendar/fridge-freezer-installation"
+    ],
+    "count": 20,
+    "clientShown": true
+   },
+   {
+    "id": "ct_schema_mismatch",
+    "severity": "medium",
+    "title": "The business details in your page code don’t match the page",
+    "line": "The business details in your page code don’t match the page (3 pages)",
+    "saw": "The markup gives the postcode KT19 8NQ; the pages show KT19 8NF",
+    "pages": [
+     "https://www.bkwservices.co.uk/",
+     "https://www.bkwservices.co.uk/post/reliable-same-day-appliance-repair-washing-machine-services-you-can-trust",
+     "https://www.bkwservices.co.uk/post/how-often-should-you-clean-your-appliances"
+    ],
+    "count": 3,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_proof",
+    "severity": "medium",
+    "title": "We couldn’t find reviews, testimonials or case studies",
+    "line": "We couldn’t find reviews, testimonials or case studies",
+    "saw": "None found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "internal_linking",
+    "severity": "medium",
+    "title": "Service pages are not linked from the homepage or menu",
+    "line": "Service pages are not linked from the homepage or menu",
+    "saw": "11 of 11 service pages are not linked from the homepage or the main menu.",
+    "pages": [
+     "https://www.bkwservices.co.uk/service-page/washing-machine-installtion",
+     "https://www.bkwservices.co.uk/service-page/tumble-dryer-installation",
+     "https://www.bkwservices.co.uk/service-page/fridge-freezer-installation"
+    ],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "thin_pages",
+    "severity": "low",
+    "title": "Other thin pages",
+    "line": "Other thin pages (27 pages)",
+    "saw": "27 pages have under 120 words of readable text.",
+    "pages": [
+     "https://www.bkwservices.co.uk/recent-work",
+     "https://www.bkwservices.co.uk/meet-the-team",
+     "https://www.bkwservices.co.uk/clients"
+    ],
+    "count": 27,
+    "clientShown": true
+   },
+   {
+    "id": "ct_image_alt",
+    "severity": "low",
+    "title": "Most images have no description (alt text)",
+    "line": "Most images have no description (alt text) (20 pages)",
+    "saw": "22 of 39 photos and pictures have no alt text (icons and logos not counted)",
+    "pages": [
+     "https://www.bkwservices.co.uk/",
+     "https://www.bkwservices.co.uk/get-a-quote",
+     "https://www.bkwservices.co.uk/recent-work"
+    ],
+    "count": 20,
+    "clientShown": true
+   },
+   {
+    "id": "long_titles",
+    "severity": "low",
+    "title": "Long page titles",
+    "line": "Long page titles",
+    "saw": "1 page have titles over 65 characters.",
+    "pages": [
+     "https://www.bkwservices.co.uk/post/reliable-same-day-appliance-repair-washing-machine-services-you-can-trust"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_areas_not_stated",
+    "severity": "low",
+    "title": "We couldn’t find which areas you cover",
+    "line": "Your site doesn’t say which areas you cover",
+    "saw": "No “areas we cover” list or statement on any page read (read in full)",
+    "pages": [
+     "https://www.bkwservices.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_link_mismatch",
+    "severity": "low",
+    "title": "Some links go to the wrong place",
+    "line": "Some links go to the wrong place",
+    "saw": "“Request to Book” goes to /booking-calendar/washing-machine-installtion (a page about it is at /payment-request-page)",
+    "pages": [
+     "https://www.bkwservices.co.uk/book-online"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_dead_links",
+    "severity": "low",
+    "title": "Links that go nowhere",
+    "line": "Links that go nowhere",
+    "saw": "“same day washing machine repair” → # on /post/reliable-same-day-appliance-repair-washing-machine-services-you-can-trust",
+    "pages": [
+     "https://www.bkwservices.co.uk/post/reliable-same-day-appliance-repair-washing-machine-services-you-can-trust"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "vs_faq_no_schema",
+    "severity": "low",
+    "title": "FAQs on the site have no FAQ markup",
+    "line": "Your FAQs are not marked up for search tools",
+    "saw": "1 page answer customer questions with no FAQPage markup, e.g. /post/reliable-same-day-appliance-repair-washing-machine-services-you-can-trust: “Why Choose Same-Day Appliance Repair for Your Washing Machine?”.",
+    "pages": [
+     "https://www.bkwservices.co.uk/post/reliable-same-day-appliance-repair-washing-machine-services-you-can-trust"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_reviews",
+    "severity": "low",
+    "title": "No reviews or testimonials found on the site",
+    "line": "No reviews or testimonials found on the site",
+    "saw": "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us).",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_breadcrumbs",
+    "severity": "low",
+    "title": "No breadcrumb markup",
+    "line": "No breadcrumb markup",
+    "saw": "None of the 59 pages read carries BreadcrumbList markup.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_accreditations",
+    "severity": "low",
+    "title": "We couldn’t find any named accreditations or memberships",
+    "line": "We couldn’t find any named accreditations or memberships",
+    "saw": "None named on any page read, in text or logo images",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 10559,
+  "serviceReview": null
+ },
+ {
+  "slug": "corbygas.co.uk",
+  "state": "clean",
+  "headline": "No serious website issues found on the 8 pages checked. 5 minor points.",
+  "pagesRead": 8,
+  "capped": false,
+  "issues": [
+   {
+    "id": "vs_faq_no_schema",
+    "severity": "low",
+    "title": "FAQs on the site have no FAQ markup",
+    "line": "Your FAQs are not marked up for search tools",
+    "saw": "1 page answer customer questions with no FAQPage markup, e.g. homepage: “What do I do?”.",
+    "pages": [
+     "https://corbygasman.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "redirects_to_other_domain",
+    "severity": "low",
+    "title": "The address on file redirects to another domain",
+    "line": "The address on file redirects to another domain",
+    "saw": "http://www.corbygas.co.uk redirects to https://corbygasman.co.uk.",
+    "pages": [
+     "http://www.corbygas.co.uk/"
+    ],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_contact_page",
+    "severity": "low",
+    "title": "No contact page found",
+    "line": "No contact page found",
+    "saw": "No page looks like a contact page.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_about_page",
+    "severity": "low",
+    "title": "No About page found",
+    "line": "No About page found",
+    "saw": "No page looks like an About page.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_area_coverage",
+    "severity": "low",
+    "title": "We couldn’t find a page for each area you cover",
+    "line": "We couldn’t find a page for each area you cover",
+    "saw": "Places named on the site: Corby, Corby Kettering Rothwell, I'm, Kettering, Rothwell, Desborough, Wellingborough, Northampton",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 1544,
+  "serviceReview": null
+ },
+ {
+  "slug": "dgprinceelectrical.wixsite.com",
+  "state": "issues",
+  "headline": "3 website issues found on the 1 page checked.",
+  "pagesRead": 1,
+  "capped": false,
+  "issues": [
+   {
+    "id": "one_page_site",
+    "severity": "medium",
+    "title": "A one-page website",
+    "line": "Your website is a single page",
+    "saw": "Only the homepage was found; there are no other pages.",
+    "pages": [
+     "https://dgprinceelectrical.wixsite.com/my-site-2"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_sitemap",
+    "severity": "medium",
+    "title": "No XML sitemap found",
+    "line": "There is no page list for Google to follow",
+    "saw": "No sitemap was declared in robots.txt, and none was found at /sitemap.xml, /sitemap_index.xml or /wp-sitemap.xml.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_proof",
+    "severity": "medium",
+    "title": "We couldn’t find reviews, testimonials or case studies",
+    "line": "We couldn’t find reviews, testimonials or case studies",
+    "saw": "None found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "long_titles",
+    "severity": "low",
+    "title": "Long page titles",
+    "line": "Long page titles",
+    "saw": "1 page have titles over 65 characters.",
+    "pages": [
+     "https://dgprinceelectrical.wixsite.com/my-site-2"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_areas_not_stated",
+    "severity": "low",
+    "title": "We couldn’t find which areas you cover",
+    "line": "Your site doesn’t say which areas you cover",
+    "saw": "No “areas we cover” list or statement on any page read (read in full)",
+    "pages": [
+     "https://dgprinceelectrical.wixsite.com/my-site-2"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_image_alt",
+    "severity": "low",
+    "title": "Most images have no description (alt text)",
+    "line": "Most images have no description (alt text)",
+    "saw": "8 of 10 photos and pictures have no alt text (icons and logos not counted)",
+    "pages": [
+     "https://dgprinceelectrical.wixsite.com/my-site-2"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_address",
+    "severity": "low",
+    "title": "No address or postcode found",
+    "line": "No address or postcode found",
+    "saw": "No street address or postcode was found on any page read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_reviews",
+    "severity": "low",
+    "title": "No reviews or testimonials found on the site",
+    "line": "No reviews or testimonials found on the site",
+    "saw": "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us).",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_business_schema",
+    "severity": "low",
+    "title": "No business structured data",
+    "line": "No business structured data",
+    "saw": "No Organization or LocalBusiness markup was found on any page read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_people",
+    "severity": "low",
+    "title": "We couldn’t find who runs the business",
+    "line": "We couldn’t find who runs the business",
+    "saw": "No owner, director or team named on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_accreditations",
+    "severity": "low",
+    "title": "We couldn’t find any named accreditations or memberships",
+    "line": "We couldn’t find any named accreditations or memberships",
+    "saw": "None named on any page read, in text or logo images",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 783,
+  "serviceReview": null
+ },
+ {
+  "slug": "eongraphics.co.uk",
+  "state": "issues",
+  "headline": "2 website issues found on the 60 pages checked.",
+  "pagesRead": 60,
+  "capped": true,
+  "issues": [
+   {
+    "id": "ct_placeholder_content",
+    "severity": "high",
+    "title": "Unfinished placeholder blocks are live on the site",
+    "line": "Some pages on your site are unfinished, with sample text still on them",
+    "saw": "“…Page Divi Construction Lorem ipsum dolor sit amet, consectetur…” on /trade-construction",
+    "pages": [
+     "https://eongraphics.co.uk/trade-construction/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "vs_key_page_basics",
+    "severity": "medium",
+    "title": "Key pages have no main heading (H1) or meta description",
+    "line": "Some main pages have no main heading or description (3 pages)",
+    "saw": "/price-plan: no H1; /work-ap-mechanical-services: no meta description; /website-design-and-seo-services-uk: no H1, no meta description.",
+    "pages": [
+     "https://eongraphics.co.uk/price-plan/",
+     "https://eongraphics.co.uk/work-ap-mechanical-services/",
+     "https://eongraphics.co.uk/website-design-and-seo-services-uk/"
+    ],
+    "count": 3,
+    "clientShown": true
+   },
+   {
+    "id": "ct_image_alt",
+    "severity": "low",
+    "title": "Most images have no description (alt text)",
+    "line": "Most images have no description (alt text) (20 pages)",
+    "saw": "294 of 343 photos and pictures have no alt text (icons and logos not counted)",
+    "pages": [
+     "https://eongraphics.co.uk/",
+     "https://eongraphics.co.uk/gallery-business-cards-websites-packaging-seo-branding-portfolio-responsive-examples/",
+     "https://eongraphics.co.uk/price-plan/"
+    ],
+    "count": 20,
+    "clientShown": true
+   },
+   {
+    "id": "thin_pages",
+    "severity": "low",
+    "title": "Other thin pages",
+    "line": "Other thin pages (10 pages)",
+    "saw": "10 pages have under 120 words of readable text.",
+    "pages": [
+     "https://eongraphics.co.uk/work-atypical-grooming-barlon/",
+     "https://eongraphics.co.uk/work-tiny-iron/",
+     "https://eongraphics.co.uk/work-yellow-brick/"
+    ],
+    "count": 10,
+    "clientShown": true
+   },
+   {
+    "id": "ct_dead_links",
+    "severity": "low",
+    "title": "Links that go nowhere",
+    "line": "Links that go nowhere (9 pages)",
+    "saw": "“Design Strategy” → # on 3 pages (e.g. /price-plan)",
+    "pages": [
+     "https://eongraphics.co.uk/price-plan/",
+     "https://eongraphics.co.uk/work-stewart-logistics-graphic-designer/",
+     "https://eongraphics.co.uk/project-a-to-z-london/"
+    ],
+    "count": 9,
+    "clientShown": true
+   },
+   {
+    "id": "ct_link_mismatch",
+    "severity": "low",
+    "title": "Some links go to the wrong place",
+    "line": "Some links go to the wrong place (4 pages)",
+    "saw": "“logo design” goes to /gallery-business-cards-websites-packaging-seo-branding-portfolio-responsive-examples (a page about it is at /leon-m-a-edwards-logo-web-design-project-in-milton-keynes)",
+    "pages": [
+     "https://eongraphics.co.uk/local-graphic-designer-for-your-business/",
+     "https://eongraphics.co.uk/seo-company-near-milton-keynes/",
+     "https://eongraphics.co.uk/website-design-in-milton-keynes/"
+    ],
+    "count": 4,
+    "clientShown": true
+   },
+   {
+    "id": "vs_faq_no_schema",
+    "severity": "low",
+    "title": "FAQs on the site have no FAQ markup",
+    "line": "Your FAQs are not marked up for search tools (4 pages)",
+    "saw": "4 pages answer customer questions with no FAQPage markup, e.g. /what-is-a-brand-voice: “What is a brand voice?”.",
+    "pages": [
+     "https://eongraphics.co.uk/what-is-a-brand-voice/",
+     "https://eongraphics.co.uk/about-websites-print-motion-graphics/",
+     "https://eongraphics.co.uk/about/"
+    ],
+    "count": 4,
+    "clientShown": true
+   },
+   {
+    "id": "long_titles",
+    "severity": "low",
+    "title": "Long page titles",
+    "line": "Long page titles (3 pages)",
+    "saw": "3 pages have titles over 65 characters.",
+    "pages": [
+     "https://eongraphics.co.uk/rebranding-taking-on-the-challenge-of-delivery-services/",
+     "https://eongraphics.co.uk/what-are-the-benefits-of-seo-search-engine-optimisation/",
+     "https://eongraphics.co.uk/brand-design-services/"
+    ],
+    "count": 3,
+    "clientShown": true
+   },
+   {
+    "id": "internal_redirects",
+    "severity": "low",
+    "title": "Internal addresses that redirect",
+    "line": "Internal addresses that redirect (2 pages)",
+    "saw": "2 addresses found on the site redirect to a different page.",
+    "pages": [
+     "https://eongraphics.co.uk/careers/ → https://eongraphics.co.uk/careers-contact/",
+     "https://eongraphics.co.uk/branding/ → https://eongraphics.co.uk/branding-for-trades-businesses/"
+    ],
+    "count": 2,
+    "clientShown": true
+   },
+   {
+    "id": "duplicate_titles",
+    "severity": "low",
+    "title": "Pages sharing the same title",
+    "line": "Several pages have the same title (2 pages)",
+    "saw": "2 pages share a page title with another page.",
+    "pages": [
+     "https://eongraphics.co.uk/about-websites-print-motion-graphics/",
+     "https://eongraphics.co.uk/about/"
+    ],
+    "count": 2,
+    "clientShown": true
+   },
+   {
+    "id": "multiple_h1",
+    "severity": "low",
+    "title": "Pages with more than one main heading",
+    "line": "Pages with more than one main heading (2 pages)",
+    "saw": "2 pages have several H1 headings.",
+    "pages": [
+     "https://eongraphics.co.uk/create-a-brand-strategy-for-your-business/",
+     "https://eongraphics.co.uk/free-infinity-digital-business-cards/"
+    ],
+    "count": 2,
+    "clientShown": true
+   },
+   {
+    "id": "ct_generic_copy",
+    "severity": "low",
+    "title": "Pages read as general copy, with few specifics",
+    "line": "Pages read as general copy, with few specifics",
+    "saw": "/website-design-services-in-gambia (740 words): “high quality”, “we pride ourselves”, “pride ourselves”",
+    "pages": [
+     "https://eongraphics.co.uk/website-design-services-in-gambia/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found in the 53 pages we read — the site gives years of experience (20) but no start year",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_accreditations",
+    "severity": "low",
+    "title": "We couldn’t find any named accreditations or memberships",
+    "line": "We couldn’t find any named accreditations or memberships",
+    "saw": "None named in the 53 pages we read, in text or logo images",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 19809,
+  "serviceReview": null
+ },
+ {
+  "slug": "facebook.com-fb",
+  "state": "profile",
+  "headline": "No standalone business website found, only a Facebook profile — nothing of their own to check.",
+  "pagesRead": null,
+  "capped": null,
+  "issues": [],
+  "misses": 0,
+  "ms": 1,
+  "serviceReview": null
+ },
+ {
+  "slug": "fbsproperties.co.uk",
+  "state": "issues",
+  "headline": "1 website issue found on the 1 page checked.",
+  "pagesRead": 1,
+  "capped": false,
+  "issues": [
+   {
+    "id": "client_rendered",
+    "severity": "medium",
+    "title": "Homepage text only appears after JavaScript runs",
+    "line": "Your homepage text only appears after the page code runs, so some tools may see an almost empty page",
+    "saw": "The homepage HTML we received carries very little readable text; the content is built in the browser.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 580,
+  "serviceReview": null
+ },
+ {
+  "slug": "gbelectrical.godaddysites.com",
+  "state": "issues",
+  "headline": "4 website issues found on the 1 page checked.",
+  "pagesRead": 1,
+  "capped": false,
+  "issues": [
+   {
+    "id": "ct_areas_not_stated",
+    "severity": "medium",
+    "title": "We couldn’t find which areas you cover",
+    "line": "Your site doesn’t say which areas you cover",
+    "saw": "No “areas we cover” list or statement on any page read (read in full)",
+    "pages": [
+     "https://gbelectrical.godaddysites.com/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_vague_headings",
+    "severity": "medium",
+    "title": "Main headings don’t say what you do or where",
+    "line": "Main headings don’t say what you do or where",
+    "saw": "Homepage: “Powering Your World with Innovative Solutions”",
+    "pages": [
+     "https://gbelectrical.godaddysites.com/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "vs_key_page_basics",
+    "severity": "medium",
+    "title": "Key pages have no meta description",
+    "line": "Some main pages have no description for Google",
+    "saw": "homepage: no meta description.",
+    "pages": [
+     "https://gbelectrical.godaddysites.com/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_proof",
+    "severity": "medium",
+    "title": "We couldn’t find reviews, testimonials or case studies",
+    "line": "We couldn’t find reviews, testimonials or case studies",
+    "saw": "None found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_dead_links",
+    "severity": "low",
+    "title": "Links that go nowhere",
+    "line": "Links that go nowhere",
+    "saw": "“Decline” → # on the homepage",
+    "pages": [
+     "https://gbelectrical.godaddysites.com/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_reviews",
+    "severity": "low",
+    "title": "No reviews or testimonials found on the site",
+    "line": "No reviews or testimonials found on the site",
+    "saw": "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us).",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_business_schema",
+    "severity": "low",
+    "title": "No business structured data",
+    "line": "No business structured data",
+    "saw": "No Organization or LocalBusiness markup was found on any page read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_accreditations",
+    "severity": "low",
+    "title": "We couldn’t find any named accreditations or memberships",
+    "line": "We couldn’t find any named accreditations or memberships",
+    "saw": "None named on any page read, in text or logo images",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 902,
+  "serviceReview": null
+ },
+ {
+  "slug": "granthambuilder.co.uk",
+  "state": "issues",
+  "headline": "5 website issues found on the 29 pages checked.",
+  "pagesRead": 29,
+  "capped": false,
+  "issues": [
+   {
+    "id": "vs_town_swapped_pages",
+    "severity": "medium",
+    "title": "Area or service pages are the same text with only the town or service name changed",
+    "line": "Several of your pages are the same text with only the town or service swapped (11 pages)",
+    "saw": "11 pages read the same once the town or service name in their address is taken out — e.g. /ancaster and /barrowby are 100% the same.",
+    "pages": [
+     "https://www.granthambuilder.co.uk/ancaster/",
+     "https://www.granthambuilder.co.uk/barrowby/",
+     "https://www.granthambuilder.co.uk/bottesford/"
+    ],
+    "count": 11,
+    "clientShown": true
+   },
+   {
+    "id": "broken_pages",
+    "severity": "medium",
+    "title": "Linked pages that return an error",
+    "line": "Some links on your site lead to error pages (2 pages)",
+    "saw": "2 addresses linked from the site or listed in its sitemap answered with an error (404).",
+    "pages": [
+     "https://www.granthambuilder.co.uk/stamford (404)",
+     "https://www.granthambuilder.co.uk/about (404)"
+    ],
+    "count": 2,
+    "clientShown": true
+   },
+   {
+    "id": "ct_schema_mismatch",
+    "severity": "medium",
+    "title": "The business details in your page code don’t match the page",
+    "line": "The business details in your page code don’t match the page (2 pages)",
+    "saw": "The markup names the business “Grantham Builder”",
+    "pages": [
+     "https://www.granthambuilder.co.uk/",
+     "https://www.granthambuilder.co.uk/fencing-grantham/"
+    ],
+    "count": 2,
+    "clientShown": true
+   },
+   {
+    "id": "no_service_pages",
+    "severity": "medium",
+    "title": "No dedicated service pages found",
+    "line": "There are no separate pages for your services",
+    "saw": "None of the pages read look like a page about one service.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "vs_name_inconsistent",
+    "severity": "medium",
+    "title": "The business name is written two different ways",
+    "line": "Your business name is written different ways across the site",
+    "saw": "“Mark Oakes - Construction & Maintenance” (business markup on /fencing-grantham; also page titles (11 pages)); “Grantham Builder” (business markup on homepage).",
+    "pages": [
+     "https://www.granthambuilder.co.uk/fencing-grantham/",
+     "https://www.granthambuilder.co.uk/"
+    ],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_link_mismatch",
+    "severity": "low",
+    "title": "Some links go to the wrong place",
+    "line": "Some links go to the wrong place (9 pages)",
+    "saw": "“Contact Us in Ancaster” goes to /contact (a page about it is at /ancaster)",
+    "pages": [
+     "https://www.granthambuilder.co.uk/ancaster/",
+     "https://www.granthambuilder.co.uk/barrowby/",
+     "https://www.granthambuilder.co.uk/bottesford/"
+    ],
+    "count": 9,
+    "clientShown": true
+   },
+   {
+    "id": "multiple_h1",
+    "severity": "low",
+    "title": "Pages with more than one main heading",
+    "line": "Pages with more than one main heading",
+    "saw": "1 page have several H1 headings.",
+    "pages": [
+     "https://www.granthambuilder.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "long_titles",
+    "severity": "low",
+    "title": "Long page titles",
+    "line": "Long page titles",
+    "saw": "1 page have titles over 65 characters.",
+    "pages": [
+     "https://www.granthambuilder.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "vs_faq_no_schema",
+    "severity": "low",
+    "title": "FAQs on the site have no FAQ markup",
+    "line": "Your FAQs are not marked up for search tools",
+    "saw": "1 page answer customer questions with no FAQPage markup, e.g. /fencing-grantham: “Can you install gates too?”.",
+    "pages": [
+     "https://www.granthambuilder.co.uk/fencing-grantham/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_about_page",
+    "severity": "low",
+    "title": "No About page found",
+    "line": "No About page found",
+    "saw": "No page looks like an About page.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_breadcrumbs",
+    "severity": "low",
+    "title": "No breadcrumb markup",
+    "line": "No breadcrumb markup",
+    "saw": "None of the 14 pages read carries BreadcrumbList markup.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found on any page read — the site gives years of experience (15) but no start year",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_accreditations",
+    "severity": "low",
+    "title": "We couldn’t find any named accreditations or memberships",
+    "line": "We couldn’t find any named accreditations or memberships",
+    "saw": "None named on any page read, in text or logo images",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 4194,
+  "serviceReview": null
+ },
+ {
+  "slug": "highdesignroofing.com",
+  "state": "issues",
+  "headline": "2 website issues found on the 60 pages checked.",
+  "pagesRead": 60,
+  "capped": true,
+  "issues": [
+   {
+    "id": "vs_town_swapped_pages",
+    "severity": "medium",
+    "title": "Area or service pages are the same text with only the town or service name changed",
+    "line": "Several of your pages are the same text with only the town or service swapped (6 pages)",
+    "saw": "6 pages read the same once the town or service name in their address is taken out — e.g. /barnsley/chimney-repairs and /castleford/chimney-repairs are 94% the same.",
+    "pages": [
+     "https://www.highdesignroofing.com/barnsley/chimney-repairs/",
+     "https://www.highdesignroofing.com/castleford/chimney-repairs/",
+     "https://www.highdesignroofing.com/dewsbury/chimney-repairs/"
+    ],
+    "count": 6,
+    "clientShown": true
+   },
+   {
+    "id": "vs_key_page_basics",
+    "severity": "medium",
+    "title": "Key pages have no meta description",
+    "line": "Some main pages have no description for Google (2 pages)",
+    "saw": "/services: no meta description; /service-areas: no meta description.",
+    "pages": [
+     "https://www.highdesignroofing.com/services",
+     "https://www.highdesignroofing.com/service-areas/"
+    ],
+    "count": 2,
+    "clientShown": true
+   },
+   {
+    "id": "long_titles",
+    "severity": "low",
+    "title": "Long page titles",
+    "line": "Long page titles (45 pages)",
+    "saw": "45 pages have titles over 65 characters.",
+    "pages": [
+     "https://www.highdesignroofing.com/about",
+     "https://www.highdesignroofing.com/services/upvc-facias-and-soffits/",
+     "https://www.highdesignroofing.com/services/emergency-roof-repairs/"
+    ],
+    "count": 45,
+    "clientShown": true
+   },
+   {
+    "id": "vs_business_schema",
+    "severity": "low",
+    "title": "The business markup has no phone number or address",
+    "line": "The hidden business details on your site leave out your phone number or address (6 pages)",
+    "saw": "Business markup types read: RoofingContractor, Organization (on 6 pages, e.g. homepage); no phone number and no address in it.",
+    "pages": [
+     "https://www.highdesignroofing.com/",
+     "https://www.highdesignroofing.com/about",
+     "https://www.highdesignroofing.com/reviews/"
+    ],
+    "count": 6,
+    "clientShown": true
+   },
+   {
+    "id": "ct_dead_links",
+    "severity": "low",
+    "title": "Links that go nowhere",
+    "line": "Links that go nowhere (2 pages)",
+    "saw": "“All Projects” → # on /services",
+    "pages": [
+     "https://www.highdesignroofing.com/services",
+     "https://www.highdesignroofing.com/services/"
+    ],
+    "count": 2,
+    "clientShown": true
+   },
+   {
+    "id": "no_address",
+    "severity": "low",
+    "title": "No address or postcode found",
+    "line": "No address or postcode found",
+    "saw": "No street address or postcode was found in the 60 pages read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_breadcrumbs",
+    "severity": "low",
+    "title": "No breadcrumb markup",
+    "line": "No breadcrumb markup",
+    "saw": "None of the 60 pages read carries BreadcrumbList markup.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found in the 60 pages we read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_accreditations",
+    "severity": "low",
+    "title": "We couldn’t find any named accreditations or memberships",
+    "line": "We couldn’t find any named accreditations or memberships",
+    "saw": "None named in the 60 pages we read, in text or logo images",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 15070,
+  "serviceReview": null
+ },
+ {
+  "slug": "idriveauto.co.uk",
+  "state": "issues",
+  "headline": "1 website issue found on the 1 page checked.",
+  "pagesRead": 1,
+  "capped": false,
+  "issues": [
+   {
+    "id": "client_rendered",
+    "severity": "medium",
+    "title": "Homepage text only appears after JavaScript runs",
+    "line": "Your homepage text only appears after the page code runs, so some tools may see an almost empty page",
+    "saw": "The homepage HTML we received carries very little readable text; the content is built in the browser.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 1790,
+  "serviceReview": null
+ },
+ {
+  "slug": "itmelectrical.co.uk",
+  "state": "issues",
+  "headline": "2 website issues found on the 15 pages checked.",
+  "pagesRead": 15,
+  "capped": false,
+  "issues": [
+   {
+    "id": "vs_key_page_basics",
+    "severity": "medium",
+    "title": "Key pages have no main heading (H1) or meta description",
+    "line": "Some main pages have no main heading or description (6 pages)",
+    "saw": "homepage: no H1, no meta description; /services: no H1, no meta description; /gallery: no H1, no meta description; /about: no H1, no meta description and 2 more key pages.",
+    "pages": [
+     "https://www.itmelectrical.co.uk/",
+     "https://www.itmelectrical.co.uk/services",
+     "https://www.itmelectrical.co.uk/gallery"
+    ],
+    "count": 6,
+    "clientShown": true
+   },
+   {
+    "id": "ct_accreditations_unnamed",
+    "severity": "medium",
+    "title": "Your site claims accreditation or qualifications but names no scheme",
+    "line": "Your site claims accreditation or qualifications but names no scheme",
+    "saw": "“…an affordable price. We are fully qualified, insured, have relevant…”",
+    "pages": [
+     "https://www.itmelectrical.co.uk/about"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_image_alt",
+    "severity": "low",
+    "title": "Most images have no description (alt text)",
+    "line": "Most images have no description (alt text) (11 pages)",
+    "saw": "17 of 23 photos and pictures have no alt text (icons and logos not counted)",
+    "pages": [
+     "https://www.itmelectrical.co.uk/",
+     "https://www.itmelectrical.co.uk/gallery",
+     "https://www.itmelectrical.co.uk/about"
+    ],
+    "count": 11,
+    "clientShown": true
+   },
+   {
+    "id": "sitemap_only_pages",
+    "severity": "low",
+    "title": "Pages in the sitemap that no page links to",
+    "line": "Some important pages are not linked from anywhere on your site (7 pages)",
+    "saw": "7 pages appear in the sitemap but are not linked from any page we read.",
+    "pages": [
+     "https://www.itmelectrical.co.uk/home",
+     "https://www.itmelectrical.co.uk/store-1-0/p/harvest-moon-cup-5fc72-96b49-an9pa",
+     "https://www.itmelectrical.co.uk/store-1-0/p/earth-sky-planter-4awkk-nazcb-zxx84"
+    ],
+    "count": 7,
+    "clientShown": true
+   },
+   {
+    "id": "duplicate_titles",
+    "severity": "low",
+    "title": "Pages sharing the same title",
+    "line": "Several pages have the same title (2 pages)",
+    "saw": "2 pages share a page title with another page.",
+    "pages": [
+     "https://www.itmelectrical.co.uk/",
+     "https://www.itmelectrical.co.uk/home"
+    ],
+    "count": 2,
+    "clientShown": true
+   },
+   {
+    "id": "canonical_mismatch",
+    "severity": "low",
+    "title": "Pages point to a different page as their main version",
+    "line": "Some pages point Google at a different page as the main one",
+    "saw": "1 page carry a canonical link to another page on the site.",
+    "pages": [
+     "https://www.itmelectrical.co.uk/home"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "internal_redirects",
+    "severity": "low",
+    "title": "Internal addresses that redirect",
+    "line": "Internal addresses that redirect",
+    "saw": "1 address found on the site redirect to a different page.",
+    "pages": [
+     "https://www.itmelectrical.co.uk/new-dropdown → https://www.itmelectrical.co.uk/terms-conditions"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "thin_pages",
+    "severity": "low",
+    "title": "Other thin pages",
+    "line": "Other thin pages",
+    "saw": "1 page have under 120 words of readable text.",
+    "pages": [
+     "https://www.itmelectrical.co.uk/new-page"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_link_mismatch",
+    "severity": "low",
+    "title": "Some links go to the wrong place",
+    "line": "Some links go to the wrong place",
+    "saw": "“Complaints Procedure” goes to /new-page (a page about it is at /s/ITM-Electrical-Complaints-Procedure.pdf)",
+    "pages": [
+     "https://www.itmelectrical.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_address",
+    "severity": "low",
+    "title": "No address or postcode found",
+    "line": "No address or postcode found",
+    "saw": "No street address or postcode was found on any page read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_reviews",
+    "severity": "low",
+    "title": "No reviews or testimonials found on the site",
+    "line": "No reviews or testimonials found on the site",
+    "saw": "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us).",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_business_schema",
+    "severity": "low",
+    "title": "No business structured data",
+    "line": "No business structured data",
+    "saw": "No Organization or LocalBusiness markup was found on any page read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_breadcrumbs",
+    "severity": "low",
+    "title": "No breadcrumb markup",
+    "line": "No breadcrumb markup",
+    "saw": "None of the 14 pages read carries BreadcrumbList markup.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_area_coverage",
+    "severity": "low",
+    "title": "We couldn’t find a page for each area you cover",
+    "line": "We couldn’t find a page for each area you cover",
+    "saw": "Places named on the site: Wellingborough, Irthlingborough, Rushden, Higham Ferrers, Finedon, Kettering, Corby, Earls Barton",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_people",
+    "severity": "low",
+    "title": "We couldn’t find who runs the business",
+    "line": "We couldn’t find who runs the business",
+    "saw": "No owner, director or team named on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 5695,
+  "serviceReview": null
+ },
+ {
+  "slug": "ladiesfirstdrivingschool.co.uk",
+  "state": "issues",
+  "headline": "3 website issues found on the 45 pages checked.",
+  "pagesRead": 45,
+  "capped": false,
+  "issues": [
+   {
+    "id": "vs_key_page_basics",
+    "severity": "medium",
+    "title": "Key pages have no main heading (H1) or meta description",
+    "line": "Some main pages have no main heading or description (5 pages)",
+    "saw": "/courses: no H1, no meta description; /about-us: no H1, no meta description; /areas-we-cover: no meta description; /faqs: no H1, no meta description and 1 more key page.",
+    "pages": [
+     "https://ladiesfirstdrivingschool.co.uk/courses/",
+     "https://ladiesfirstdrivingschool.co.uk/about-us/",
+     "https://ladiesfirstdrivingschool.co.uk/areas-we-cover/"
+    ],
+    "count": 5,
+    "clientShown": true
+   },
+   {
+    "id": "vs_town_swapped_pages",
+    "severity": "medium",
+    "title": "Area or service pages are the same text with only the town or service name changed",
+    "line": "Several of your pages are the same text with only the town or service swapped (2 pages)",
+    "saw": "2 pages read the same once the town or service name in their address is taken out — e.g. /driving-course/48-hours-course-manual and /driving-course/48-hours-course-auto are 100% the same.",
+    "pages": [
+     "https://ladiesfirstdrivingschool.co.uk/driving-course/48-hours-course-manual/",
+     "https://ladiesfirstdrivingschool.co.uk/driving-course/48-hours-course-auto/"
+    ],
+    "count": 2,
+    "clientShown": true
+   },
+   {
+    "id": "no_service_pages",
+    "severity": "medium",
+    "title": "No dedicated service pages found",
+    "line": "There are no separate pages for your services",
+    "saw": "None of the pages read look like a page about one service.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "vs_business_schema",
+    "severity": "low",
+    "title": "Only a generic “Organization” business markup, with no phone number or address",
+    "line": "The hidden business details on your site leave out your phone number or address (44 pages)",
+    "saw": "Business markup type read: Organization (on 44 pages, e.g. homepage); no phone number and no address in it.",
+    "pages": [
+     "https://ladiesfirstdrivingschool.co.uk/",
+     "https://ladiesfirstdrivingschool.co.uk/courses/",
+     "https://ladiesfirstdrivingschool.co.uk/about-us/"
+    ],
+    "count": 44,
+    "clientShown": true
+   },
+   {
+    "id": "ct_dead_links",
+    "severity": "low",
+    "title": "Links that go nowhere",
+    "line": "Links that go nowhere (20 pages)",
+    "saw": "“Forgot Password?” → # on 44 pages (e.g. the homepage)",
+    "pages": [
+     "https://ladiesfirstdrivingschool.co.uk/",
+     "https://ladiesfirstdrivingschool.co.uk/courses/",
+     "https://ladiesfirstdrivingschool.co.uk/about-us/"
+    ],
+    "count": 20,
+    "clientShown": true
+   },
+   {
+    "id": "long_titles",
+    "severity": "low",
+    "title": "Long page titles",
+    "line": "Long page titles (14 pages)",
+    "saw": "14 pages have titles over 65 characters.",
+    "pages": [
+     "https://ladiesfirstdrivingschool.co.uk/",
+     "https://ladiesfirstdrivingschool.co.uk/contact/",
+     "https://ladiesfirstdrivingschool.co.uk/driving-course/35-hours-course-manual-test-booking-included/"
+    ],
+    "count": 14,
+    "clientShown": true
+   },
+   {
+    "id": "sitemap_only_pages",
+    "severity": "low",
+    "title": "Pages in the sitemap that no page links to",
+    "line": "Some important pages are not linked from anywhere on your site (9 pages)",
+    "saw": "9 pages appear in the sitemap but are not linked from any page we read.",
+    "pages": [
+     "https://ladiesfirstdrivingschool.co.uk/driving-course/",
+     "https://ladiesfirstdrivingschool.co.uk/driving-course/48-hours-course-manual/",
+     "https://ladiesfirstdrivingschool.co.uk/driving-course/48-hours-course-auto/"
+    ],
+    "count": 9,
+    "clientShown": true
+   },
+   {
+    "id": "internal_redirects",
+    "severity": "low",
+    "title": "Internal addresses that redirect",
+    "line": "Internal addresses that redirect",
+    "saw": "1 address found on the site redirect to a different page.",
+    "pages": [
+     "https://ladiesfirstdrivingschool.co.uk/theory-test/ → https://ladiesfirstdrivingschool.co.uk/courses/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_link_mismatch",
+    "severity": "low",
+    "title": "Some links go to the wrong place",
+    "line": "Some links go to the wrong place",
+    "saw": "“More Packages” goes to /courses (a page about it is at /driving-course/5-hours-test-package-auto)",
+    "pages": [
+     "https://ladiesfirstdrivingschool.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_address",
+    "severity": "low",
+    "title": "No address or postcode found",
+    "line": "No address or postcode found",
+    "saw": "No street address or postcode was found on any page read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 15009,
+  "serviceReview": null
+ },
+ {
+  "slug": "leighsdrivingschool.co.uk",
+  "state": "unreadable",
+  "headline": "We could not read the website: The website answered with an error instead of a page.",
+  "pagesRead": 0,
+  "capped": false,
+  "issues": [],
+  "misses": 0,
+  "ms": 35644,
+  "serviceReview": null
+ },
+ {
+  "slug": "ljmullanelectrical.com",
+  "state": "issues",
+  "headline": "5 website issues found on the 60 pages checked.",
+  "pagesRead": 60,
+  "capped": true,
+  "issues": [
+   {
+    "id": "vs_town_swapped_pages",
+    "severity": "medium",
+    "title": "Area or service pages are the same text with only the town or service name changed",
+    "line": "Several of your pages are the same text with only the town or service swapped (6 pages)",
+    "saw": "6 pages read the same once the town or service name in their address is taken out — e.g. /service/decorative-sockets-and-switches and /service/electric-radiator-installation are 90% the same.",
+    "pages": [
+     "https://www.ljmullanelectrical.com/service/decorative-sockets-and-switches",
+     "https://www.ljmullanelectrical.com/service/electric-radiator-installation",
+     "https://www.ljmullanelectrical.com/service/electric-toothbrush-charger-installation"
+    ],
+    "count": 6,
+    "clientShown": true
+   },
+   {
+    "id": "vs_key_page_basics",
+    "severity": "medium",
+    "title": "Key pages have no main heading (H1) or meta description",
+    "line": "Some main pages have no main heading or description (6 pages)",
+    "saw": "/rewire-calculator: no meta description; /archive: no meta description; /frequently-asked-questions: no meta description; /team-members: no meta description and 2 more key pages.",
+    "pages": [
+     "https://www.ljmullanelectrical.com/rewire-calculator",
+     "https://www.ljmullanelectrical.com/archive",
+     "https://www.ljmullanelectrical.com/frequently-asked-questions"
+    ],
+    "count": 6,
+    "clientShown": true
+   },
+   {
+    "id": "ct_unsourced_claims",
+    "severity": "medium",
+    "title": "Your site quotes a star rating without saying where it comes from",
+    "line": "Your site quotes a star rating without saying where it comes from (3 pages)",
+    "saw": "“…and have over 180 five-star reviews from customers across…” (/service/eicr) — no source named on that page",
+    "pages": [
+     "https://www.ljmullanelectrical.com/service/eicr?page=2",
+     "https://www.ljmullanelectrical.com/service/eicr?page=3",
+     "https://www.ljmullanelectrical.com/service/fuse-board-upgrade?page=2"
+    ],
+    "count": 3,
+    "clientShown": true
+   },
+   {
+    "id": "ct_vague_headings",
+    "severity": "medium",
+    "title": "Main headings don’t say what you do or where",
+    "line": "Main headings don’t say what you do or where",
+    "saw": "Homepage: “Homepage”",
+    "pages": [
+     "https://www.ljmullanelectrical.com/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_sitemap",
+    "severity": "medium",
+    "title": "No XML sitemap found",
+    "line": "There is no page list for Google to follow",
+    "saw": "No sitemap was declared in robots.txt, and none was found at /sitemap.xml, /sitemap_index.xml or /wp-sitemap.xml.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "vs_faq_no_schema",
+    "severity": "low",
+    "title": "FAQs on the site have no FAQ markup",
+    "line": "Your FAQs are not marked up for search tools (8 pages)",
+    "saw": "8 pages answer customer questions with no FAQPage markup, e.g. /rewire-calculator: “How many sockets would you like?”.",
+    "pages": [
+     "https://www.ljmullanelectrical.com/rewire-calculator",
+     "https://www.ljmullanelectrical.com/service/eicr",
+     "https://www.ljmullanelectrical.com/service/fuse-board-upgrade"
+    ],
+    "count": 8,
+    "clientShown": true
+   },
+   {
+    "id": "ct_generic_copy",
+    "severity": "low",
+    "title": "Pages read as general copy, with few specifics",
+    "line": "Pages read as general copy, with few specifics (6 pages)",
+    "saw": "/service/decorative-sockets-and-switches (424 words): “customer satisfaction”, “we pride ourselves”, “pride ourselves”",
+    "pages": [
+     "https://www.ljmullanelectrical.com/service/decorative-sockets-and-switches",
+     "https://www.ljmullanelectrical.com/service/electric-radiator-installation",
+     "https://www.ljmullanelectrical.com/service/electric-toothbrush-charger-installation"
+    ],
+    "count": 6,
+    "clientShown": true
+   },
+   {
+    "id": "long_titles",
+    "severity": "low",
+    "title": "Long page titles",
+    "line": "Long page titles (4 pages)",
+    "saw": "4 pages have titles over 65 characters.",
+    "pages": [
+     "https://www.ljmullanelectrical.com/service/decorative-sockets-and-switches",
+     "https://www.ljmullanelectrical.com/service/electric-radiator-installation",
+     "https://www.ljmullanelectrical.com/service/electric-toothbrush-charger-installation"
+    ],
+    "count": 4,
+    "clientShown": true
+   },
+   {
+    "id": "ct_dead_links",
+    "severity": "low",
+    "title": "Links that go nowhere",
+    "line": "Links that go nowhere (2 pages)",
+    "saw": "“twitter” → # on /team-members",
+    "pages": [
+     "https://www.ljmullanelectrical.com/team-members",
+     "https://www.ljmullanelectrical.com/blog/over-200-five-star-google-reviews-thank-you-l-j-mullan-electrical"
+    ],
+    "count": 2,
+    "clientShown": true
+   },
+   {
+    "id": "multiple_h1",
+    "severity": "low",
+    "title": "Pages with more than one main heading",
+    "line": "Pages with more than one main heading",
+    "saw": "1 page have several H1 headings.",
+    "pages": [
+     "https://www.ljmullanelectrical.com/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_breadcrumbs",
+    "severity": "low",
+    "title": "No breadcrumb markup",
+    "line": "No breadcrumb markup",
+    "saw": "None of the 60 pages read carries BreadcrumbList markup.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found in the 60 pages we read — the site gives years of experience (13) but no start year",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 17673,
+  "serviceReview": null
+ },
+ {
+  "slug": "mcdrive.co.uk",
+  "state": "issues",
+  "headline": "5 website issues found on the 1 page checked.",
+  "pagesRead": 1,
+  "capped": false,
+  "issues": [
+   {
+    "id": "noindex_home",
+    "severity": "high",
+    "title": "The homepage asks not to be listed (noindex)",
+    "line": "Your homepage asks Google not to show it",
+    "saw": "The homepage carries “noindex, nofollow”.",
+    "pages": [
+     "https://mcdrive.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "one_page_site",
+    "severity": "medium",
+    "title": "A one-page website",
+    "line": "Your website is a single page",
+    "saw": "Only the homepage was found; there are no other pages.",
+    "pages": [
+     "https://mcdrive.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_vague_headings",
+    "severity": "medium",
+    "title": "Main headings don’t say what you do or where",
+    "line": "Main headings don’t say what you do or where",
+    "saw": "Homepage: “Welcome to the keys to your freedom”",
+    "pages": [
+     "https://mcdrive.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "vs_key_page_basics",
+    "severity": "medium",
+    "title": "Key pages have no meta description",
+    "line": "Some main pages have no description for Google",
+    "saw": "homepage: no meta description.",
+    "pages": [
+     "https://mcdrive.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_sitemap",
+    "severity": "medium",
+    "title": "No XML sitemap found",
+    "line": "There is no page list for Google to follow",
+    "saw": "No sitemap was declared in robots.txt, and none was found at /sitemap.xml, /sitemap_index.xml or /wp-sitemap.xml.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "multiple_h1",
+    "severity": "low",
+    "title": "Pages with more than one main heading",
+    "line": "Pages with more than one main heading",
+    "saw": "1 page have several H1 headings.",
+    "pages": [
+     "https://mcdrive.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_image_alt",
+    "severity": "low",
+    "title": "Most images have no description (alt text)",
+    "line": "Most images have no description (alt text)",
+    "saw": "11 of 11 photos and pictures have no alt text (icons and logos not counted)",
+    "pages": [
+     "https://mcdrive.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_dead_links",
+    "severity": "low",
+    "title": "Links that go nowhere",
+    "line": "Links that go nowhere",
+    "saw": "“Read More” → # on the homepage",
+    "pages": [
+     "https://mcdrive.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_address",
+    "severity": "low",
+    "title": "No address or postcode found",
+    "line": "No address or postcode found",
+    "saw": "No street address or postcode was found on any page read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_business_schema",
+    "severity": "low",
+    "title": "No business structured data",
+    "line": "No business structured data",
+    "saw": "No Organization or LocalBusiness markup was found on any page read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_area_coverage",
+    "severity": "low",
+    "title": "We couldn’t find a page for each area you cover",
+    "line": "We couldn’t find a page for each area you cover",
+    "saw": "Places named on the site: Wokingham, VW Scirocco GT",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_people",
+    "severity": "low",
+    "title": "We couldn’t find who runs the business",
+    "line": "We couldn’t find who runs the business",
+    "saw": "No owner, director or team named on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_accreditations",
+    "severity": "low",
+    "title": "We couldn’t find any named accreditations or memberships",
+    "line": "We couldn’t find any named accreditations or memberships",
+    "saw": "None named on any page read, in text or logo images",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 3303,
+  "serviceReview": null
+ },
+ {
+  "slug": "mkdampandtimber.co.uk",
+  "state": "issues",
+  "headline": "5 website issues found on the 10 pages checked.",
+  "pagesRead": 10,
+  "capped": false,
+  "issues": [
+   {
+    "id": "sitemap_only_pages",
+    "severity": "medium",
+    "title": "Pages in the sitemap that no page links to",
+    "line": "Some important pages are not linked from anywhere on your site (3 pages)",
+    "saw": "3 pages appear in the sitemap but are not linked from any page we read.",
+    "pages": [
+     "https://mkdampandtimber.co.uk/home/",
+     "https://mkdampandtimber.co.uk/about-us/",
+     "https://mkdampandtimber.co.uk/contact-us/"
+    ],
+    "count": 3,
+    "clientShown": true
+   },
+   {
+    "id": "ct_ai_images",
+    "severity": "medium",
+    "title": "Some images look AI-generated",
+    "line": "Some images look AI-generated (3 pages)",
+    "saw": "File: ChatGPT Image Aug 20 2026 08 09 55 AM 400x300",
+    "pages": [
+     "https://mkdampandtimber.co.uk/",
+     "https://mkdampandtimber.co.uk/uncategorized/mould-condensation-control-mk-damp-timber/",
+     "https://mkdampandtimber.co.uk/services/structural-repairs-brickwork-stitching-mk-damp-timber/"
+    ],
+    "count": 3,
+    "clientShown": true
+   },
+   {
+    "id": "vs_duplicate_homepage",
+    "severity": "medium",
+    "title": "Other copies of the homepage can be listed by search engines",
+    "line": "There is a second copy of your homepage that Google can list (2 pages)",
+    "saw": "/about-us is 91% the same text as the homepage; /contact-us is 89% the same text as the homepage, with no noindex and no canonical link to the homepage.",
+    "pages": [
+     "https://mkdampandtimber.co.uk/about-us/",
+     "https://mkdampandtimber.co.uk/contact-us/"
+    ],
+    "count": 2,
+    "clientShown": true
+   },
+   {
+    "id": "vs_key_page_basics",
+    "severity": "medium",
+    "title": "Key pages have no main heading (H1) or meta description",
+    "line": "Some main pages have no main heading or description",
+    "saw": "homepage: no H1, no meta description.",
+    "pages": [
+     "https://mkdampandtimber.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_proof",
+    "severity": "medium",
+    "title": "We couldn’t find reviews, testimonials or case studies",
+    "line": "We couldn’t find reviews, testimonials or case studies",
+    "saw": "None found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "vs_business_schema",
+    "severity": "low",
+    "title": "Only a generic “Organization” business markup, with no phone number or address",
+    "line": "The hidden business details on your site leave out your phone number or address (10 pages)",
+    "saw": "Business markup type read: Organization (on 10 pages, e.g. homepage); no phone number and no address in it.",
+    "pages": [
+     "https://mkdampandtimber.co.uk/",
+     "https://mkdampandtimber.co.uk/services/damp-proofing-services-milton-keynes-watford-london/",
+     "https://mkdampandtimber.co.uk/services/damp-surveys-milton-keynes-watford-north-london/"
+    ],
+    "count": 10,
+    "clientShown": true
+   },
+   {
+    "id": "canonical_mismatch",
+    "severity": "low",
+    "title": "Pages point to a different page as their main version",
+    "line": "Some pages point Google at a different page as the main one",
+    "saw": "1 page carry a canonical link to another page on the site.",
+    "pages": [
+     "https://mkdampandtimber.co.uk/home/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "multiple_h1",
+    "severity": "low",
+    "title": "Pages with more than one main heading",
+    "line": "Pages with more than one main heading",
+    "saw": "1 page have several H1 headings.",
+    "pages": [
+     "https://mkdampandtimber.co.uk/about-us/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_reviews",
+    "severity": "low",
+    "title": "No reviews or testimonials found on the site",
+    "line": "No reviews or testimonials found on the site",
+    "saw": "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us).",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_people",
+    "severity": "low",
+    "title": "We couldn’t find who runs the business",
+    "line": "We couldn’t find who runs the business",
+    "saw": "No owner, director or team named on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 10663,
+  "serviceReview": null
+ },
+ {
+  "slug": "mlgelec.co.uk",
+  "state": "issues",
+  "headline": "8 website issues found on the 14 pages checked.",
+  "pagesRead": 14,
+  "capped": false,
+  "issues": [
+   {
+    "id": "ct_placeholder_content",
+    "severity": "high",
+    "title": "Unfinished placeholder blocks are live on the site",
+    "line": "Some pages on your site are unfinished, with sample text still on them",
+    "saw": "“…a title I'm a description. Click to edit me press to zoom I'm a title…” on /our-products",
+    "pages": [
+     "https://www.mlgelec.co.uk/our-products"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "town_missing",
+    "severity": "medium",
+    "title": "Homepage does not mention Widnes",
+    "line": "Your homepage does not mention Widnes",
+    "saw": "Widnes is not in the homepage’s text (read in full); it appears on 1 other page.",
+    "pages": [
+     "https://www.mlgelec.co.uk/contact"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_areas_not_stated",
+    "severity": "medium",
+    "title": "We couldn’t find which areas you cover",
+    "line": "Your site doesn’t say which areas you cover",
+    "saw": "No “areas we cover” list or statement on any page read (read in full)",
+    "pages": [
+     "https://www.mlgelec.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "vs_address_not_on_key_pages",
+    "severity": "medium",
+    "title": "The business address is not on the homepage",
+    "line": "Your address is not on your homepage (7 pages)",
+    "saw": "The address (Contact MLG ELECTRICAL LTD 7 Halebank road Widnes Cheshire Wa88na) is shown on /contact, but not on homepage, /about-us, /services and 4 other key pages.",
+    "pages": [
+     "https://www.mlgelec.co.uk/",
+     "https://www.mlgelec.co.uk/about-us",
+     "https://www.mlgelec.co.uk/services"
+    ],
+    "count": 7,
+    "clientShown": true
+   },
+   {
+    "id": "vs_key_page_basics",
+    "severity": "medium",
+    "title": "Key pages have no main heading (H1) or meta description",
+    "line": "Some main pages have no main heading or description (7 pages)",
+    "saw": "homepage: no H1; /about-us: no H1; /services: no H1; /domestic: no H1, no meta description and 3 more key pages.",
+    "pages": [
+     "https://www.mlgelec.co.uk/",
+     "https://www.mlgelec.co.uk/about-us",
+     "https://www.mlgelec.co.uk/services"
+    ],
+    "count": 7,
+    "clientShown": true
+   },
+   {
+    "id": "duplicate_titles",
+    "severity": "medium",
+    "title": "Pages sharing the same title",
+    "line": "Several pages have the same title (6 pages)",
+    "saw": "6 pages share a page title with another page.",
+    "pages": [
+     "https://www.mlgelec.co.uk/",
+     "https://www.mlgelec.co.uk/about-us",
+     "https://www.mlgelec.co.uk/services"
+    ],
+    "count": 6,
+    "clientShown": true
+   },
+   {
+    "id": "thin_key_pages",
+    "severity": "medium",
+    "title": "Thin service, area or home pages",
+    "line": "Your service, area or home pages have very little text on them (2 pages)",
+    "saw": "2 pages have under 120 words of readable text.",
+    "pages": [
+     "https://www.mlgelec.co.uk/",
+     "https://www.mlgelec.co.uk/services"
+    ],
+    "count": 2,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_proof",
+    "severity": "medium",
+    "title": "We couldn’t find reviews, testimonials or case studies",
+    "line": "We couldn’t find reviews, testimonials or case studies",
+    "saw": "None found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "thin_pages",
+    "severity": "low",
+    "title": "Other thin pages",
+    "line": "Other thin pages (8 pages)",
+    "saw": "8 pages have under 120 words of readable text.",
+    "pages": [
+     "https://www.mlgelec.co.uk/domestic",
+     "https://www.mlgelec.co.uk/commercial",
+     "https://www.mlgelec.co.uk/lighting-systems"
+    ],
+    "count": 8,
+    "clientShown": true
+   },
+   {
+    "id": "ct_image_alt",
+    "severity": "low",
+    "title": "Most images have no description (alt text)",
+    "line": "Most images have no description (alt text) (5 pages)",
+    "saw": "16 of 30 photos and pictures have no alt text (icons and logos not counted)",
+    "pages": [
+     "https://www.mlgelec.co.uk/",
+     "https://www.mlgelec.co.uk/about-us",
+     "https://www.mlgelec.co.uk/services"
+    ],
+    "count": 5,
+    "clientShown": true
+   },
+   {
+    "id": "sitemap_only_pages",
+    "severity": "low",
+    "title": "Pages in the sitemap that no page links to",
+    "line": "Some important pages are not linked from anywhere on your site (4 pages)",
+    "saw": "4 pages appear in the sitemap but are not linked from any page we read.",
+    "pages": [
+     "https://www.mlgelec.co.uk/brands",
+     "https://www.mlgelec.co.uk/shop",
+     "https://www.mlgelec.co.uk/blog"
+    ],
+    "count": 4,
+    "clientShown": true
+   },
+   {
+    "id": "noindex_pages",
+    "severity": "low",
+    "title": "Pages that ask not to be listed (noindex)",
+    "line": "Some of your pages ask Google not to show them",
+    "saw": "1 page carry a noindex instruction.",
+    "pages": [
+     "https://www.mlgelec.co.uk/cart-page"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_questions_answered",
+    "severity": "low",
+    "title": "No pages answer customer questions directly",
+    "line": "No pages answer customer questions directly",
+    "saw": "No FAQ page and no question-style headings (e.g. “How much does … cost?”).",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_reviews",
+    "severity": "low",
+    "title": "No reviews or testimonials found on the site",
+    "line": "No reviews or testimonials found on the site",
+    "saw": "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us).",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_business_schema",
+    "severity": "low",
+    "title": "No business structured data",
+    "line": "No business structured data",
+    "saw": "No Organization or LocalBusiness markup was found on any page read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_breadcrumbs",
+    "severity": "low",
+    "title": "No breadcrumb markup",
+    "line": "No breadcrumb markup",
+    "saw": "None of the 14 pages read carries BreadcrumbList markup.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_people",
+    "severity": "low",
+    "title": "We couldn’t find who runs the business",
+    "line": "We couldn’t find who runs the business",
+    "saw": "No owner, director or team named on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_accreditations",
+    "severity": "low",
+    "title": "We couldn’t find any named accreditations or memberships",
+    "line": "We couldn’t find any named accreditations or memberships",
+    "saw": "None named on any page read, in text or logo images",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 12159,
+  "serviceReview": null
+ },
+ {
+  "slug": "nselec.co.uk",
+  "state": "issues",
+  "headline": "2 website issues found on the 1 page checked.",
+  "pagesRead": 1,
+  "capped": false,
+  "issues": [
+   {
+    "id": "one_page_site",
+    "severity": "medium",
+    "title": "A one-page website",
+    "line": "Your website is a single page",
+    "saw": "Only the homepage was found; there are no other pages.",
+    "pages": [
+     "https://home.nselec.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_sitemap",
+    "severity": "medium",
+    "title": "No XML sitemap found",
+    "line": "There is no page list for Google to follow",
+    "saw": "No sitemap was declared in robots.txt, and none was found at /sitemap.xml, /sitemap_index.xml or /wp-sitemap.xml.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "redirects_to_other_domain",
+    "severity": "low",
+    "title": "The address on file redirects to another domain",
+    "line": "The address on file redirects to another domain",
+    "saw": "https://nselec.co.uk redirects to https://home.nselec.co.uk.",
+    "pages": [
+     "https://nselec.co.uk/"
+    ],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_robots",
+    "severity": "low",
+    "title": "No robots.txt file",
+    "line": "No robots.txt file",
+    "saw": "There is no robots.txt at the site’s root.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_area_coverage",
+    "severity": "low",
+    "title": "We couldn’t find a page for each area you cover",
+    "line": "We couldn’t find a page for each area you cover",
+    "saw": "Places named on the site: Lancaster Lancaster's, Lancaster, North West, Morecambe, Preston, Blackpool, Cumbria, Manchester",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found on any page read — the site gives years of experience (20) but no start year",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_people",
+    "severity": "low",
+    "title": "We couldn’t find who runs the business",
+    "line": "We couldn’t find who runs the business",
+    "saw": "No owner, director or team named on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 4872,
+  "serviceReview": null
+ },
+ {
+  "slug": "poesuk.com",
+  "state": "issues",
+  "headline": "1 website issue found on the 12 pages checked.",
+  "pagesRead": 12,
+  "capped": true,
+  "issues": [
+   {
+    "id": "client_rendered",
+    "severity": "medium",
+    "title": "Homepage text only appears after JavaScript runs",
+    "line": "Your homepage text only appears after the page code runs, so some tools may see an almost empty page",
+    "saw": "The homepage HTML we received carries very little readable text; the content is built in the browser. The rest of this check read the site in a real browser, as a customer sees it.",
+    "pages": [
+     "https://poesuk.com/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_dead_links",
+    "severity": "low",
+    "title": "Links that go nowhere",
+    "line": "Links that go nowhere (12 pages)",
+    "saw": "“Privacy Policy” → # on 12 pages (e.g. the homepage)",
+    "pages": [
+     "https://poesuk.com/",
+     "https://poesuk.com/services",
+     "https://poesuk.com/contact"
+    ],
+    "count": 12,
+    "clientShown": true
+   },
+   {
+    "id": "long_titles",
+    "severity": "low",
+    "title": "Long page titles",
+    "line": "Long page titles",
+    "saw": "1 page have titles over 65 characters.",
+    "pages": [
+     "https://poesuk.com/services/smart-automation"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_about_page",
+    "severity": "low",
+    "title": "No About page found",
+    "line": "No About page found",
+    "saw": "No page looks like an About page in the 12 pages read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found in the 12 pages we read — the site gives years of experience (15) but no start year",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 54024,
+  "serviceReview": null
+ },
+ {
+  "slug": "protechelectrical.uk",
+  "state": "issues",
+  "headline": "3 website issues found on the 1 page checked.",
+  "pagesRead": 1,
+  "capped": false,
+  "issues": [
+   {
+    "id": "one_page_site",
+    "severity": "medium",
+    "title": "A one-page website",
+    "line": "Your website is a single page",
+    "saw": "Only the homepage was found; there are no other pages.",
+    "pages": [
+     "https://protechelectrical.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_accreditations_unnamed",
+    "severity": "medium",
+    "title": "Your site claims accreditation or qualifications but names no scheme",
+    "line": "Your site claims accreditation or qualifications but names no scheme",
+    "saw": "“…On — Safe, Efficient, and Fully Certified. 07470878709 ProTech…”",
+    "pages": [
+     "https://protechelectrical.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_proof",
+    "severity": "medium",
+    "title": "We couldn’t find reviews, testimonials or case studies",
+    "line": "We couldn’t find reviews, testimonials or case studies",
+    "saw": "None found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_dead_links",
+    "severity": "low",
+    "title": "Links that go nowhere",
+    "line": "Links that go nowhere",
+    "saw": "“Decline” → # on the homepage",
+    "pages": [
+     "https://protechelectrical.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_address",
+    "severity": "low",
+    "title": "No address or postcode found",
+    "line": "No address or postcode found",
+    "saw": "No street address or postcode was found on any page read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_reviews",
+    "severity": "low",
+    "title": "No reviews or testimonials found on the site",
+    "line": "No reviews or testimonials found on the site",
+    "saw": "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us).",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_business_schema",
+    "severity": "low",
+    "title": "No business structured data",
+    "line": "No business structured data",
+    "saw": "No Organization or LocalBusiness markup was found on any page read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_area_coverage",
+    "severity": "low",
+    "title": "We couldn’t find a page for each area you cover",
+    "line": "We couldn’t find a page for each area you cover",
+    "saw": "Places named on the site: Leamington Spa",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_people",
+    "severity": "low",
+    "title": "We couldn’t find who runs the business",
+    "line": "We couldn’t find who runs the business",
+    "saw": "No owner, director or team named on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 2492,
+  "serviceReview": null
+ },
+ {
+  "slug": "ronnocoroofing.co.uk",
+  "state": "issues",
+  "headline": "4 website issues found on the 9 pages checked.",
+  "pagesRead": 9,
+  "capped": false,
+  "issues": [
+   {
+    "id": "schema_malformed",
+    "severity": "medium",
+    "title": "Broken structured data",
+    "line": "The hidden business details on some pages are broken (5 pages)",
+    "saw": "5 pages carry structured data (JSON-LD) that is not valid JSON.",
+    "pages": [
+     "https://ronnocoroofing.co.uk/services/hmo-assessments",
+     "https://ronnocoroofing.co.uk/services/care-home-assessments",
+     "https://ronnocoroofing.co.uk/services/apartment-block-assessments"
+    ],
+    "count": 5,
+    "clientShown": true
+   },
+   {
+    "id": "thin_key_pages",
+    "severity": "medium",
+    "title": "Thin service, area or home pages",
+    "line": "Your service, area or home pages have very little text on them",
+    "saw": "1 page have under 120 words of readable text.",
+    "pages": [
+     "https://ronnocoroofing.co.uk/services"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "client_rendered",
+    "severity": "medium",
+    "title": "Homepage text only appears after JavaScript runs",
+    "line": "Your homepage text only appears after the page code runs, so some tools may see an almost empty page",
+    "saw": "The homepage HTML we received carries very little readable text; the content is built in the browser.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_proof",
+    "severity": "medium",
+    "title": "We couldn’t find reviews, testimonials or case studies",
+    "line": "We couldn’t find reviews, testimonials or case studies",
+    "saw": "None found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "thin_pages",
+    "severity": "low",
+    "title": "Other thin pages",
+    "line": "Other thin pages",
+    "saw": "1 page have under 120 words of readable text.",
+    "pages": [
+     "https://ronnocoroofing.co.uk/about"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "missing_h1",
+    "severity": "low",
+    "title": "Pages without a main heading (H1)",
+    "line": "Some pages have no main heading",
+    "saw": "1 page have no H1 heading.",
+    "pages": [
+     "https://ronnocoroofing.co.uk/about"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_area_coverage",
+    "severity": "low",
+    "title": "We couldn’t find a page for each area you cover",
+    "line": "We couldn’t find a page for each area you cover",
+    "saw": "Places named on the site: Essex, East London, Hertfordshire, Kent, Suffolk, Grays, Multiple Occupation HMO, Multiple Occupation",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found on any page read — the site gives years of experience (40) but no start year",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_people",
+    "severity": "low",
+    "title": "We couldn’t find who runs the business",
+    "line": "We couldn’t find who runs the business",
+    "saw": "No owner, director or team named on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_accreditations",
+    "severity": "low",
+    "title": "We couldn’t find any named accreditations or memberships",
+    "line": "We couldn’t find any named accreditations or memberships",
+    "saw": "None named on any page read, in text or logo images",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 39630,
+  "serviceReview": null
+ },
+ {
+  "slug": "rooke-trade.co.uk",
+  "state": "issues",
+  "headline": "4 website issues found on the 2 pages checked.",
+  "pagesRead": 2,
+  "capped": false,
+  "issues": [
+   {
+    "id": "canonical_off_site",
+    "severity": "high",
+    "title": "Pages name a different website as their main version",
+    "line": "Some pages tell Google a different website is the real one (2 pages)",
+    "saw": "2 pages carry a canonical link to another domain (e.g. https://rooke-trade.vercel.app/).",
+    "pages": [
+     "https://www.rooke-trade.co.uk/",
+     "https://www.rooke-trade.co.uk/quote"
+    ],
+    "count": 2,
+    "clientShown": true
+   },
+   {
+    "id": "client_rendered",
+    "severity": "medium",
+    "title": "Homepage text only appears after JavaScript runs",
+    "line": "Your homepage text only appears after the page code runs, so some tools may see an almost empty page",
+    "saw": "The homepage HTML we received carries very little readable text; the content is built in the browser. The rest of this check read the site in a real browser, as a customer sees it.",
+    "pages": [
+     "https://www.rooke-trade.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_sitemap",
+    "severity": "medium",
+    "title": "No XML sitemap found",
+    "line": "There is no page list for Google to follow",
+    "saw": "No sitemap was declared in robots.txt, and none was found at /sitemap.xml, /sitemap_index.xml or /wp-sitemap.xml.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_service_pages",
+    "severity": "medium",
+    "title": "Services are listed but none has its own page",
+    "line": "There are no separate pages for your services: Domestic electrical services, Commercial electrical installations, Industrial electrical solutions",
+    "saw": "The site names Domestic electrical services, Commercial electrical installations, Industrial electrical solutions and EICR, PAT testing and certification, but no page about any one of them.",
+    "pages": [
+     "https://www.rooke-trade.co.uk/"
+    ],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "duplicate_titles",
+    "severity": "low",
+    "title": "Pages sharing the same title",
+    "line": "Several pages have the same title (2 pages)",
+    "saw": "2 pages share a page title with another page.",
+    "pages": [
+     "https://www.rooke-trade.co.uk/",
+     "https://www.rooke-trade.co.uk/quote"
+    ],
+    "count": 2,
+    "clientShown": true
+   },
+   {
+    "id": "long_titles",
+    "severity": "low",
+    "title": "Long page titles",
+    "line": "Long page titles (2 pages)",
+    "saw": "2 pages have titles over 65 characters.",
+    "pages": [
+     "https://www.rooke-trade.co.uk/",
+     "https://www.rooke-trade.co.uk/quote"
+    ],
+    "count": 2,
+    "clientShown": true
+   },
+   {
+    "id": "ct_logo_alt_mismatch",
+    "severity": "low",
+    "title": "Logo images are captioned with the wrong company names",
+    "line": "Logo images are captioned with the wrong company names (2 pages)",
+    "saw": "“RookeTrade Electrical Logo” on logo jqkxbz",
+    "pages": [
+     "https://www.rooke-trade.co.uk/",
+     "https://www.rooke-trade.co.uk/quote"
+    ],
+    "count": 2,
+    "clientShown": true
+   },
+   {
+    "id": "no_robots",
+    "severity": "low",
+    "title": "No robots.txt file",
+    "line": "No robots.txt file",
+    "saw": "There is no robots.txt at the site’s root.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_about_page",
+    "severity": "low",
+    "title": "No About page found",
+    "line": "No About page found",
+    "saw": "No page looks like an About page.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_address",
+    "severity": "low",
+    "title": "No address or postcode found",
+    "line": "No address or postcode found",
+    "saw": "No street address or postcode was found on any page read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_questions_answered",
+    "severity": "low",
+    "title": "No pages answer customer questions directly",
+    "line": "No pages answer customer questions directly",
+    "saw": "No FAQ page and no question-style headings (e.g. “How much does … cost?”).",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_business_schema",
+    "severity": "low",
+    "title": "No business structured data",
+    "line": "No business structured data",
+    "saw": "No Organization or LocalBusiness markup was found on any page read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_area_coverage",
+    "severity": "low",
+    "title": "We couldn’t find a page for each area you cover",
+    "line": "We couldn’t find a page for each area you cover",
+    "saw": "Places named on the site: Nottingham, Nottinghamshire, Nottingham Locally",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found on any page read — the site gives years of experience (10) but no start year",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_people",
+    "severity": "low",
+    "title": "We couldn’t find who runs the business",
+    "line": "We couldn’t find who runs the business",
+    "saw": "No owner, director or team named on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 17693,
+  "serviceReview": null
+ },
+ {
+  "slug": "sparkieelectrical.com",
+  "state": "issues",
+  "headline": "6 website issues found on the 10 pages checked.",
+  "pagesRead": 10,
+  "capped": false,
+  "issues": [
+   {
+    "id": "vs_key_page_basics",
+    "severity": "medium",
+    "title": "Key pages have no meta description",
+    "line": "Some main pages have no description for Google (3 pages)",
+    "saw": "homepage: no meta description; /home: no meta description; /about-us: no meta description.",
+    "pages": [
+     "https://www.sparkieelectrical.com/",
+     "https://www.sparkieelectrical.com/home",
+     "https://www.sparkieelectrical.com/about-us"
+    ],
+    "count": 3,
+    "clientShown": true
+   },
+   {
+    "id": "ct_vague_headings",
+    "severity": "medium",
+    "title": "Main headings don’t say what you do or where",
+    "line": "Main headings don’t say what you do or where",
+    "saw": "Homepage: “Get in touch”",
+    "pages": [
+     "https://www.sparkieelectrical.com/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "vs_duplicate_homepage",
+    "severity": "medium",
+    "title": "A second copy of the homepage can be listed by search engines",
+    "line": "There is a second copy of your homepage that Google can list",
+    "saw": "/home is 100% the same text as the homepage, with no noindex and no canonical link to the homepage.",
+    "pages": [
+     "https://www.sparkieelectrical.com/home"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_sitemap",
+    "severity": "medium",
+    "title": "No XML sitemap found",
+    "line": "There is no page list for Google to follow",
+    "saw": "No sitemap was declared in robots.txt, and none was found at /sitemap.xml, /sitemap_index.xml or /wp-sitemap.xml.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_service_pages",
+    "severity": "medium",
+    "title": "No dedicated service pages found",
+    "line": "There are no separate pages for your services",
+    "saw": "None of the pages read look like a page about one service.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_proof",
+    "severity": "medium",
+    "title": "We couldn’t find reviews, testimonials or case studies",
+    "line": "We couldn’t find reviews, testimonials or case studies",
+    "saw": "None found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_image_alt",
+    "severity": "low",
+    "title": "Most images have no description (alt text)",
+    "line": "Most images have no description (alt text) (10 pages)",
+    "saw": "9 of 9 photos and pictures have no alt text (icons and logos not counted)",
+    "pages": [
+     "https://www.sparkieelectrical.com/",
+     "https://www.sparkieelectrical.com/home",
+     "https://www.sparkieelectrical.com/about-us"
+    ],
+    "count": 10,
+    "clientShown": true
+   },
+   {
+    "id": "multiple_h1",
+    "severity": "low",
+    "title": "Pages with more than one main heading",
+    "line": "Pages with more than one main heading (9 pages)",
+    "saw": "9 pages have several H1 headings.",
+    "pages": [
+     "https://www.sparkieelectrical.com/",
+     "https://www.sparkieelectrical.com/home",
+     "https://www.sparkieelectrical.com/contact-us"
+    ],
+    "count": 9,
+    "clientShown": true
+   },
+   {
+    "id": "duplicate_titles",
+    "severity": "low",
+    "title": "Pages sharing the same title",
+    "line": "Several pages have the same title (2 pages)",
+    "saw": "2 pages share a page title with another page.",
+    "pages": [
+     "https://www.sparkieelectrical.com/",
+     "https://www.sparkieelectrical.com/home"
+    ],
+    "count": 2,
+    "clientShown": true
+   },
+   {
+    "id": "name_unclear",
+    "severity": "low",
+    "title": "Business name is not in the homepage title or main heading",
+    "line": "Your business name is not in your homepage title or main heading",
+    "saw": "“Sparkie Electrical” appears in the homepage text, but not in its title, main heading or business markup.",
+    "pages": [
+     "https://www.sparkieelectrical.com/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_robots",
+    "severity": "low",
+    "title": "No robots.txt file",
+    "line": "No robots.txt file",
+    "saw": "There is no robots.txt at the site’s root.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_address",
+    "severity": "low",
+    "title": "No address or postcode found",
+    "line": "No address or postcode found",
+    "saw": "No street address or postcode was found on any page read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_questions_answered",
+    "severity": "low",
+    "title": "No pages answer customer questions directly",
+    "line": "No pages answer customer questions directly",
+    "saw": "No FAQ page and no question-style headings (e.g. “How much does … cost?”).",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_reviews",
+    "severity": "low",
+    "title": "No reviews or testimonials found on the site",
+    "line": "No reviews or testimonials found on the site",
+    "saw": "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us).",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_business_schema",
+    "severity": "low",
+    "title": "No business structured data",
+    "line": "No business structured data",
+    "saw": "No Organization or LocalBusiness markup was found on any page read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_breadcrumbs",
+    "severity": "low",
+    "title": "No breadcrumb markup",
+    "line": "No breadcrumb markup",
+    "saw": "None of the 10 pages read carries BreadcrumbList markup.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_people",
+    "severity": "low",
+    "title": "We couldn’t find who runs the business",
+    "line": "We couldn’t find who runs the business",
+    "saw": "No owner, director or team named on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 837,
+  "serviceReview": null
+ },
+ {
+  "slug": "st-electric.co.uk",
+  "state": "issues",
+  "headline": "3 website issues found on the 23 pages checked.",
+  "pagesRead": 23,
+  "capped": false,
+  "issues": [
+   {
+    "id": "vs_town_swapped_pages",
+    "severity": "medium",
+    "title": "Area or service pages are the same text with only the town or service name changed",
+    "line": "Several of your pages are the same text with only the town or service swapped (13 pages)",
+    "saw": "13 pages read the same once the town or service name in their address is taken out — e.g. /Torquay-Electrician and /Paignton-Electrician are 100% the same.",
+    "pages": [
+     "https://www.st-electric.co.uk/Torquay-Electrician/",
+     "https://www.st-electric.co.uk/Paignton-Electrician/",
+     "https://www.st-electric.co.uk/Brixham-Electrician/"
+    ],
+    "count": 13,
+    "clientShown": true
+   },
+   {
+    "id": "vs_key_page_basics",
+    "severity": "medium",
+    "title": "Key pages have no main heading (H1)",
+    "line": "Some main pages have no main heading (3 pages)",
+    "saw": "homepage: no H1; /Services: no H1; /Landlord-Services: no H1.",
+    "pages": [
+     "https://www.st-electric.co.uk/",
+     "https://www.st-electric.co.uk/Services/",
+     "https://www.st-electric.co.uk/Landlord-Services/"
+    ],
+    "count": 3,
+    "clientShown": true
+   },
+   {
+    "id": "thin_key_pages",
+    "severity": "medium",
+    "title": "Thin service, area or home pages",
+    "line": "Your service, area or home pages have very little text on them",
+    "saw": "1 page have under 120 words of readable text.",
+    "pages": [
+     "https://www.st-electric.co.uk/Landlord-Services/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_image_alt",
+    "severity": "low",
+    "title": "Most images have no description (alt text)",
+    "line": "Most images have no description (alt text) (20 pages)",
+    "saw": "18 of 18 photos and pictures have no alt text (icons and logos not counted)",
+    "pages": [
+     "https://www.st-electric.co.uk/",
+     "https://www.st-electric.co.uk/Services/",
+     "https://www.st-electric.co.uk/Domestic-Electrician/"
+    ],
+    "count": 20,
+    "clientShown": true
+   },
+   {
+    "id": "vs_faq_no_schema",
+    "severity": "low",
+    "title": "FAQs on the site have no FAQ markup",
+    "line": "Your FAQs are not marked up for search tools",
+    "saw": "1 page answer customer questions with no FAQPage markup, e.g. /consumer-unit-replacement-torquay: “What Is Included in a Consumer Unit Replacement?”.",
+    "pages": [
+     "https://www.st-electric.co.uk/consumer-unit-replacement-torquay/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_robots",
+    "severity": "low",
+    "title": "No robots.txt file",
+    "line": "No robots.txt file",
+    "saw": "There is no robots.txt at the site’s root.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_about_page",
+    "severity": "low",
+    "title": "No About page found",
+    "line": "No About page found",
+    "saw": "No page looks like an About page.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_address",
+    "severity": "low",
+    "title": "No address or postcode found",
+    "line": "No address or postcode found",
+    "saw": "No street address or postcode was found on any page read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_questions_answered",
+    "severity": "low",
+    "title": "No pages answer customer questions directly",
+    "line": "No pages answer customer questions directly",
+    "saw": "No FAQ page and no question-style headings (e.g. “How much does … cost?”).",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_business_schema",
+    "severity": "low",
+    "title": "No business structured data",
+    "line": "No business structured data",
+    "saw": "No Organization or LocalBusiness markup was found on any page read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_breadcrumbs",
+    "severity": "low",
+    "title": "No breadcrumb markup",
+    "line": "No breadcrumb markup",
+    "saw": "None of the 23 pages read carries BreadcrumbList markup.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found on any page read — the site gives years of experience (15) but no start year",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_people",
+    "severity": "low",
+    "title": "We couldn’t find who runs the business",
+    "line": "We couldn’t find who runs the business",
+    "saw": "No owner, director or team named on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 2239,
+  "serviceReview": null
+ },
+ {
+  "slug": "svgelectricalsolutions.co.uk",
+  "state": "issues",
+  "headline": "5 website issues found on the 6 pages checked.",
+  "pagesRead": 6,
+  "capped": false,
+  "issues": [
+   {
+    "id": "ct_areas_not_stated",
+    "severity": "medium",
+    "title": "We couldn’t find which areas you cover",
+    "line": "Your site doesn’t say which areas you cover",
+    "saw": "No “areas we cover” list or statement on any page read (read in full)",
+    "pages": [
+     "https://www.svgelectricalsolutions.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "sitemap_off_site",
+    "severity": "medium",
+    "title": "The sitemap lists addresses on a different website",
+    "line": "The list of your pages that Google reads points at a different website (8 pages)",
+    "saw": "8 sitemap entries point to another domain.",
+    "pages": [
+     "https://n1063999.websitebuilder.online/",
+     "https://n1063999.websitebuilder.online/projects",
+     "https://n1063999.websitebuilder.online/contact"
+    ],
+    "count": 8,
+    "clientShown": true
+   },
+   {
+    "id": "vs_key_page_basics",
+    "severity": "medium",
+    "title": "Key pages have no main heading (H1) or meta description",
+    "line": "Some main pages have no main heading or description (3 pages)",
+    "saw": "homepage: no H1; /projects: no H1; /about-us: no H1, no meta description.",
+    "pages": [
+     "https://www.svgelectricalsolutions.co.uk/",
+     "https://www.svgelectricalsolutions.co.uk/projects",
+     "https://www.svgelectricalsolutions.co.uk/about-us"
+    ],
+    "count": 3,
+    "clientShown": true
+   },
+   {
+    "id": "ct_link_mismatch",
+    "severity": "medium",
+    "title": "Some links go to the wrong place",
+    "line": "Some links go to the wrong place",
+    "saw": "The email “contact@svgelectrical.co.uk” is linked as a phone number (tel:07950440800)",
+    "pages": [
+     "https://www.svgelectricalsolutions.co.uk/contact"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_service_pages",
+    "severity": "medium",
+    "title": "No dedicated service pages found",
+    "line": "There are no separate pages for your services",
+    "saw": "None of the pages read look like a page about one service.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_image_alt",
+    "severity": "low",
+    "title": "Most images have no description (alt text)",
+    "line": "Most images have no description (alt text) (6 pages)",
+    "saw": "20 of 21 photos and pictures have no alt text (icons and logos not counted)",
+    "pages": [
+     "https://www.svgelectricalsolutions.co.uk/",
+     "https://www.svgelectricalsolutions.co.uk/projects",
+     "https://www.svgelectricalsolutions.co.uk/contact"
+    ],
+    "count": 6,
+    "clientShown": true
+   },
+   {
+    "id": "ct_dead_links",
+    "severity": "low",
+    "title": "Links that go nowhere",
+    "line": "Links that go nowhere (6 pages)",
+    "saw": "“Configure” → # on 6 pages (e.g. the homepage)",
+    "pages": [
+     "https://www.svgelectricalsolutions.co.uk/",
+     "https://www.svgelectricalsolutions.co.uk/projects",
+     "https://www.svgelectricalsolutions.co.uk/contact"
+    ],
+    "count": 6,
+    "clientShown": true
+   },
+   {
+    "id": "no_address",
+    "severity": "low",
+    "title": "No address or postcode found",
+    "line": "No address or postcode found",
+    "saw": "No street address or postcode was found on any page read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_questions_answered",
+    "severity": "low",
+    "title": "No pages answer customer questions directly",
+    "line": "No pages answer customer questions directly",
+    "saw": "No FAQ page and no question-style headings (e.g. “How much does … cost?”).",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_people",
+    "severity": "low",
+    "title": "We couldn’t find who runs the business",
+    "line": "We couldn’t find who runs the business",
+    "saw": "No owner, director or team named on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 2146,
+  "serviceReview": null
+ },
+ {
+  "slug": "swarburtonroofingservices.co.uk",
+  "state": "issues",
+  "headline": "5 website issues found on the 5 pages checked.",
+  "pagesRead": 5,
+  "capped": false,
+  "issues": [
+   {
+    "id": "noindex_home",
+    "severity": "high",
+    "title": "The homepage asks not to be listed (noindex)",
+    "line": "Your homepage asks Google not to show it",
+    "saw": "The homepage carries “noindex”.",
+    "pages": [
+     "https://www.swarburtonroofingservices.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "noindex_pages",
+    "severity": "medium",
+    "title": "Pages that ask not to be listed (noindex)",
+    "line": "Some of your pages ask Google not to show them (4 pages)",
+    "saw": "4 pages carry a noindex instruction, including service, area, about or contact pages.",
+    "pages": [
+     "https://www.swarburtonroofingservices.co.uk/roofing-services",
+     "https://www.swarburtonroofingservices.co.uk/contact",
+     "https://www.swarburtonroofingservices.co.uk/refund-policy"
+    ],
+    "count": 4,
+    "clientShown": true
+   },
+   {
+    "id": "vs_key_page_basics",
+    "severity": "medium",
+    "title": "Key pages have no meta description",
+    "line": "Some main pages have no description for Google (2 pages)",
+    "saw": "homepage: no meta description; /roofing-services: no meta description.",
+    "pages": [
+     "https://www.swarburtonroofingservices.co.uk/",
+     "https://www.swarburtonroofingservices.co.uk/roofing-services"
+    ],
+    "count": 2,
+    "clientShown": true
+   },
+   {
+    "id": "no_sitemap",
+    "severity": "medium",
+    "title": "No XML sitemap found",
+    "line": "There is no page list for Google to follow",
+    "saw": "No sitemap was declared in robots.txt, and none was found at /sitemap.xml, /sitemap_index.xml or /wp-sitemap.xml.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_proof",
+    "severity": "medium",
+    "title": "We couldn’t find reviews, testimonials or case studies",
+    "line": "We couldn’t find reviews, testimonials or case studies",
+    "saw": "None found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "heavy_pages",
+    "severity": "low",
+    "title": "Very large pages",
+    "line": "Very large pages",
+    "saw": "1 page send over 2 MB of HTML.",
+    "pages": [
+     "https://www.swarburtonroofingservices.co.uk/roofing-services"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_vague_headings",
+    "severity": "low",
+    "title": "Main headings don’t say what you do or where",
+    "line": "Main headings don’t say what you do or where",
+    "saw": "/roofing-services: “Our Roofing Services”",
+    "pages": [
+     "https://www.swarburtonroofingservices.co.uk/roofing-services"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "ct_image_alt",
+    "severity": "low",
+    "title": "Most images have no description (alt text)",
+    "line": "Most images have no description (alt text)",
+    "saw": "15 of 15 photos and pictures have no alt text (icons and logos not counted)",
+    "pages": [
+     "https://www.swarburtonroofingservices.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_about_page",
+    "severity": "low",
+    "title": "No About page found",
+    "line": "No About page found",
+    "saw": "No page looks like an About page.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_reviews",
+    "severity": "low",
+    "title": "No reviews or testimonials found on the site",
+    "line": "No reviews or testimonials found on the site",
+    "saw": "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us).",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_area_coverage",
+    "severity": "low",
+    "title": "We couldn’t find a page for each area you cover",
+    "line": "We couldn’t find a page for each area you cover",
+    "saw": "Places named on the site: North Wales, Wrexham, Chester, Cheshire, Flintshire, Llay, Organization",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_people",
+    "severity": "low",
+    "title": "We couldn’t find who runs the business",
+    "line": "We couldn’t find who runs the business",
+    "saw": "No owner, director or team named on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_accreditations",
+    "severity": "low",
+    "title": "We couldn’t find any named accreditations or memberships",
+    "line": "We couldn’t find any named accreditations or memberships",
+    "saw": "None named on any page read, in text or logo images",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 1705,
+  "serviceReview": null
+ },
+ {
+  "slug": "thinkingtiger.co.uk",
+  "state": "issues",
+  "headline": "2 website issues found on the 12 pages checked.",
+  "pagesRead": 12,
+  "capped": true,
+  "issues": [
+   {
+    "id": "client_rendered",
+    "severity": "medium",
+    "title": "Homepage text only appears after JavaScript runs",
+    "line": "Your homepage text only appears after the page code runs, so some tools may see an almost empty page",
+    "saw": "The homepage HTML we received carries very little readable text; the content is built in the browser. The rest of this check read the site in a real browser, as a customer sees it.",
+    "pages": [
+     "https://www.thinkingtiger.co.uk/"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_contact_details",
+    "severity": "medium",
+    "title": "No phone number found on the site",
+    "line": "No phone number found on the site",
+    "saw": "No phone number appears in the 12 pages read.",
+    "pages": [
+     "https://www.thinkingtiger.co.uk/"
+    ],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "long_titles",
+    "severity": "low",
+    "title": "Long page titles",
+    "line": "Long page titles (3 pages)",
+    "saw": "3 pages have titles over 65 characters.",
+    "pages": [
+     "https://www.thinkingtiger.co.uk/solutions/portals",
+     "https://www.thinkingtiger.co.uk/solutions/modernise-sharepoint",
+     "https://www.thinkingtiger.co.uk/insights/power-platform-adoption-playbook"
+    ],
+    "count": 3,
+    "clientShown": true
+   },
+   {
+    "id": "vs_business_schema",
+    "severity": "low",
+    "title": "Only a generic “Organization” business markup, with no phone number or address",
+    "line": "The hidden business details on your site leave out your phone number or address (2 pages)",
+    "saw": "Business markup type read: Organization (on 2 pages, e.g. homepage); no phone number and no address in it.",
+    "pages": [
+     "https://www.thinkingtiger.co.uk/",
+     "https://www.thinkingtiger.co.uk/insights/power-platform-adoption-playbook"
+    ],
+    "count": 2,
+    "clientShown": true
+   },
+   {
+    "id": "vs_faq_no_schema",
+    "severity": "low",
+    "title": "FAQs on the site have no FAQ markup",
+    "line": "Your FAQs are not marked up for search tools",
+    "saw": "1 page answer customer questions with no FAQPage markup, e.g. /contact: “What happens on the consultation?”.",
+    "pages": [
+     "https://www.thinkingtiger.co.uk/contact"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_address",
+    "severity": "low",
+    "title": "No address or postcode found",
+    "line": "No address or postcode found",
+    "saw": "No street address or postcode was found in the 12 pages read.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_reviews",
+    "severity": "low",
+    "title": "No reviews or testimonials found on the site",
+    "line": "No reviews or testimonials found on the site",
+    "saw": "No customer reviews or testimonials were found in the 12 pages read (a reviews widget that loads by JavaScript would not be visible to us).",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_breadcrumbs",
+    "severity": "low",
+    "title": "No breadcrumb markup",
+    "line": "No breadcrumb markup",
+    "saw": "None of the 12 pages read carries BreadcrumbList markup.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found in the 12 pages we read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_accreditations",
+    "severity": "low",
+    "title": "We couldn’t find any named accreditations or memberships",
+    "line": "We couldn’t find any named accreditations or memberships",
+    "saw": "None named in the 12 pages we read, in text or logo images",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 46453,
+  "serviceReview": null
+ },
+ {
+  "slug": "tinamillerdrivingschool.com",
+  "state": "issues",
+  "headline": "5 website issues found on the 7 pages checked.",
+  "pagesRead": 7,
+  "capped": false,
+  "issues": [
+   {
+    "id": "vs_address_not_on_key_pages",
+    "severity": "medium",
+    "title": "The business address is missing from key pages",
+    "line": "Your address is not on your homepage or main pages (6 pages)",
+    "saw": "The address (Heath Way, Horsham, RH12 5XQ) is shown on homepage, but not on /general-9, /links, /general-1 and 3 other key pages.",
+    "pages": [
+     "https://www.tinamillerdrivingschool.com/general-9",
+     "https://www.tinamillerdrivingschool.com/links",
+     "https://www.tinamillerdrivingschool.com/general-1"
+    ],
+    "count": 6,
+    "clientShown": true
+   },
+   {
+    "id": "vs_key_page_basics",
+    "severity": "medium",
+    "title": "Key pages have no main heading (H1) or meta description",
+    "line": "Some main pages have no main heading or description (6 pages)",
+    "saw": "/general-9: no meta description; /links: no H1, no meta description; /general-1: no meta description; /general-4: no meta description and 2 more key pages.",
+    "pages": [
+     "https://www.tinamillerdrivingschool.com/general-9",
+     "https://www.tinamillerdrivingschool.com/links",
+     "https://www.tinamillerdrivingschool.com/general-1"
+    ],
+    "count": 6,
+    "clientShown": true
+   },
+   {
+    "id": "no_service_pages",
+    "severity": "medium",
+    "title": "No dedicated service pages found",
+    "line": "There are no separate pages for your services",
+    "saw": "None of the pages read look like a page about one service.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_no_proof",
+    "severity": "medium",
+    "title": "We couldn’t find reviews, testimonials or case studies",
+    "line": "We couldn’t find reviews, testimonials or case studies",
+    "saw": "None found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "vs_name_inconsistent",
+    "severity": "medium",
+    "title": "The business name is written two different ways",
+    "line": "Your business name is written different ways across the site",
+    "saw": "“TMDS” (page titles (5 pages)); “Tina's Driving School” (business markup on homepage).",
+    "pages": [
+     "https://www.tinamillerdrivingschool.com/"
+    ],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "thin_pages",
+    "severity": "low",
+    "title": "Other thin pages",
+    "line": "Other thin pages (3 pages)",
+    "saw": "3 pages have under 120 words of readable text.",
+    "pages": [
+     "https://www.tinamillerdrivingschool.com/general-4",
+     "https://www.tinamillerdrivingschool.com/general-1-1",
+     "https://www.tinamillerdrivingschool.com/general-1-2"
+    ],
+    "count": 3,
+    "clientShown": true
+   },
+   {
+    "id": "no_contact_page",
+    "severity": "low",
+    "title": "No contact page found",
+    "line": "No contact page found",
+    "saw": "No page looks like a contact page.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_about_page",
+    "severity": "low",
+    "title": "No About page found",
+    "line": "No About page found",
+    "saw": "No page looks like an About page.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_questions_answered",
+    "severity": "low",
+    "title": "No pages answer customer questions directly",
+    "line": "No pages answer customer questions directly",
+    "saw": "No FAQ page and no question-style headings (e.g. “How much does … cost?”).",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_reviews",
+    "severity": "low",
+    "title": "No reviews or testimonials found on the site",
+    "line": "No reviews or testimonials found on the site",
+    "saw": "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us).",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_area_coverage",
+    "severity": "low",
+    "title": "We couldn’t find a page for each area you cover",
+    "line": "We couldn’t find a page for each area you cover",
+    "saw": "Places named on the site: Family Tina, Horsham, Family First Steps, Family Recommended Reading, Family Success Stories, Chichester, Crawley, Epsom",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 4013,
+  "serviceReview": null
+ },
+ {
+  "slug": "tonbridgepattesting.co.uk",
+  "state": "issues",
+  "headline": "5 website issues found on the 60 pages checked.",
+  "pagesRead": 60,
+  "capped": false,
+  "issues": [
+   {
+    "id": "duplicate_titles",
+    "severity": "medium",
+    "title": "Pages sharing the same title",
+    "line": "Several pages have the same title (44 pages)",
+    "saw": "44 pages share a page title with another page.",
+    "pages": [
+     "https://www.tonbridgepattesting.co.uk/",
+     "https://www.tonbridgepattesting.co.uk/kent-pat-testing-tonbridge",
+     "https://www.tonbridgepattesting.co.uk/pat-testing-kent-blog"
+    ],
+    "count": 44,
+    "clientShown": true
+   },
+   {
+    "id": "vs_town_swapped_pages",
+    "severity": "medium",
+    "title": "Area or service pages are the same text with only the town or service name changed",
+    "line": "Several of your pages are the same text with only the town or service swapped (17 pages)",
+    "saw": "17 pages read the same once the town or service name in their address is taken out — e.g. /pat-testing-southborough-kent and /pat-testing-london are 95% the same.",
+    "pages": [
+     "https://www.tonbridgepattesting.co.uk/pat-testing-southborough-kent",
+     "https://www.tonbridgepattesting.co.uk/pat-testing-london",
+     "https://www.tonbridgepattesting.co.uk/pat-testing-kent"
+    ],
+    "count": 17,
+    "clientShown": true
+   },
+   {
+    "id": "broken_pages",
+    "severity": "medium",
+    "title": "Linked pages that return an error",
+    "line": "Some links on your site lead to error pages (16 pages)",
+    "saw": "16 addresses linked from the site or listed in its sitemap answered with an error (404).",
+    "pages": [
+     "https://www.tonbridgepattesting.co.uk/pat-testing-tonbridge-kent (404)",
+     "https://www.tonbridgepattesting.co.uk/new-page (404)",
+     "https://www.tonbridgepattesting.co.uk/tunbridge-wells-page (404)"
+    ],
+    "count": 16,
+    "clientShown": true
+   },
+   {
+    "id": "sitemap_only_pages",
+    "severity": "medium",
+    "title": "Pages in the sitemap that no page links to",
+    "line": "Some important pages are not linked from anywhere on your site (9 pages)",
+    "saw": "9 pages appear in the sitemap but are not linked from any page we read.",
+    "pages": [
+     "https://www.tonbridgepattesting.co.uk/pattestingstore/p/visual-pat-testing-log-book-electrical-inspection-record-for-landlords-schools-workplaces",
+     "https://www.tonbridgepattesting.co.uk/pattestingstore/p/set-of-electrical-screwdrivers",
+     "https://www.tonbridgepattesting.co.uk/pattestingstore/p/13a-fused-plug-in-active-rcd-plug"
+    ],
+    "count": 9,
+    "clientShown": true
+   },
+   {
+    "id": "no_service_pages",
+    "severity": "medium",
+    "title": "No dedicated service pages found",
+    "line": "There are no separate pages for your services",
+    "saw": "None of the pages read look like a page about one service.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "vs_business_schema",
+    "severity": "low",
+    "title": "Only a generic “Organization” business markup, with no phone number or address",
+    "line": "The hidden business details on your site leave out your phone number or address (14 pages)",
+    "saw": "Business markup type read: Organization (on 14 pages, e.g. /pat-testing-kent-blog/pat-testing-by-appointment-in-tonbridge-a-cost-effective-option-for-smaller-jobs); no phone number and no address in it.",
+    "pages": [
+     "https://www.tonbridgepattesting.co.uk/pat-testing-kent-blog/pat-testing-by-appointment-in-tonbridge-a-cost-effective-option-for-smaller-jobs",
+     "https://www.tonbridgepattesting.co.uk/pat-testing-kent-blog/halloween-christmas-decoration-electrical-safety-pat-testing",
+     "https://www.tonbridgepattesting.co.uk/pat-testing-kent-blog/reversed-polarity-is-it-dangerous"
+    ],
+    "count": 14,
+    "clientShown": true
+   },
+   {
+    "id": "ct_link_mismatch",
+    "severity": "low",
+    "title": "Some links go to the wrong place",
+    "line": "Some links go to the wrong place (10 pages)",
+    "saw": "“PAT Test Shop” goes to /pattestingstore (a page about it is at /pat-testing-kent-blog)",
+    "pages": [
+     "https://www.tonbridgepattesting.co.uk/",
+     "https://www.tonbridgepattesting.co.uk/pat-testing-kent-blog",
+     "https://www.tonbridgepattesting.co.uk/pat-testing-kent-blog/pat-testing-by-appointment-in-tonbridge-a-cost-effective-option-for-smaller-jobs"
+    ],
+    "count": 10,
+    "clientShown": true
+   },
+   {
+    "id": "vs_faq_no_schema",
+    "severity": "low",
+    "title": "FAQs on the site have no FAQ markup",
+    "line": "Your FAQs are not marked up for search tools (4 pages)",
+    "saw": "4 pages answer customer questions with no FAQPage markup, e.g. homepage: “What counts as a portable appliance?”.",
+    "pages": [
+     "https://www.tonbridgepattesting.co.uk/",
+     "https://www.tonbridgepattesting.co.uk/kent-pat-testing-tonbridge",
+     "https://www.tonbridgepattesting.co.uk/pat-testing-kent-blog/halloween-christmas-decoration-electrical-safety-pat-testing"
+    ],
+    "count": 4,
+    "clientShown": true
+   },
+   {
+    "id": "long_titles",
+    "severity": "low",
+    "title": "Long page titles",
+    "line": "Long page titles (2 pages)",
+    "saw": "2 pages have titles over 65 characters.",
+    "pages": [
+     "https://www.tonbridgepattesting.co.uk/",
+     "https://www.tonbridgepattesting.co.uk/kent-pat-testing-tonbridge"
+    ],
+    "count": 2,
+    "clientShown": true
+   },
+   {
+    "id": "canonical_mismatch",
+    "severity": "low",
+    "title": "Pages point to a different page as their main version",
+    "line": "Some pages point Google at a different page as the main one",
+    "saw": "1 page carry a canonical link to another page on the site.",
+    "pages": [
+     "https://www.tonbridgepattesting.co.uk/kent-pat-testing-tonbridge"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "multiple_h1",
+    "severity": "low",
+    "title": "Pages with more than one main heading",
+    "line": "Pages with more than one main heading",
+    "saw": "1 page have several H1 headings.",
+    "pages": [
+     "https://www.tonbridgepattesting.co.uk/pat-testing-kent-blog"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "no_about_page",
+    "severity": "low",
+    "title": "No About page found",
+    "line": "No About page found",
+    "saw": "No page looks like an About page.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_reviews",
+    "severity": "low",
+    "title": "No reviews or testimonials found on the site",
+    "line": "No reviews or testimonials found on the site",
+    "saw": "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us).",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "no_breadcrumbs",
+    "severity": "low",
+    "title": "No breadcrumb markup",
+    "line": "No breadcrumb markup",
+    "saw": "None of the 44 pages read carries BreadcrumbList markup.",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "ct_missing_entity_facts",
+    "severity": "low",
+    "title": "We couldn’t find a founding year or company number",
+    "line": "We couldn’t find a founding year or company number",
+    "saw": "Neither found on any page read",
+    "pages": [],
+    "count": 0,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 8570,
+  "serviceReview": null
+ },
+ {
+  "slug": "webneon.co.uk",
+  "state": "issues",
+  "headline": "8 website issues found on the 60 pages checked.",
+  "pagesRead": 60,
+  "capped": true,
+  "issues": [
+   {
+    "id": "ct_schema_mismatch",
+    "severity": "medium",
+    "title": "The business details in your page code don’t match the page",
+    "line": "The business details in your page code don’t match the page (20 pages)",
+    "saw": "The markup names the business “SITUS GACOR”",
+    "pages": [
+     "https://webneon.co.uk/",
+     "https://webneon.co.uk/contact-us/",
+     "https://webneon.co.uk/about-us-web-design-company-reading/"
+    ],
+    "count": 20,
+    "clientShown": true
+   },
+   {
+    "id": "ct_conflicting_facts",
+    "severity": "medium",
+    "title": "Your site gives different figures for how long you’ve been trading",
+    "line": "Your site gives different figures for how long you’ve been trading (14 pages)",
+    "saw": "“…245+ Active Projects 7+ Team Members 3+ Years of Experience Choose WebNeon Services as your…” (/website-development-company-in-reading)",
+    "pages": [
+     "https://webneon.co.uk/",
+     "https://webneon.co.uk/about-us-web-design-company-reading/",
+     "https://webneon.co.uk/why-choose-us/"
+    ],
+    "count": 14,
+    "clientShown": true
+   },
+   {
+    "id": "ct_ai_images",
+    "severity": "medium",
+    "title": "Some images look AI-generated",
+    "line": "Some images look AI-generated (13 pages)",
+    "saw": "File: ChatGPT Image Jun 10 2026 01 40 25 PM 1370x550",
+    "pages": [
+     "https://webneon.co.uk/google-ads-expert-for-taxi-business/",
+     "https://webneon.co.uk/ppc-advertising-agency-united-kingdom/",
+     "https://webneon.co.uk/google-ads-expert-for-garage-business/"
+    ],
+    "count": 13,
+    "clientShown": true
+   },
+   {
+    "id": "vs_key_page_basics",
+    "severity": "medium",
+    "title": "Key pages have no main heading (H1) or meta description",
+    "line": "Some main pages have no main heading or description (7 pages)",
+    "saw": "/webneon-services: no H1; /google-ads-for-locksmiths: no H1; /google-ads-for-roadside-auto-recovery: no H1; /google-ads-for-auto-body-repair: no H1 and 3 more key pages.",
+    "pages": [
+     "https://webneon.co.uk/webneon-services/",
+     "https://webneon.co.uk/google-ads-for-locksmiths/",
+     "https://webneon.co.uk/google-ads-for-roadside-auto-recovery/"
+    ],
+    "count": 7,
+    "clientShown": true
+   },
+   {
+    "id": "duplicate_titles",
+    "severity": "medium",
+    "title": "Pages sharing the same title",
+    "line": "Several pages have the same title (6 pages)",
+    "saw": "6 pages share a page title with another page.",
+    "pages": [
+     "https://webneon.co.uk/",
+     "https://webneon.co.uk/website-design-company-reading/",
+     "https://webneon.co.uk/graphic-design-company-in-reading/"
+    ],
+    "count": 6,
+    "clientShown": true
+   },
+   {
+    "id": "vs_town_swapped_pages",
+    "severity": "medium",
+    "title": "Area or service pages are the same text with only the town or service name changed",
+    "line": "Several of your pages are the same text with only the town or service swapped (5 pages)",
+    "saw": "5 pages read the same once the town or service name in their address is taken out — e.g. /roof-repair-google-ads-agency-in-birmingham and /roof-repair-google-ads-agency-in-oxford are 94% the same.",
+    "pages": [
+     "https://webneon.co.uk/roof-repair-google-ads-agency-in-birmingham/",
+     "https://webneon.co.uk/roof-repair-google-ads-agency-in-oxford/",
+     "https://webneon.co.uk/roof-repair-google-ads-agency-london/"
+    ],
+    "count": 5,
+    "clientShown": true
+   },
+   {
+    "id": "broken_pages",
+    "severity": "medium",
+    "title": "Linked pages that return an error",
+    "line": "Some links on your site lead to error pages",
+    "saw": "1 address linked from the site or listed in its sitemap answered with an error (404).",
+    "pages": [
+     "https://webneon.co.uk/our-services/ (404)"
+    ],
+    "count": 1,
+    "clientShown": true
+   },
+   {
+    "id": "vs_name_inconsistent",
+    "severity": "medium",
+    "title": "The business name is written two different ways",
+    "line": "Your business name is written different ways across the site",
+    "saw": "“Webneon” (page titles (28 pages)); “SITUS GACOR” (business markup on /portfolio).",
+    "pages": [
+     "https://webneon.co.uk/",
+     "https://webneon.co.uk/portfolio/"
+    ],
+    "count": 0,
+    "clientShown": true
+   },
+   {
+    "id": "vs_business_schema",
+    "severity": "low",
+    "title": "Only a generic “Organization” business markup, with no phone number or address",
+    "line": "The hidden business details on your site leave out your phone number or address (56 pages)",
+    "saw": "Business markup type read: Organization (on 56 pages, e.g. homepage); no phone number and no address in it.",
+    "pages": [
+     "https://webneon.co.uk/",
+     "https://webneon.co.uk/contact-us/",
+     "https://webneon.co.uk/about-us-web-design-company-reading/"
+    ],
+    "count": 56,
+    "clientShown": true
+   },
+   {
+    "id": "ct_dead_links",
+    "severity": "low",
+    "title": "Links that go nowhere",
+    "line": "Links that go nowhere (20 pages)",
+    "saw": "“Get My Free Marketing Audit ↗” → # on the homepage",
+    "pages": [
+     "https://webneon.co.uk/",
+     "https://webneon.co.uk/contact-us/",
+     "https://webneon.co.uk/about-us-web-design-company-reading/"
+    ],
+    "count": 20,
+    "clientShown": true
+   },
+   {
+    "id": "multiple_h1",
+    "severity": "low",
+    "title": "Pages with more than one main heading",
+    "line": "Pages with more than one main heading (8 pages)",
+    "saw": "8 pages have several H1 headings.",
+    "pages": [
+     "https://webneon.co.uk/",
+     "https://webneon.co.uk/portfolio/",
+     "https://webneon.co.uk/instagram-advertising/"
+    ],
+    "count": 8,
+    "clientShown": true
+   },
+   {
+    "id": "vs_faq_no_schema",
+    "severity": "low",
+    "title": "FAQs on the site have no FAQ markup",
+    "line": "Your FAQs are not marked up for search tools (8 pages)",
+    "saw": "8 pages answer customer questions with no FAQPage markup, e.g. homepage: “Why Choose Webneon For Your Digital Marketing Growth?”.",
+    "pages": [
+     "https://webneon.co.uk/",
+     "https://webneon.co.uk/e-commerce-website-design-agency-in-uk/",
+     "https://webneon.co.uk/graphic-design-company-in-reading/"
+    ],
+    "count": 8,
+    "clientShown": true
+   },
+   {
+    "id": "ct_link_mismatch",
+    "severity": "low",
+    "title": "Some links go to the wrong place",
+    "line": "Some links go to the wrong place (4 pages)",
+    "saw": "“website development company” goes to /contact-us (a page about it is at /website-development-company-in-reading)",
+    "pages": [
+     "https://webneon.co.uk/about-us-web-design-company-reading/",
+     "https://webneon.co.uk/portfolio/",
+     "https://webneon.co.uk/google-ads-vs-facebook-ads/"
+    ],
+    "count": 4,
+    "clientShown": true
+   },
+   {
+    "id": "internal_redirects",
+    "severity": "low",
+    "title": "Internal addresses that redirect",
+    "line": "Internal addresses that redirect (3 pages)",
+    "saw": "3 addresses found on the site redirect to a different page.",
+    "pages": [
+     "https://webneon.co.uk/about-us/ → https://webneon.co.uk/about-us-web-design-company-reading/",
+     "https://webneon.co.uk/contact → https://webneon.co.uk/contact-us/",
+     "https://webneon.co.uk/about → https://webneon.co.uk/about-us-web-design-company-reading/"
+    ],
+    "count": 3,
+    "clientShown": true
+   },
+   {
+    "id": "long_titles",
+    "severity": "low",
+    "title": "Long page titles",
+    "line": "Long page titles (3 pages)",
+    "saw": "3 pages have titles over 65 characters.",
+    "pages": [
+     "https://webneon.co.uk/portfolio/",
+     "https://webneon.co.uk/ppc-advertising-agency-united-kingdom/",
+     "https://webneon.co.uk/website-development-and-digital-marketing-services/"
+    ],
+    "count": 3,
+    "clientShown": true
+   }
+  ],
+  "misses": 0,
+  "ms": 9767,
+  "serviceReview": null
+ }
+]

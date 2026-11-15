@@ -37,6 +37,8 @@ import { detectClientRendered, visibleText } from './crawlCheck.ts';
 import { CREDENTIALS, fullPageFamily, jsonLdNodes, linkBase, pageWasCut, type FullPageFamily } from './fullCrawl.ts';
 import { robotsAllows, robotsRulesFor } from './crawlUrl.ts';
 import { coverageStatementsIn, FULL_TEXT_MARK } from './siteClaims.ts';
+import { CLIENT_HIDDEN_KINDS } from './websiteCheckAccuracy.ts';
+import { headingHtml, insideConsentBox, insideNav, NAMED_START_RE, PROOF_PAGE_RE, PROOF_RE, SELF_INTRO_RE, UI_LABEL_RE, withoutComments } from './siteSignals.ts';
 
 /** Bump when the MEANING of a stored issue changes. Rows with an older (or no) version show nothing new. */
 export const CONTENT_TRUST_VERSION = 1;
@@ -331,7 +333,7 @@ const GENERIC_PHRASES = [
 const COMMERCIAL_RE = /\b(?:commercial|industrial|c&i|b2b|businesses|factories|warehouses?|offices|facilities management|contractors?)\b/i;
 const DOMESTIC_RE = /\b(?:domestic|residential|homeowners?|households?|your home|home ?owners?|elect home|homes)\b/i;
 /** A statement of the areas a business covers, followed by a place ("We cover Norwich", "Serving Great Yarmouth"). */
-const COVERAGE_RE = /\b(?:[Aa]reas? (?:we|I) (?:cover|serve|work in)|[Aa]reas? [Cc]overed|[Ss]ervice [Aa]reas?|(?:[Ww]e|I) (?:cover|serve|travel to|work across)|\b(?:[Ww]ork|[Ww]orking|[Oo]perate|[Oo]perating) (?:across|throughout)|(?:[Pp]roudly )?[Ss]erving|[Cc]overing)[:\s]+(?:the\s+)?(?:(?:whole|wider|surrounding)\s+)?(?:areas? of\s+|towns? of\s+)?[A-Z][a-z]{2,}/g;
+const COVERAGE_RE = /\b(?:[Aa]reas? (?:we|I) (?:cover|serve|work in)|[Aa]reas? [Cc]overed|AREAS? (?:WE |I )?(?:COVER(?:ED)?|SERVED?)|[Ll]ocations? [Cc]overed|LOCATIONS? COVERED|[Ss]ervice [Aa]reas?|(?:[Ww]e|I) (?:cover|serve|travel to|work across)|\b(?:[Ww]ork|[Ww]orking|[Oo]perate|[Oo]perating) (?:across|throughout)|(?:[Pp]roudly )?[Ss]erving|[Cc]overing)[:\s]+(?:the\s+)?(?:(?:whole|wider|surrounding)\s+)?(?:areas? of\s+|towns? of\s+)?[A-Z][a-z]{2,}/g;
 /** "owned by Kylie", "founded by Pete Dixon", "I’m Kylie, the owner", "My name is Sam and I’m the founder". */
 const OWNER_RES: RegExp[] = [
   /\b(?:owned|run|founded|started|set up|established) by ([A-Z][a-z]+(?: [A-Z][a-z]+)?)\b/g,
@@ -357,14 +359,15 @@ const NOT_PLACE = new Set(['the', 'our', 'your', 'we', 'all', 'each', 'every', '
 
 /** Everything the content checks need from ONE page, kept small enough to store per crawled page. */
 export function pageObservations(html: string, pageUrl: string, homeUrl: string, status = 200): PageObs {
-  const raw = String(html || '');
+  /* What a visitor sees: commented-out markup is not on the page (2026-11-15, siteSignals.withoutComments). */
+  const raw = withoutComments(String(html || ''));
   const url = pageUrl;
   const text = decode(visibleText(raw)).replace(/[​-‍﻿]/g, '').replace(/\s+/g, ' ').trim();
   const headPart = /<head\b[^>]*>([\s\S]*?)<\/head>/i.exec(raw)?.[1] ?? raw.slice(0, 60_000);
   /* Some builders write the title and meta tags after </head> (fullCrawl.processPage says why). */
   const head = /<title\b/i.test(headPart) ? headPart : raw.replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, ' ');
   const linkRoot = linkBase(raw, url);
-  const h1 = [...raw.matchAll(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi)].map((m) => clip(tagText(m[1]), 160)).filter(Boolean).slice(0, 5);
+  const h1 = headingHtml(raw, 1, 10).map((m) => clip(tagText(m), 160)).filter(Boolean).slice(0, 5);
   const obs: PageObs = {
     url, family: fullPageFamily(url, homeUrl), status,
     ...(detectClientRendered(raw).flagged ? { shell: true } : {}),
@@ -397,6 +400,11 @@ export function pageObservations(html: string, pageUrl: string, homeUrl: string,
     if (PERSONAL_RE.test(sentenceAround(text, m.index ?? 0, m[0].length))) continue;
     const y = Number(m[1]);
     if (y >= 1850 && y <= new Date().getUTCFullYear() && obs.founded.length < 4) obs.founded.push({ y, q: quote(text, m.index ?? 0, m[0].length, 40) });
+  }
+  /* "before setting up McDrive in 2020": a NAMED business set up in a year, even in a sole trader's own words (2026-11-15). */
+  for (const m of text.matchAll(NAMED_START_RE)) {
+    const y = Number(m[2]);
+    if (y >= 1850 && y <= new Date().getUTCFullYear() && obs.founded.length < 4 && !obs.founded.some((f) => f.y === y)) obs.founded.push({ y, q: quote(text, m.index ?? 0, m[0].length, 40) });
   }
   const cn = COMPANY_NO_RE.exec(text);
   if (cn) obs.companyNo = cn[1] || cn[2] || null;
@@ -453,12 +461,15 @@ export function pageObservations(html: string, pageUrl: string, homeUrl: string,
   const nodes = jsonLdNodes(raw);
   const typesOf = (n: Record<string, unknown>): string[] => (Array.isArray(n?.['@type']) ? n['@type'] as unknown[] : n?.['@type'] ? [n['@type']] : []).map(String);
   if (nodes.some((n) => typesOf(n).some((t) => /^(?:Review|AggregateRating)$/i.test(t)))) obs.reviews.push('Review markup in the page code');
-  const rm = REVIEW_RE.exec(text);
+  /* The crawl's page reader uses the same words (siteSignals.PROOF_RE), so the two never disagree. */
+  const rm = REVIEW_RE.exec(text) ?? PROOF_RE.exec(text);
   if (rm) obs.reviews.push(quote(text, rm.index, rm[0].length, 50));
+  /* A page that IS the reviews page by its own title or heading ("Reviews | TMDS" at /general-4, 2026-11-15). */
+  else if (PROOF_PAGE_RE.test(obs.title) || h1.some((h) => PROOF_PAGE_RE.test(h))) obs.reviews.push(`A reviews page: “${clip(h1[0] ?? obs.title, 80)}”`);
   if (/trustpilot-widget|trustbox|reviews?-widget|google-reviews|trustindex|reviews\.io|feefo|yotpo|elfsight[^"'>]{0,40}review/i.test(raw)) obs.reviews.push('A reviews widget is on the page');
   const cm = CASE_RE.exec(text);
   if (cm || obs.family === 'gallery') obs.cases.push(cm ? quote(text, cm.index, cm[0].length, 50) : `Projects page: ${pathOf(url)}`);
-  obs.people = PEOPLE_RE.test(text);
+  obs.people = PEOPLE_RE.test(text) || SELF_INTRO_RE.test(text);
 
   // Links: placeholders, links to nowhere, label vs destination, phone ↔ email mix-ups.
   const labelSeen = new Set<string>();
@@ -471,6 +482,9 @@ export function pageObservations(html: string, pageUrl: string, homeUrl: string,
     const opensMenu = /dropdown|toggle|aria-haspopup|aria-expanded|data-(?:bs-)?toggle|submenu|has-children/i.test(m[1])
       || /^\s*(?:<\/?(?:span|i|svg|b)\b[^>]*>\s*)*<(?:ul|div)\b/i.test(raw.slice((m.index ?? 0) + m[0].length, (m.index ?? 0) + m[0].length + 200));
     if (nowhere && opensMenu) continue;
+    /* A cookie banner's Decline, a log-in box's "Forgot password?", a menu heading in the site's own menu: buttons, not dead
+       links (2026-11-15 bench: every one of these was called "a link that goes nowhere"). */
+    if (nowhere && (UI_LABEL_RE.test(label) || insideNav(raw, m.index ?? 0) || insideConsentBox(raw, m.index ?? 0))) continue;
     if (nowhere) {
       if (PLACEHOLDER_LABEL_RE.test(label)) { if (obs.placeholders.length < 8) obs.placeholders.push(`“${label}” links to “${href || '#'}”`); }
       else if (obs.deadLinks.length < 8 && !obs.deadLinks.includes(label) && !/^(?:menu|close|open|toggle|search|skip|top|back to top)$/i.test(label)) obs.deadLinks.push(label);
@@ -637,7 +651,44 @@ function tokenMatch(a: string, b: string): boolean {
   /* Plural / -ing / -al forms only ("repairs" ~ "repair", "electrical" ~ "electric"), never "workplaces" ~ "work". */
   return Math.min(a.length, b.length) >= 4 && Math.abs(a.length - b.length) <= 3 && (a.startsWith(b) || b.startsWith(a));
 }
-const slugTokens = (p: string) => p.toLowerCase().split(/[/_\-.]+/).filter((t) => t.length >= 2);
+/** Words that are never part of a town's name: the bench found every one of these read as a place (2026-11-15: "Family Tina",
+ *  "Multiple Occupation HMO", "Nottingham Locally", "Organization"). */
+const NEVER_PLACE_WORD = new Set(['family', 'families', 'success', 'stories', 'steps', 'recommended', 'multiple', 'occupation', 'organization',
+  'organisation', 'locally', 'local', 'pupils', 'cars', 'customers', 'reviews', 'testimonials', 'website', 'websites', 'team', 'people',
+  'inside', 'outside', 'near', 'nearby', 'call', 'contact', 'book', 'get', 'our', 'your', 'need', 'help',
+  'no', 'yes', 'when', 'what', 'how', 'why', 'where', 'who', 'if', 'so', 'it', 'we', 'i', 'you', 'patch']);
+
+/** The places a site names, cleaned of what the page reader caught by mistake. Pure.
+ *  · cut at a contraction or possessive ("Essex We're" → Essex, "Lancaster Lancaster's" → Lancaster, "I'm" → nothing);
+ *  · cut at the business's own name ("Rushden Festo" → Rushden);
+ *  · drop a phrase holding a word that is never a place, or a 2–3 letter capital code ("VW Scirocco GT", "HMO");
+ *  · drop a phrase that is only other places run together ("Corby Kettering Rothwell"). */
+export function cleanPlaces(places: readonly string[], bizWords: ReadonlySet<string>): string[] {
+  const cut: string[] = [];
+  for (const raw of places) {
+    const toks = raw.split(/\s+/);
+    const keep: string[] = [];
+    for (const t of toks) {
+      /* The business name cuts only AFTER a place ("Rushden Festo"): a business named after its town ("Corby Gas") keeps the town. */
+      if (/[’']/.test(t) || (keep.length > 0 && bizWords.has(t.toLowerCase()))) break;
+      keep.push(t);
+    }
+    if (!keep.length) continue;
+    if (keep.some((t) => NEVER_PLACE_WORD.has(t.toLowerCase()) || /^[A-Z]{2,3}$/.test(t))) continue;
+    cut.push(keep.join(' '));
+  }
+  const set = new Set(cut.map((p) => p.toLowerCase()));
+  const singles = new Set(cut.filter((p) => !/\s/.test(p)).map((p) => p.toLowerCase()));
+  /* …and a place with the next sentence's first word run on ("Corby Old", "Corby Cold"): a known single place + words that are not. */
+  return uniq(cut).filter((p) => {
+    const t = p.toLowerCase().split(/\s+/);
+    if (t.length < 2) return true;
+    if (t.every((x) => singles.has(x) && set.has(x))) return false;
+    return !(singles.has(t[0]) && !t.slice(1).some((x) => singles.has(x)));
+  });
+}
+
+const slugTokens = (p: string) =>p.toLowerCase().split(/[/_\-.]+/).filter((t) => t.length >= 2);
 
 export function buildContentTrust(input: ContentTrustInput): ContentTrust {
   /* ⛔ An empty JavaScript shell is never judged (2026-11-03, siteAudit says why); a page we did not download to its end cannot
@@ -841,7 +892,7 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
     spoken: `Your ${vagueH1[0].home ? 'homepage' : 'page'}’s main heading is “${vagueH1[0].h}” — it doesn’t say what you do or where.` });
 
   /* ── Areas covered ────────────────────────────────────────────────────────────────────────────── */
-  const allPlaces = uniq(pages.flatMap((p) => p.places))
+  const allPlaces = cleanPlaces(uniq(pages.flatMap((p) => p.places)), bizWords)
     .filter((p) => !/^(?:UK|United Kingdom|England|Britain|Great Britain|Wales|Scotland|United States|USA|America|Europe|EU|Ireland|Northern Ireland)$/i.test(p));
   const placeTokens = new Set(allPlaces.flatMap((p) => words(p)).filter((t) => t.length >= 4));
   const areaPages = uniq(input.knownUrls.map(pathOf)).filter((path) => {
@@ -891,7 +942,15 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
     evidence: ai.map((f) => `File: ${f}`), urls: pages.filter((p) => p.img.ai.length).map((p) => p.url),
     needs: 'Real photos of your team and your jobs.',
     spoken: 'Some of the photos on your site have file names like “ChatGPT Image” — they look AI-generated rather than real photos of you.'.replace('“ChatGPT Image”', `“${ai[0].split(' ').slice(0, 2).join(' ')}”`) });
-  const altBad = uniq(pages.flatMap((p) => p.img.altBad));
+  /* A logo captioned with the business's OWN name is right, whatever its file is called (2026-11-15: "RookeTrade Electrical
+     Logo" on logo-jqkxbz.png was called "the wrong company"). Own name = the lead's name or the site's own domain. */
+  const ownWords = new Set([...bizWords, ...(() => { try { return words(new URL(input.servedUrl).hostname.replace(/^www\./, '').split('.')[0].replace(/-/g, ' ')); } catch { return []; } })()]);
+  const hostSquashed = (() => { try { return new URL(input.servedUrl).hostname.replace(/^www\./, '').split('.')[0].replace(/[^a-z0-9]/gi, '').toLowerCase(); } catch { return ''; } })();
+  const altBad = uniq(pages.flatMap((p) => p.img.altBad)).filter((x) => {
+    const alt = /^“(.*?)\s+logo”/i.exec(x)?.[1] ?? '';
+    const w = words(alt).filter((t) => t.length >= 3);
+    return !w.some((t) => ownWords.has(t) || (hostSquashed.length >= 4 && hostSquashed.includes(t)));
+  });
   if (altBad.length) add({ kind: 'logo_alt_mismatch', severity: altBad.length >= 3 ? 'medium' : 'low',
     title: 'Logo images are captioned with the wrong company names',
     why: 'Each image’s description (alt text) is what search engines and AI tools read in place of the picture. A caption naming a different company tells them the wrong thing about who you have worked with.',
@@ -910,38 +969,17 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
     needs: 'Nothing new — a short, true description of what each photo shows.',
     spoken: `${noAlt} of the ${imgN} images on the pages we read have no description, so there’s nothing for search tools to read about them.` });
 
-  /* ── Links whose label doesn't match where they go; phone ↔ email mix-ups ─────────────────────── */
-  const allLinks = pages.flatMap((p) => p.links.map((l) => ({ ...l, from: p.url })));
-  const labelFreq = new Map<string, number>();
-  /* A brand prefix ("Elect C&I", "Elect EV", "Elect PV", "Elect Home") is the first word of 3+ different labels: never a topic. */
-  for (const l of uniq(allLinks.map((l) => l.t.toLowerCase()))) { const f = words(l)[0]; if (f) labelFreq.set(f, (labelFreq.get(f) ?? 0) + 1); }
-  const knownPaths = uniq([...input.knownUrls.map(pathOf), ...allLinks.map((l) => l.p)]);
-  const mismatched: string[] = [];
-  const mismatchUrls: string[] = [];
-  /* A post or archive is never "the page about it" — only a real page is. */
-  const realPaths = knownPaths.filter((kp) => !/\/(?:post|posts|blog|news|article|articles|category|tag|author)\//i.test(`${kp}/`));
-  for (const l of allLinks) {
-    const all = uniq(words(l.t)).filter((t) => !FILLER.has(t));
-    const topic = all.filter((t) => (labelFreq.get(t) ?? 0) < 3);
-    const dest = slugTokens(l.p);
-    if (!topic.length || !dest.length) continue;
-    // ANY word of the label in the destination means it is about the right thing ("Commercial Workplaces" → /commercial-…).
-    if (all.some((t) => dest.some((d) => tokenMatch(t, d)))) continue;
-    const elsewhere = realPaths.find((kp) => kp !== l.p && topic.every((t) => slugTokens(kp).some((d) => tokenMatch(t, d))));
-    if (!elsewhere) continue;
-    const line = `“${l.t}” goes to ${l.p} (a page about it is at ${elsewhere})`;
-    if (!mismatched.includes(line)) { mismatched.push(line); mismatchUrls.push(l.from); }
-  }
+  /* ── Phone ↔ email mix-ups (the only link fault code can prove) ─────────────────────────────────── */
   const mix = uniq(pages.flatMap((p) => p.contactMix));
-  /* A contact link that opens the wrong app is a fault. A word in a link going somewhere else on the site is often a button to the
-     quote form: never said as serious (2026-11-03). */
-  if (mismatched.length || mix.length) add({ kind: 'link_mismatch', severity: mix.length ? 'medium' : 'low',
+  /* ⛔ ONLY WHAT CODE CAN PROVE (2026-11-15, docs/WEBSITE_CHECK_ACCURACY.md): a phone linked as an email, an email linked as a phone.
+     "A word in this link names a different page" was right 1 time in 7 on the bench ("Request to Book" goes to the booking page,
+     "Complaints Procedure" to the complaints page): it is a guess about intent, never said. */
+  if (mix.length) add({ kind: 'link_mismatch', severity: 'medium',
     title: 'Some links go to the wrong place',
     why: 'A button or link that says one thing and opens another sends visitors — and crawlers following links to understand the site — to the wrong page or the wrong contact method.',
-    evidence: [...mix, ...mismatched].slice(0, 6), urls: [...mismatchUrls, ...pages.filter((p) => p.contactMix.length).map((p) => p.url)],
+    evidence: mix.slice(0, 6), urls: pages.filter((p) => p.contactMix.length).map((p) => p.url),
     needs: 'Nothing to supply — point each link at its real page.',
-    spoken: mix.length ? `${mix[0].replace(/ \(.*\)$/, '')} — tapping it opens an email instead of calling you.`
-      : `Some of your buttons go to the wrong page — “${mismatched[0].split('” goes')[0].slice(1)}” opens a different service.` });
+    spoken: `${mix[0].replace(/ \(.*\)$/, '')} — tapping it opens the wrong app.` });
 
   /* ── Identical dates on every post ────────────────────────────────────────────────────────────── */
   const postDates = new Map<string, string>();
@@ -1003,7 +1041,9 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
       if (tel.length >= 10 && shownPhones.size && !shownPhones.has(tel)) mism.push(`The markup gives the phone ${b.tel}; the pages show ${[...shownPhones][0]}`);
       const pc = b.pc.toUpperCase().replace(/\s+/g, ' ').trim();
       if (pc && shownPcs.size && ![...shownPcs].some((s) => s.replace(/\s/g, '') === pc.replace(/\s/g, ''))) mism.push(`The markup gives the postcode ${pc}; the pages show ${[...shownPcs][0]}`);
-      if (b.name && bizWords.size && !words(b.name).some((w) => bizWords.has(w)) && !nameOnPage(b.name, input.lead?.name)) mism.push(`The markup names the business “${b.name}”`);
+      /* A name the pages themselves use (a trading name in the homepage title) matches the page (2026-11-15: "Grantham Builder"). */
+      const namedOnPages = pages.some((p) => nameOnPage(`${p.title} ${p.h1.join(' ')}`, b.name));
+      if (b.name && bizWords.size && !words(b.name).some((w) => bizWords.has(w)) && !nameOnPage(b.name, input.lead?.name) && !namedOnPages) mism.push(`The markup names the business “${b.name}”`);
     }
     if (mism.length) add({ kind: 'schema_mismatch', severity: 'medium',
       title: 'The business details in your page code don’t match the page',
@@ -1051,7 +1091,8 @@ export interface ReportContentIssue {
 export function reportContentIssues(stored: unknown): ReportContentIssue[] {
   const ct = usableContentTrust(stored);
   if (!ct) return [];
-  return [...ct.issues].sort(compareIssues).map((i) => ({
+  /* Only the client report reads this: the kinds measured under the accuracy bar are left out (websiteCheckAccuracy.ts). */
+  return [...ct.issues].filter((i) => !CLIENT_HIDDEN_KINDS.has(`ct_${i.kind}`)).sort(compareIssues).map((i) => ({
     kind: i.kind, severity: i.severity, title: i.title, why: i.why, evidence: i.evidence[0] ?? null,
   }));
 }

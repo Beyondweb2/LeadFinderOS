@@ -1,0 +1,1672 @@
+{
+ "_about": "Hand verdicts (2026-11-15) for every finding the bench run results/replay-pre.json produced, made by reading the independent browser read (evidence/) and, where the crawl's claim was about raw markup, the crawl's own saved HTML (cache/). T = what the client would read is true. F = false or materially overstated (a line with a false example is false). A finding id not listed for a site was not produced for it. Kept as the fixed answer key: a later run's finding is scored against it; a finding it has never seen is reported as unlabelled, never as right. The third value is the finding text the verdict was given for: when a later run says something different, the scorer reports it as changed (to be re-labelled), never reuses the old verdict.",
+ "bkwservices.co.uk": {
+  "noindex_pages": [
+   "F",
+   "the noindex pages are booking-calendar widgets and a member profile; every service page is index",
+   "24 pages carry a noindex instruction, including service, area, about or contact pages."
+  ],
+  "vs_key_page_basics": [
+   "T",
+   "",
+   "/recent-work: no H1; /meet-the-team: no meta description; /clients: no meta description; /service-page/boiler-installation: no meta description and 20 more key pages."
+  ],
+  "thin_key_pages": [
+   "T",
+   "service pages 97-114 words",
+   "22 pages have under 120 words of readable text."
+  ],
+  "vs_town_swapped_pages": [
+   "T",
+   "the Wix booking service pages are one template with the service name changed",
+   "18 pages read the same once the town or service name in their address is taken out — e.g. /service-page/boiler-installation and /service-page/tumble-dryer-repair are 83% the same."
+  ],
+  "ct_schema_mismatch": [
+   "T",
+   "markup KT19 8NQ, page KT19 8NF",
+   "The markup gives the postcode KT19 8NQ; the pages show KT19 8NF"
+  ],
+  "ct_no_proof": [
+   "F",
+   "homepage carries a customer testimonial (\"I wouldn't hesitate to recommend Ali…\") and a Checkatrade reviews link",
+   "None found on any page read"
+  ],
+  "internal_linking": [
+   "T",
+   "",
+   "11 of 11 service pages are not linked from the homepage or the main menu."
+  ],
+  "thin_pages": [
+   "T",
+   "",
+   "27 pages have under 120 words of readable text."
+  ],
+  "ct_image_alt": [
+   "T",
+   "",
+   "22 of 39 photos and pictures have no alt text (icons and logos not counted)"
+  ],
+  "long_titles": [
+   "T",
+   "",
+   "1 page have titles over 65 characters."
+  ],
+  "ct_areas_not_stated": [
+   "T",
+   "only Epsom in titles and the address",
+   "No “areas we cover” list or statement on any page read (read in full)"
+  ],
+  "ct_link_mismatch": [
+   "F",
+   "\"Request to Book\" correctly goes to the booking calendar",
+   "“Request to Book” goes to /booking-calendar/washing-machine-installtion (a page about it is at /payment-request-page)"
+  ],
+  "ct_dead_links": [
+   "T",
+   "link points at its own page",
+   "“same day washing machine repair” → # on /post/reliable-same-day-appliance-repair-washing-machine-services-you-can-trust"
+  ],
+  "vs_faq_no_schema": [
+   "F",
+   "a blog post heading phrased as a question is not an FAQ",
+   "1 page answer customer questions with no FAQPage markup, e.g. /post/reliable-same-day-appliance-repair-washing-machine-services-you-can-trust: “Why Choose Same-Day Appliance Repair for Your Washing Machine?”."
+  ],
+  "no_reviews": [
+   "F",
+   "homepage testimonial",
+   "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us)."
+  ],
+  "no_breadcrumbs": [
+   "T",
+   "",
+   "None of the 59 pages read carries BreadcrumbList markup."
+  ],
+  "ct_missing_entity_facts": [
+   "T",
+   "",
+   "Neither found on any page read"
+  ],
+  "ct_no_accreditations": [
+   "F",
+   "site shows Checkatrade (\"Reviews On Check A Trade\")",
+   "None named on any page read, in text or logo images"
+  ]
+ },
+ "corbygas.co.uk": {
+  "vs_faq_no_schema": [
+   "T",
+   "homepage Quick answers has no FAQPage (the service pages do)",
+   "1 page answer customer questions with no FAQPage markup, e.g. homepage: “What do I do?”."
+  ],
+  "redirects_to_other_domain": [
+   "T",
+   "",
+   "http://www.corbygas.co.uk redirects to https://corbygasman.co.uk."
+  ],
+  "no_contact_page": [
+   "T",
+   "contact is a form on the homepage",
+   "No page looks like a contact page."
+  ],
+  "no_about_page": [
+   "T",
+   "about is the homepage intro",
+   "No page looks like an About page."
+  ],
+  "ct_area_coverage": [
+   "T",
+   "real towns, no area pages",
+   "Places named on the site: Corby, Kettering, Rothwell, Desborough, Wellingborough, Northampton"
+  ]
+ },
+ "dgprinceelectrical.wixsite.com": {
+  "one_page_site": [
+   "T",
+   "menu items are anchors",
+   "Only the homepage was found; there are no other pages."
+  ],
+  "no_sitemap": [
+   "F",
+   "the Wix site lives under /my-site-2; its sitemap is /my-site-2/sitemap.xml (200)",
+   "No sitemap was declared in robots.txt, and none was found at /sitemap.xml, /sitemap_index.xml or /wp-sitemap.xml."
+  ],
+  "ct_no_proof": [
+   "F",
+   "testimonials from David and Andy on the page",
+   "None found on any page read"
+  ],
+  "long_titles": [
+   "T",
+   "",
+   "1 page have titles over 65 characters."
+  ],
+  "ct_areas_not_stated": [
+   "F",
+   "\"AREA COVERED Winchester and most of Hampshire\"",
+   "No “areas we cover” list or statement on any page read (read in full)"
+  ],
+  "ct_image_alt": [
+   "T",
+   "",
+   "8 of 10 photos and pictures have no alt text (icons and logos not counted)"
+  ],
+  "no_address": [
+   "T",
+   "",
+   "No street address or postcode was found on any page read."
+  ],
+  "no_reviews": [
+   "F",
+   "testimonials on the page",
+   "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us)."
+  ],
+  "no_business_schema": [
+   "T",
+   "",
+   "No Organization or LocalBusiness markup was found on any page read."
+  ],
+  "ct_missing_entity_facts": [
+   "T",
+   "",
+   "Neither found on any page read"
+  ],
+  "ct_no_people": [
+   "T",
+   "",
+   "No owner, director or team named on any page read"
+  ],
+  "ct_no_accreditations": [
+   "T",
+   "",
+   "None named on any page read, in text or logo images"
+  ],
+  "sitemap_only_pages": [
+   "T",
+   "the homepage menu is anchors; /our-services is linked from nowhere",
+   "1 page appear in the sitemap but are not linked from any page we read."
+  ],
+  "vs_key_page_basics": [
+   "T",
+   "/my-site-2/our-services has no H1 and no description",
+   "/my-site-2/our-services: no H1, no meta description."
+  ],
+  "no_contact_page": [
+   "T",
+   "contact is a homepage section",
+   "No page looks like a contact page."
+  ],
+  "no_about_page": [
+   "T",
+   "About is a homepage section",
+   "No page looks like an About page."
+  ],
+  "no_questions_answered": [
+   "T",
+   "checked again after the fix",
+   "No FAQ page and no question-style headings (e.g. “How much does … cost?”)."
+  ],
+  "ct_area_coverage": [
+   "T",
+   "Winchester named, no area page",
+   "Places named on the site: Winchester"
+  ]
+ },
+ "gbelectrical.godaddysites.com": {
+  "ct_areas_not_stated": [
+   "T",
+   "only the address",
+   "No “areas we cover” list or statement on any page read (read in full)"
+  ],
+  "ct_vague_headings": [
+   "T",
+   "",
+   "Homepage: “Powering Your World with Innovative Solutions”"
+  ],
+  "vs_key_page_basics": [
+   "T",
+   "",
+   "homepage: no meta description."
+  ],
+  "ct_no_proof": [
+   "T",
+   "\"Sparking Reviews!\" heading with no reviews under it",
+   "None found on any page read"
+  ],
+  "ct_dead_links": [
+   "F",
+   "the cookie banner's Decline button",
+   "“Decline” → # on the homepage"
+  ],
+  "no_reviews": [
+   "T",
+   "",
+   "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us)."
+  ],
+  "no_business_schema": [
+   "T",
+   "",
+   "No Organization or LocalBusiness markup was found on any page read."
+  ],
+  "ct_missing_entity_facts": [
+   "T",
+   "",
+   "Neither found on any page read"
+  ],
+  "ct_no_accreditations": [
+   "T",
+   "",
+   "None named on any page read, in text or logo images"
+  ]
+ },
+ "granthambuilder.co.uk": {
+  "vs_town_swapped_pages": [
+   "T",
+   "village pages 167 words, same text",
+   "11 pages read the same once the town or service name in their address is taken out — e.g. /ancaster and /barrowby are 100% the same."
+  ],
+  "broken_pages": [
+   "T",
+   "/stamford linked from the homepage, 404",
+   "2 addresses linked from the site or listed in its sitemap answered with an error (404)."
+  ],
+  "ct_schema_mismatch": [
+   "F",
+   "the homepage itself is titled Grantham Builder; markup matches the page",
+   "The markup names the business “Grantham Builder”"
+  ],
+  "no_service_pages": [
+   "F",
+   "/fencing-grantham is a service page",
+   "None of the pages read look like a page about one service."
+  ],
+  "vs_name_inconsistent": [
+   "T",
+   "Grantham Builder and Mark Oakes - Construction & Maintenance",
+   "“Mark Oakes - Construction & Maintenance” (business markup on /fencing-grantham; also page titles (11 pages)); “Grantham Builder” (business markup on homepage)."
+  ],
+  "ct_link_mismatch": [
+   "F",
+   "\"Contact Us in Ancaster\" rightly goes to /contact",
+   "“Contact Us in Ancaster” goes to /contact (a page about it is at /ancaster)"
+  ],
+  "multiple_h1": [
+   "T",
+   "",
+   "1 page have several H1 headings."
+  ],
+  "long_titles": [
+   "T",
+   "",
+   "1 page have titles over 65 characters."
+  ],
+  "vs_faq_no_schema": [
+   "T",
+   "Fencing FAQs, no FAQPage",
+   "1 page answer customer questions with no FAQPage markup, e.g. /fencing-grantham: “Can you install gates too?”."
+  ],
+  "no_about_page": [
+   "T",
+   "About is a homepage section",
+   "No page looks like an About page."
+  ],
+  "no_breadcrumbs": [
+   "T",
+   "",
+   "None of the 14 pages read carries BreadcrumbList markup."
+  ],
+  "ct_missing_entity_facts": [
+   "T",
+   "",
+   "Neither found on any page read — the site gives years of experience (15) but no start year"
+  ],
+  "ct_no_accreditations": [
+   "T",
+   "",
+   "None named on any page read, in text or logo images"
+  ]
+ },
+ "highdesignroofing.com": {
+  "vs_town_swapped_pages": [
+   "T",
+   "",
+   "6 pages read the same once the town or service name in their address is taken out — e.g. /barnsley/chimney-repairs and /castleford/chimney-repairs are 94% the same."
+  ],
+  "vs_key_page_basics": [
+   "T",
+   "",
+   "/services: no meta description; /service-areas: no meta description."
+  ],
+  "long_titles": [
+   "T",
+   "",
+   "45 pages have titles over 65 characters."
+  ],
+  "vs_business_schema": [
+   "T",
+   "",
+   "Business markup types read: RoofingContractor, Organization (on 6 pages, e.g. homepage); no phone number and no address in it."
+  ],
+  "ct_dead_links": [
+   "T",
+   "javascript:void(0)",
+   "“All Projects” → # on /services"
+  ],
+  "no_address": [
+   "T",
+   "Castleford named, no street or postcode",
+   "No street address or postcode was found in the 60 pages read."
+  ],
+  "no_breadcrumbs": [
+   "T",
+   "",
+   "None of the 60 pages read carries BreadcrumbList markup."
+  ],
+  "ct_missing_entity_facts": [
+   "T",
+   "",
+   "Neither found in the 60 pages we read"
+  ],
+  "ct_no_accreditations": [
+   "T",
+   "",
+   "None named in the 60 pages we read, in text or logo images"
+  ]
+ },
+ "itmelectrical.co.uk": {
+  "vs_key_page_basics": [
+   "T",
+   "",
+   "homepage: no H1, no meta description; /services: no H1, no meta description; /gallery: no H1, no meta description; /about: no H1, no meta description and 2 more key pages."
+  ],
+  "ct_accreditations_unnamed": [
+   "T",
+   "\"fully qualified\", no scheme",
+   "“…an affordable price. We are fully qualified, insured, have relevant…”"
+  ],
+  "ct_image_alt": [
+   "T",
+   "",
+   "17 of 23 photos and pictures have no alt text (icons and logos not counted)"
+  ],
+  "sitemap_only_pages": [
+   "T",
+   "demo shop products and /home",
+   "7 pages appear in the sitemap but are not linked from any page we read."
+  ],
+  "duplicate_titles": [
+   "T",
+   "",
+   "2 pages share a page title with another page."
+  ],
+  "canonical_mismatch": [
+   "T",
+   "",
+   "1 page carry a canonical link to another page on the site."
+  ],
+  "internal_redirects": [
+   "T",
+   "",
+   "1 address found on the site redirect to a different page."
+  ],
+  "thin_pages": [
+   "T",
+   "",
+   "1 page have under 120 words of readable text."
+  ],
+  "ct_link_mismatch": [
+   "F",
+   "/new-page IS the Complaints Procedure page",
+   "“Complaints Procedure” goes to /new-page (a page about it is at /s/ITM-Electrical-Complaints-Procedure.pdf)"
+  ],
+  "no_address": [
+   "T",
+   "",
+   "No street address or postcode was found on any page read."
+  ],
+  "no_reviews": [
+   "T",
+   "",
+   "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us)."
+  ],
+  "no_business_schema": [
+   "T",
+   "",
+   "No Organization or LocalBusiness markup was found on any page read."
+  ],
+  "no_breadcrumbs": [
+   "T",
+   "",
+   "None of the 14 pages read carries BreadcrumbList markup."
+  ],
+  "ct_area_coverage": [
+   "T",
+   "real towns, no page each",
+   "Places named on the site: Wellingborough, Irthlingborough, Rushden, Higham Ferrers, Finedon, Kettering, Corby, Earls Barton"
+  ],
+  "ct_missing_entity_facts": [
+   "T",
+   "",
+   "Neither found on any page read"
+  ],
+  "ct_no_people": [
+   "T",
+   "",
+   "No owner, director or team named on any page read"
+  ]
+ },
+ "ladiesfirstdrivingschool.co.uk": {
+  "vs_key_page_basics": [
+   "T",
+   "each page named checked in the browser",
+   "/courses: no H1, no meta description; /about-us: no H1, no meta description; /areas-we-cover: no meta description; /faqs: no meta description and 1 more key page."
+  ],
+  "vs_town_swapped_pages": [
+   "T",
+   "manual and auto course pages identical",
+   "2 pages read the same once the town or service name in their address is taken out — e.g. /driving-course/48-hours-course-manual and /driving-course/48-hours-course-auto are 100% the same."
+  ],
+  "no_service_pages": [
+   "F",
+   "every course has its own /driving-course/ page",
+   "None of the pages read look like a page about one service."
+  ],
+  "vs_business_schema": [
+   "T",
+   "",
+   "Business markup type read: Organization (on 44 pages, e.g. homepage); no phone number and no address in it."
+  ],
+  "ct_dead_links": [
+   "F",
+   "\"Forgot Password?\" opens the login box",
+   "“Forgot Password?” → # on 44 pages (e.g. the homepage)"
+  ],
+  "long_titles": [
+   "T",
+   "",
+   "14 pages have titles over 65 characters."
+  ],
+  "sitemap_only_pages": [
+   "T",
+   "corrected on re-read: no page links to /48-hours-course-manual (the Related Courses grid links other courses)",
+   "9 pages appear in the sitemap but are not linked from any page we read."
+  ],
+  "internal_redirects": [
+   "T",
+   "",
+   "1 address found on the site redirect to a different page."
+  ],
+  "ct_link_mismatch": [
+   "F",
+   "\"More Packages\" rightly goes to /courses",
+   "“More Packages” goes to /courses (a page about it is at /driving-course/5-hours-test-package-auto)"
+  ],
+  "no_address": [
+   "F",
+   "\"26 DALLEY ROAD WOKINGHAM\" on every page",
+   "No street address or postcode was found on any page read."
+  ],
+  "multiple_h1": [
+   "T",
+   "/faqs has two H1s",
+   "1 page have several H1 headings."
+  ]
+ },
+ "ljmullanelectrical.com": {
+  "vs_town_swapped_pages": [
+   "T",
+   "templated service pages, 90% the same",
+   "6 pages read the same once the town or service name in their address is taken out — e.g. /service/decorative-sockets-and-switches and /service/electric-radiator-installation are 90% the same."
+  ],
+  "vs_key_page_basics": [
+   "T",
+   "",
+   "/rewire-calculator: no meta description; /archive: no meta description; /frequently-asked-questions: no meta description; /team-members: no meta description and 2 more key pages."
+  ],
+  "ct_unsourced_claims": [
+   "T",
+   "\"over 180 five-star reviews\" with no source on that page",
+   "“…and have over 180 five-star reviews from customers across…” (/service/eicr) — no source named on that page"
+  ],
+  "ct_vague_headings": [
+   "T",
+   "homepage H1 is \"Homepage\"",
+   "Homepage: “Homepage”"
+  ],
+  "no_sitemap": [
+   "T",
+   "",
+   "No sitemap was declared in robots.txt, and none was found at /sitemap.xml, /sitemap_index.xml or /wp-sitemap.xml."
+  ],
+  "vs_faq_no_schema": [
+   "T",
+   "FAQ sections on the service pages, no FAQPage",
+   "7 pages answer customer questions with no FAQPage markup, e.g. /service/eicr: “How much does an EICR cost in Banbury?”."
+  ],
+  "ct_generic_copy": [
+   "T",
+   "",
+   "/service/decorative-sockets-and-switches (424 words): “customer satisfaction”, “we pride ourselves”, “pride ourselves”"
+  ],
+  "long_titles": [
+   "T",
+   "",
+   "4 pages have titles over 65 characters."
+  ],
+  "ct_dead_links": [
+   "T",
+   "social icon pointing at its own page",
+   "“twitter” → # on /team-members"
+  ],
+  "multiple_h1": [
+   "T",
+   "",
+   "1 page have several H1 headings."
+  ],
+  "no_breadcrumbs": [
+   "T",
+   "",
+   "None of the 60 pages read carries BreadcrumbList markup."
+  ],
+  "ct_missing_entity_facts": [
+   "T",
+   "",
+   "Neither found in the 60 pages we read — the site gives years of experience (13) but no start year"
+  ]
+ },
+ "mcdrive.co.uk": {
+  "noindex_home": [
+   "T",
+   "",
+   "The homepage carries “noindex, nofollow”."
+  ],
+  "one_page_site": [
+   "T",
+   "only a privacy page besides the homepage",
+   "Only the homepage was found; there are no other pages."
+  ],
+  "ct_vague_headings": [
+   "T",
+   "",
+   "Homepage: “Welcome to the keys to your freedom”"
+  ],
+  "vs_key_page_basics": [
+   "T",
+   "",
+   "homepage: no meta description."
+  ],
+  "no_sitemap": [
+   "T",
+   "",
+   "No sitemap was declared in robots.txt, and none was found at /sitemap.xml, /sitemap_index.xml or /wp-sitemap.xml."
+  ],
+  "multiple_h1": [
+   "T",
+   "",
+   "1 page have several H1 headings."
+  ],
+  "ct_image_alt": [
+   "T",
+   "",
+   "11 of 11 photos and pictures have no alt text (icons and logos not counted)"
+  ],
+  "ct_dead_links": [
+   "F",
+   "the \"Read More\" links are inside an HTML comment: nobody sees them",
+   "“Read More” → # on the homepage"
+  ],
+  "no_address": [
+   "T",
+   "",
+   "No street address or postcode was found on any page read."
+  ],
+  "no_business_schema": [
+   "T",
+   "",
+   "No Organization or LocalBusiness markup was found on any page read."
+  ],
+  "ct_area_coverage": [
+   "T",
+   "checked again after the fix",
+   "Places named on the site: Wokingham"
+  ],
+  "ct_missing_entity_facts": [
+   "F",
+   "\"setting up McDrive in 2020\"",
+   "Neither found on any page read"
+  ],
+  "ct_no_people": [
+   "F",
+   "\"I'm Matt McKay and I founded McDrive\"",
+   "No owner, director or team named on any page read"
+  ],
+  "ct_no_accreditations": [
+   "T",
+   "BSM training named, no accreditation",
+   "None named on any page read, in text or logo images"
+  ]
+ },
+ "mkdampandtimber.co.uk": {
+  "sitemap_only_pages": [
+   "T",
+   "",
+   "3 pages appear in the sitemap but are not linked from any page we read."
+  ],
+  "ct_ai_images": [
+   "T",
+   "file names \"ChatGPT Image …\"",
+   "File: ChatGPT Image Aug 20 2026 08 09 55 AM 400x300"
+  ],
+  "vs_duplicate_homepage": [
+   "T",
+   "",
+   "/about-us is 91% the same text as the homepage; /contact-us is 89% the same text as the homepage, with no noindex and no canonical link to the homepage."
+  ],
+  "vs_key_page_basics": [
+   "T",
+   "",
+   "homepage: no H1, no meta description."
+  ],
+  "ct_no_proof": [
+   "T",
+   "",
+   "None found on any page read"
+  ],
+  "vs_business_schema": [
+   "T",
+   "",
+   "Business markup type read: Organization (on 10 pages, e.g. homepage); no phone number and no address in it."
+  ],
+  "canonical_mismatch": [
+   "T",
+   "/home canonical to /",
+   "1 page carry a canonical link to another page on the site."
+  ],
+  "multiple_h1": [
+   "T",
+   "",
+   "1 page have several H1 headings."
+  ],
+  "no_reviews": [
+   "T",
+   "",
+   "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us)."
+  ],
+  "ct_no_people": [
+   "T",
+   "",
+   "No owner, director or team named on any page read"
+  ]
+ },
+ "mlgelec.co.uk": {
+  "ct_placeholder_content": [
+   "T",
+   "Wix \"I'm a title… Click to edit me\"",
+   "“…a title I'm a description. Click to edit me press to zoom I'm a title…” on /our-products"
+  ],
+  "town_missing": [
+   "T",
+   "",
+   "Widnes is not in the homepage’s text (read in full); it appears on 1 other page."
+  ],
+  "ct_areas_not_stated": [
+   "T",
+   "",
+   "No “areas we cover” list or statement on any page read (read in full)"
+  ],
+  "vs_address_not_on_key_pages": [
+   "T",
+   "",
+   "The address (Contact MLG ELECTRICAL LTD 7 Halebank road Widnes Cheshire Wa88na) is shown on /contact, but not on homepage, /about-us, /services and 4 other key pages."
+  ],
+  "vs_key_page_basics": [
+   "T",
+   "",
+   "homepage: no H1; /about-us: no H1; /services: no H1; /domestic: no H1, no meta description and 3 more key pages."
+  ],
+  "duplicate_titles": [
+   "T",
+   "",
+   "6 pages share a page title with another page."
+  ],
+  "thin_key_pages": [
+   "T",
+   "",
+   "2 pages have under 120 words of readable text."
+  ],
+  "ct_no_proof": [
+   "T",
+   "",
+   "None found on any page read"
+  ],
+  "thin_pages": [
+   "T",
+   "",
+   "8 pages have under 120 words of readable text."
+  ],
+  "ct_image_alt": [
+   "T",
+   "",
+   "16 of 30 photos and pictures have no alt text (icons and logos not counted)"
+  ],
+  "sitemap_only_pages": [
+   "T",
+   "",
+   "4 pages appear in the sitemap but are not linked from any page we read."
+  ],
+  "noindex_pages": [
+   "F",
+   "the one noindex page is the shop cart, which should be noindex",
+   "1 page carry a noindex instruction."
+  ],
+  "no_questions_answered": [
+   "T",
+   "",
+   "No FAQ page and no question-style headings (e.g. “How much does … cost?”)."
+  ],
+  "no_reviews": [
+   "T",
+   "",
+   "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us)."
+  ],
+  "no_business_schema": [
+   "T",
+   "",
+   "No Organization or LocalBusiness markup was found on any page read."
+  ],
+  "no_breadcrumbs": [
+   "T",
+   "",
+   "None of the 14 pages read carries BreadcrumbList markup."
+  ],
+  "ct_missing_entity_facts": [
+   "T",
+   "",
+   "Neither found on any page read"
+  ],
+  "ct_no_people": [
+   "T",
+   "",
+   "No owner, director or team named on any page read"
+  ],
+  "ct_no_accreditations": [
+   "T",
+   "",
+   "None named on any page read, in text or logo images"
+  ]
+ },
+ "nselec.co.uk": {
+  "one_page_site": [
+   "T",
+   "",
+   "Only the homepage was found; there are no other pages."
+  ],
+  "no_sitemap": [
+   "T",
+   "",
+   "No sitemap was declared in robots.txt, and none was found at /sitemap.xml, /sitemap_index.xml or /wp-sitemap.xml."
+  ],
+  "redirects_to_other_domain": [
+   "T",
+   "to home.nselec.co.uk",
+   "https://nselec.co.uk redirects to https://home.nselec.co.uk."
+  ],
+  "no_robots": [
+   "T",
+   "",
+   "There is no robots.txt at the site’s root."
+  ],
+  "ct_area_coverage": [
+   "T",
+   "checked again after the fix",
+   "Places named on the site: Lancaster, North West, Morecambe, Preston, Blackpool, Cumbria, Manchester, Leeds"
+  ],
+  "ct_missing_entity_facts": [
+   "T",
+   "",
+   "Neither found on any page read — the site gives years of experience (20) but no start year"
+  ],
+  "ct_no_people": [
+   "T",
+   "",
+   "No owner, director or team named on any page read"
+  ]
+ },
+ "poesuk.com": {
+  "client_rendered": [
+   "T",
+   "raw HTML has ~50 characters of text",
+   "The homepage HTML we received carries very little readable text; the content is built in the browser. The rest of this check read the site in a real browser, as a customer sees it."
+  ],
+  "ct_dead_links": [
+   "T",
+   "Privacy Policy → #",
+   "“Privacy Policy” → # on 12 pages (e.g. the homepage)"
+  ],
+  "long_titles": [
+   "T",
+   "",
+   "1 page have titles over 65 characters."
+  ],
+  "no_about_page": [
+   "T",
+   "\"About Us\" goes to /contact",
+   "No page looks like an About page in the 12 pages read."
+  ],
+  "ct_missing_entity_facts": [
+   "F",
+   "\"since 2008\" on the area pages",
+   "Neither found in the 12 pages we read — the site gives years of experience (15) but no start year"
+  ]
+ },
+ "protechelectrical.uk": {
+  "one_page_site": [
+   "T",
+   "",
+   "Only the homepage was found; there are no other pages."
+  ],
+  "ct_accreditations_unnamed": [
+   "T",
+   "\"Fully Certified\", no scheme",
+   "“…On — Safe, Efficient, and Fully Certified. 07470878709 ProTech…”"
+  ],
+  "ct_no_proof": [
+   "T",
+   "",
+   "None found on any page read"
+  ],
+  "ct_dead_links": [
+   "F",
+   "the cookie banner's Decline button",
+   "“Decline” → # on the homepage"
+  ],
+  "no_address": [
+   "T",
+   "",
+   "No street address or postcode was found on any page read."
+  ],
+  "no_reviews": [
+   "T",
+   "",
+   "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us)."
+  ],
+  "no_business_schema": [
+   "T",
+   "",
+   "No Organization or LocalBusiness markup was found on any page read."
+  ],
+  "ct_area_coverage": [
+   "T",
+   "one town, no page of its own",
+   "Places named on the site: Leamington Spa"
+  ],
+  "ct_missing_entity_facts": [
+   "T",
+   "",
+   "Neither found on any page read"
+  ],
+  "ct_no_people": [
+   "T",
+   "",
+   "No owner, director or team named on any page read"
+  ]
+ },
+ "ronnocoroofing.co.uk": {
+  "schema_malformed": [
+   "T",
+   "the FAQPage JSON-LD does not parse on every page",
+   "6 pages carry structured data (JSON-LD) that is not valid JSON."
+  ],
+  "ct_conflicting_facts": [
+   "T",
+   "17 years and 40 years both stated",
+   "“…Ply Roofing. A tight two-man crew with 17 years' experience specialising in liquid and single ply…” (the homepage)"
+  ],
+  "sitemap_only_pages": [
+   "T",
+   "",
+   "5 pages appear in the sitemap but are not linked from any page we read."
+  ],
+  "client_rendered": [
+   "T",
+   "",
+   "The homepage HTML we received carries very little readable text; the content is built in the browser. The rest of this check read the site in a real browser, as a customer sees it."
+  ],
+  "name_unclear": [
+   "F",
+   "the Google listing name is keyword-stuffed; the homepage title says Ronnoco Roofing",
+   "We could not find “Ronnoco roofing flat roofing GRP SINGLE PLY FELT LIQUID” on the homepage (title: “Flat Roofing Installers Essex & Hertfordshire | Ronnoco Roofing”)."
+  ],
+  "thin_key_pages": [
+   "F",
+   "/services shows 316 words in a browser",
+   "1 page have under 120 words of readable text."
+  ],
+  "thin_pages": [
+   "F",
+   "/about shows 281 words in a browser",
+   "1 page have under 120 words of readable text."
+  ],
+  "ct_area_coverage": [
+   "T",
+   "checked again after the fix",
+   "Places named on the site: Essex, East London, Hertfordshire, Kent, Suffolk, Grays"
+  ],
+  "ct_missing_entity_facts": [
+   "T",
+   "",
+   "Neither found on any page read — the site gives years of experience (17 and 40) but no start year"
+  ],
+  "ct_no_accreditations": [
+   "F",
+   "\"Professional Accreditations AssocRICS … FCABE\" on the HMO pages",
+   "None named on any page read, in text or logo images"
+  ],
+  "services_on_one_page": [
+   "T",
+   "the flat-roofing services are sections of /services; only the HMO assessments have pages",
+   "Liquid Roofing Systems, Extensions, Dormers & Garages, Refurbishments & Repairs and Commercial Flat Roofing are all described on one page (https://ronnocoroofing.co.uk/services); none of them has a page of its own."
+  ]
+ },
+ "rooke-trade.co.uk": {
+  "canonical_off_site": [
+   "T",
+   "canonical is rooke-trade.vercel.app",
+   "2 pages carry a canonical link to another domain (e.g. https://rooke-trade.vercel.app/)."
+  ],
+  "client_rendered": [
+   "T",
+   "",
+   "The homepage HTML we received carries very little readable text; the content is built in the browser. The rest of this check read the site in a real browser, as a customer sees it."
+  ],
+  "no_sitemap": [
+   "T",
+   "/sitemap.xml returns the app's HTML",
+   "No sitemap was declared in robots.txt, and none was found at /sitemap.xml, /sitemap_index.xml or /wp-sitemap.xml."
+  ],
+  "no_service_pages": [
+   "T",
+   "one-page site, services are a section",
+   "The site names Domestic electrical services, Commercial electrical installations, Industrial electrical solutions and EICR, PAT testing and certification, but no page about any one of them."
+  ],
+  "duplicate_titles": [
+   "T",
+   "",
+   "2 pages share a page title with another page."
+  ],
+  "long_titles": [
+   "T",
+   "",
+   "2 pages have titles over 65 characters."
+  ],
+  "ct_logo_alt_mismatch": [
+   "F",
+   "the logo's alt text is the business's own name",
+   "“RookeTrade Electrical Logo” on logo jqkxbz"
+  ],
+  "no_robots": [
+   "T",
+   "robots.txt returns the app's HTML",
+   "There is no robots.txt at the site’s root."
+  ],
+  "no_about_page": [
+   "T",
+   "",
+   "No page looks like an About page."
+  ],
+  "no_address": [
+   "T",
+   "",
+   "No street address or postcode was found on any page read."
+  ],
+  "no_questions_answered": [
+   "F",
+   "the homepage has an FAQ section",
+   "No FAQ page and no question-style headings (e.g. “How much does … cost?”)."
+  ],
+  "no_business_schema": [
+   "T",
+   "",
+   "No Organization or LocalBusiness markup was found on any page read."
+  ],
+  "ct_area_coverage": [
+   "T",
+   "checked again after the fix",
+   "Places named on the site: Nottingham, Nottinghamshire"
+  ],
+  "ct_missing_entity_facts": [
+   "T",
+   "",
+   "Neither found on any page read — the site gives years of experience (10) but no start year"
+  ],
+  "ct_no_people": [
+   "T",
+   "",
+   "No owner, director or team named on any page read"
+  ]
+ },
+ "sparkieelectrical.com": {
+  "vs_key_page_basics": [
+   "T",
+   "",
+   "homepage: no meta description; /home: no meta description; /about-us: no meta description."
+  ],
+  "ct_vague_headings": [
+   "T",
+   "H1 \"Get in touch\"",
+   "Homepage: “Get in touch”"
+  ],
+  "vs_duplicate_homepage": [
+   "T",
+   "",
+   "/home is 100% the same text as the homepage, with no noindex and no canonical link to the homepage."
+  ],
+  "no_sitemap": [
+   "T",
+   "",
+   "No sitemap was declared in robots.txt, and none was found at /sitemap.xml, /sitemap_index.xml or /wp-sitemap.xml."
+  ],
+  "no_service_pages": [
+   "T",
+   "town pages only",
+   "None of the pages read look like a page about one service."
+  ],
+  "ct_no_proof": [
+   "T",
+   "only a link to the Google profile",
+   "None found on any page read"
+  ],
+  "ct_image_alt": [
+   "T",
+   "",
+   "9 of 9 photos and pictures have no alt text (icons and logos not counted)"
+  ],
+  "multiple_h1": [
+   "T",
+   "",
+   "9 pages have several H1 headings."
+  ],
+  "duplicate_titles": [
+   "T",
+   "",
+   "2 pages share a page title with another page."
+  ],
+  "name_unclear": [
+   "T",
+   "title \"Home\", H1 \"Get in touch\"",
+   "“Sparkie Electrical” appears in the homepage text, but not in its title, main heading or business markup."
+  ],
+  "no_robots": [
+   "T",
+   "",
+   "There is no robots.txt at the site’s root."
+  ],
+  "no_address": [
+   "T",
+   "",
+   "No street address or postcode was found on any page read."
+  ],
+  "no_questions_answered": [
+   "T",
+   "",
+   "No FAQ page and no question-style headings (e.g. “How much does … cost?”)."
+  ],
+  "no_reviews": [
+   "T",
+   "",
+   "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us)."
+  ],
+  "no_business_schema": [
+   "T",
+   "",
+   "No Organization or LocalBusiness markup was found on any page read."
+  ],
+  "no_breadcrumbs": [
+   "T",
+   "",
+   "None of the 10 pages read carries BreadcrumbList markup."
+  ],
+  "ct_missing_entity_facts": [
+   "T",
+   "",
+   "Neither found on any page read"
+  ],
+  "ct_no_people": [
+   "T",
+   "",
+   "No owner, director or team named on any page read"
+  ]
+ },
+ "st-electric.co.uk": {
+  "vs_town_swapped_pages": [
+   "T",
+   "",
+   "13 pages read the same once the town or service name in their address is taken out — e.g. /Torquay-Electrician and /Paignton-Electrician are 100% the same."
+  ],
+  "vs_key_page_basics": [
+   "T",
+   "",
+   "homepage: no H1; /Services: no H1; /Landlord-Services: no H1."
+  ],
+  "thin_key_pages": [
+   "T",
+   "/Landlord-Services 84 words",
+   "1 page have under 120 words of readable text."
+  ],
+  "ct_image_alt": [
+   "T",
+   "",
+   "18 of 18 photos and pictures have no alt text (icons and logos not counted)"
+  ],
+  "vs_faq_no_schema": [
+   "T",
+   "\"Frequently Asked Questions\" sections, no FAQPage",
+   "2 pages answer customer questions with no FAQPage markup, e.g. /consumer-unit-replacement-torquay: “What Is Included in a Consumer Unit Replacement?”."
+  ],
+  "no_robots": [
+   "T",
+   "",
+   "There is no robots.txt at the site’s root."
+  ],
+  "no_about_page": [
+   "T",
+   "",
+   "No page looks like an About page."
+  ],
+  "no_address": [
+   "T",
+   "",
+   "No street address or postcode was found on any page read."
+  ],
+  "no_questions_answered": [
+   "F",
+   "the same check found a question-style heading on /consumer-unit-replacement-torquay",
+   "No FAQ page and no question-style headings (e.g. “How much does … cost?”)."
+  ],
+  "no_business_schema": [
+   "T",
+   "",
+   "No Organization or LocalBusiness markup was found on any page read."
+  ],
+  "no_breadcrumbs": [
+   "T",
+   "",
+   "None of the 23 pages read carries BreadcrumbList markup."
+  ],
+  "ct_missing_entity_facts": [
+   "T",
+   "",
+   "Neither found on any page read — the site gives years of experience (15) but no start year"
+  ],
+  "ct_no_people": [
+   "T",
+   "",
+   "No owner, director or team named on any page read"
+  ]
+ },
+ "svgelectricalsolutions.co.uk": {
+  "ct_areas_not_stated": [
+   "T",
+   "\"based in Andover\" is where, not which areas",
+   "No “areas we cover” list or statement on any page read (read in full)"
+  ],
+  "sitemap_off_site": [
+   "T",
+   "",
+   "8 sitemap entries point to another domain."
+  ],
+  "vs_key_page_basics": [
+   "T",
+   "",
+   "homepage: no H1; /projects: no H1; /about-us: no H1, no meta description."
+  ],
+  "ct_link_mismatch": [
+   "T",
+   "email linked as tel:",
+   "The email “contact@svgelectrical.co.uk” is linked as a phone number (tel:07950440800)"
+  ],
+  "no_service_pages": [
+   "T",
+   "",
+   "None of the pages read look like a page about one service."
+  ],
+  "ct_image_alt": [
+   "T",
+   "",
+   "20 of 21 photos and pictures have no alt text (icons and logos not counted)"
+  ],
+  "ct_dead_links": [
+   "T",
+   "a visible \"Learn more\" on /about-us goes to #",
+   "“Learn more” → # on /about-us"
+  ],
+  "no_address": [
+   "T",
+   "",
+   "No street address or postcode was found on any page read."
+  ],
+  "no_questions_answered": [
+   "T",
+   "",
+   "No FAQ page and no question-style headings (e.g. “How much does … cost?”)."
+  ],
+  "ct_missing_entity_facts": [
+   "T",
+   "",
+   "Neither found on any page read"
+  ],
+  "ct_no_people": [
+   "T",
+   "\"I am a fully qualified…\" with no name",
+   "No owner, director or team named on any page read"
+  ]
+ },
+ "swarburtonroofingservices.co.uk": {
+  "noindex_home": [
+   "T",
+   "",
+   "The homepage carries “noindex”."
+  ],
+  "noindex_pages": [
+   "T",
+   "every page is noindex",
+   "4 pages carry a noindex instruction, including service, area, about or contact pages."
+  ],
+  "vs_key_page_basics": [
+   "T",
+   "",
+   "homepage: no meta description; /roofing-services: no meta description."
+  ],
+  "no_sitemap": [
+   "T",
+   "the declared sitemap answers 404",
+   "No sitemap was declared in robots.txt, and none was found at /sitemap.xml, /sitemap_index.xml or /wp-sitemap.xml."
+  ],
+  "ct_no_proof": [
+   "F",
+   "homepage \"What people say about us\" with named testimonials",
+   "None found on any page read"
+  ],
+  "heavy_pages": [
+   "T",
+   "2.0 MB",
+   "1 page send over 2 MB of HTML."
+  ],
+  "ct_vague_headings": [
+   "T",
+   "\"Our Roofing Services\" says neither what kind nor where",
+   "/roofing-services: “Our Roofing Services”"
+  ],
+  "ct_image_alt": [
+   "T",
+   "",
+   "15 of 15 photos and pictures have no alt text (icons and logos not counted)"
+  ],
+  "no_about_page": [
+   "T",
+   "",
+   "No page looks like an About page."
+  ],
+  "no_reviews": [
+   "F",
+   "homepage testimonials",
+   "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us)."
+  ],
+  "ct_area_coverage": [
+   "T",
+   "checked again after the fix",
+   "Places named on the site: North Wales, Wrexham, Chester, Cheshire, Flintshire, Llay"
+  ],
+  "ct_no_people": [
+   "F",
+   "Steve Warburton named in the testimonials and copy",
+   "No owner, director or team named on any page read"
+  ],
+  "ct_no_accreditations": [
+   "T",
+   "",
+   "None named on any page read, in text or logo images"
+  ]
+ },
+ "thinkingtiger.co.uk": {
+  "client_rendered": [
+   "T",
+   "",
+   "The homepage HTML we received carries very little readable text; the content is built in the browser. The rest of this check read the site in a real browser, as a customer sees it."
+  ],
+  "no_contact_details": [
+   "T",
+   "no phone anywhere",
+   "No phone number appears in the 12 pages read."
+  ],
+  "long_titles": [
+   "T",
+   "",
+   "3 pages have titles over 65 characters."
+  ],
+  "vs_business_schema": [
+   "T",
+   "Organization only, no telephone or address",
+   "Business markup type read: Organization (on 2 pages, e.g. homepage); no phone number and no address in it."
+  ],
+  "vs_faq_no_schema": [
+   "T",
+   "/contact questions, no FAQPage there",
+   "1 page answer customer questions with no FAQPage markup, e.g. /contact: “What happens on the consultation?”."
+  ],
+  "no_address": [
+   "T",
+   "",
+   "No street address or postcode was found in the 12 pages read."
+  ],
+  "no_reviews": [
+   "T",
+   "",
+   "No customer reviews or testimonials were found in the 12 pages read (a reviews widget that loads by JavaScript would not be visible to us)."
+  ],
+  "no_breadcrumbs": [
+   "T",
+   "",
+   "None of the 12 pages read carries BreadcrumbList markup."
+  ],
+  "ct_missing_entity_facts": [
+   "T",
+   "",
+   "Neither found in the 12 pages we read"
+  ],
+  "ct_no_accreditations": [
+   "T",
+   "",
+   "None named in the 12 pages we read, in text or logo images"
+  ]
+ },
+ "tinamillerdrivingschool.com": {
+  "vs_address_not_on_key_pages": [
+   "T",
+   "",
+   "The address (Heath Way, Horsham, RH12 5XQ) is shown on homepage, but not on /general-9, /links, /general-1 and 3 other key pages."
+  ],
+  "vs_key_page_basics": [
+   "T",
+   "",
+   "/general-9: no meta description; /links: no H1, no meta description; /general-1: no meta description; /general-4: no meta description and 2 more key pages."
+  ],
+  "no_service_pages": [
+   "T",
+   "no lesson or course pages",
+   "None of the pages read look like a page about one service."
+  ],
+  "ct_no_proof": [
+   "F",
+   "a Reviews page and a 2,570-word Success Stories page",
+   "None found on any page read"
+  ],
+  "vs_name_inconsistent": [
+   "T",
+   "TMDS and Tina's Driving School",
+   "“TMDS” (page titles (5 pages)); “Tina's Driving School” (business markup on homepage)."
+  ],
+  "thin_pages": [
+   "T",
+   "",
+   "3 pages have under 120 words of readable text."
+  ],
+  "no_contact_page": [
+   "T",
+   "",
+   "No page looks like a contact page."
+  ],
+  "no_about_page": [
+   "T",
+   "",
+   "No page looks like an About page."
+  ],
+  "no_questions_answered": [
+   "T",
+   "",
+   "No FAQ page and no question-style headings (e.g. “How much does … cost?”)."
+  ],
+  "no_reviews": [
+   "F",
+   "a Reviews page",
+   "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us)."
+  ],
+  "ct_area_coverage": [
+   "T",
+   "checked again after the fix",
+   "Places named on the site: Horsham, Chichester, Crawley, Epsom, Tolworth, Burgess Hill"
+  ],
+  "ct_missing_entity_facts": [
+   "T",
+   "",
+   "Neither found on any page read"
+  ]
+ },
+ "tonbridgepattesting.co.uk": {
+  "duplicate_titles": [
+   "T",
+   "",
+   "44 pages share a page title with another page."
+  ],
+  "vs_town_swapped_pages": [
+   "T",
+   "",
+   "17 pages read the same once the town or service name in their address is taken out — e.g. /pat-testing-southborough-kent and /pat-testing-london are 95% the same."
+  ],
+  "broken_pages": [
+   "T",
+   "homepage links /pat-testing-tonbridge-kent and /new-page, both 404",
+   "16 addresses linked from the site or listed in its sitemap answered with an error (404)."
+  ],
+  "sitemap_only_pages": [
+   "T",
+   "shop products",
+   "9 pages appear in the sitemap but are not linked from any page we read."
+  ],
+  "no_service_pages": [
+   "F",
+   "a one-service business: every page is about PAT testing",
+   "None of the pages read look like a page about one service."
+  ],
+  "vs_business_schema": [
+   "T",
+   "corrected on re-read: the LocalBusiness block has an empty address and no phone, so the markup gives neither",
+   "Business markup type read: Organization (on 14 pages, e.g. /pat-testing-kent-blog/pat-testing-by-appointment-in-tonbridge-a-cost-effective-option-for-smaller-jobs); no phone number and no address in it."
+  ],
+  "ct_link_mismatch": [
+   "F",
+   "\"PAT Test Shop\" rightly goes to the shop",
+   "“PAT Test Shop” goes to /pattestingstore (a page about it is at /pat-testing-kent-blog)"
+  ],
+  "vs_faq_no_schema": [
+   "T",
+   "homepage FAQ, no FAQPage",
+   "5 pages answer customer questions with no FAQPage markup, e.g. homepage: “What counts as a portable appliance?”."
+  ],
+  "long_titles": [
+   "T",
+   "",
+   "2 pages have titles over 65 characters."
+  ],
+  "canonical_mismatch": [
+   "T",
+   "",
+   "1 page carry a canonical link to another page on the site."
+  ],
+  "multiple_h1": [
+   "T",
+   "",
+   "1 page have several H1 headings."
+  ],
+  "no_about_page": [
+   "T",
+   "",
+   "No page looks like an About page."
+  ],
+  "no_reviews": [
+   "T",
+   "",
+   "No customer reviews or testimonials were found on any page read (a reviews widget that loads by JavaScript would not be visible to us)."
+  ],
+  "no_breadcrumbs": [
+   "T",
+   "",
+   "None of the 44 pages read carries BreadcrumbList markup."
+  ],
+  "ct_missing_entity_facts": [
+   "T",
+   "",
+   "Neither found on any page read"
+  ]
+ },
+ "webneon.co.uk": {
+  "ct_schema_mismatch": [
+   "T",
+   "markup names \"SITUS GACOR\" (spam on the site)",
+   "The markup names the business “SITUS GACOR”"
+  ],
+  "ct_conflicting_facts": [
+   "T",
+   "3+, 10+ and 16+ years",
+   "“…245+ Active Projects 7+ Team Members 3+ Years of Experience Choose WebNeon Services as your…” (/website-development-company-in-reading)"
+  ],
+  "ct_ai_images": [
+   "T",
+   "",
+   "File: ChatGPT Image Jun 10 2026 01 40 25 PM 1370x550"
+  ],
+  "vs_key_page_basics": [
+   "T",
+   "",
+   "/webneon-services: no H1; /google-ads-for-locksmiths: no H1; /google-ads-for-roadside-auto-recovery: no H1; /google-ads-for-auto-body-repair: no H1 and 3 more key pages."
+  ],
+  "duplicate_titles": [
+   "T",
+   "",
+   "6 pages share a page title with another page."
+  ],
+  "vs_town_swapped_pages": [
+   "T",
+   "",
+   "5 pages read the same once the town or service name in their address is taken out — e.g. /roof-repair-google-ads-agency-in-birmingham and /roof-repair-google-ads-agency-in-oxford are 94% the same."
+  ],
+  "broken_pages": [
+   "T",
+   "/our-services linked, 404",
+   "1 address linked from the site or listed in its sitemap answered with an error (404)."
+  ],
+  "vs_name_inconsistent": [
+   "T",
+   "",
+   "“Webneon” (page titles (28 pages)); “SITUS GACOR” (business markup on /portfolio)."
+  ],
+  "vs_business_schema": [
+   "T",
+   "",
+   "Business markup type read: Organization (on 56 pages, e.g. homepage); no phone number and no address in it."
+  ],
+  "ct_dead_links": [
+   "T",
+   "footer menu item \"Food Delivery\" → #",
+   "“Food Delivery” → # on 55 pages (e.g. the homepage)"
+  ],
+  "multiple_h1": [
+   "T",
+   "",
+   "8 pages have several H1 headings."
+  ],
+  "vs_faq_no_schema": [
+   "T",
+   "FAQ sections, no FAQPage",
+   "6 pages answer customer questions with no FAQPage markup, e.g. /e-commerce-website-design-agency-in-uk: “Which platform is best for my business — Shopify or WooCommerce?”."
+  ],
+  "ct_link_mismatch": [
+   "F",
+   "\"website development company\" → /contact-us is a sensible link",
+   "“website development company” goes to /contact-us (a page about it is at /website-development-company-in-reading)"
+  ],
+  "internal_redirects": [
+   "T",
+   "",
+   "3 addresses found on the site redirect to a different page."
+  ],
+  "long_titles": [
+   "T",
+   "",
+   "3 pages have titles over 65 characters."
+  ]
+ },
+ "fbsproperties.co.uk": {
+  "duplicate_titles": [
+   "T",
+   "every page has the same title",
+   "7 pages share a page title with another page."
+  ],
+  "canonical_mismatch": [
+   "T",
+   "every page canonical to /",
+   "6 pages carry a canonical link to another page on the site (often a template setting every page to the homepage)."
+  ],
+  "client_rendered": [
+   "T",
+   "",
+   "The homepage HTML we received carries very little readable text; the content is built in the browser. The rest of this check read the site in a real browser, as a customer sees it."
+  ],
+  "no_sitemap": [
+   "T",
+   "/sitemap.xml returns the app's HTML",
+   "No sitemap was declared in robots.txt, and none was found at /sitemap.xml, /sitemap_index.xml or /wp-sitemap.xml."
+  ],
+  "ct_logo_alt_mismatch": [
+   "F",
+   "the logo's alt text is the business's own name",
+   "“Festo Building and Property Services Ltd Logo” on b2b28ab7 ae36 416c 8e50 039c58f40cda"
+  ],
+  "ct_dead_links": [
+   "F",
+   "\"Gas Services\" is a menu heading that opens a submenu",
+   "“Gas Services” → # on 7 pages (e.g. the homepage)"
+  ],
+  "no_address": [
+   "T",
+   "towns only",
+   "No street address or postcode was found on any page read."
+  ],
+  "no_business_schema": [
+   "T",
+   "",
+   "No Organization or LocalBusiness markup was found on any page read."
+  ],
+  "ct_area_coverage": [
+   "T",
+   "real towns, no area pages",
+   "Places named on the site: Wellingborough, Northamptonshire, Rushden"
+  ],
+  "ct_missing_entity_facts": [
+   "T",
+   "",
+   "Neither found on any page read — the site gives years of experience (10) but no start year"
+  ],
+  "services_on_one_page": [
+   "T",
+   "the services are sections of /services; no service has its own page",
+   "Boiler Installation, Bathroom Installation, Kitchen Installation and General Electrical Services are all described on one page (https://fbsproperties.co.uk/services); none of them has a page of its own."
+  ]
+ },
+ "idriveauto.co.uk": {
+  "client_rendered": [
+   "F",
+   "the homepage text is in images (no text even in a browser); scripts do not build it",
+   "The homepage HTML we received carries very little readable text; the content is built in the browser."
+  ],
+  "home_no_text": [
+   "T",
+   "the homepage words are pictures; a browser shows no text either"
+  ]
+ },
+ "eongraphics.co.uk": {
+  "_excluded": [
+   "X",
+   "the site took too long for the independent browser read; not scored"
+  ]
+ }
+}

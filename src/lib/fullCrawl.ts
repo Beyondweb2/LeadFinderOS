@@ -26,11 +26,12 @@
    IMPORTED BY EDGE FUNCTIONS: relative imports with an explicit .ts extension only (CLAUDE.md §4).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-import { crawlPageKind, detectClientRendered, visibleText, THIN_WORDS, MAX_CRAWL_PAGES } from './crawlCheck.ts';
+import { crawlPageKind, detectClientRendered, unclosedTail, visibleText, THIN_WORDS, MAX_CRAWL_PAGES } from './crawlCheck.ts';
 import { sameSite, classifyCrawlUrl } from './crawlUrl.ts';
 import type { SiteAudit } from './siteAudit.ts';
 import { KEPT_TEXT_CHARS } from './siteClaims.ts';
 import { SITE_FETCH_TIMEOUT_MS } from './siteReadIdentity.ts';
+import { headingHtml, PROOF_RE, STREET_RE, withoutComments } from './siteSignals.ts';
 
 export type CrawlMode = 'standard' | 'full';
 
@@ -169,7 +170,9 @@ export function rawLinks(html: string): string[] {
   const out: string[] = [];
   const re = /<a\b[^>]*\shref\s*=\s*["']([^"']+)["']/gi;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(html || '')) !== null) out.push(decode(m[1]));
+  /* A link inside an HTML comment is not on the page (siteSignals.withoutComments, 2026-11-15). */
+  const src = withoutComments(html);
+  while ((m = re.exec(src)) !== null) out.push(decode(m[1]));
   return out;
 }
 
@@ -189,7 +192,7 @@ export function leanHtml(html: string): string {
     .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, ' ')
     .replace(/<!--[\s\S]*?-->/g, ' ')
     /* A page cut at MAX_PAGE_BYTES can end inside a script: the rest is code, never page text. */
-    .replace(/<(?:script\b(?![^>]*application\/ld\+json)|style\b)[^>]*>[\s\S]*$/i, ' ');
+    .replace(/<(?:script\b(?![^>]*application\/ld\+json)|style\b)[^>]*>[\s\S]*$/i, unclosedTail);
 }
 
 /* ── text helpers ─────────────────────────────────────────────────────────────────────────────── */
@@ -221,11 +224,8 @@ function linkHref(html: string, rel: RegExp): string {
   return '';
 }
 function headings(html: string, level: 1 | 2 | 3, max: number): string[] {
-  const re = new RegExp(`<h${level}\\b[^>]*>([\\s\\S]*?)<\\/h${level}>`, 'gi');
-  const out: string[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null && out.length < max) { const t = clip(tagText(m[1]), 160); if (t) out.push(t); }
-  return out;
+  /* Closed or not (siteSignals.headingHtml): "<h2><h1>FAQs<h1>" is an H1 in every browser (2026-11-15). */
+  return headingHtml(html, level, max * 2).map((h) => clip(tagText(h), 160)).filter(Boolean).slice(0, max);
 }
 const abs = (href: string, base: string) => { try { return new URL(href, base).href; } catch { return href; } };
 
@@ -386,7 +386,11 @@ export const PAGE_LINKS_MAX = 300;
 export const CREDENTIALS: Array<{ name: string; re: RegExp }> = [
   { name: 'NICEIC', re: /\bNICEIC\b/i }, { name: 'NAPIT', re: /\bNAPIT\b/i }, { name: 'ELECSA', re: /\bELECSA\b/i },
   { name: 'Gas Safe', re: /\bGas\s*Safe\b/i }, { name: 'OFTEC', re: /\bOFTEC\b/i }, { name: 'HETAS', re: /\bHETAS\b/i },
-  { name: 'TrustMark', re: /\bTrust\s*Mark\b/i }, { name: 'Checkatrade', re: /\bCheckatrade\b/i },
+  { name: 'TrustMark', re: /\bTrust\s*Mark\b/i }, { name: 'Checkatrade', re: /\bCheck\s*a\s*Trade\b/i },
+  /* Bench 2026-11-15: named on lead sites and missed ("Reviews On Check A Trade", "AssocRICS … FCABE"). */
+  { name: 'RICS', re: /\b(?:Assoc)?RICS\b|\bRoyal Institution of Chartered Surveyors\b/ }, { name: 'CABE', re: /\b[FM]?CABE\b|\bChartered Association of Building Engineers\b/ },
+  { name: 'NFRC', re: /\bNFRC\b/ }, { name: 'CompetentRoofer', re: /\bCompetent\s*Roofer\b/i }, { name: 'JIB', re: /\bJIB\b/ },
+  { name: 'Stroma', re: /\bStroma\b/ }, { name: 'PASMA', re: /\bPASMA\b/ }, { name: 'IPAF', re: /\bIPAF\b/ },
   { name: 'Which? Trusted Trader', re: /\bWhich\?\s*Trusted\s*Trader/i }, { name: 'TrustATrader', re: /\bTrust\s*A\s*Trader\b/i },
   { name: 'Master Locksmiths Association', re: /\bMaster\s+Locksmiths?\s+Association\b|\bMLA\b(?=[^.]{0,40}(?:member|approved|licens))/i },
   { name: 'FENSA', re: /\bFENSA\b/i }, { name: 'CERTASS', re: /\bCERTASS\b/i }, { name: 'Part P', re: /\bPart\s*P\b/i },
@@ -444,9 +448,10 @@ export function processPage(p: {
   /** Decided on the page as downloaded, by a caller that passes leaned HTML. Absent = judged from `html`. */
   shell?: boolean; rendered?: boolean; cut?: boolean;
 }, homeUrl: string): PageEvidence {
-  const html = p.html || '';
+  /* What a visitor sees: commented-out markup is not on the page (2026-11-15, siteSignals.withoutComments). */
+  const html = withoutComments(p.html || '');
   const url = p.finalUrl || p.url;
-  const head = /<head\b[^>]*>([\s\S]*?)<\/head>/i.exec(html)?.[1] ?? html.slice(0, 60_000);
+  const head =/<head\b[^>]*>([\s\S]*?)<\/head>/i.exec(html)?.[1] ?? html.slice(0, 60_000);
   /* Some site builders write the title and meta tags after </head>; a browser still uses them (2026-11-03, svgelectricalsolutions.co.uk:
      "6 pages have no title"). The head first, then the whole page without its SVGs, whose own <title> is not the page's. */
   const doc = html.replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, ' ');
@@ -517,12 +522,14 @@ export function processPage(p: {
   const people: string[] = [], guarantees: string[] = [], experience: string[] = [], prices: string[] = [];
   for (const s of sentences(text)) {
     if (UK_POSTCODE.test(s) && s.length < 160 && /\d/.test(s)) addresses.push(s);
+    /* A street line with no postcode is an address too ("26 Dalley Road Wokingham", 2026-11-15). */
+    else { const st = STREET_RE.exec(s); if (st) addresses.push(s.slice(st.index, st.index + 120)); }
     if (/\b(?:owner|founder|director|proprietor|my name is|run by|family[- ]run)\b/i.test(s)) people.push(s);
     if (/\bguarantee[ds]?\b|\bwarrant(?:y|ies|ied)\b|\bno fix,? no fee\b|\bmoney[- ]back\b/i.test(s)) guarantees.push(s);
     if (/\b\d{1,2}\+?\s*(?:years?|yrs)\b[^.]{0,40}\b(?:experience|trading|established|in business|serving)\b|\b(?:established|est\.?|since|founded)\s+(?:in\s+)?(?:19|20)\d{2}\b/i.test(s)) experience.push(s);
     if (/£\s?\d/.test(s)) prices.push(s);
     /* The same words the content check counts as proof (contentTrust REVIEW_RE), so the two never disagree (2026-11-03, acroofingsouth.co.uk). */
-    if (/\b(?:testimonials?|what (?:our|my) (?:customers|clients) say|customer reviews?|google reviews?|reviews? from|would highly recommend|highly recommended|5[- ]stars?|five[- ]stars?|trustpilot|checkatrade|trustatrader|rated people|mybuilder)\b|★/i.test(s)) reviews.push(s);
+    if (PROOF_RE.test(s)) reviews.push(s);
   }
   /* A page whose text has no sentence breaks makes one long "sentence" over the limit above, so a postcode plainly on the page
      was never read as an address (2026-11-03, sknightelectrical.co.uk: "No address or postcode found" beside TQ2 8LA). */
@@ -531,6 +538,8 @@ export function processPage(p: {
     const line = text.slice(Math.max(0, at - 60), at + m[0].length).trim();
     if (!addresses.some((a) => a.includes(m[0]))) addresses.push(line);
   }
+  /* The same for a street line with no postcode, on a page with no sentence breaks. */
+  if (!addresses.length) for (const m of text.matchAll(new RegExp(STREET_RE.source, 'gi'))) { addresses.push(m[0]); break; }
   const creds: string[] = [];
   for (const c of CREDENTIALS) {
     const m = c.re.exec(text);

@@ -29,6 +29,7 @@
    a string for does not get made.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { crawlPageKind } from './crawlCheck.ts';
+import { UTILITY_PATH_RE } from './siteSignals.ts';
 
 /** Bump when the MEANING of a stored evidence finding changes.
  *  ⛔ SEPARATE FROM CRAWL_CHECK_VERSION, DELIBERATELY AND PERMANENTLY. That constant gates the
@@ -301,7 +302,9 @@ export function pageImportance(url: string, homeUrl: string): PageImportance {
   const homePath = (() => { try { return new URL(homeUrl).pathname; } catch { return '/'; } })();
   const norm = (p: string) => p.replace(/\/+$/, '') || '/';
   if (norm(path) === norm(homePath) || norm(path) === '/') return 'home';
-  if (UTILITY_PATH.test(path) || ARCHIVE_PATH.test(path)) return 'utility';
+  /* …and the booking widgets, member profiles and account pages the website checks share (siteSignals, 2026-11-15: BKW's
+     /booking-calendar/* pages were "an important page set to noindex"). */
+  if (UTILITY_PATH.test(path) || ARCHIVE_PATH.test(path) || UTILITY_PATH_RE.test(`${path}/`)) return 'utility';
   const kind = crawlPageKind(url);
   if (kind === 'service' || kind === 'location') return 'commercial';
   return 'supporting';

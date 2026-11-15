@@ -16,6 +16,7 @@ import {
 import { auditFromStoredCrawl } from '../src/lib/siteAudit.ts';
 import { selectFindings } from '../src/lib/coldCallPlaybook.ts';
 import { OVERVIEW_NO_NAMES_TEXT } from '../src/lib/aiOverview.ts';
+import { CLIENT_HIDDEN_KINDS } from '../src/lib/websiteCheckAccuracy.ts';
 
 let failures = 0;
 function ok(cond: unknown, label: string) { if (!cond) failures++; console.log(`${cond ? 'PASS' : 'FAIL'} ${label}`); }
@@ -74,7 +75,8 @@ const elect = build([ELECT_HOME, ELECT_CI, ELECT_EV, ELECT_PV, ELECT_HOMEPAGE]);
   ok(k.includes('image_alt'), 'A: most images have empty alt text');
   ok(k.includes('ai_images') && /ChatGPT Image/.test(issue(elect, 'ai_images')!.evidence.join(' ')), 'A: a "ChatGPT Image" file name suggests an AI-generated picture');
   const lm = issue(elect, 'link_mismatch')!;
-  ok(lm && lm.evidence.some((e) => /EXPLORE ELECTRICAL.*\/commercial-ev-charging/.test(e)) && lm.evidence.some((e) => /EXPLORE EV.*\/solar-pv-installation/.test(e)), 'A: "Explore Electrical" → EV charging and "Explore EV" → solar are caught');
+  /* 2026-11-15 (docs/WEBSITE_CHECK_ACCURACY.md): a label naming a different page was right 1 time in 7 on the bench — never said. */
+  ok(lm && !lm.evidence.some((e) => /goes to/.test(e)), 'A: a link whose words name a different page is never called a wrong link (only phone ↔ email mix-ups are)');
   ok(!lm.evidence.some((e) => /EXPLORE PV|Example (EV|PV|Home|C&I)/.test(e)), 'A: correct links and a brand prefix ("Example EV") are never flagged');
   ok(lm.evidence.some((e) => /phone number “07590 409 416” is linked as an email/.test(e)), 'A: a phone number linked as mailto: is caught');
   const dates = issue(elect, 'identical_dates');
@@ -144,7 +146,8 @@ const elect = build([ELECT_HOME, ELECT_CI, ELECT_EV, ELECT_PV, ELECT_HOMEPAGE]);
   ok(ph.evidenceClass === 'B' && /Real projects/.test(ph.needs ?? '') && ph.severity === 'high', 'D: each carries its evidence class and what the business would supply');
   ok(after.findings.every((f, n) => n === 0 || ({ high: 0, medium: 1, low: 2, good: 3 })[after.findings[n - 1].severity] <= ({ high: 0, medium: 1, low: 2, good: 3 })[f.severity]), 'D: the merged audit stays worst first');
   const rep = reportContentIssues(elect);
-  ok(rep.length === elect.issues.length && rep[0].kind === 'placeholder_content' && rep.every((r) => 'evidence' in r && !('needs' in r)), 'D: the report view carries the words and one evidence line only');
+  /* The kinds measured under the accuracy bar are left out of the client report (websiteCheckAccuracy.ts CLIENT_HIDDEN_KINDS). */
+  ok(rep.length === elect.issues.filter((i) => !CLIENT_HIDDEN_KINDS.has(`ct_${i.kind}`)).length && rep[0].kind === 'placeholder_content' && rep.every((r) => 'evidence' in r && !('needs' in r)), 'D: the report view carries the words and one evidence line only');
 }
 
 /* ── E. THE CALL SCRIPT USES THE TOP ISSUES AS HOOKS ─────────────────────────────────────────────── */

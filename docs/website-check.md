@@ -1,6 +1,6 @@
 # One website check (2026-10-15, feat/send-error-capture)
 
-**Latest:** the accuracy fix of 2026-11-03 is at the bottom of this file. Read it before changing what a check may claim.
+**Latest:** measured accuracy and the bench (2026-11-15): `docs/WEBSITE_CHECK_ACCURACY.md` — read it before changing what a check may claim. The accuracy fix of 2026-11-03 is at the bottom of this file.
 
 ## What was there before (the inspection)
 

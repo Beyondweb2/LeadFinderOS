@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-15-website-check-accuracy', date: '2026-11-15', title: 'Website check: measured on 27 real sites, now 99% of findings true', audience: 'all',
+    body: 'Every finding the website check makes was checked by hand against what a real browser shows, on 27 real lead websites. 82% were true; after the fixes 99% are. The check now finds testimonials it used to miss, no longer calls a cookie banner\'s button a dead link, no longer lists things like "VW Scirocco GT" as a place, reads badly written headings and the sitemap of a Wix site in a folder, and gives a slow homepage a longer second try. Two kinds of point still under 90% (dead links, missing accreditations) are no longer said in client reports, replies or voice notes; they stay on the team\'s screens.',
+    report: {
+      added: ['A repeatable accuracy test over 27 saved real sites (every future change is measured).', 'gpt-5.5 reads service names for the deep crawl (the most accurate of six models tried).'],
+      changed: ['Testimonials, named owners, start years, street addresses and FAQ sections are read more fully, so fewer false "not found" points.', 'Older checks (made before today) no longer show the kinds the test found unreliable, until the lead is checked again.', 'A homepage that times out is tried once more with a longer wait before "couldn\'t check".'],
+      removed: ['"This link goes to the wrong page" guesses (right 1 time in 7). Only a phone linked as an email, or the reverse, is still said.', 'Dead links and missing accreditations from client reports, drafted replies and voice notes (team screens still show them).'],
+      effect: 'What the website check tells a business about its own site is now almost always true, and the points we are less sure of stay internal.',
+    } },
   { id: '2026-11-15-leadfinderos-example-report', date: '2026-11-15', title: 'LeadFinderOS example report, and the Web dev example template', audience: 'all',
     body: 'There is now a permanent example report at /r/example on the app address: a made-up business, clearly marked "Example report · sample data" on screen and in the PDF. It is never linked to a real lead and never counts opens. The new WhatsApp template "Web dev example" (a follow-up only, like Web dev report) sends the app pitch with that example link. LeadFinderOS reports also gain a "Where you stand" section: the searches AI already names the business on, beside the ones it does not yet, each with its evidence.',
     report: {
