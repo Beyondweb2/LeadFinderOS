@@ -23,6 +23,8 @@ import { answerProblems, buildOnboardingPatch, changedOnboardingPatch, cleanAnsw
 import { alertContractAnswer } from "../_shared/contract-alert.ts";
 import { contractAlertAnswer } from "../../../src/lib/contractAlert.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
+import { strictNamed } from "../../../src/lib/strictName.ts";
+import { guaranteeIdentityFor } from "../../../src/lib/auditVerdict.ts";
 import { loadClientSetup, loadClientSetups, recordFirstContact, recordLeadEvent, submitForDelivery, SETUP_LEAD_COLUMNS, type ClientSetup } from "../_shared/client-setup.ts";
 import { agreementRouteLock, maySetAgreementRoute, resolveAgreementRoute } from "../../../src/lib/agreementRoute.ts";
 import { signedAgreementRecord, type TermsLite } from "../../../src/lib/signedAgreement.ts";
@@ -79,12 +81,15 @@ async function baselineVisibility(service: any, audit: Record<string, unknown>, 
     if (batch.length < 1000) break;
   }
   const ctx = { businessName: text(audit.business_name), trade: text(audit.business_type) || null, town: text(audit.location_text) || null };
+  /* A baseline created on rules v2 counts with the strict name match — the ruler its frozen snapshot and its day-28
+     comparison use (docs/AUDIT_RULES.md "The guarantee count"). Older baselines: unchanged. */
+  const strict = guaranteeIdentityFor(text(audit.created_at) || null, text(audit.business_name), text(audit.website));
   let named = 0, answered = 0;
   for (const r of rows) for (const e of SUMMARY_ENGINES) {
     const cell = (r.result ?? {})[e];
     if (!cell || typeof cell !== "object") continue;
     answered++;
-    if (cellNamed(cell as never, ctx)) named++;
+    if (strict ? strictNamed(cell as never, strict) : cellNamed(cell as never, ctx)) named++;
   }
   return { named, answered, expected: rows.length * SUMMARY_ENGINES.length };
 }

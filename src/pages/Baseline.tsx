@@ -26,6 +26,8 @@ import { SEOHead } from '@/components/SEOHead';
 import { Callout, EmptyState, ErrorState, Figure, LoadState, PageHeader, SubSection, SURFACE, TONE, ToneChip, type Tone } from '@/components/operator/ui';
 import { cn } from '@/lib/utils';
 import { isInternalMeasurement, isClientBaseline, auditRoleLabel } from '@/lib/auditKind';
+import { guaranteeIdentityFor } from '@/lib/auditVerdict';
+import { strictNamed } from '@/lib/strictName';
 
 /**
  * OPERATOR VIEW of a paid client's baseline — /baseline/:auditId.
@@ -67,6 +69,8 @@ interface AuditRow {
   /* With is_measurement + baseline_target_runs, feeds isInternalMeasurement: a full measure or a
      day-28 replay is an operator document, so this page must not offer a client report for it. */
   audit_purpose: string | null;
+  /** Selected below; decides the guarantee's name ruler (auditVerdict.guaranteeIdentityFor). */
+  created_at?: string | null;
   // Report context only — buildReportData needs the trade, the town and the client's own domain
   // (the last one enables the citation half of the "cited as a source" figure; without it this
   // report would show a LOWER cited count than the live client report, which does pass it).
@@ -210,6 +214,8 @@ export default function Baseline() {
         trade: row.business_type,
         town: row.location_text,
         measuredAt: row.baseline?.measured_at ?? row.baseline_completed_at ?? null,
+        /* A baseline created on rules v2: the strict name match its snapshot and day-28 comparison use. Older: unchanged. */
+        isNamed: (() => { const id = guaranteeIdentityFor(row.created_at ?? null, row.business_name, row.website ?? null); return id ? (c: object) => strictNamed(c as never, id) : undefined; })(),
       }));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load that baseline.');
