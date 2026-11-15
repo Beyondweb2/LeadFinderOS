@@ -212,6 +212,11 @@ export async function createCrawlJob(service: Client, input: {
     if (r.ok && !detectClientRendered(r.html).flagged) {
       homeRendered = true; homeShell = false;
       p = { ...p, homeHtml: r.html, missingH1: !hasH1(r.html), noJsonLd: !hasJsonLd(r.html), homeWords: wordCount(r.html) };
+    } else if (r.ok && p.clientRendered) {
+      /* ⛔ EMPTY IN A BROWSER TOO (2026-11-15, idriveauto.co.uk: its words are pictures of words). The page is still unjudged (a
+         browser read that stopped early would look the same), but "the content is built in the browser" is not said: the finding
+         says what is true — almost no readable text, even in a browser. */
+      p = { ...p, clientRendered: { ...p.clientRendered, emptyInBrowser: true } };
     } else if (!r.ok) console.error(`[crawl-job] homepage not rendered (${r.reason}): ${r.detail ?? ""}`);
   }
   const jsSite = p.clientRendered?.flagged === true;
@@ -245,7 +250,10 @@ export async function createCrawlJob(service: Client, input: {
   await enqueue(service, jobId, [{ url: homeUrlKey, kind: "page", source: "seed", depth: 0, status: "done", http_status: p.homeStatus, final_url: p.servedUrl, evidence: homeEv, processed_at: new Date().toISOString() }], counts);
 
   // Sitemaps: robots-declared, then the conventional paths.
-  const sitemapSeeds = [...robots.sitemaps, "/sitemap.xml", "/sitemap_index.xml", "/wp-sitemap.xml"]
+  /* A site that lives in a folder (Wix free sites: name.wixsite.com/my-site-2) keeps its sitemap in that folder (2026-11-15:
+     "No sitemap" said of a site whose /my-site-2/sitemap.xml answers). */
+  const homeFolder = (() => { try { const path = new URL(p.servedUrl).pathname.replace(/\/+$/, ""); return path && path !== "/" ? path : ""; } catch { return ""; } })();
+  const sitemapSeeds = [...robots.sitemaps, ...(homeFolder ? [`${homeFolder}/sitemap.xml`] : []), "/sitemap.xml", "/sitemap_index.xml", "/wp-sitemap.xml"]
     .map((s) => classifySitemapUrl(s, p.servedUrl)).filter((s): s is string => !!s);
   await enqueue(service, jobId, [...new Set(sitemapSeeds)].map((u, i) => ({ url: u, kind: "sitemap" as const, source: i < robots.sitemaps.length ? "robots" : "seed", depth: 0 })), counts);
 

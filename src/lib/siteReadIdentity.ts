@@ -32,5 +32,8 @@ export const SITE_CHECK_HEADERS: Readonly<Record<string, string>> = {
 /** How long one page read waits before it is "did not answer" — the same for the quick check and the deep crawl. */
 export const SITE_FETCH_TIMEOUT_MS = 10_000;
 
+/** The homepage's SECOND try after a timeout: a slow host is not a site we could not read (2026-11-15, eongraphics.co.uk). */
+export const SITE_HOME_RETRY_TIMEOUT_MS = 25_000;
+
 /** What `signals.readableAs` says for a check made with this name (any non-null value = the homepage was read). */
 export const SITE_CHECK_READ_AS = 'site check';

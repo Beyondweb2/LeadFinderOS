@@ -24,6 +24,7 @@
 import type { AuditFinding } from './siteAudit.ts';
 import { nameOnPage } from './businessNameMatch.ts';
 import type { PageBusiness, PageDigest } from './fullCrawl.ts';
+import { isCustomerQuestion, looksLikeFaq, UTILITY_PATH_RE } from './siteSignals.ts';
 
 export const VISIBILITY_CHECKS_VERSION = 1;
 /** Two pages whose own text (shared header / footer removed, town names removed) is at least this alike are "the same". */
@@ -224,8 +225,12 @@ export function buildVisibilityChecks(input: VisibilityInput): VisibilityChecks 
   }
 
   /* ── 2. FAQs with no FAQPage markup ──────────────────────────────────────────────────────────── */
-  const faqNoSchema = pages.map((p) => ({ p, qs: questionsOf(p) }))
-    .filter(({ p, qs }) => (p.d.family === 'faq' ? qs.length >= 2 : qs.length >= 3) && !(p.d.schemaTypes ?? []).some((t) => /^faqpage$/i.test(t)));
+  /* ⛔ AN FAQ, NOT A QUESTION (2026-11-15 bench: a blog heading "Why choose same-day repair?" and a calculator's "How many sockets
+     would you like?" were called FAQs). An FAQ page, a section headed FAQ / Frequently asked / Quick answers, or three customer
+     questions as headings (siteSignals.looksLikeFaq). */
+  const faqNoSchema = pages.map((p) => ({ p, qs: questionsOf(p).filter(isCustomerQuestion) }))
+    .filter(({ p, qs }) => (p.d.family === 'faq' ? qs.length >= 2 : qs.length >= 2 && looksLikeFaq([...(p.d.h1 ?? []), ...(p.d.h2 ?? []), ...(p.d.h3 ?? [])]))
+      && !(p.d.schemaTypes ?? []).some((t) => /^faqpage$/i.test(t)));
   if (faqNoSchema.length) {
     out.push(finding({
       id: 'vs_faq_no_schema', category: 'structured_data', severity: 'low',
@@ -351,7 +356,9 @@ export function buildVisibilityChecks(input: VisibilityInput): VisibilityChecks 
 
     /* 5. Location / service pages that are the same text with only the town swapped. */
     /* A shop's products share a template and carry no town: not "area or service pages" (2026-11-03: "Harvest Moon Cup" on an electrician's site). */
-    const candidates = withText.filter((p) => ['location', 'service', 'other'].includes(p.d.family) && words(p) >= 60 && !/\/(?:shop|store(?:-[\w-]+)?|products?)(?:\/|$)/i.test(pathOfUrl(urlOf(p))));
+    /* Nor are booking widgets, carts or member pages, or any page that asks not to be listed (2026-11-15: BKW's booking calendars). */
+    const candidates = withText.filter((p) => ['location', 'service', 'other'].includes(p.d.family) && words(p) >= 60 && !p.d.noindex
+      && !/\/(?:shop|store(?:-[\w-]+)?|products?)(?:\/|$)/i.test(pathOfUrl(urlOf(p))) && !UTILITY_PATH_RE.test(`${pathOfUrl(urlOf(p))}/`));
     const groups: VisibilityPage[][] = [];
     const used = new Set<VisibilityPage>();
     for (let i = 0; i < candidates.length; i++) {

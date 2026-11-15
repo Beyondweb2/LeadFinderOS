@@ -579,7 +579,7 @@ async function loadPhases(service: Service, leadId: string): Promise<Phases> {
     service.from("lead_crawl_checks").select("result, created_at, last_failed_attempt").eq("lead_id", leadId).maybeSingle(),
     loadAuditPhase(service, leadId),
   ]);
-  const check = websiteCheckFor(crawl?.result ? { result: crawl.result, created_at: crawl.created_at } : null, { website: lead?.website ?? null });
+  const check = websiteCheckFor(crawl?.result ? { result: crawl.result, created_at: crawl.created_at } : null, { website: lead?.website ?? null, audience: "client" });
   return { audit, crawl: crawlPhaseOf(check.state, !!crawl?.last_failed_attempt), site: check.state };
 }
 

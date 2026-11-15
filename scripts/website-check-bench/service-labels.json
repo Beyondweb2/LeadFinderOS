@@ -1,0 +1,334 @@
+{
+ "_about": "Hand labels (2026-11-15) for the service-review question: which headings are services a customer could buy. R = real service, N = not a service, ? = genuinely arguable (not scored). Read from each site's own pages in the independent browser read.",
+ "Corby Gas": {
+  "R": [
+   "Boiler repair",
+   "New boilers",
+   "Gas safety certificates (CP12)",
+   "Gas hob fitting"
+  ],
+  "N": [
+   "Common boiler problems"
+  ]
+ },
+ "BKW Services Ltd": {
+  "R": [
+   "Washing Machine Installtion",
+   "Tumble Dryer Installation",
+   "Fridge Freezer Installation",
+   "Range Cooker Installation",
+   "Oven Installation",
+   "Kitchen Tap Installation",
+   "Fridge Freezer Repair",
+   "Range Cooker Repair",
+   "Oven Repair",
+   "Tumble Dryer Repair",
+   "Washing Machine Repair",
+   "Sink Pipe Repair"
+  ],
+  "N": []
+ },
+ "High Design Roofing": {
+  "R": [
+   "New Roofs",
+   "UPVC Facias & Soffits",
+   "Cast Iron Guttering",
+   "Emergency Roofing Repairs",
+   "Flat Roof Repairs",
+   "Leaking Roof Repairs",
+   "Chimney Repairs",
+   "Roof Cleaning & Roof Repairs",
+   "Roof Painting & Sealing",
+   "UPVC Cleaning",
+   "Ridge Tile Re-bedding",
+   "Roof Cladding",
+   "Power Clean Driveways"
+  ],
+  "N": [
+   "Skilled And Experienced Builders"
+  ],
+  "?": [
+   "Maintenance"
+  ]
+ },
+ "Eon Graphics": {
+  "R": [
+   "Website design & development",
+   "Ongoing Graphic Design",
+   "Essential Branding Design",
+   "Pro Branding Design",
+   "Premium Branding Design",
+   "Design & Print",
+   "Website design and SEO services UK",
+   "Branding and Graphic Design"
+  ],
+  "N": [
+   "Transforming Businesses Through Design",
+   "Roadside Tyres",
+   "Design Projects Created",
+   "Build a Long-Term Partnership",
+   "Design Strategy includes;",
+   "Brand Design project",
+   "High-Quality Designs & Services",
+   "Milton Keynes Graphic Design Agency",
+   "Web Design Principles",
+   "Security Features",
+   "Let’s Build Something Together",
+   "Website Design in Gambia",
+   "Conversion & Sales Impact"
+  ],
+  "?": [
+   "A to Z London Design Strategy",
+   "Strategic Brand Design That Works"
+  ]
+ },
+ "Mk damp and timber": {
+  "R": [
+   "DAMP PROOFING SERVICES",
+   "DAMP SURVEY",
+   "PITCHED & FLAT ROOFING",
+   "Brickwork Stitching and Crack Repair",
+   "Structural Timber Repairs",
+   "Roof Repairs & Water Ingress"
+  ],
+  "N": [
+   "Identifying the Cause of Damp",
+   "A Thorough Inspection and Clear Advice",
+   "Don’t Ignore Damp Problems"
+  ]
+ },
+ "L J Mullan Electrical": {
+  "R": [
+   "Additional Socket Outlet",
+   "Car Charger installation",
+   "Decorative lighting",
+   "Decorative Sockets and Switches",
+   "Electric Radiator Installation",
+   "Electric Toothbrush Charger Installation",
+   "Extractor Fan Installation",
+   "Fault Finding & Repair",
+   "Garage Electrics",
+   "Outdoor lighting",
+   "Outdoor Socket",
+   "Ring Doorbell Installation",
+   "Security Lighting",
+   "Smart Home Install",
+   "Smoke Alarm Installation",
+   "Storage Heater Installation",
+   "TV Wall Mounting Set Up",
+   "Domestic Extractor Fan Installation Electrician",
+   "Domestic Fault Finding & Repair Electrician",
+   "Domestic Garage Electrics Electrician"
+  ],
+  "N": [
+   "Heating Calculator",
+   "Rewire Cost Calculator",
+   "1) Additional Sockets Installation in Banbury",
+   "8) EV Charger Installation Pricing"
+  ]
+ },
+ "Tonbridge PAT Testing – Portable Appliance Testing": {
+  "R": [],
+  "N": [
+   "Pat Testing Southborough Kent",
+   "Pat Testing London",
+   "Pat Testing Aylesford Kent",
+   "Pat Testing Staplehurst Kent",
+   "Pat Testing Cranbrook Kent",
+   "Pat Testing Snodland Kent",
+   "Pat Testing Hadlow Kent",
+   "Pat Testing East Peckham Kent",
+   "Pat Testing West Mailing Kent",
+   "Pat Testing Hildenborough Kent",
+   "Pat Testing Kings Hill Kent",
+   "Pat Testing Paddock Wood Kent",
+   "Pat Testing Sevenoaks Kent",
+   "Pat Testing Tunbridge Wells Kent",
+   "Pat Testing Maidstone Kent",
+   "Pat Testing Borough Green Kent"
+  ]
+ },
+ "Webneon": {
+  "R": [
+   "Google Ads for Mobile Tyre Fitting",
+   "Google Ads For Auto Body Repair",
+   "Google Ads For Accountant",
+   "Google Ads For Roof Repair",
+   "Locksmith Google Ads UK",
+   "Google Ads Solutions for Locksmiths",
+   "Online Advertising For Accountants",
+   "Conversion Tracking & Pixel Setup",
+   "Graphic & Video Design",
+   "Mobile Advertising for Garage Businesses",
+   "Shop Designs"
+  ],
+  "N": [
+   "Let's Build Something Great Together.",
+   "Understanding the SME Landscape",
+   "Type Of Website Design By WebNeon",
+   "Best Graphic Designing Company In UK",
+   "High-Quality Creative Design",
+   "Locksmith Industry Expertise",
+   "Ad Extensions & Clear CTAs",
+   "No wasted spend. No irrelevant clicks.",
+   "emergency roofer near me",
+   "roof leak repair",
+   "new roof quote",
+   "gutter replacement Reading",
+   "Mobile conversions",
+   "Reducing Wasted Clicks",
+   "Faster Conversions",
+   "Remarketing Campaigns Increase Conversions",
+   "The Importance of Conversion Rate Optimisation",
+   "3. Conversion Rates",
+   "Roof Replacement",
+   "Roof Miantenance",
+   "Gutter Cleaning",
+   "Garage MOT Services",
+   "Landing Pages and Conversions",
+   "Key Components of High-Converting Ads",
+   "3. Conversion Optimization",
+   "Social Media Builds Brand Awareness"
+  ],
+  "?": [
+   "Mobile-First Responsive Design",
+   "Design & UX",
+   "Conversion-Focused Design",
+   "Conversion Tracking and Performance Measurement",
+   "Cyber Security"
+  ]
+ },
+ "Rooketrade Electrical": {
+  "R": [
+   "Domestic electrical services",
+   "Commercial electrical installations",
+   "Industrial electrical solutions",
+   "EICR, PAT testing and certification",
+   "Lighting, security and garden systems"
+  ],
+  "N": []
+ },
+ "Power On Electrical Services UK Ltd": {
+  "R": [
+   "Installation & Upgrades",
+   "Commercial Electrical Installations",
+   "Full & Partial Rewiring",
+   "Industrial Lighting Installation",
+   "Socket & Power Installation",
+   "High-End Residential Installations",
+   "EV Charger Installation",
+   "Battery Storage Systems",
+   "LED Lighting Upgrades",
+   "EICR Inspections",
+   "Emergency Lighting Testing",
+   "Fire Alarm Testing",
+   "Heating Controls",
+   "Intelligent Lighting",
+   "Commercial Electrical Repairs",
+   "Fuse Box Repairs",
+   "Lighting Repairs",
+   "Socket & Power Repairs",
+   "High-End Residential Repairs",
+   "Fire & Security",
+   "Fire Alarm Systems",
+   "CCTV Systems",
+   "House Rewiring",
+   "Electrical Fault Finding",
+   "Commercial Electrical Work",
+   "Planned Electrical Maintenance",
+   "Office Fit-Out Electrical Work",
+   "Three-Phase Power Installations",
+   "Landlord Electrical Certificates",
+   "Home Cinema Installation",
+   "Loxone Installation",
+   "Scheduled Electrical Inspections",
+   "Emergency Lighting Maintenance",
+   "Repeat PAT Testing Programmes",
+   "CCTV and Intruder Detection",
+   "Intruder Alarm Systems"
+  ],
+  "N": [
+   "Domestic Electricians in Altrincham",
+   "Repairs, Rewiring and Electrical Upgrades",
+   "Installation, Repairs and Planned Maintenance",
+   "All Electrical Services by Division",
+   "Electrical Installation Projects in Altrincham",
+   "Arrange an Electrical Installation Survey",
+   "Choosing the Right Installation Service",
+   "Surveys, Quotations and Next Steps",
+   "New Builds, Renovations and Finished Properties",
+   "Arrange an Automation Survey",
+   "Electrical Repair Help in Altrincham",
+   "Discuss an Electrical Repair in Altrincham",
+   "Discuss an Electrical Maintenance Plan",
+   "Initial Conversation",
+   "Survey Scope and Responsibilities",
+   "Installation and Commissioning",
+   "Design and Quotation",
+   "Survey Inputs and IT Coordination",
+   "Installation, Servicing, Repairs and Maintenance"
+  ],
+  "?": [
+   "Electrical Energy Upgrades in Altrincham",
+   "Energy Site Survey",
+   "Electrical Testing and Compliance in Altrincham",
+   "Electrical Repairs in Altrincham and Manchester",
+   "Electrical Maintenance for Altrincham Premises"
+  ]
+ },
+ "Thinking Tiger": {
+  "R": [
+   "Build Internal Apps",
+   "Dashboards We Build",
+   "SharePoint Designer Workflows → Power Automate",
+   "Replace spreadsheets with internal apps"
+  ],
+  "N": [
+   "Let's Build Something That Works",
+   "Adoption by Design",
+   "Security and Access",
+   "Secure Data Sharing",
+   "Security & Compliance"
+  ]
+ },
+ "Festo Building & Property Services Ltd": {
+  "R": [
+   "Boiler Installation",
+   "Bathroom Installation",
+   "Kitchen Installation",
+   "General Electrical Services",
+   "Garage Conversion and Extension",
+   "Property Maintenance and Management",
+   "Plumbing and Heating"
+  ],
+  "N": [
+   "Home Maintenance & Energy Guides",
+   "Exterior Wall & Brickwork Care",
+   "Home Maintenance Checklist",
+   "Boiler Maintenance Tips",
+   "Kitchen Design Essentials",
+   "Loft Conversion Guide",
+   "Preventing Plumbing Problems"
+  ]
+ },
+ "Ronnoco roofing flat roofing GRP SINGLE PLY FELT LIQUID": {
+  "R": [
+   "Domestic Flat Roofs",
+   "Liquid Roofing Systems",
+   "Extensions, Dormers & Garages",
+   "Refurbishments & Repairs",
+   "Commercial Flat Roofing"
+  ],
+  "N": [
+   "Two roofers. One standard.",
+   "Flat Roofing, Done Right",
+   "Clean & Tidy",
+   "Two roofers. Seventeen years. One promise.",
+   "Key Features",
+   "Detection & Alarm Systems",
+   "Photographic Evidence",
+   "Flat Entrance Doors",
+   "Services & Installations"
+  ]
+ }
+}

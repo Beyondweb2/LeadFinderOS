@@ -25,6 +25,7 @@
    threshold is a named const so a tuning change is one line, not a scattered magic number.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { robotsAllows, robotsRulesFor } from './crawlUrl.ts';
+import { headingHtml } from './siteSignals.ts';
 
 /** Below this many characters of crawler-visible text, a page says almost nothing to AI. The real
  *  case that motivated this: 69 characters served to GPTBot against 7,153 rendered in a browser. */
@@ -96,14 +97,22 @@ export function verifiedSearchBlocked(s: { searchBlocked?: string[] | null; bloc
 /** The text a crawler actually reads: raw HTML with scripts/styles/comments removed, tags stripped,
  *  a few common entities decoded, whitespace collapsed. Deliberately crude — we are measuring HOW
  *  MUCH readable text there is, not rendering it. */
+/** An unclosed <script>/<style> to the end of the page: dropped whole when it starts in the last half (a page cut inside its
+ *  code), else only the opening tag is dropped and the text after it is kept (a malformed tag mid-page). */
+export function unclosedTail(m: string, offset: number, whole: string): string {
+  return offset >= whole.length * 0.5 ? ' ' : m.replace(/^<[^>]*>/, ' ');
+}
+
 export function visibleText(html: string): string {
   return (html || '')
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
     .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, ' ')
     .replace(/<!--[\s\S]*?-->/g, ' ')
-    /* A page cut short can end inside a script: the rest is code, never page text. */
-    .replace(/<(?:script|style)\b[^>]*>[\s\S]*$/i, ' ')
+    /* A page cut short can end inside a script: the rest is code, never page text. ⛔ Only near the END (2026-11-15,
+       ronnocoroofing.co.uk): a script left unclosed early on (its FAQ markup) is not the end of the page, and dropping everything
+       after it made a 350-word page read as 11 words. */
+    .replace(/<(?:script|style)\b[^>]*>[\s\S]*$/i, unclosedTail)
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
@@ -121,6 +130,9 @@ export interface ClientRenderResult {
   visibleChars: number;
   htmlBytes: number;
   appShell: boolean;
+  /** Set by the deep crawl when a real browser read the homepage and it was just as empty (2026-11-15): the text is not built by
+   *  scripts (often it is pictures of words), so "built in the browser" is never said. */
+  emptyInBrowser?: boolean;
 }
 
 /** Is this page client-rendered — i.e. does a JS-less crawler see almost nothing? Two ways to be
@@ -139,7 +151,8 @@ export function detectClientRendered(html: string): ClientRenderResult {
 }
 
 export function hasH1(html: string): boolean {
-  return /<h1\b[^>]*>[\s\S]*?<\/h1>/i.test(html || '');
+  /* Closed or not: "<h1>FAQs<h1>" is a heading in every browser (siteSignals.headingHtml, 2026-11-15). */
+  return headingHtml(html || '', 1, 1).length > 0;
 }
 
 export function hasJsonLd(html: string): boolean {

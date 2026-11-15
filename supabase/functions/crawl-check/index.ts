@@ -41,7 +41,7 @@ import {
 } from "../../../src/lib/fullCrawl.ts";
 import { buildVisibilityChecks, type VisibilityChecks } from "../../../src/lib/visibilityChecks.ts";
 import { crawlStartUrl, parseRobots, robotsAllows } from "../../../src/lib/crawlUrl.ts";
-import { SITE_CHECK_HEADERS, SITE_CHECK_READ_AS, SITE_CHECK_UA } from "../../../src/lib/siteReadIdentity.ts";
+import { SITE_CHECK_HEADERS, SITE_CHECK_READ_AS, SITE_CHECK_UA, SITE_HOME_RETRY_TIMEOUT_MS } from "../../../src/lib/siteReadIdentity.ts";
 /** ⛔ ONE REQUEST AT A TIME PER SITE (Paul, 2026-10-20): the quick check reads its pages one after another, never in
  *  parallel at one host, and skips any page robots.txt's "User-agent: *" rules disallow (the deep job already does). */
 const QUICK_CHECK_CONCURRENCY = 1;
@@ -449,10 +449,10 @@ Deno.serve(async (req) => {
       if ((Date.now() - started) >= profile.deadlineMs) { hitDeadline = true; return true; }
       return false;
     };
-    const budgeted = async (url: string, samplePage = false): Promise<Fetched> => {
+    const budgeted = async (url: string, samplePage = false, timeoutMs = profile.fetchTimeoutMs): Promise<Fetched> => {
       if (outOfBudget()) return { url, finalUrl: url, ok: false, status: 0, xRobotsTag: null, html: "", blocked: false, responded: false };
       fetchesUsed++;
-      const r = await get(url, profile.fetchTimeoutMs);
+      const r = await get(url, timeoutMs);
       /* FULL mode keeps only the lean SAMPLE page (scripts/styles/SVG stripped, JSON-LD kept): 60 raw
          Wix pages would be ~40 MB held at once. The homepage probes stay raw in both modes, because
          the client-rendered check reads the scripts. STANDARD keeps every byte exactly as before. */
@@ -466,7 +466,9 @@ Deno.serve(async (req) => {
     let homeRead = await budgeted(homeUrl);
     if (!homeRead.ok) {
       await new Promise((r) => setTimeout(r, HOME_RETRY_PAUSE_MS));
-      const again = await budgeted(homeUrl);
+      /* A homepage that timed out gets a longer second wait (2026-11-15, eongraphics.co.uk: 7–9 s pages, "couldn't check" twice
+         at 10 s). Every other page keeps the one timeout. */
+      const again = await budgeted(homeUrl, false, homeRead.error === "timeout" || !homeRead.responded ? SITE_HOME_RETRY_TIMEOUT_MS : profile.fetchTimeoutMs);
       if (again.ok || again.responded || !homeRead.responded) homeRead = again;
     }
     const home = homeRead.ok && homeRead.html.trim().length > 0 ? homeRead : null;

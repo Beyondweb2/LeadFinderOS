@@ -204,7 +204,7 @@ async function loadVoiceSamples(service: Service, bookUserId: string, actorId: s
 async function loadSitePoints(service: Service, lead: ResearchLead): Promise<string[]> {
   try {
     const { data } = await service.from("lead_crawl_checks").select("result, created_at").eq("lead_id", lead.id).maybeSingle();
-    const check = websiteCheckFor(data?.result ? { result: data.result, created_at: data.created_at } : null, { website: lead.website });
+    const check = websiteCheckFor(data?.result ? { result: data.result, created_at: data.created_at } : null, { website: lead.website, audience: "client" });
     return check.state === "issues" ? pitchIssueLines(check.serious, check.minor) : [];
   } catch { return []; }
 }

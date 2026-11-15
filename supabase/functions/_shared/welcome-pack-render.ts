@@ -224,7 +224,7 @@ export async function renderWelcomePack(service: any, slug: string): Promise<Wel
     const { data: cc } = await service.from("lead_crawl_checks").select("result, created_at")
       .eq("lead_id", leadId).order("created_at", { ascending: false }).limit(1).maybeSingle();
     if (cc) {
-      const wc = websiteCheckFor({ result: (cc as { result?: unknown }).result as never, created_at: (cc as { created_at: string }).created_at }, { website: ownWebsite || null });
+      const wc = websiteCheckFor({ result: (cc as { result?: unknown }).result as never, created_at: (cc as { created_at: string }).created_at }, { website: ownWebsite || null, audience: "client" });
       readability = readabilityFromCheck(wc, (cc as { result?: unknown }).result as never, { services: facts.services.values, areas: facts.areas.values, town: (audit as { location_text?: string | null }).location_text ?? facts.primaryLocation.value ?? null });
     }
   } catch { readability = null; }
