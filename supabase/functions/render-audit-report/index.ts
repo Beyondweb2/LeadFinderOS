@@ -17,6 +17,8 @@ import { theirAreas, type OppContext, type OppRow } from "../../../src/lib/repor
 import { buildReportModel, websiteSectionFromCheck, type WebsiteSection } from "../../../src/lib/reportModel.ts";
 import { chooseReportDesign, renderReport } from "../../../src/lib/reportDesign.ts";
 import { auditRulesFor } from "../../../src/lib/auditVerdict.ts";
+import { reportPlaceLabel } from "../../../src/lib/alreadyNamed.ts";
+import { alreadyNamedForBaseline } from "../_shared/already-named.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { renderReportHtml } from "../../../src/lib/aiAuditReportHtml.ts";
 import { measuringState } from "../../../src/lib/measuringState.ts";
@@ -27,7 +29,7 @@ import { SITE_SHOT_BUCKET } from "../../../src/lib/siteShot.ts";
 
 import { auditCodeFromSlug, isShortCode, shortReportUrl } from "../../../src/lib/reportSlug.ts";
 import { paidReportKind } from "../../../src/lib/reportKind.ts";
-import { WEEKLY_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
+import { NAMED_RECHECK_AUDIT_PURPOSE, WEEKLY_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
 import { buildFaultLines, CRAWL_CHECK_VERSION, CRAWL_FRESH_MS, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
 import { usableSiteEvidence, type SiteEvidence } from "../../../src/lib/siteEvidence.ts";
 import { reportContentIssues } from "../../../src/lib/contentTrust.ts";
@@ -193,7 +195,7 @@ Deno.serve(async (req) => {
       // for everything a prospect sees before paying (seoStyleForAudit).
       // audit_purpose decides the one purpose refused below (the weekly check). Measurement audits ARE
       // served as client reports since 15634d49 (Paul, 2026-09-18).
-      .select("id, short_code, business_name, business_type, location_text, specialism, website, has_website, is_market, lead_id, baseline_target_runs, is_measurement, audit_purpose, created_at")
+      .select("id, short_code, business_name, business_type, location_text, specialism, website, has_website, is_market, lead_id, baseline_target_runs, is_measurement, audit_purpose, created_at, business_address, business_scope, country")
       .eq("id", auditId).maybeSingle();
     if (!audit) return unavailable("Audit not found.");
     // Every non-market audit is rendered as the same client-facing report, whether it contains a
@@ -211,7 +213,8 @@ Deno.serve(async (req) => {
        reached its link could read it as their guarantee result. Refused exactly like a market audit.
        Keyed on the stored purpose, the one marker. Nothing else changes: every other audit renders as
        before. */
-    if ((audit as { audit_purpose?: string | null }).audit_purpose === WEEKLY_CHECK_AUDIT_PURPOSE) {
+    /* The quarterly named re-check (2026-11-15) is internal in exactly the same way. */
+    if ([WEEKLY_CHECK_AUDIT_PURPOSE, NAMED_RECHECK_AUDIT_PURPOSE].includes(String((audit as { audit_purpose?: string | null }).audit_purpose ?? ""))) {
       console.log(`[render-audit-report] REFUSED weekly check ${audit.id}: internal monitoring.`);
       return unavailable("No report for this audit.");
     }
@@ -571,6 +574,22 @@ Deno.serve(async (req) => {
           /* A baseline built from a Discovery is not the client's guarantee baseline: never show the paid client's re-measure date on it. */
           checkAgainLabel: leadRemeasureDue && String((audit as { audit_purpose?: string | null }).audit_purpose ?? "") !== "targeted" ? new Date(leadRemeasureDue).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : undefined,
         });
+        /* THE HEADER'S PLACE (Paul, 2026-11-15): what is KNOWN about the business — its town, else its stored address, else
+           (nationwide) the country. Never the commonest place in the search list: that put "Clare" on Moments' baseline. */
+        const au = audit as { business_address?: string | null; business_scope?: string | null; country?: string | null };
+        model.place = reportPlaceLabel({ town, address: au.business_address ?? null, scope: au.business_scope ?? null, country: au.country ?? null, fromSearches: model.where });
+        /* "YOU'RE ALREADY NAMED ON X SEARCHES" (Paul, 2026-11-15; src/lib/alreadyNamed.ts): a rules-v2 baseline opens with the
+           searches its Discovery's STORED answers already name it on. Shown once, never re-measured for the client, never part
+           of the guarantee: nothing above (the 20 targets, their counts, the frozen day-0 numbers) reads it. Older baselines
+           (rules 1, incl. every paid baseline sold before v2) are unchanged. A failed read shows no section. */
+        if (designKind === "baseline" && rules === 2) {
+          try {
+            const an = await alreadyNamedForBaseline(service, { id: audit.id, business_name: audit.business_name ?? null, website: ownWebsite || null, lead_id: leadId, created_at: (audit as { created_at: string }).created_at }, questions, { placeId: leadPlaceId });
+            if (an) model.alreadyNamed = { dateLabel: an.dateLabel, searches: an.searches };
+          } catch (e) {
+            console.error("[render-audit-report] already-named read failed (no section shown):", e instanceof Error ? e.message : e);
+          }
+        }
         return htmlResponse(renderReport(model, { print: url.searchParams.get("print") === "1" }), 200);
       } catch (e) {
         // A design that cannot render must never cost the reader their report: fall through to the classic page.

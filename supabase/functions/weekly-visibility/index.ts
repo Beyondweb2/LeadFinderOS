@@ -3,7 +3,10 @@ import { bookOwnerId, isInternalCall, refusalBody, requireAdmin } from "../_shar
 import { hookQuestionsFor } from "../_shared/baseline-discovery.ts";
 import { paidMode } from "../_shared/protection.ts";
 import { buildAuditRunRequest } from "../../../src/lib/auditQuestionContext.ts";
-import { WEEKLY_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
+import { NAMED_RECHECK_AUDIT_PURPOSE, WEEKLY_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
+import { AUDIT_RULES_V2_FROM } from "../../../src/lib/auditVerdict.ts";
+import { foldNamedRecheck, namedRecheckDue } from "../../../src/lib/alreadyNamed.ts";
+import { alreadyNamedForBaseline } from "../_shared/already-named.ts";
 import { isPaidLead } from "../../../src/lib/leadPayment.ts";
 import { serviceRouteForTotal, serviceRouteFromRow, type ServiceRoute } from "../../../src/lib/findableOffer.ts";
 import { chooseWeeklySet, summariseWeek, weekOf, weeklyAffordable, weeklyStart, WEEKLY_CHECK_QUESTIONS } from "../../../src/lib/weeklyCheck.ts";
@@ -31,7 +34,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-const BUILD_ID = "weekly-visibility-2026-09-30c";
+const BUILD_ID = "weekly-visibility-2026-11-15-named-recheck";
 const FN = "weekly-visibility";
 const RUN_LEASE_SECONDS = 600;
 /** Refuse to start new checks when the Apify account is this full (directory-presence's rule). */
@@ -177,6 +180,104 @@ async function run(service: Service, url: string, secret: string, serviceKey: st
   return { week, clients: clients.length, spentThisWeekUsd: Math.round(spentThisWeek * 1000) / 1000, outcome };
 }
 
+
+/* ══ THE QUARTERLY NAMED RE-CHECK (Paul, 2026-11-15; src/lib/alreadyNamed.ts) ═══════════════════════════════════
+   A rules-v2 baseline's page lists the searches its Discovery already named the business on (stored answers, shown
+   once, never re-measured for the client, never the guarantee). For PAUL only, every NAMED_RECHECK_DAYS those searches
+   are asked again — ONE run, purpose 'named_recheck' (internal, refused by the public renderer) — and any search no
+   longer named is flagged in his bell. Same spending guards as the weekly check: the emergency stop, the Apify ceiling,
+   the per-check and weekly caps (weeklyAffordable), and at most MAX_NAMED_STARTS new checks per run.
+   ⛔ It reads no baseline number and writes nothing to the baseline, the lead or the guarantee. It sends nothing to
+   anyone outside the app. */
+const MAX_NAMED_STARTS = 3;
+const key = (s: string | null | undefined) => String(s ?? "").trim().toLowerCase();
+
+async function namedRechecks(service: Service, url: string, secret: string, serviceKey: string, owner: string | null): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  // 1. Fold finished re-checks (no spend): a re-check whose runs are all done and that has no fold yet.
+  const { data: rcs } = await service.from("ai_audits").select("id, short_code, business_name, business_type, location_text, created_at")
+    .eq("audit_purpose", NAMED_RECHECK_AUDIT_PURPOSE).is("archived_at", null).order("created_at", { ascending: false }).limit(200);
+  const rechecks = (rcs ?? []) as Array<{ id: string; short_code: string | null; business_name: string | null; business_type: string | null; location_text: string | null; created_at: string }>;
+  for (const a of rechecks) {
+    const { data: aRuns } = await service.from("ai_audit_runs").select("id, status, results").eq("audit_id", a.id);
+    const list = (aRuns ?? []) as Array<{ id: string; status: string; results: Record<string, unknown> | null }>;
+    if (!list.length || !list.every((x) => RUN_DONE.has(String(x.status))) || list.some((x) => x.results && (x.results as { named_recheck?: unknown }).named_recheck)) continue;
+    const { data: rows } = await service.from("ai_audit_queue").select("id, run_id, question, status, result").in("run_id", list.map((x) => x.id)).order("id").limit(400);
+    const qrows = (rows ?? []) as QueueRow[];
+    const searches = [...new Set(qrows.map((q) => String(q.question).trim()))];
+    const week = summariseWeek(a.created_at.slice(0, 10), searches, qrows, { name: a.business_name ?? "", location: a.location_text ?? "", trade: a.business_type ?? undefined });
+    const tallies = new Map(week.perQuestion.map((p) => [p.question, {
+      named: Object.values(p.named).filter((v) => v === true).length,
+      answered: Object.values(p.named).filter((v) => v !== null).length,
+    }]));
+    const fold = foldNamedRecheck(searches, tallies);
+    const first = list[0];
+    await service.from("ai_audit_runs").update({ results: { ...(first.results ?? {}), named_recheck: { ...fold, folded_at: new Date().toISOString() } } }).eq("id", first.id);
+    out[a.id] = `folded: ${fold.kept.length} kept, ${fold.dropped.length} dropped, ${fold.unknown.length} unanswered`;
+    if (fold.dropped.length && owner) {
+      const { error } = await service.rpc("notify_person", {
+        _user: owner, _kind: "audit_finished",
+        _title: `Already-named re-check: ${fold.dropped.length} search${fold.dropped.length === 1 ? "" : "es"} dropped · ${a.business_name ?? "a business"}`.slice(0, 200),
+        _body: `No longer named on: ${fold.dropped.slice(0, 6).join("; ")}${fold.dropped.length > 6 ? "; …" : ""}. Internal only — the client's baseline is unchanged.`,
+        _link: "/ai-audit", _lead: null, _dedupe: `named-recheck-${a.id}`, _priority: 2,
+      });
+      if (error) console.error("[weekly-visibility] named re-check notification not written:", error.message);
+    }
+  }
+
+  // 2. Start due re-checks.
+  const mode = await paidMode(service);
+  const pct = await apifyPct(service);
+  const { data: bs } = await service.from("ai_audits")
+    .select("id, short_code, business_name, business_type, location_text, website, country, lead_id, user_id, created_at, audit_purpose")
+    .in("audit_purpose", ["targeted", "baseline"]).is("archived_at", null).gte("created_at", AUDIT_RULES_V2_FROM).order("created_at", { ascending: false }).limit(200);
+  const baselines = (bs ?? []) as Array<{ id: string; short_code: string | null; business_name: string | null; business_type: string | null; location_text: string | null; website: string | null; country: string | null; lead_id: string | null; user_id: string | null; created_at: string }>;
+  const doneBiz = new Set<string>();
+  let started = 0;
+  let spent = 0;
+  for (const b of baselines) {
+    const biz = b.lead_id ? `lead:${b.lead_id}` : `name:${key(b.business_name)}`;
+    if (doneBiz.has(biz)) continue; // the newest baseline of a business speaks for it
+    doneBiz.add(biz);
+    const { data: runs } = await service.from("ai_audit_runs").select("id").eq("audit_id", b.id);
+    const { data: tq } = await service.from("ai_audit_queue").select("question").in("run_id", ((runs ?? []) as { id: string }[]).map((x) => x.id));
+    const targets = [...new Set(((tq ?? []) as { question: string }[]).map((x) => x.question.trim()))];
+    const an = await alreadyNamedForBaseline(service, { id: b.id, business_name: b.business_name, website: b.website, lead_id: b.lead_id, created_at: b.created_at }, targets);
+    if (!an) { out[b.id] = "no already-named searches"; continue; }
+    const last = rechecks.find((r) => key(r.business_name) === key(b.business_name));
+    const due = namedRecheckDue({ discoveryAt: an.discoveryAt, lastRecheckAt: last?.created_at ?? null });
+    if (!due.due) { out[b.id] = `next re-check due ${due.dueAt.slice(0, 10)}`; continue; }
+    if (started >= MAX_NAMED_STARTS) { out[b.id] = "due — waits for the next run (per-run limit)"; continue; }
+    if (mode === "all_stop") { out[b.id] = "due — paid calls paused (emergency stop)"; continue; }
+    if (pct === null || pct >= APIFY_CRITICAL_PCT) { out[b.id] = "due — Apify usage too high or unreadable"; continue; }
+    const afford = weeklyAffordable(an.searches.length, spent);
+    if (!afford.ok) { out[b.id] = `due — not started: ${afford.reason}`; continue; }
+    const body = {
+      ...buildAuditRunRequest({
+        business_name: b.business_name ?? "", business_category: b.business_type ?? "", primary_location: b.location_text ?? "",
+        country: b.country ?? "UK", website: b.website ?? "", services: [], service_areas: [], specialisms: [],
+      }, { questionCount: an.searches.length, purpose: NAMED_RECHECK_AUDIT_PURPOSE, userId: b.user_id ?? owner ?? undefined, questions: an.searches }),
+      /* ⛔ NO lead_id, ON PURPOSE: a completed audit carrying a lead can arm the audit_complete WhatsApp pitch
+         (process-ai-audit-queue). This internal check must never be able to message anyone. */
+      town_confirmed: true, target_runs: 1, skip_seo: true,
+    };
+    try {
+      const res = await fetch(`${url}/functions/v1/create-ai-audit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}`, "x-cron-secret": secret, "x-internal-job": "1" },
+        body: JSON.stringify(body),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload?.ok) throw new Error(String(payload?.error ?? `status ${res.status}`));
+      started++; spent += afford.estimateUsd;
+      out[b.id] = `started (${an.searches.length} searches)`;
+    } catch (e) {
+      out[b.id] = `start failed: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
+  return out;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: { ...corsHeaders, "x-build": BUILD_ID } });
   try {
@@ -195,6 +296,9 @@ Deno.serve(async (req) => {
     if (claimed !== true) return json({ ok: true, build: BUILD_ID, skipped: "another run is in progress" });
     try {
       const result = await run(service, url, secret, serviceKey);
+      /* The quarterly named re-check (2026-11-15) rides the same hourly, leased run. Its failure never costs the weekly result. */
+      try { result.namedRechecks = await namedRechecks(service, url, secret, serviceKey, await bookOwnerId(service)); }
+      catch (e) { result.namedRechecks = { error: e instanceof Error ? e.message : String(e) }; }
       await service.rpc("admin_job_finish", { _job: FN, _status: "ok", _result: result, _error: null });
       return json({ ok: true, build: BUILD_ID, ...result });
     } catch (e) {

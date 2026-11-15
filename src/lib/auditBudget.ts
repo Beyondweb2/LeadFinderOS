@@ -33,7 +33,7 @@ export const BUDGET_POOLS: readonly BudgetPool[] = ['guarantee', 'client', 'pros
 /** The guarantee: the frozen baseline and the day-28 replay. */
 export const GUARANTEE_POOL_PURPOSES: readonly string[] = ['baseline', 'remeasure'];
 /** Paid-client work that is not the guarantee. */
-export const CLIENT_POOL_PURPOSES: readonly string[] = ['measurement', 'discovery', 'weekly_check'];
+export const CLIENT_POOL_PURPOSES: readonly string[] = ['measurement', 'discovery', 'weekly_check', 'named_recheck'];
 
 /** Which pool an audit's spend comes from. POSITIVE matches only: anything else is prospecting. */
 export function budgetPoolForPurpose(purpose: unknown): BudgetPool {

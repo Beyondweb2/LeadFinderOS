@@ -11,6 +11,8 @@
    ⛔ Presentation only: nothing here scores, ranks or changes a rule. The numbers come from auditListSummary.ts.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -38,10 +40,33 @@ const TYPE_STYLE: Record<AuditTypeKey, string> = {
   weekly: 'bg-zinc-600 text-white dark:bg-zinc-500',
 };
 
+/** The quarterly named re-check's result (weekly-visibility folds it onto run 1): "12 still named · 1 dropped". Admin page only. */
+function NamedRecheckFlag({ audit }: { audit: AuditLite }) {
+  const first = [...audit.runs].sort((a, b) => a.run_number - b.run_number)[0];
+  const { data } = useQuery({
+    queryKey: ['named-recheck', first?.id],
+    enabled: !!first?.id,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data: row } = await supabase.from('ai_audit_runs').select('results').eq('id', first!.id).maybeSingle();
+      const f = (row?.results as { named_recheck?: { kept?: string[]; dropped?: string[]; unknown?: string[] } } | null)?.named_recheck;
+      return f ? { kept: f.kept?.length ?? 0, dropped: f.dropped ?? [], unknown: f.unknown?.length ?? 0 } : null;
+    },
+  });
+  if (!data) return <span className="ml-2 text-[11px] text-muted-foreground">Re-check not folded yet</span>;
+  return (
+    <span className="ml-2 inline-flex flex-wrap items-center gap-1 text-[11px] font-medium" title={data.dropped.length ? `No longer named on: ${data.dropped.join('; ')}` : 'Every already-named search is still named.'}>
+      <span className="rounded border border-sky-500/50 bg-sky-500/10 px-1.5 py-0.5 text-sky-700 dark:text-sky-300">{data.kept} still named</span>
+      {data.dropped.length > 0 && <span className="rounded border border-red-500/50 bg-red-500/10 px-1.5 py-0.5 text-red-700 dark:text-red-300">{data.dropped.length} dropped</span>}
+      {data.unknown > 0 && <span className="rounded border border-border/70 px-1.5 py-0.5 text-muted-foreground">{data.unknown} unanswered</span>}
+    </span>
+  );
+}
+
 /** Does this audit have a public report to open? A market audit and the internal weekly check have none. */
 export function hasReport(a: AuditLite): boolean {
   if (!a.short_code || a.is_market === true) return false;
-  if (String(a.audit_purpose ?? '').toLowerCase() === 'weekly_check') return false;
+  if (['weekly_check', 'named_recheck'].includes(String(a.audit_purpose ?? '').toLowerCase())) return false;
   return a.runs.some((r) => r.status === 'complete');
 }
 
@@ -186,7 +211,7 @@ function AuditRowCard({ au, archivedReady, showArchived, onOpenAudit, onCancelRu
             </span>
           )}
         </div>
-        <div className="min-w-0">{running ? <RunningProgress audit={au} /> : <PooledResult audit={au} />}</div>
+        <div className="min-w-0">{running ? <RunningProgress audit={au} /> : <PooledResult audit={au} />}{!running && String(au.audit_purpose ?? '').toLowerCase() === 'named_recheck' && <NamedRecheckFlag audit={au} />}</div>
         <div className="flex shrink-0 items-center gap-1">
           {running && runningRun && (
             <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => onCancelRun(au, runningRun.id)} disabled={cancellingId === au.id} title="Stop this audit">

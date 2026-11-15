@@ -65,6 +65,10 @@ export const DISCOVERY_AUDIT_PURPOSE = 'discovery';
    served publicly since 15634d49, so that refusal is explicit, not inherited. Created only by fn
    weekly-visibility (create-ai-audit accepts it internally). */
 export const WEEKLY_CHECK_AUDIT_PURPOSE = 'weekly_check';
+/** Paul's quarterly re-check of the searches a baseline's Discovery already named the business on (Paul, 2026-11-15;
+ *  src/lib/alreadyNamed.ts). INTERNAL, exactly like the weekly check: never a baseline, never the guarantee, never a client
+ *  report (render-audit-report refuses it), graded as the internal 'weekly_check' kind. Created only by fn weekly-visibility. */
+export const NAMED_RECHECK_AUDIT_PURPOSE = 'named_recheck';
 /** A baseline built from a Discovery's own answers (discovery-baseline, 2026-11-14): the 20 targeted searches, nothing
  *  asked again. NOT the guarantee baseline: it claims no pointer and starts no clock. Its report uses the baseline design. */
 export const TARGETED_AUDIT_PURPOSE = 'targeted';
@@ -140,7 +144,7 @@ export function auditKind(row: AuditKindRow): AuditKind {
     if (purpose === MEASUREMENT_AUDIT_PURPOSE || purpose === REMEASURE_AUDIT_PURPOSE) return 'measurement';
     if (purpose === FREE_CHECK_AUDIT_PURPOSE) return 'free_check';
     if (purpose === DISCOVERY_AUDIT_PURPOSE) return 'discovery';
-    if (purpose === WEEKLY_CHECK_AUDIT_PURPOSE) return 'weekly_check';
+    if (purpose === WEEKLY_CHECK_AUDIT_PURPOSE || purpose === NAMED_RECHECK_AUDIT_PURPOSE) return 'weekly_check';
     return 'ordinary';
   }
 

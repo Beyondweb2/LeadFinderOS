@@ -66,10 +66,20 @@ export interface ReportModel {
   /** The full sign-up for THIS lead (findable.live/onboarding/…?lead=<id>): questions, agreement, then payment, which makes
    *  the lead a paid client. Absent = no sign-up button (a paying client, no lead, prospect-only country, no site origin). */
   signupUrl?: string | null;
+  /** Baseline: "You're already named on X searches" — from the business's Discovery (stored answers, shown once, NOT
+   *  re-measured, NOT part of the guarantee; src/lib/alreadyNamed.ts). Absent / null = no section. */
+  alreadyNamed?: { dateLabel: string; searches: string[] } | null;
+  /** The header's place, from what is known about the business (alreadyNamed.ts reportPlaceLabel). Absent = `where`. */
+  place?: string | null;
 }
 
 export interface ReportModelInput {
   signupUrl?: string | null;
+  /** Baseline: "You're already named on X searches" — from the business's Discovery (stored answers, shown once, NOT
+   *  re-measured, NOT part of the guarantee; src/lib/alreadyNamed.ts). Absent / null = no section. */
+  alreadyNamed?: { dateLabel: string; searches: string[] } | null;
+  /** The header's place, from what is known about the business (alreadyNamed.ts reportPlaceLabel). Absent = `where`. */
+  place?: string | null;
   kind: ReportKind;
   businessName: string;
   /** The audit's own town or city ("London", "Wisbech"). */
@@ -156,6 +166,8 @@ export function buildReportModel(rows: OppRow[], ctx0: OppContext, o: ReportMode
     mainQuestions: o.kind === 'baseline' ? mainSearches(targets, o.town) : [],
     readability: o.kind === 'baseline' ? (o.readability ?? null) : null,
     signupUrl: o.signupUrl ?? null,
+    alreadyNamed: o.kind === 'baseline' && o.alreadyNamed && o.alreadyNamed.searches.length ? o.alreadyNamed : null,
+    place: o.place ?? undefined,
   };
 }
 
