@@ -32,6 +32,14 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       removed: [],
       effect: 'You can open a conversation with a short question. Every cold WhatsApp rule (UK mobiles, daily cap, opt-outs) still applies to it.',
     } },
+  { id: '2026-11-15-past-audits-clear', date: '2026-11-15', title: 'Past audits: one clear row per audit', audience: 'admin',
+    body: 'On the AI Audit page, Moments Wedding Content, London Domestic Maintenance and every audit made from now on show the new rows (older audits look as before). Each audit is now its own row with a big coloured type badge (Discovery, Baseline, Quick check, Website check), the pooled result for the whole audit (named % and Winnable X of N, the same numbers as its report), an Open report button and the opened count. Runs are folded under Show runs; older audits of a business fold under N older audits; a running audit shows live progress. Re-scored copies say Re-scored (new rules) and show no cost. The business header shows the named % of the latest audit, matching its report.',
+    report: {
+      added: ['Type badge, pooled result and Open report button on every audit row.', 'Re-scored (new rules) label.'],
+      changed: ['Runs are folded under Show runs.', 'Re-scored copies no longer add their copied cost to spend.'],
+      removed: [],
+      effect: 'You can see which kind each audit is and open its report from the list. Reports and scoring are unchanged.',
+    } },
   { id: '2026-11-15-audit-rules-v2', date: '2026-11-15', title: 'New Winnable rules: already named always counts as Winnable', audience: 'admin',
     body: 'Audit reports now decide Winnable / Not winnable with the new rules. If AI already names the business in any answer, the search is Winnable. Winnable means room to be named, not to come first: a search is Not winnable only when the list is closed (the same firms fill every spot in every answer and no other firm ever appears). A firm that is always there is just one to beat. Everything else is Winnable: names that change, no clear leader, only directories named, or a category or local gap. The whole-city cap is gone. A name only counts when it is the exact business name, its website or its Google profile; a near-name like "MC Moments Wedding Content" is flagged and not counted. Failed searches are re-run, never given a verdict; only genuinely odd questions are flagged. New baselines count the guarantee with the same strict name match; existing and paid baselines are unchanged. Reports made before today keep the page they showed; new audits and re-scored copies use the new rules.',
     report: {
