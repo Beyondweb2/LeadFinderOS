@@ -14,7 +14,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import type { ReportModel } from './reportModel.ts';
-import type { OppQuestion } from './reportOpportunity.ts';
+import { RULE_WORDS, type OppQuestion } from './reportOpportunity.ts';
 import { LFOS_CTA_LINE, LFOS_SITE_URL } from './reportBrand.ts';
 
 export function esc(s: unknown): string {
@@ -114,6 +114,23 @@ body.lf-has-sticky{padding-bottom:84px}
 .lf-foot{display:grid;gap:6px;border-top:1px solid var(--border);margin-top:28px;padding-top:16px;font-size:11.5px;color:var(--muted)}
 .lf-foot .lf-mark{width:20px;height:20px}
 .lf-footrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.lf-sample{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;padding:10px 16px;background:repeating-linear-gradient(135deg,#f5b301 0 14px,#f7c233 14px 28px);color:#1a1405;font:800 13px 'Plus Jakarta Sans',Inter,sans-serif;text-align:center;letter-spacing:.02em}
+.lf-sample span{font:500 12.5px Inter,sans-serif}
+.lf-split{display:grid;gap:12px}
+.lf-col h3{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:800;margin-bottom:10px}
+.lf-count{font:800 12px Inter,sans-serif;border-radius:999px;padding:2px 9px;background:var(--well);color:var(--muted)}
+.lf-col-on h3 .lf-count{background:color-mix(in srgb,var(--you) 16%,var(--well));color:var(--you)}
+.lf-col-room h3 .lf-count{background:color-mix(in srgb,var(--a) 22%,var(--well));color:#a5a7ff}
+.lf-rows{display:grid;gap:8px}
+.lf-row{background:var(--box2);border:1px solid var(--border);border-radius:14px;padding:11px 13px}
+.lf-row b{display:block;color:var(--strong);font-size:14px}
+.lf-row>span:not(.lf-badge){display:block;font-size:12.5px;color:var(--muted);margin-top:3px}
+.lf-badge{display:inline-block;font:700 11px Inter,sans-serif;text-transform:uppercase;letter-spacing:.06em;border-radius:8px;padding:2px 7px;margin-bottom:5px;background:var(--well);color:var(--muted)}
+.lf-b-named{color:var(--you);background:color-mix(in srgb,var(--you) 14%,var(--well))}
+.lf-b-lots{color:#a5a7ff;background:color-mix(in srgb,var(--a) 22%,var(--well))}
+.lf-b-some{color:#67e8f9;background:color-mix(in srgb,#22d3ee 14%,var(--well))}
+.lf-b-little{color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,var(--well))}
+.lf-rule{font-size:12.5px;color:var(--muted);margin:12px 0 0}
 .lf-wait{text-align:center;padding:48px 16px}
 .lf-wait h1{font-size:26px;margin-bottom:10px}
 .lf-pulse{animation:lfp 1.4s ease-in-out infinite}@keyframes lfp{50%{opacity:.45}}
@@ -125,7 +142,7 @@ body.lf-has-sticky{padding-bottom:84px}
   .lf-hero h1{font-size:40px}
   .lf-ring{width:160px;height:160px}.lf-ring>div{width:128px;height:128px}.lf-ring b{font-size:44px}
   .lf-lanes{grid-template-columns:1fr 1fr}
-  .lf-pair{grid-template-columns:1fr 1fr}
+  .lf-pair,.lf-split{grid-template-columns:1fr 1fr}
   .lf-end{padding:36px 38px}
   .lf-endtop{grid-template-columns:minmax(0,1.4fr) minmax(260px,1fr)}
   .lf-end h2{font-size:36px}
@@ -143,7 +160,7 @@ body.lf-has-sticky{padding-bottom:84px}
   .lf-hero{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}
   .lf-hero h1{font-size:30px}
   .lf-ring{width:120px;height:120px}.lf-ring>div{width:96px;height:96px}.lf-ring b{font-size:32px}
-  .lf-lanes,.lf-pair{grid-template-columns:1fr 1fr}
+  .lf-lanes,.lf-pair,.lf-split{grid-template-columns:1fr 1fr}
   .lf-endtop{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}
   .lf-steps{grid-template-columns:1fr 1fr}
   .lf-pdf,.lf-btn,.lf-try,.lf-sticky,.lf-ctanote{display:none!important}
@@ -258,8 +275,30 @@ function rivalsBlock(m: ReportModel): string {
   return `<div class="lf-card"><h3>Named instead</h3>${body}</div>`;
 }
 
+/* WHERE YOU STAND: the searches AI already names them on, beside the ones it does not yet, each graded by the written room rule
+   (reportOpportunity.ts RULE_WORDS) WITH its evidence ("6 answers named 9 different firms") and the rule in words under it.
+   Never a score, never a promise: the "not guarantees" line sits under it. Only when the name match can be judged. */
+const ROOM_SHOWN = new Set(['lots', 'some', 'little', 'nofirms']);
+function splitBlock(m: ReportModel): string {
+  const qs = m.all.slice(0, 8);
+  const on = qs.filter((q) => q.tier === 'named');
+  const room = qs.filter((q) => ROOM_SHOWN.has(q.tier)).sort((a, b) => ['lots', 'some', 'nofirms', 'little'].indexOf(a.tier) - ['lots', 'some', 'nofirms', 'little'].indexOf(b.tier));
+  if (!on.length && !room.length) return '';
+  const label = (t: string) => RULE_WORDS.find((w) => w.key === t)?.label ?? '';
+  const row = (q: OppQuestion) => `<div class="lf-row"><span class="lf-badge lf-b-${q.tier}">${esc(label(q.tier))}</span><b>${esc(q.question)}</b><span>${esc(q.why)}</span></div>`;
+  const col = (cls: string, title: string, list: OppQuestion[], empty: string) =>
+    `<div class="lf-card lf-col ${cls}"><h3>${title}<span class="lf-count">${list.length}</span></h3>` +
+    (list.length ? `<div class="lf-rows">${list.map(row).join('')}</div>` : `<p class="lf-none">${empty}</p>`) + `</div>`;
+  const rule = RULE_WORDS.filter((w) => ['lots', 'some', 'little'].includes(w.key)).map((w) => `${w.label}: ${w.short.toLowerCase()}`).join('. ');
+  return `<section class="lf-sec"><h2>Where you stand</h2><p class="lf-sub">The searches AI already names you on, and the ones it does not yet.</p>` +
+    `<div class="lf-split">${col('lf-col-on', 'Already named', on, 'Not named on any of these searches yet.')}${col('lf-col-room', 'Not named yet', room, 'AI names you on every search here.')}</div>` +
+    `<p class="lf-rule">How the room is read, from the answers themselves: ${esc(rule)}. These are measurements, not guarantees.</p></section>`;
+}
+
 export interface LfosRenderOpts {
   print?: boolean;
+  /** The example page at /r/example (leadfinderExample.ts): a "sample data" band on screen and in the PDF. */
+  example?: boolean;
   /** The name match could not be judged (auditReport nameNotJudgeable): no "Named you" / "Not named" verdicts are shown. */
   nameNotJudgeable?: boolean;
 }
@@ -294,8 +333,10 @@ export function renderLeadfinderReport(m: ReportModel, opts: LfosRenderOpts = {}
     `<li>Every result above is a real answer from ChatGPT or Gemini, recorded on ${esc(m.dateLabel)}.</li>` +
     `<li>The aim is to be named in the answer. This is not a ranking, and nobody can promise one.</li>` +
     `<li>AI answers change from day to day. These are measurements, not guarantees.</li></ul></div></section>`;
-  const inner = header(m.dateLabel) + `<div class="lf-body">${hero}${searchSec}${pair}${notes}${closing()}${footer(m.dateLabel, m.asks)}</div>`;
-  return page(`${biz} - AI visibility report | LeadFinderOS`, inner, { print: opts.print, sticky: !opts.print });
+  const split = judgeable ? splitBlock(m) : '';
+  const sample = opts.example ? `<div class="lf-sample" role="note">Example report · sample data<span>A made-up business, to show what a report looks like.</span></div>` : '';
+  const inner = sample + header(m.dateLabel) + `<div class="lf-body">${hero}${split}${searchSec}${pair}${notes}${closing()}${footer(m.dateLabel, m.asks)}</div>`;
+  return page(`${opts.example ? 'Example report · sample data | LeadFinderOS' : `${biz} - AI visibility report | LeadFinderOS`}`, inner, { print: opts.print, sticky: !opts.print });
 }
 
 /** While the audit is still running: no figures, LeadFinderOS-branded, no-store (the caller sets the header). */

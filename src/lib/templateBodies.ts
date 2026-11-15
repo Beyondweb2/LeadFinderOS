@@ -29,7 +29,7 @@ import { onboardingTemplateBody, signupLinkTemplateBody } from './whatsappLinkTe
 import { WELCOME_PACK_TEMPLATE_BODY } from './welcomePackWhatsApp.ts';
 import { reportOfferBody } from './reportOfferTemplate.ts';
 import { dashboardTemplateTranscript } from './dashboardTemplates.ts';
-import { webdevHookBody, webdevReportBody } from './webdevReport.ts';
+import { webdevExampleBody, webdevHookBody, webdevReportBody } from './webdevReport.ts';
 
 // ── Findable, link-bearing ────────────────────────────────────────────────
 const onboardingFollowupBody = (b: string, u: string) =>
@@ -447,6 +447,8 @@ export const READABLE_TEMPLATE_BODIES: Record<string, TemplateBodyFn> = {
   webdev_report: (b: string, u: string) => webdevReportBody(b, u),
   /* webdev_hook: no variables (src/lib/webdevReport.ts), shared with whatsapp-send.ts. */
   webdev_hook: () => webdevHookBody(),
+  /* webdev_example: no variables, the sample report link is fixed text (src/lib/webdevReport.ts), shared with whatsapp-send.ts. */
+  webdev_example: () => webdevExampleBody(),
   audit_reply: auditReplyBody,
   video_template: videoTemplateBody,
   competitor_hook: competitorHookBody,

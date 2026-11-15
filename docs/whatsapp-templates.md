@@ -811,6 +811,16 @@ body tables). Treated as approved; Meta's LIVE status is still read first at bot
 - **Report style (2026-11-15):** for a lead whose campaign has Report style = LeadFinderOS, {{2}} is
   `app.leadfinderos.com/r/<code>` (the LeadFinderOS report), not findable.live. See `src/lib/reportBrand.ts`.
 
+## `webdev_example` — the app pitch + the sample report link, no variables (2026-11-15, Paul)
+
+English, Marketing, **zero variables**: the link `https://app.leadfinderos.com/r/example` is fixed text, built from
+`LFOS_EXAMPLE_URL` (`src/lib/reportBrand.ts`). Body byte for byte in `src/lib/webdevReport.ts` (`webdevExampleBody`). Set up
+exactly like `webdev_report`: follow-up only (`CONTINUATION_TEMPLATES` + `NEEDS_PRIOR_WHATSAPP`), Meta's LIVE status read first
+at both senders (BUILD_ID `2026-11-15e-webdev-example`), both pickers (no link, no audit needed), Inbox label "Web dev example",
+"Put in message box" gets the full wording. Test: `scripts/webdev-example-template.test.ts`.
+The example page is built in `src/lib/leadfinderExample.ts` from fixed made-up rows and served by `functions/r/[slug].ts` before
+any fetch: no database read, no lead, no opens. It carries "Example report · sample data" on screen and in the PDF.
+
 ## `webdev_hook` — the same app pitch, no variables (2026-11-15, Paul)
 
 English, Marketing, no header/footer/buttons, **zero variables** (`vars: []`). Body byte for byte in `src/lib/webdevReport.ts`

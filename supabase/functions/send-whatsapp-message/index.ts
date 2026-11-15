@@ -130,7 +130,8 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
 /* 2026-11-15a: initial_question opener (no variables) - Meta's LIVE status is read first, like initial_contact_short. */
 /* 2026-11-15c: webdev_report follow-up ({{1}} name, {{2}} the latest report link, link-only audit resolve; needs prior WhatsApp). */
 /* 2026-11-15d: webdev_hook follow-up (no variables; needs prior WhatsApp; Meta live status first). */
-const BUILD_ID = "2026-11-15d-webdev-hook";
+/* 2026-11-15e: webdev_example follow-up (no variables, fixed sample report link; needs prior WhatsApp; Meta live status first). */
+const BUILD_ID = "2026-11-15e-webdev-example";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -650,7 +651,7 @@ Deno.serve(async (req) => {
          built; anything but APPROVED / UNKNOWN is refused with Meta's word and nothing is sent (UNKNOWN still tries — Meta decides). */
       /* initial_question (2026-11-15) is gated the same way: registered while Meta's review was still running. */
       /* webdev_report (2026-11-15) too: added the same day it was submitted. */
-      if (templateName === "initial_contact_short" || templateName === "initial_question" || templateName === "webdev_report" || templateName === "webdev_hook") {
+      if (templateName === "initial_contact_short" || templateName === "initial_question" || templateName === "webdev_report" || templateName === "webdev_hook" || templateName === "webdev_example") {
         const shortAvail = await templateAvailability(service, templateName);
         if (["PENDING", "IN_APPEAL", "REJECTED", "PAUSED", "DISABLED", "LIMIT_EXCEEDED", "NOT_FOUND"].includes(shortAvail.status)) {
           return json({ ok: false, error: "template_" + shortAvail.status.toLowerCase(), reason: "Meta says this template is " + shortAvail.status.toLowerCase().replace("_", " ") + " - nothing was sent." }, 200);

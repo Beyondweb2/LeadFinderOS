@@ -565,6 +565,8 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
   { value: 'webdev_report', label: 'Web dev report — "I ran one on …" (app pitch + their report link)' },
   /* webdev_hook (Paul, 2026-11-15) — the same app pitch with no variables. A follow-up only (never a first message). */
   { value: 'webdev_hook', label: 'Web dev hook — app pitch, no link ("Cool, if you’ve got space…")' },
+  /* webdev_example (Paul, 2026-11-15) — the same app pitch + the sample report link (/r/example). A follow-up only. */
+  { value: 'webdev_example', label: 'Web dev example — app pitch + sample report link' },
   { value: 'audit_reply', label: 'Audit reply (report + competitors)' },
   /* 🔴 THE LABEL SAID "Audit result hook (outreach)" AND THAT IS THE NAME OF THE TEMPLATE THIS ONE
      REPLACED. `audit_result_hook` was retired on 2026-09-12; `video_template` is its successor,

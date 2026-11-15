@@ -270,6 +270,7 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
   initial_question: 'Initial question ("Do you build websites…?")',
   webdev_report: 'Web dev report ("I ran one on …")',
   webdev_hook: 'Web dev hook (app pitch, no link)',
+  webdev_example: 'Web dev example (app pitch + sample report)',
   onboarding_followup: 'Onboarding follow-up',
   book_call: 'Arrange a call',
   re_engage_49: 'Re-engage (gone quiet)',
