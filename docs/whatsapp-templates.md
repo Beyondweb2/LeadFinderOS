@@ -808,3 +808,13 @@ body tables). Treated as approved; Meta's LIVE status is still read first at bot
 - **Picker:** `WA_TEMPLATE_REQS` needsAudit → greyed "Run an audit for this lead first." without a report. In-window
   "Put in message box" fills the wording with both variables (the dry run renders the same body).
 - Report opens after it are counted (`REPORT_LINK_TEMPLATES`). Test: `scripts/webdev-report-template.test.ts`.
+- **Report style (2026-11-15):** for a lead whose campaign has Report style = LeadFinderOS, {{2}} is
+  `app.leadfinderos.com/r/<code>` (the LeadFinderOS report), not findable.live. See `src/lib/reportBrand.ts`.
+
+## `webdev_hook` — the same app pitch, no variables (2026-11-15, Paul)
+
+English, Marketing, no header/footer/buttons, **zero variables** (`vars: []`). Body byte for byte in `src/lib/webdevReport.ts`
+(`webdevHookBody`), used by both body tables. Set up exactly like `webdev_report`: a follow-up only (`CONTINUATION_TEMPLATES` +
+`NEEDS_PRIOR_WHATSAPP`), treated as approved with Meta's LIVE status read first at both senders (BUILD_ID
+`2026-11-15d-webdev-hook`), in both pickers (needs no link and no audit), Inbox label "Web dev hook", "Put in message box" gets
+the full wording. Test: `scripts/webdev-hook-template.test.ts`.

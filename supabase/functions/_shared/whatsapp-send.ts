@@ -16,7 +16,7 @@ import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
 import { REPORT_OFFER_NO_NAME, REPORT_OFFER_TEMPLATE, reportOfferBody } from "../../../src/lib/reportOfferTemplate.ts";
 import { maskSecrets, metaErrorPartsFromResponse, type SendErrorParts } from "../../../src/lib/sendErrorMeaning.ts";
 import { cleanNeededItem, dashboardTemplateTranscript } from "../../../src/lib/dashboardTemplates.ts";
-import { webdevReportBody } from "../../../src/lib/webdevReport.ts";
+import { webdevHookBody, webdevReportBody } from "../../../src/lib/webdevReport.ts";
 
 export const GRAPH_VERSION = "v21.0";
 
@@ -123,6 +123,9 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
      where resolveAuditReplyVars answers it in LINK-ONLY mode (a report is all it needs). A CONTINUATION that NEEDS_PRIOR_WHATSAPP.
      Meta's LIVE status is read first at both senders. MIRRORS process-whatsapp-queue; change both together. */
   webdev_report: { lang: "en", vars: ["name", "audit_url"] },
+  /* webdev_hook — Paul, 2026-11-15 (src/lib/webdevReport.ts). English, Marketing, ZERO variables: vars MUST stay []. A CONTINUATION
+     that NEEDS_PRIOR_WHATSAPP. Meta's LIVE status is read first at both senders. MIRRORS process-whatsapp-queue. */
+  webdev_hook: { lang: "en", vars: [] },
   // Reply-to-a-reply: 4 vars — {{1}} trade, {{2}} competitors, {{3}} business name, {{4}} report link.
   // Vars resolved server-side per-lead from the lead's own completed audit (see resolveAuditReplyVars).
   audit_reply: { lang: "en", vars: ["trade", "competitors", "name", "url"] },
@@ -838,6 +841,7 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   initial_question: () => initialQuestionBody(),
   /* b = {{1}} business name, u = {{2}} report link. The one body, shared with the SPA (src/lib/webdevReport.ts). */
   webdev_report: (b, u) => webdevReportBody(b, u),
+  webdev_hook: () => webdevHookBody(),
   audit_reply: auditReplyBody,
   video_template: videoTemplateBody,
   competitor_hook: competitorHookBody,

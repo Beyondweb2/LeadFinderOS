@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-15-leadfinderos-report-style', date: '2026-11-15', title: 'LeadFinderOS report style for web-dev campaigns, and the Web dev hook template', audience: 'all',
+    body: 'Each campaign now has a "Report style" (Edit campaign, admin only): Findable, the default and unchanged, or LeadFinderOS. Web devs/agencies · WhatsApp is set to LeadFinderOS. Its leads’ reports open on the LeadFinderOS app address (/r/<code>) in the LeadFinderOS look, with no Findable name, price or guarantee, and end with "Run reports like this for your clients. Start free at leadfinderos.com". The Web dev report template and Copy Report Link use that link. Web-dev leads’ audits now ask about web design, SEO and websites in their area. A new WhatsApp follow-up, Web dev hook (the app pitch, no link), is in both pickers.',
+    report: {
+      added: ['"Report style" on each campaign (admin only): Findable or LeadFinderOS.', 'The LeadFinderOS report page on the LeadFinderOS app address (/r/<code>): desktop, phone and PDF.', 'Web dev hook WhatsApp template (no variables, a follow-up only) in the Outreach and Inbox pickers, with "Put in message box".'],
+      changed: ['Web devs/agencies · WhatsApp uses the LeadFinderOS style, including audits already sent: their old findable.live links now show the LeadFinderOS page too.', 'Web dev report template and Copy Report Link give the LeadFinderOS link for those leads; opens are still counted.', 'Audits for web designers, developers, SEO and web agencies ask "best web designer", "best SEO agency" and "build a website for a small business" in their area.'],
+      removed: [],
+      effect: 'Web developers we pitch see a LeadFinderOS report, not a Findable one. Every other campaign’s reports are exactly as before.',
+    } },
   { id: '2026-11-15-webdev-report-template', date: '2026-11-15', title: 'New WhatsApp follow-up: Web dev report ("I ran one on …")', audience: 'all',
     body: 'A new WhatsApp template, Web dev report, is in the template pickers. It pitches the app to a web developer or SEO person and links the report we ran on their own business. The business name and their latest report link fill in by themselves. It is a follow-up: it only goes to a number we have already messaged, never as a first message. If the lead has no report yet it is greyed out with "Run an audit for this lead first" and nothing is sent. When their 24 hours are open, "Put in message box" fills the box with the wording and the link.',
     report: {

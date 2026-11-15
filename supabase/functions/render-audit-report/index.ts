@@ -35,6 +35,8 @@ import { usableSiteEvidence, type SiteEvidence } from "../../../src/lib/siteEvid
 import { reportContentIssues } from "../../../src/lib/contentTrust.ts";
 import { issueLine, websiteCheckFor } from "../../../src/lib/websiteCheck.ts";
 import { readabilityFromCheck, type AiReadability } from "../../../src/lib/aiReadability.ts";
+import { LFOS_BRAND_PARAM, LFOS_BRAND_VALUE, lfosReportUrl, reportStyleOf, type ReportStyle } from "../../../src/lib/reportBrand.ts";
+import { renderLeadfinderMeasuring, renderLeadfinderReport, renderLeadfinderUnavailable } from "../../../src/lib/leadfinderReport.ts";
 
 /** The stored crawl shape this function reads, from either the run's results or the lead-level row.
  *  `evidence` / `evidenceVersion` are optional because every row written before 2026-09-22 has
@@ -140,9 +142,15 @@ async function recordAuditOpen(service: any, auditId: string, userAgent: string)
 Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
+    /* ══ REPORT STYLE (Paul, 2026-11-15; src/lib/reportBrand.ts) ═══════════════════════════════════════════════════════
+       brand=leadfinderos = the request came in on the LeadFinderOS address (V1's functions/r/[slug].ts). There, every refusal
+       is the LeadFinderOS page (never another brand's), and ONLY a LeadFinderOS-style report is served: a Findable client's
+       report is refused, so the brands never cross. The style itself is the lead's campaign's, read at render time below. */
+    const lfosHost = url.searchParams.get(LFOS_BRAND_PARAM) === LFOS_BRAND_VALUE;
+    const no = (msg: string): Response => lfosHost ? htmlResponse(renderLeadfinderUnavailable(msg), 404) : unavailable(msg);
     // Accept ?slug=… or a trailing path segment (…/render-audit-report/<slug>).
     const slug = (url.searchParams.get("slug") || url.pathname.split("/").filter(Boolean).pop() || "").trim();
-    if (!slug) return unavailable("No report specified.");
+    if (!slug) return no("No report specified.");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -166,12 +174,12 @@ Deno.serve(async (req) => {
       const { data: bySc } = await service
         .from("ai_audits").select("id").eq("short_code", slug.toLowerCase()).maybeSingle();
       const scId = (bySc as { id?: string } | null)?.id ?? null;
-      if (!scId) return unavailable("This report link is no longer valid.");
+      if (!scId) return no("This report link is no longer valid.");
       auditId = scId;
     } else {
       const code = auditCodeFromSlug(slug);
       // No code → a bare name, or junk. Either way there is nothing to resolve.
-      if (!code) return unavailable("This report link is no longer valid.");
+      if (!code) return no("This report link is no longer valid.");
       const { data: reps } = await service
         .from("business_reports")
         .select("audit_id")
@@ -181,7 +189,7 @@ Deno.serve(async (req) => {
          stranger's report would be far worse than a dead link. See the note in reportSlug.ts. */
       if (matches.length !== 1 || !matches[0].audit_id) {
         if (matches.length > 1) console.error(`[render-audit-report] code ${code} matched ${matches.length} reports — refusing to guess.`);
-        return unavailable("This report doesn’t exist or isn’t published.");
+        return no("This report doesn’t exist or isn’t published.");
       }
       auditId = matches[0].audit_id as string;
     }
@@ -197,7 +205,7 @@ Deno.serve(async (req) => {
       // served as client reports since 15634d49 (Paul, 2026-09-18).
       .select("id, short_code, business_name, business_type, location_text, specialism, website, has_website, is_market, lead_id, baseline_target_runs, is_measurement, audit_purpose, created_at, business_address, business_scope, country")
       .eq("id", auditId).maybeSingle();
-    if (!audit) return unavailable("Audit not found.");
+    if (!audit) return no("Audit not found.");
     // Every non-market audit is rendered as the same client-facing report, whether it contains a
     // single audit run or a multi-run measurement. Operator controls exist only in the SPA.
     /* ⛔ THE PUBLIC RENDERER REFUSES MARKET AUDITS. This is the one an outsider could reach with a
@@ -206,7 +214,7 @@ Deno.serve(async (req) => {
        Reads the column, never the name. */
     if ((audit as { is_market?: boolean }).is_market === true) {
       console.log(`[render-audit-report] REFUSED market audit ${audit.id}: no business attached.`);
-      return unavailable("No report for this audit.");
+      return no("No report for this audit.");
     }
     /* ⛔ THE WEEKLY VISIBILITY CHECK IS NEVER A CLIENT REPORT (Admin control centre, release 4,
        2026-09-30). It is Paul's directional monitoring — often a partial set, one run — and a client who
@@ -216,7 +224,7 @@ Deno.serve(async (req) => {
     /* The quarterly named re-check (2026-11-15) is internal in exactly the same way. */
     if ([WEEKLY_CHECK_AUDIT_PURPOSE, NAMED_RECHECK_AUDIT_PURPOSE].includes(String((audit as { audit_purpose?: string | null }).audit_purpose ?? ""))) {
       console.log(`[render-audit-report] REFUSED weekly check ${audit.id}: internal monitoring.`);
-      return unavailable("No report for this audit.");
+      return no("No report for this audit.");
     }
 
     // 3) latest run for the audit.
@@ -224,7 +232,7 @@ Deno.serve(async (req) => {
       .from("ai_audit_runs")
       .select("id, audit_id, run_number, status, mention_rate, results, created_at")
       .eq("audit_id", audit.id).order("run_number", { ascending: false }).limit(1).maybeSingle();
-    if (!run) return unavailable("No audit run yet for this business.");
+    if (!run) return no("No audit run yet for this business.");
 
     /* 4) queue rows across ALL runs of the audit. A Full Measurement asks each question over several
        runs; buildReportData groups by question and aggregates across them so "named X of Y" is the
@@ -266,7 +274,8 @@ Deno.serve(async (req) => {
     let leadServices: string[] = [];
     let leadAreas: string[] = [];
     let readability: AiReadability | null = null;
-    const leadId = (audit as { lead_id?: string | null }).lead_id ?? null;
+    let reportStyle: ReportStyle = "findable";
+    const leadId =(audit as { lead_id?: string | null }).lead_id ?? null;
     if (leadId) {
       const { data: svc } = await service.from("outreach_leads").select("services_included, service_areas").eq("id", leadId).maybeSingle();
       const asList = (v: unknown) => Array.isArray(v) ? v.map(String).filter(Boolean) : [];
@@ -277,8 +286,13 @@ Deno.serve(async (req) => {
            paid before audit_purpose existed (2026-09-12) carry NULL on their baseline rows, and the
            lead claiming an audit is the only evidence those are paid baselines. Both columns are set
            by DB triggers and are immutable once set (src/lib/reportKind.ts). */
-        .from("outreach_leads").select("amount_paid, website, place_id, baseline_audit_id, remeasure_audit_id, country, address, remeasure_due_date").eq("id", leadId).maybeSingle();
-      const l = lead as { amount_paid?: unknown; website?: string | null; place_id?: string | null; baseline_audit_id?: string | null; remeasure_audit_id?: string | null; country?: string | null; address?: string | null; remeasure_due_date?: string | null } | null;
+        .from("outreach_leads").select("amount_paid, website, place_id, baseline_audit_id, remeasure_audit_id, country, address, remeasure_due_date, campaign_id").eq("id", leadId).maybeSingle();
+      const l = lead as { amount_paid?: unknown; website?: string | null; place_id?: string | null; baseline_audit_id?: string | null; remeasure_audit_id?: string | null; country?: string | null; address?: string | null; remeasure_due_date?: string | null; campaign_id?: string | null } | null;
+      /* The report style follows the lead's campaign NOW (reportBrand.ts): a failed read is Findable, the default. */
+      if (l?.campaign_id) {
+        const { data: camp } = await service.from("campaigns").select("report_style").eq("id", l.campaign_id).maybeSingle();
+        reportStyle = reportStyleOf(camp as { report_style?: string | null } | null);
+      }
       leadRemeasureDue = l?.remeasure_due_date ? String(l.remeasure_due_date) : null;
       leadProspectOnly = prospectOnlyLead(l);
       amountPaid = Number(l?.amount_paid ?? 0) || 0;
@@ -287,6 +301,9 @@ Deno.serve(async (req) => {
       leadBaselineAuditId = l?.baseline_audit_id ? String(l.baseline_audit_id) : null;
       leadRemeasureAuditId = l?.remeasure_audit_id ? String(l.remeasure_audit_id) : null;
     }
+    const lfos = reportStyle === "leadfinderos";
+    /* ⛔ The LeadFinderOS address serves only LeadFinderOS-style reports (a Findable client's report is not shown there). */
+    if (lfosHost && !lfos) return no("This report link is no longer valid.");
     const auditWebsite = String(audit.website ?? "").trim();
     const ownWebsite = auditWebsite || leadWebsite;
     /* No lead (a wizard audit): the operator answered the website question themselves, so the
@@ -315,7 +332,7 @@ Deno.serve(async (req) => {
         (audit as { is_measurement?: unknown }).is_measurement,
       ),
     });
-    if (!data) return unavailable("This audit hasn’t completed yet — check back shortly.");
+    if (!data) return no("This audit hasn’t completed yet — check back shortly.");
 
     /* ── STILL MEASURING? (2026-09-13) ─────────────────────────────────────────────────────────
        AD Locksmithing's report read "4 of 12 answers" while run 3 was going and "5 of 18" twenty
@@ -376,6 +393,12 @@ Deno.serve(async (req) => {
        never is). See shareUrlFor and reportSlug.ts. */
     const auditShortCode = (audit as { short_code?: string | null }).short_code ?? null;
     data.shareUrl = auditShortCode ? shortReportUrl(auditShortCode) : shareUrlFor(supabaseUrl, audit.id);
+    /* LeadFinderOS style: its own address, and no Findable offer / sign-up of any kind. */
+    if (lfos) {
+      if (auditShortCode) data.shareUrl = lfosReportUrl(auditShortCode);
+      data.showOffer = false;
+      data.offerUrl = null;
+    }
     /* The prospect's own site as a bare host, for the quick report's site card. An aggregator page (a Facebook
        or directory listing) is not their website, so it never names one. */
     if (ownWebsite && !isAggregatorUrl(ownWebsite)) {
@@ -516,7 +539,13 @@ Deno.serve(async (req) => {
        report. PRESENTATION ONLY: they read the same stored answers (counts), never a score, and never run the
        audit. Anything measuring / name-unjudgeable / the day-28 re-measure keeps the classic page, and
        ?design=classic always shows it. See src/lib/reportDesign.ts + reportOpportunity.ts. */
-    const designKind = chooseReportDesign({
+    /* ══ LEADFINDEROS STYLE (src/lib/leadfinderReport.ts): always its own page, built from the same model; never the classic
+       Findable page, never ?design=classic. A hook (three searches or fewer) shows each search; a longer audit shows them all. */
+    if (lfos && data.measuring) {
+      return htmlResponse(renderLeadfinderMeasuring(audit.business_name ?? "", data.generatedAtLabel, data.measuring.runsDone, data.measuring.runsTarget), 200, { noStore: true });
+    }
+    const lfosKind = new Set(queueRows.map((r) => r.question.trim())).size > 3 ? "opportunity" as const : "hook" as const;
+    const designKind = lfos ? lfosKind : chooseReportDesign({
       auditPurpose: (audit as { audit_purpose?: string | null }).audit_purpose ?? null,
       paidKind: kind,
       hookComplete: data.hook?.shape === "six" && !!data.hook.score,
@@ -578,6 +607,10 @@ Deno.serve(async (req) => {
            (nationwide) the country. Never the commonest place in the search list: that put "Clare" on Moments' baseline. */
         const au = audit as { business_address?: string | null; business_scope?: string | null; country?: string | null };
         model.place = reportPlaceLabel({ town, address: au.business_address ?? null, scope: au.business_scope ?? null, country: au.country ?? null, fromSearches: model.where });
+        if (lfos) {
+          model.signupUrl = null;
+          return htmlResponse(renderLeadfinderReport(model, { print: url.searchParams.get("print") === "1", nameNotJudgeable: data.nameNotJudgeable === true }), 200);
+        }
         /* "YOU'RE ALREADY NAMED ON X SEARCHES" (Paul, 2026-11-15; src/lib/alreadyNamed.ts): a rules-v2 baseline opens with the
            searches its Discovery's STORED answers already name it on. Shown once, never re-measured for the client, never part
            of the guarantee: nothing above (the 20 targets, their counts, the frozen day-0 numbers) reads it. Older baselines
@@ -594,11 +627,16 @@ Deno.serve(async (req) => {
       } catch (e) {
         // A design that cannot render must never cost the reader their report: fall through to the classic page.
         console.error("[render-audit-report] redesign failed, serving classic:", e instanceof Error ? e.message : e);
+        /* ⛔ A LeadFinderOS-style lead must never fall through to the Findable classic page. */
+        if (lfos) return no("Something went wrong rendering this report.");
       }
     }
     return htmlResponse(renderReportHtml(data), 200, { noStore: !!data.measuring });
   } catch (e) {
     console.error("[render-audit-report] error:", e instanceof Error ? e.message : e);
-    return unavailable("Something went wrong rendering this report.");
+    const msg = "Something went wrong rendering this report.";
+    let onLfos = false;
+    try { onLfos = new URL(req.url).searchParams.get(LFOS_BRAND_PARAM) === LFOS_BRAND_VALUE; } catch { /* plain page */ }
+    return onLfos ? htmlResponse(renderLeadfinderUnavailable(msg), 404) : unavailable(msg);
   }
 });

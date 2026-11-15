@@ -50,6 +50,7 @@ import {
   expectedResponses, planGenerationBatches,
 } from "../../../src/lib/auditPlan.ts";
 import { planHookQuestionsBestFirst } from "../../../src/lib/hookAudit.ts";
+import { isWebdevTrade, webdevHookQuestions } from "../../../src/lib/webdevReport.ts";
 import { categoryMayBeNarrower, homepageWords, siteTradeFor } from "../../../src/lib/siteClaims.ts";
 import { canWorkLead, isClientLead, refusalBody, resolveActor, salesAuditRefusal, type Actor } from "../_shared/access.ts";
 import { guardAction, paidMode } from "../_shared/protection.ts";
@@ -246,6 +247,8 @@ function buildMarketContext(
    are the three that run (confirming sends them back verbatim, and the run re-plans them unchanged). */
 function finalHookPlan(questions: string[], ctx: { town: string; country: string | null; trade: string; businessName: string }): string[] {
   const hookPlace = hookPlaceFor(ctx.town, ctx.country);
+  /* ⛔ WEB-DEV LEADS (Paul, 2026-11-15; src/lib/webdevReport.ts): their own trade (web design, SEO, websites) in their area. */
+  if (isWebdevTrade(ctx.trade) && hookPlace.trim()) return webdevHookQuestions(hookPlace);
   /* ⛔ QUESTION 1 IS ALWAYS "Who is the best [trade] in [town]?" (Paul, 2026-10-23); the rest keep their order. */
   let qs = planHookQuestionsBestFirst(dedupeQuestions(questions).questions, { town: ctx.town, trade: ctx.trade, place: hookPlace });
   if (qs.length < HOOK_SCORE_QUESTIONS) {
