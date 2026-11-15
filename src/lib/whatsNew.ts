@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-15-webdev-report-template', date: '2026-11-15', title: 'New WhatsApp follow-up: Web dev report ("I ran one on …")', audience: 'all',
+    body: 'A new WhatsApp template, Web dev report, is in the template pickers. It pitches the app to a web developer or SEO person and links the report we ran on their own business. The business name and their latest report link fill in by themselves. It is a follow-up: it only goes to a number we have already messaged, never as a first message. If the lead has no report yet it is greyed out with "Run an audit for this lead first" and nothing is sent. When their 24 hours are open, "Put in message box" fills the box with the wording and the link.',
+    report: {
+      added: ['Web dev report in the WhatsApp template pickers (Outreach and Inbox), with the business name and report link filled in.'],
+      changed: [],
+      removed: [],
+      effect: 'You can send web developers their own report with the app pitch in one go. It cannot be a first message, and it cannot go without a report link.',
+    } },
   { id: '2026-11-15-onboarding-to-audit', date: '2026-11-15', title: 'Paid clients: setup answers go straight to Discovery and the baseline', audience: 'admin',
     body: 'After paying, the client\'s setup form now also asks two optional questions: anything they do but don\'t want more of (for example emergency call-outs), and the area they cover in their own words (for example "all London boroughs inside the M25"). The towns box is now called "Priority towns or areas". When a paid client sends their setup answers you get an email and a bell alert listing them, with a link that opens Prepare baseline. The client page has a "Client\'s setup answers" card with two buttons: Run Discovery and Create baseline. Both write draft questions from the answers: only the services they want, their towns, never anything they don\'t offer or don\'t want pushed. Nothing is measured or frozen until you review and approve, and running Discovery still asks you to confirm the cost. The agreement, prices and guarantee are unchanged.',
     report: {

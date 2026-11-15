@@ -267,6 +267,7 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
   initial_opener_v2: 'Initial contact v2 (newer opener)',
   initial_contact_short: 'Initial contact short ("Hey, is this …?")',
   initial_question: 'Initial question ("Do you build websites…?")',
+  webdev_report: 'Web dev report ("I ran one on …")',
   onboarding_followup: 'Onboarding follow-up',
   book_call: 'Arrange a call',
   re_engage_49: 'Re-engage (gone quiet)',

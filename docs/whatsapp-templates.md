@@ -792,3 +792,19 @@ header, footer or buttons. Meta approval was still in progress when it was added
   `whatsAppSendRequest` (`sendErrorMeaning`), not shown as raw Meta text.
 - Registered in: openerVariant, WHATSAPP_TEMPLATES (picker), WA_TEMPLATE_REQS, both body tables, Inbox TEMPLATE_DISPLAY,
   campaign wording, WA_TEMPLATES + queue mirror. Test: `scripts/initial-question-template.test.ts`.
+
+## `webdev_report` — app pitch to a web dev, with their own report (2026-11-15, Paul)
+
+English, Marketing, no header/footer/buttons. Body as Paul submitted it (one copy: `src/lib/webdevReport.ts`, used by both
+body tables). Treated as approved; Meta's LIVE status is still read first at both senders (BUILD_ID `2026-11-15c-webdev-report`).
+- **Variables:** `["name", "audit_url"]` — {{1}} the business name (kept whole: `IDENTIFY_NAME_TEMPLATES`, so "I ran one on
+  Leeds Boilers", never "Leeds"), {{2}} the lead's latest completed audit's report link (`findable.live/r/<code>`). Both
+  resolved server-side by `resolveAuditReplyVars` in **link-only mode** (`REPORT_LINK_ONLY_TEMPLATES`): the body claims nothing
+  about who AI named, so the competitor / absence / named-share / trade refusals do not apply. No report → refused with
+  `NO_REPORT_REASON` ("Run an audit first…"); a capped run with no answers → "re-run it". Meta never gets a blank link
+  (`audit_url` throws on empty).
+- **A follow-up, the same setup as `initial_question`:** in `CONTINUATION_TEMPLATES` and `NEEDS_PRIOR_WHATSAPP` (both
+  senders refuse it to a number never messaged). `NEEDS_PRIOR_WHATSAPP_REASON` now says "This template is a follow-up…".
+- **Picker:** `WA_TEMPLATE_REQS` needsAudit → greyed "Run an audit for this lead first." without a report. In-window
+  "Put in message box" fills the wording with both variables (the dry run renders the same body).
+- Report opens after it are counted (`REPORT_LINK_TEMPLATES`). Test: `scripts/webdev-report-template.test.ts`.

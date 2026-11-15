@@ -18,6 +18,7 @@ import { isHookState } from "../../../src/lib/hookAudit.ts";
 import { HOOK_SCORE_RESULTS, isHookStateV2, scoreHookRun, type HookScoreContext, type HookScoreRow } from "../../../src/lib/hookScore.ts";
 import { scoringMethodFor } from "../../../src/lib/aiOverview.ts";
 import { worstMiss } from "../../../src/lib/worstMiss.ts";
+import { NO_REPORT_REASON, REPORT_LINK_ONLY_TEMPLATES } from "../../../src/lib/webdevReport.ts";
 
 /* ── The all-named hook guard ──────────────────────────────────────────────────────────────────────
    ⛔ A HOOK THAT NAMED THEM EVERYWHERE FORBIDS ABSENCE COPY (Paul, 2026-09-21). Several audit-class
@@ -148,7 +149,28 @@ export async function resolveAuditReplyVars(service: any, leadId: string, opts: 
     const done = runs.find((r) => r.status === "complete" || r.status === "capped");
     if (done) { audit = a; run = done; break; }
   }
+  /* ⛔ LINK-ONLY TEMPLATES (webdev_report, src/lib/webdevReport.ts, 2026-11-15): the body names the business and links its report,
+     and claims nothing about who AI named. So it needs only a finished audit with a report: no competitor, absence, named-share
+     or trade rule applies. A lead with no report is refused with the plain "Run an audit first" words, never a blank link. */
+  const linkOnly = !!opts.templateName && REPORT_LINK_ONLY_TEMPLATES.has(opts.templateName);
+  if (linkOnly && (!audit || !run)) return { ok: false, reason: NO_REPORT_REASON };
   if (!audit || !run) return { ok: false, reason: "No completed audit for this lead yet — run an audit first." };
+  if (linkOnly) {
+    const linkBusiness = (audit.business_name ?? "").trim();
+    if (!linkBusiness) return { ok: false, reason: "The audit has no business name, so the message cannot say whose report it is. Nothing was sent." };
+    if (run.status === "capped") {
+      const { data: crows } = await service.from("ai_audit_queue").select("id, question, status, result").eq("run_id", run.id);
+      if (countAnsweredCells((crows ?? []) as Parameters<typeof countAnsweredCells>[0]) === 0) {
+        return { ok: false, reason: "The audit didn't answer any questions, so its report is empty — re-run it. Nothing was sent." };
+      }
+    }
+    const reportLink = (audit.short_code as string | null | undefined)
+      ? shortReportUrl(audit.short_code as string)
+      : `${REPORT_SITE_ORIGIN}/report/${audit.id}`;
+    return { ok: true, trade: (audit.business_type ?? "").trim(), competitors: "", rivals: [], business: linkBusiness, link: reportLink,
+      town: (audit.location_text ?? "").trim(), auditId: audit.id, siteFault: null, siteFindings: null, siteFindingsKinds: null,
+      hookQuestion: null, hookEngine: null, visibilityPct: null, scoreNamed: null, scoreTotal: null, worstMiss: null };
+  }
 
   /* ⛔ THE ALL-NAMED HOOK SENDS NOTHING FROM HERE (2026-09-21, hookForbidsAbsenceCopy above). Every template
      this resolver serves is built on the lead's audit, and several state as fact that the business was

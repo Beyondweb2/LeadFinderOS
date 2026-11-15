@@ -138,6 +138,8 @@ export const REPORT_LINK_TEMPLATES: ReadonlySet<string> = new Set([
   'audit_followup_fault',
   // ai_visibility_report_offer (2026-10-14) carries the report link in {{5}}.
   'ai_visibility_report_offer',
+  // webdev_report (2026-11-15) carries the lead's latest report link in {{2}}.
+  'webdev_report',
   // ⛔ ai_site_findings_v2 is DELIBERATELY ABSENT (2026-09-25): the approved body carries NO report
   // link, so counting it here would mark "report sent" on a thread that has never been sent one —
   // the same reason audit_followup_call is absent. No row was ever sent with the old 7-var body (it

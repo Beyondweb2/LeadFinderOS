@@ -118,8 +118,8 @@ export type NameStyle = "greet" | "identify" | "clean";
    ⚠️ MEMBERSHIP IS DECIDED BY THE SENTENCE, NOT THE TONE: `initial_contact` is here because its
    body is "Hi, is this ${b}?". Every other live body opens "Hi ${b}," and wants the short form. */
 /* welcome_pack_ready (2026-10-29): "your welcome pack for {{2}}" names the business, so the greeting peel ("Leeds Boilers" ->
-   "Leeds") would be wrong there. */
-export const IDENTIFY_NAME_TEMPLATES: ReadonlySet<string> = new Set(["initial_contact", "welcome_pack_ready"]);
+   "Leeds") would be wrong there. webdev_report (2026-11-15): "I ran one on {{1}}" names the business, same reason. */
+export const IDENTIFY_NAME_TEMPLATES: ReadonlySet<string> = new Set(["initial_contact", "welcome_pack_ready", "webdev_report"]);
 
 /* ⛔ THE THIRD STYLE: "clean" — the short lowercase name of src/lib/cleanBusinessName.ts (Paul, 2026-10-15). A
    template opts in by being named HERE and nowhere else; the send, the stored body and the Inbox mirror all
