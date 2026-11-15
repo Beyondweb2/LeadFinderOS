@@ -160,6 +160,7 @@ const COUNTRIES: { value: string; label: string }[] = [
 import type { AuditRow, RunLite, AuditLite, BusinessGroup, LeadOption } from '@/types/auditBook';
 import { auditListQueryKey } from '@/types/auditBook';
 import { AuditBookList } from '@/components/audit/AuditBookList';
+import { isRescoredCopy } from '@/lib/auditListSummary';
 import { ProspectPreviewButton } from '@/components/ProspectPreviewPanel';
 const TERMINAL = new Set(['complete', 'capped', 'failed', 'cancelled']);
 
@@ -2150,7 +2151,8 @@ const AiAudit = () => {
         runningRun: allRuns.find((r) => r.status === 'pending' || r.status === 'running') ?? null,
         auditCount: audits.length,
         runCount: allRuns.length,
-        cost: allRuns.reduce((sum, r) => sum + (r.actor_cost_usd ?? 0), 0),
+        /* A re-scored copy re-read stored answers and cost nothing: its copied run cost is not spend. */
+        cost: audits.filter((a) => !isRescoredCopy(a)).flatMap((a) => a.runs).reduce((sum, r) => sum + (r.actor_cost_usd ?? 0), 0),
       });
     }
     // Most recent activity first within a trade.
