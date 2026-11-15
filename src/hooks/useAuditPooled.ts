@@ -14,7 +14,8 @@ import type { AuditLite } from '@/types/auditBook';
    pooled numbers are counted once and kept, keyed by audit id, run count and rules version. Visiting the page again reads
    them back instead of re-fetching every answer. Browser storage can be blocked or empty: every access is guarded and
    the page then simply counts as before. */
-const cacheKey = (a: AuditLite) => `fos.auditPooled.v1:${AUDIT_RULES_VERSION}:${a.id}:${a.runs.length}`;
+/* v2 (2026-11-15): the crowding rule and the three-way split; a v1 entry holds the old counts and no split. */
+const cacheKey = (a: AuditLite) => `fos.auditPooled.v2:${AUDIT_RULES_VERSION}:${a.id}:${a.runs.length}`;
 function readCache(a: AuditLite): PooledSummary | undefined {
   try { const v = localStorage.getItem(cacheKey(a)); return v ? (JSON.parse(v) as PooledSummary) : undefined; } catch { return undefined; }
 }

@@ -192,6 +192,7 @@ a.rp-fk{text-decoration:none}
 .rp-chat-b mark{background:var(--y);padding:0 3px;border-radius:3px}
 .rp-grp{margin:16px 0 6px;font-size:13px;font-weight:800;color:#3a3b40}
 .rp-grp:first-of-type{margin-top:0}
+.rp-split-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.rp-split-i{border-radius:12px;padding:12px 14px;border:1px solid #e6e3db}.rp-split-i b{display:block;font-size:30px;font-weight:900;line-height:1}.rp-split-i span{display:block;margin-top:4px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}.rp-split-i--named{background:#e3f1f7;color:#14566f}.rp-split-i--win{background:#e6f5eb;color:#13703a}.rp-split-i--not{background:#efeeea;color:#5d5e63}.rp-split-line{margin:10px 2px 0;font-size:13px;color:#55565c}
 .rp-mini{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid #f1eee7;font-size:14px}.rp-mini:first-of-type{border-top:0}
 .rp-rd{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:center;margin-bottom:6px}
 .rp-rd-n{font-size:52px;font-weight:900;letter-spacing:-.05em;line-height:1}.rp-rd-n span{font-size:18px;color:#6b6c72;font-weight:800}
@@ -493,6 +494,24 @@ function baseWinnable(q: Pick<OppQuestion, 'tier' | 'repeatShare' | 'top' | 'ans
   }
   return null;
 }
+/** THE THREE-WAY SPLIT (Paul, 2026-11-15), rules v2 only: Already named (named in at least one answer), Winnable (the
+ *  rest with room), Not winnable (crowded). null when no search carries a v2 verdict (an older audit keeps its page).
+ *  One function for the report summary and the Past audits row, so the two always agree. */
+export interface VerdictSplit { named: number; winnable: number; notWinnable: number }
+export function verdictSplitOf(qs: Pick<OppQuestion, 'verdict'>[]): VerdictSplit | null {
+  if (!qs.some((q) => !!q.verdict)) return null;
+  const out: VerdictSplit = { named: 0, winnable: 0, notWinnable: 0 };
+  for (const q of qs) {
+    const v = q.verdict;
+    if (!v || v.verdict === null) continue;
+    if (v.rule === 'visible') out.named++;
+    else if (v.verdict === 'winnable') out.winnable++;
+    else out.notWinnable++;
+  }
+  return out;
+}
+export const splitLine = (s: VerdictSplit): string => `Already named ${s.named} · Winnable ${s.winnable} · Not winnable ${s.notWinnable}`;
+
 /** The one plain line beside a winnable search: why it is open, in words, never counts (Paul, 2026-11-14). */
 export function winnableWhy(q: Pick<OppQuestion, 'tier' | 'namedYou'> & Partial<Pick<OppQuestion, 'verdict'>>): string {
   if (q.verdict) return clientLineOf(q.verdict);
@@ -509,6 +528,7 @@ function opportunityBody(m: ReportModel): string {
     ? ({ visible: 0, open: q.verdict.label === 'Names change' ? 1 : 2 } as Record<string, number>)[q.verdict.rule] ?? 3
     : (q.tier === 'lots' ? 0 : q.tier === 'some' ? 1 : 2);
   const v2 = m.all.some((q) => !!q.verdict);
+  if (v2) return opportunityBodyV2(m, live.map((x) => x.q), rank);
   const win = live.filter((x) => x.v === 'winnable').map((x) => x.q).sort((a, b) => rank(a) - rank(b) || a.question.localeCompare(b.question));
   const not = live.filter((x) => x.v === 'not_winnable').map((x) => x.q).sort((a, b) => a.question.localeCompare(b.question));
   /* No "left out" note and no answer counts on the page (Paul, 2026-11-14): one plain line per winnable search. */
@@ -522,6 +542,32 @@ function opportunityBody(m: ReportModel): string {
       not.map((q) => `<div class="rp-mini"><span>${esc(q.question)}</span>${chip('na', 'Not winnable')}</div>`).join('') + `</section>`
     : '';
   return `<p class="rp-line">${headlineText(m)}</p>` + winPanel + notPanel;
+}
+
+/** Rules v2: the summary line, then three groups: Already named, Winnable, Not winnable (Paul, 2026-11-15). */
+function opportunityBodyV2(m: ReportModel, live: OppQuestion[], rank: (q: OppQuestion) => number): string {
+  const split = verdictSplitOf(live) ?? { named: 0, winnable: 0, notWinnable: 0 };
+  const named = live.filter((q) => q.verdict!.rule === 'visible').sort((a, b) => b.namedYou - a.namedYou || a.question.localeCompare(b.question));
+  const win = live.filter((q) => q.verdict!.rule !== 'visible' && q.verdict!.verdict === 'winnable').sort((a, b) => rank(a) - rank(b) || a.question.localeCompare(b.question));
+  const not = live.filter((q) => q.verdict!.verdict === 'not_winnable').sort((a, b) => a.question.localeCompare(b.question));
+  const stat = (n: number, label: string, tone: string) => `<div class="rp-split-i rp-split-i--${tone}"><b>${n}</b><span>${esc(label)}</span></div>`;
+  const summary = `<section class="rp-panel rp-split" aria-label="${esc(splitLine(split))}"><p class="rp-h-sub">${esc(`Your ${plural(live.length, 'search', 'searches')}, in three groups.`)}</p>` +
+    `<div class="rp-split-row">${stat(split.named, 'Already named', 'named')}${stat(split.winnable, 'Winnable', 'win')}${stat(split.notWinnable, 'Not winnable', 'not')}</div>` +
+    `<p class="rp-split-line">${esc(splitLine(split))}</p></section>`;
+  const namedPanel = named.length
+    ? `<section class="rp-panel"><h2 class="rp-h">Already named &middot; ${named.length}</h2><p class="rp-h-sub">AI names you in at least one answer for these. We work to make it more often.</p>` +
+      named.map((q) => `<div class="rp-target"><h3>${esc(q.question)}</h3><p>${chip('b', 'Already named')} ${esc(winnableWhy(q))}</p></div>`).join('') + `</section>`
+    : '';
+  const winPanel = `<section class="rp-panel"><h2 class="rp-h">Winnable searches &middot; ${win.length}</h2>` +
+    `<p class="rp-h-sub">${esc(`AI doesn't name you yet, but there is room. ${WINNABLE_LINE}`)}</p>` +
+    (win.length
+      ? win.map((q) => `<div class="rp-target"><h3>${esc(q.question)}</h3><p>${chip('y', 'Winnable')} ${esc(winnableWhy(q))}</p></div>`).join('')
+      : `<p class="rp-h-sub">None of the other searches is winnable yet.</p>`) + `</section>`;
+  const notPanel = not.length
+    ? `<section class="rp-panel"><h2 class="rp-h">Not winnable for now &middot; ${not.length}</h2><p class="rp-h-sub">A few businesses take nearly every spot in AI's answers for these.</p>` +
+      not.map((q) => `<div class="rp-mini"><span>${esc(q.question)}</span>${chip('na', 'Not winnable')}</div>`).join('') + `</section>`
+    : '';
+  return `<p class="rp-line">${headlineText(m)}</p>` + summary + namedPanel + winPanel + notPanel;
 }
 
 /** "How easy your website is for AI to read" (aiReadability.ts): the number, the six parts, what is in the way. */
