@@ -66,6 +66,10 @@ export type PaidBaseline = {
   /* ── 2026-10-04, fix/04-ai-measurement ─────────────────────────────────────────────────────── */
   /** The client's explicit "we do NOT offer" list (onboarding services_not_offered). */
   services_not_offered?: string[];
+  /** What they DO but don't want pushed (onboarding services_not_wanted) — excluded like not-offered. */
+  services_not_wanted?: string[];
+  /** The area they cover, in their own words (onboarding coverage_area). Context only. */
+  coverage_area?: string;
   /** What customers contact them for most (onboarding top_requests). */
   top_requests?: string;
   /** True only when the services are the client's own answer or a verified build fact. */

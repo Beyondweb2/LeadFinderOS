@@ -45,7 +45,7 @@ export const INTAKE_LEAD_COLUMNS =
 const ONBOARDING_COLUMNS =
   "id,lead_id,status,source,updated_at,created_at,business_name,business_website,confirmed_location,business_address,services,services_list,areas_list,areas_wanted," +
   "contact_name,contact_email,confirmed_phone,standout,accreditations,must_not_say,website_platform,website_manager,website_route,domain_status,gbp_status,gbp_exists," +
-  "plan_tier,website_addon,quick_close,site_rights,services_not_offered,client_source";
+  "plan_tier,website_addon,quick_close,site_rights,services_not_offered,client_source,services_not_wanted,coverage_area,top_requests";
 const AGREEMENT_COLUMNS = "id,lead_id,onboarding_id,agreement_version,service_route,legal_business_name,business_name,company_number,typed_name,typed_role,business_address,email,phone,website_domain,accepted_at";
 const CRAWL_COLUMNS =
   "url,created_at,mode,job_id,requested_from,site:result->siteInfo,fetch_failed:result->signals->fetchFailed," +
@@ -517,6 +517,7 @@ export async function intakeView(service: Service, leadId: string): Promise<Inta
       answers: [
         ...answer("What makes them stand out", ob?.standout), ...answer("Accreditations", ob?.accreditations), ...answer("Must not say", ob?.must_not_say),
         ...answer("Not offered", Array.isArray(ob?.services_not_offered) ? (ob!.services_not_offered as string[]).join(", ") : ob?.services_not_offered),
+        ...answer("Does not want pushed", ob?.services_not_wanted), ...answer("Area covered", ob?.coverage_area), ...answer("Most asked for", ob?.top_requests),
         ...answer("Website platform", ob?.website_platform), ...answer("Who manages the website", ob?.website_manager),
         ...answer("Domain", ob?.domain_status), ...answer("Google Business Profile", ob?.gbp_status ?? ob?.gbp_exists),
       ],

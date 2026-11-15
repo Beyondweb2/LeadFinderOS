@@ -32,6 +32,7 @@ Moved verbatim from CLAUDE.md §10 on 2026-10-15. Add a row here when you write 
 | The three payment options (pay in full / 6 / 12 months), `paymentPlans.ts`, `payment_plan`, `paid_in_full_at` | `docs/payment-options.md` (+ `payment-options-live-setup.md`, `agreement-v6.md`, `v6-review-for-solicitor.md`) |
 | The v3 agreement, sign-up link, payment gate, Option B dates, Continuing Service, v3 commission | `docs/pre-sales-certification/client-agreement-commercial-alignment.md` |
 | Baselines, replays, the pointer, the results sender, the noise band, named-by-model | `docs/measurement.md` (§17, §18, §19, §24, §25, §31) |
+| Client setup answers, not-wanted services, area covered, the setup-answers alert, Run Discovery / Create baseline | `docs/onboarding-to-audit.md` (2026-11-15) |
 | Prepare Baseline, `baseline_status`, the `starting` claim, the hub poller, the approve gate | `docs/paid-baseline-flow.md` (2026-09-22) |
 | The recommended 20, Hook questions locked in, the Opportunity Backlog, the replay run-2 fix, collapsible sections | `docs/baseline-workflow.md` (2026-09-30) |
 | Any WhatsApp template, sender, greeting name, the Inbox list, the reply rule | `docs/whatsapp-templates.md` (§6g, §16, §29, §30–30e, §32) |

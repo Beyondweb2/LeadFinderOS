@@ -22,6 +22,7 @@ import { backlogCandidates, describeDraft, hookProtection, recommendBaseline, ty
 import { normaliseOpportunity } from "../../../src/lib/opportunityBacklog.ts";
 import { discoveryScope, discoveryState, generateDiscoveryPool, hookQuestionsFor, mixContext, opportunityCheckResults, startDiscoveryRun, storePoolVersion, DISCOVERY_MAX_QUESTIONS, DISCOVERY_RUNS, DISCOVERY_USD_PER_QUESTION_RUN, type DiscoveryState, type DiscoveryStore } from "../_shared/baseline-discovery.ts";
 import { resolveServiceTruth, splitServiceList } from "../../../src/lib/serviceScope.ts";
+import { excludedServicesOf } from "../../../src/lib/onboardingAnswers.ts";
 import { assessBaselineQuality, acceptedOverrides, unresolvedBlocks, QUALITY_OVERRIDE_MIN_REASON, type QualityOverride } from "../../../src/lib/baselineQuality.ts";
 import { coreQuestions } from "../../../src/lib/customerQuestion.ts";
 import { placeSuffixForCountry } from "../../../src/lib/seedGuard.ts";
@@ -119,7 +120,7 @@ Deno.serve(async (req) => {
     const url = Deno.env.get("SUPABASE_URL")!;
     const service = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } });
     let q = service.from("onboarding_responses")
-      .select("id, lead_id, status, confirmed_location, services, services_list, areas_list, areas_wanted, baseline_status, baseline_questions, baseline_approved_at, baseline_approved_by, audit_id, baseline_discovery, baseline_meta, services_not_offered, top_requests, must_not_say")
+      .select("id, lead_id, status, confirmed_location, services, services_list, areas_list, areas_wanted, baseline_status, baseline_questions, baseline_approved_at, baseline_approved_by, audit_id, baseline_discovery, baseline_meta, services_not_offered, top_requests, must_not_say, services_not_wanted, coverage_area")
       .eq("status", "paid");
     if (onboardingId) q = q.eq("id", onboardingId);
     else q = q.eq("lead_id", leadId).order("updated_at", { ascending: false }).limit(1);
@@ -194,10 +195,15 @@ Deno.serve(async (req) => {
        travels with every Discovery generation and every check below; the services are the winning
        list only (mergeClientContext no longer concatenates sources). */
     const notOffered = splitServiceList((row as { services_not_offered?: unknown }).services_not_offered);
+    /* + what they DO but don't want pushed (v1-onboarding-to-audit, 2026-11-15). For question writing and the
+       final-20 checks it is the same exclusion as "not offered" — ONE rule, src/lib/onboardingAnswers.ts. The
+       two lists are still shown and saved apart, so nothing ever says they don't do it. */
+    const notWanted = splitServiceList((row as { services_not_wanted?: unknown }).services_not_wanted);
+    const excluded = excludedServicesOf(row as { services_not_offered?: unknown; services_not_wanted?: unknown });
     const discoveryInput = {
       businessName: String(lead.business_name ?? ""), businessCategory: merged.business_category, website: merged.website,
       country: String(lead.country ?? ""), primaryTown: merged.primary_location, areas: merged.service_areas, services: merged.services,
-      notOffered, mustNotSay: String((row as { must_not_say?: unknown }).must_not_say ?? "").trim(),
+      notOffered: excluded, mustNotSay: String((row as { must_not_say?: unknown }).must_not_say ?? "").trim(),
     };
     const scope = discoveryScope(discoveryInput);
     /* The two mandatory core questions for the home town (customerQuestion.ts, C-03). */
@@ -250,6 +256,8 @@ Deno.serve(async (req) => {
       ...(typeof row.audit_id === "string" && row.audit_id ? { audit_id: row.audit_id } : {}),
       /* 2026-10-04 (fix/04): business truth, the final-20 checks, the measurement's health, the budget. */
       services_not_offered: notOffered,
+      services_not_wanted: notWanted,
+      coverage_area: String((row as { coverage_area?: unknown }).coverage_area ?? ""),
       top_requests: String((row as { top_requests?: unknown }).top_requests ?? ""),
       services_client_confirmed: merged.services_client_confirmed,
       unconfirmed: { services: merged.unconfirmed_services, areas: merged.unconfirmed_areas },
@@ -441,6 +449,8 @@ Deno.serve(async (req) => {
       const truthPatch: Record<string, unknown> = {};
       if (typeof body.services_not_offered === "string") truthPatch.services_not_offered = body.services_not_offered.trim().slice(0, 2000) || null;
       if (typeof body.top_requests === "string") truthPatch.top_requests = body.top_requests.trim().slice(0, 2000) || null;
+      if (typeof body.services_not_wanted === "string") truthPatch.services_not_wanted = body.services_not_wanted.trim().slice(0, 2000) || null;
+      if (typeof body.coverage_area === "string") truthPatch.coverage_area = body.coverage_area.trim().slice(0, 500) || null;
       if (!location || !businessType) return json({ ok: false, error: "location_and_business_type_required" }, 400);
       const now = new Date().toISOString();
       const { data: updatedOnboarding, error: onErr } = await service.from("onboarding_responses").update({
@@ -458,6 +468,8 @@ Deno.serve(async (req) => {
           ...details, location, services, services_list: serviceList, areas_list: areas, business_type: businessType, website,
           ...(typeof truthPatch.services_not_offered !== "undefined" ? { services_not_offered: splitServiceList(truthPatch.services_not_offered) } : {}),
           ...(typeof truthPatch.top_requests !== "undefined" ? { top_requests: String(truthPatch.top_requests ?? "") } : {}),
+          ...(typeof truthPatch.services_not_wanted !== "undefined" ? { services_not_wanted: splitServiceList(truthPatch.services_not_wanted) } : {}),
+          ...(typeof truthPatch.coverage_area !== "undefined" ? { coverage_area: String(truthPatch.coverage_area ?? "") } : {}),
         },
       });
     }
@@ -665,6 +677,7 @@ Deno.serve(async (req) => {
         quality_overrides: acceptedOverrides(qualityNow.blocking, overrides),
         quality_warnings: qualityNow.warnings.map((w) => ({ code: w.code, question: w.question, message: w.message })),
         services_not_offered: notOffered,
+        services_not_wanted: notWanted,
         ...(prior.partial_accepted ? { partial_accepted: prior.partial_accepted } : {}),
       };
       const { data: updated, error } = await service.from("onboarding_responses").update({
