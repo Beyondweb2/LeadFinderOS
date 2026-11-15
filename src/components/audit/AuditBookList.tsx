@@ -35,6 +35,8 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AuditBusinessBlock } from '@/components/audit/AuditBusinessBlock';
+import { LegacyBusinessRow } from '@/components/audit/LegacyBusinessRow';
+import { isNewStyleAudit } from '@/lib/auditStyle';
 import type { AuditLite, BusinessGroup, RunLite } from '@/types/auditBook';
 
 /** How many rows to build at once. The book is 901 businesses; nobody reads past the first
@@ -268,13 +270,19 @@ export function AuditBookList({
       ) : (
         <>
           <div className="divide-y divide-border/50 rounded-lg border border-border/60">
-            {page.map((b) => (
+            {page.map((b) => (isNewStyleAudit(b.latestAudit) ? (
               <AuditBusinessBlock
                 key={b.key} b={b} archivedReady={archivedReady} showArchived={showArchived}
                 onOpenAudit={onOpenAudit} onCancelRun={onCancelRun} onArchive={onArchive} onRestore={onRestore}
                 busyId={busyId} cancellingId={cancellingId}
               />
-            ))}
+            ) : (
+              <LegacyBusinessRow
+                key={b.key} b={b} archivedReady={archivedReady} showArchived={showArchived}
+                onOpenAudit={onOpenAudit} onViewReport={onViewReport} onCancelRun={onCancelRun} onArchive={onArchive} onRestore={onRestore}
+                busyId={busyId} cancellingId={cancellingId}
+              />
+            )))}
           </div>
 
           {/* ⛔ SAY WHAT IS NOT ON SCREEN. A list that silently stops at 40 of 901 is the

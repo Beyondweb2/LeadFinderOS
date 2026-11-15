@@ -33,7 +33,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       effect: 'You can open a conversation with a short question. Every cold WhatsApp rule (UK mobiles, daily cap, opt-outs) still applies to it.',
     } },
   { id: '2026-11-15-past-audits-clear', date: '2026-11-15', title: 'Past audits: one clear row per audit', audience: 'admin',
-    body: 'On the AI Audit page, each past audit is now its own row with a big coloured type badge (Discovery, Baseline, Quick check, Website check), the pooled result for the whole audit (named % and Winnable X of N, the same numbers as its report), an Open report button and the opened count. Runs are folded under Show runs. Re-scored copies say Re-scored (new rules) and show no cost. The business header shows the named % of the latest audit, matching its report.',
+    body: 'On the AI Audit page, Moments Wedding Content, London Domestic Maintenance and every audit made from now on show the new rows (older audits look as before). Each audit is now its own row with a big coloured type badge (Discovery, Baseline, Quick check, Website check), the pooled result for the whole audit (named % and Winnable X of N, the same numbers as its report), an Open report button and the opened count. Runs are folded under Show runs; older audits of a business fold under N older audits; a running audit shows live progress. Re-scored copies say Re-scored (new rules) and show no cost. The business header shows the named % of the latest audit, matching its report.',
     report: {
       added: ['Type badge, pooled result and Open report button on every audit row.', 'Re-scored (new rules) label.'],
       changed: ['Runs are folded under Show runs.', 'Re-scored copies no longer add their copied cost to spend.'],
