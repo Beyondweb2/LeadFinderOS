@@ -2439,7 +2439,7 @@ const AiAudit = () => {
         <CreateBaselineDialog
           open={createBaselineOpen}
           onOpenChange={setCreateBaselineOpen}
-          audit={{ id: openAuditRow.id, lead_id: openAuditRow.lead_id ?? null, business_name: openAuditRow.business_name, business_type: openAuditRow.business_type ?? null, location_text: openAuditRow.location_text ?? null }}
+          audit={{ id: openAuditRow.id, lead_id: openAuditRow.lead_id ?? null, business_name: openAuditRow.business_name, business_type: openAuditRow.business_type ?? null, location_text: openAuditRow.location_text ?? null, website: openAuditRow.website ?? null }}
           loadRows={loadAuditRows}
           toast={toast}
         />

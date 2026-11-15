@@ -36,6 +36,7 @@ Moved verbatim from CLAUDE.md §10 on 2026-10-15. Add a row here when you write 
 | The recommended 20, Hook questions locked in, the Opportunity Backlog, the replay run-2 fix, collapsible sections | `docs/baseline-workflow.md` (2026-09-30) |
 | Any WhatsApp template, sender, greeting name, the Inbox list, the reply rule | `docs/whatsapp-templates.md` (§6g, §16, §29, §30–30e, §32) |
 | The client report, wrong-town history, partial results, the name that scores itself | `docs/reports.md` (§6b, §22, §27) |
+| Winnable / Not winnable (rules v2), the strict name match, near-names, re-scoring an old audit to a new link | `docs/AUDIT_RULES.md` (+ `scripts/audit-rules-v2.test.ts`) |
 | The manual audit wizard, the market model, how a national/hybrid question set is built | `docs/market-model-audits.md` |
 | The free-check lane, its dedupe, its emails, where it meets the baseline | `docs/free-check.md` (§6j, §15, §21) |
 | Dashboard numbers, the campaign card, the client card, stored tasks | `docs/dashboard.md` (§6h, §14, §23) |

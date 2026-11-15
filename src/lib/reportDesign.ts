@@ -29,6 +29,7 @@ import { FINDABLE_CONTACT_WHATSAPP, REMEASURE_WEEKS_STANDARD } from './findableO
 import type { EngineFacts, OppFirm, OppQuestion, OppTier } from './reportOpportunity.ts';
 import { ROOM_LITTLE_AT, ROOM_LITTLE_TOP_ALL, isBigAreaSearch } from './reportOpportunity.ts';
 import type { ReportKind, ReportModel } from './reportModel.ts';
+import { clientLineOf } from './auditVerdict.ts';
 
 export function esc(s: unknown): string {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -470,9 +471,14 @@ function hookBody(m: ReportModel): string {
    ⛔ WHOLE-CITY SEARCHES (Paul, 2026-11-14): a search over a whole city / region / country ("best plumber in London",
    reportOpportunity placeScope 'wide') is Not winnable unless AI already names the business there at least once: rotating
    answers in a big city are a lottery among thousands of firms, not room. Local (borough / town / district) searches keep
-   the rule above. */
+   the rule above.
+   ⛔ RULES v2 (Paul, 2026-11-15; docs/AUDIT_RULES.md, auditVerdict.ts): a search read under rules v2 carries its own
+   verdict (q.verdict) and that is the answer: named anywhere -> Winnable, one firm in 5/6 -> Not winnable, everything
+   else Winnable, no big-city cap. The rule above is kept ONLY for audits made before v2, so a link already sent keeps
+   the page it showed. */
 export type WinnableVerdict = 'winnable' | 'not_winnable' | null;
-export function winnableOf(q: Pick<OppQuestion, 'tier' | 'repeatShare' | 'top' | 'answers'> & Partial<Pick<OppQuestion, 'question' | 'namedYou'>>): WinnableVerdict {
+export function winnableOf(q: Pick<OppQuestion, 'tier' | 'repeatShare' | 'top' | 'answers'> & Partial<Pick<OppQuestion, 'question' | 'namedYou' | 'verdict'>>): WinnableVerdict {
+  if (q.verdict) return q.verdict.verdict;
   const verdict = baseWinnable(q);
   /* A BIG city / region / country only (isBigAreaSearch): "East London" and a smaller city like Canterbury stay local. */
   if (verdict === 'winnable' && q.question && isBigAreaSearch(q.question) && !(Number(q.namedYou ?? 0) > 0)) return 'not_winnable';
@@ -488,7 +494,8 @@ function baseWinnable(q: Pick<OppQuestion, 'tier' | 'repeatShare' | 'top' | 'ans
   return null;
 }
 /** The one plain line beside a winnable search: why it is open, in words, never counts (Paul, 2026-11-14). */
-export function winnableWhy(q: Pick<OppQuestion, 'tier' | 'namedYou'>): string {
+export function winnableWhy(q: Pick<OppQuestion, 'tier' | 'namedYou'> & Partial<Pick<OppQuestion, 'verdict'>>): string {
+  if (q.verdict) return clientLineOf(q.verdict);
   if (q.namedYou > 0) return 'AI already names you here.';
   return q.tier === 'lots' ? 'AI names different firms each time.' : 'A few firms repeat, the rest change.';
 }
@@ -498,7 +505,10 @@ function opportunityBody(m: ReportModel): string {
   /* SHORT AND CLEAN (Paul, 2026-11-14): the score, the winnable searches first, then the rest as a compact list.
      No AI answer text and no competitor anywhere; each search keeps its one-line evidence (counts only). */
   const live = m.all.map((q) => ({ q, v: winnableOf(q) })).filter((x) => x.v !== null);
-  const rank = (q: OppQuestion) => (q.tier === 'lots' ? 0 : q.tier === 'some' ? 1 : 2);
+  const rank = (q: OppQuestion) => q.verdict
+    ? ({ visible: 0, open: q.verdict.label === 'Names change' ? 1 : 2 } as Record<string, number>)[q.verdict.rule] ?? 3
+    : (q.tier === 'lots' ? 0 : q.tier === 'some' ? 1 : 2);
+  const v2 = m.all.some((q) => !!q.verdict);
   const win = live.filter((x) => x.v === 'winnable').map((x) => x.q).sort((a, b) => rank(a) - rank(b) || a.question.localeCompare(b.question));
   const not = live.filter((x) => x.v === 'not_winnable').map((x) => x.q).sort((a, b) => a.question.localeCompare(b.question));
   /* No "left out" note and no answer counts on the page (Paul, 2026-11-14): one plain line per winnable search. */
@@ -508,7 +518,7 @@ function opportunityBody(m: ReportModel): string {
       ? win.map((q) => `<div class="rp-target"><h3>${esc(q.question)}</h3><p>${chip('y', 'Winnable')} ${esc(winnableWhy(q))}</p></div>`).join('')
       : `<p class="rp-h-sub">None of these searches is winnable yet.</p>`) + `</section>`;
   const notPanel = not.length
-    ? `<section class="rp-panel"><h2 class="rp-h">Not winnable for now &middot; ${not.length}</h2><p class="rp-h-sub">AI names no firms for these, a few firms own the answer, or it is a whole-city search where AI doesn't name you yet.</p>` +
+    ? `<section class="rp-panel"><h2 class="rp-h">Not winnable for now &middot; ${not.length}</h2><p class="rp-h-sub">${v2 ? 'One business comes up in nearly every AI answer for these.' : "AI names no firms for these, a few firms own the answer, or it is a whole-city search where AI doesn't name you yet."}</p>` +
       not.map((q) => `<div class="rp-mini"><span>${esc(q.question)}</span>${chip('na', 'Not winnable')}</div>`).join('') + `</section>`
     : '';
   return `<p class="rp-line">${headlineText(m)}</p>` + winPanel + notPanel;

@@ -16,6 +16,7 @@ import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { theirAreas, type OppContext, type OppRow } from "../../../src/lib/reportOpportunity.ts";
 import { buildReportModel, websiteSectionFromCheck, type WebsiteSection } from "../../../src/lib/reportModel.ts";
 import { chooseReportDesign, renderReport } from "../../../src/lib/reportDesign.ts";
+import { auditRulesFor } from "../../../src/lib/auditVerdict.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { renderReportHtml } from "../../../src/lib/aiAuditReportHtml.ts";
 import { measuringState } from "../../../src/lib/measuringState.ts";
@@ -526,7 +527,13 @@ Deno.serve(async (req) => {
         const trade = audit.business_type ?? "";
         const town = audit.location_text ?? "";
         const nctx = { businessName: bizName, trade: trade || null, town: town || null };
-        const oppRows: OppRow[] = queueRows.filter((r) => r.status === "done" || r.result).map((r) => ({ question: r.question, result: r.result as unknown as Record<string, unknown> | null }));
+        /* Which verdict rules (src/lib/auditVerdict.ts, docs/AUDIT_RULES.md): v2 for an audit made after v2 shipped or a
+           re-scored copy; the old rule for every audit before, so a link already sent keeps its page. */
+        const { data: crawlRuns } = await service
+          .from("ai_audit_runs").select("run_number, crawl:results->crawl_check, rules:results->report_rules").eq("audit_id", audit.id).order("run_number", { ascending: true });
+        const rules = auditRulesFor({ createdAt: (audit as { created_at?: string }).created_at ?? null, runRules: ((crawlRuns ?? []) as Array<{ rules?: unknown }>).map((r) => r.rules) });
+        /* v2: a FAILED queue row is kept (its empty answers make the search "re-run needed", never a verdict). */
+        const oppRows: OppRow[] = queueRows.filter((r) => r.status === "done" || r.result || (rules === 2 && r.status === "failed")).map((r) => ({ question: r.question, result: r.result as unknown as Record<string, unknown> | null }));
         const questions = [...new Set(oppRows.map((r) => r.question.trim()))];
         /* A standalone audit (no lead) has no lead-level check: use the website check stored with its own run. */
         if (websiteSection.state === "not_checked" && runCrawl?.status === "complete") {
@@ -536,8 +543,6 @@ Deno.serve(async (req) => {
         if (!ownWebsite && hasWebsite === false) websiteSection = { state: "no_website", issues: [] };
         /* The website check's services, from whichever run stored one (a Discovery's crawl sits on run 1). Without one the
            "service on your website" test is skipped rather than guessed. */
-        const { data: crawlRuns } = await service
-          .from("ai_audit_runs").select("run_number, crawl:results->crawl_check").eq("audit_id", audit.id).order("run_number", { ascending: true });
         // deno-lint-ignore no-explicit-any
         const crawl = ((crawlRuns ?? []) as any[]).map((r) => r.crawl).find((c) => Array.isArray(c?.insights?.services) && c.insights.services.length) ?? null;
         const services = crawl ? (crawl.insights.services as Array<{ name?: string; coverage?: string }>).map((x) => ({ name: String(x.name ?? ""), dedicated: x.coverage === "dedicated" })) : [];
@@ -549,6 +554,9 @@ Deno.serve(async (req) => {
           isDirectoryHost: (h: string) => isAggregatorUrl("https://" + h),
           isNamed: (c: unknown) => cellNamed(c as never, nctx),
           isRival: (n: string) => isRealCompetitor(n, town),
+          /* v2: the strict name match — exact name, website domain or Google profile; near-names flagged, not counted. */
+          rules,
+          identity: rules === 2 ? { name: bizName, domains: ownWebsite ? [ownWebsite] : [], placeIds: leadPlaceId ? [leadPlaceId] : [] } : undefined,
         };
         /* A first-contact report is the few searches of the hook: one answer per AI per search. */
         const hookQs = questions.slice(0, 3);
