@@ -133,12 +133,15 @@ export const CONTINUATION_TEMPLATES: ReadonlySet<string> = new Set([
      ALREADY messaged on WhatsApp. ⛔ Unlike the accepted exposure of audit_followup / re_engage_49, this one is closed
      structurally: NEEDS_PRIOR_WHATSAPP below refuses it at both senders when the number has no WhatsApp history. */
   "initial_question",
+  /* webdev_report (Paul, 2026-11-15: "same setup as initial_question" — a follow-up, never a cold first message). Closed the
+     same way: NEEDS_PRIOR_WHATSAPP refuses it at both senders for a number with no WhatsApp history. */
+  "webdev_report",
 ]);
 
 /** Continuations that must NEVER be a first touch: refused (both senders) for a number with no WhatsApp message yet
  *  (sent or received, failed sends not counted). Paul, 2026-11-15. */
-export const NEEDS_PRIOR_WHATSAPP: ReadonlySet<string> = new Set(["initial_question"]);
-export const NEEDS_PRIOR_WHATSAPP_REASON = "Initial question is a follow-up: it only goes to a number we have already messaged on WhatsApp. Nothing was sent. Send an opener first.";
+export const NEEDS_PRIOR_WHATSAPP: ReadonlySet<string> = new Set(["initial_question", "webdev_report"]);
+export const NEEDS_PRIOR_WHATSAPP_REASON = "This template is a follow-up: it only goes to a number we have already messaged on WhatsApp. Nothing was sent. Send an opener first.";
 
 /** Cold-opener rules apply only while the prospect has never written to us (Paul, 2026-11-15, the Eon Graphics bug:
  *  "May not send: phone_already_contacted" on a lead who had replied). Once they have replied — the 24-hour window open

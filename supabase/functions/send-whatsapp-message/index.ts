@@ -128,7 +128,8 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    a queued needs_from_you whose words cannot be read back sends those words if the window is open, else refuses with a reason. */
 /* 2026-11-02: a person's cold send asks the cold guard (src/lib/whatsappColdGuard.ts): one cap, one gap, the cool-down, the tripwire. */
 /* 2026-11-15a: initial_question opener (no variables) - Meta's LIVE status is read first, like initial_contact_short. */
-const BUILD_ID = "2026-11-15b-replied-not-cold";
+/* 2026-11-15c: webdev_report follow-up ({{1}} name, {{2}} the latest report link, link-only audit resolve; needs prior WhatsApp). */
+const BUILD_ID = "2026-11-15c-webdev-report";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -647,7 +648,8 @@ Deno.serve(async (req) => {
       /* ⛔ initial_contact_short (2026-10-15): registered while IN REVIEW at Meta. Its live status is read before anything is
          built; anything but APPROVED / UNKNOWN is refused with Meta's word and nothing is sent (UNKNOWN still tries — Meta decides). */
       /* initial_question (2026-11-15) is gated the same way: registered while Meta's review was still running. */
-      if (templateName === "initial_contact_short" || templateName === "initial_question") {
+      /* webdev_report (2026-11-15) too: added the same day it was submitted. */
+      if (templateName === "initial_contact_short" || templateName === "initial_question" || templateName === "webdev_report") {
         const shortAvail = await templateAvailability(service, templateName);
         if (["PENDING", "IN_APPEAL", "REJECTED", "PAUSED", "DISABLED", "LIMIT_EXCEEDED", "NOT_FOUND"].includes(shortAvail.status)) {
           return json({ ok: false, error: "template_" + shortAvail.status.toLowerCase(), reason: "Meta says this template is " + shortAvail.status.toLowerCase().replace("_", " ") + " - nothing was sent." }, 200);

@@ -84,6 +84,9 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
   /* initial_question (2026-11-15) - a FOLLOW-UP with NO variables: no name, no link, no audit. Group 'opener' is the label only
      (as contact_followup's); it is a continuation (coldOutreach.ts) and only goes to a number already messaged. */
   initial_question:       { needsUrl: false, needsAudit: false, group: 'opener' },
+  /* webdev_report (2026-11-15) - a FOLLOW-UP whose {{2}} IS the lead's latest report link, so needsAudit: the picker greys it with
+     "Run an audit for this lead first." until a report exists, and the server refuses the same way (src/lib/webdevReport.ts). */
+  webdev_report:          { needsUrl: false, needsAudit: true,  group: 'audit' },
   // audit_reply is not yet wired into the manual send path; its rule lives here so the guard is
   // ready the moment it's added to the picker + sender (no drift when that happens).
   audit_reply:            { needsUrl: false, needsAudit: true,  group: 'audit' },
