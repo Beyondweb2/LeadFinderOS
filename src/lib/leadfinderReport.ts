@@ -87,18 +87,37 @@ a{color:inherit}
 .lf-pair{display:grid;gap:12px}
 .lf-pair h3{font-size:16px;font-weight:800;margin-bottom:10px}
 .lf-notes{margin:0;padding-left:18px;font-size:14px}.lf-notes li{margin:4px 0}
-.lf-end{margin-top:28px;border-radius:22px;padding:20px 22px;background:var(--strong);color:var(--bg);position:relative;overflow:hidden;display:grid;gap:14px;align-items:center;break-inside:avoid;page-break-inside:avoid}
-.lf-end::before{content:'';position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--a)}
-.lf-end h2{color:var(--bg);font-size:22px;font-weight:800}
-.lf-end p{margin:6px 0 0;color:#3d3b36}
-.lf-btn{display:inline-block;background:var(--a);color:var(--a-ink);font:800 15px 'Plus Jakarta Sans',sans-serif;border-radius:14px;padding:15px 18px;text-decoration:none;text-align:center}
-.lf-printurl{display:none;font-weight:700}
+.lf-try{display:inline-flex;align-items:center;gap:6px;background:var(--a);color:#fff;border-radius:999px;padding:7px 14px;font:800 12.5px 'Plus Jakarta Sans',Inter,sans-serif;text-decoration:none;white-space:nowrap;box-shadow:0 6px 18px -6px color-mix(in srgb,var(--a) 70%,transparent)}
+.lf-end{margin-top:32px;border-radius:24px;padding:26px 20px;position:relative;overflow:hidden;border:1px solid color-mix(in srgb,var(--a) 45%,var(--border));background:radial-gradient(120% 90% at 100% 0%,color-mix(in srgb,var(--a) 42%,transparent),transparent 60%),radial-gradient(90% 70% at 0% 100%,color-mix(in srgb,#22d3ee 16%,transparent),transparent 60%),#14152a;break-inside:avoid;page-break-inside:avoid}
+.lf-end::before{content:'';position:absolute;left:0;right:0;top:0;height:4px;background:linear-gradient(90deg,var(--a),#a5a7ff,#22d3ee)}
+.lf-endtop{display:grid;gap:18px;align-items:center}
+.lf-end .lf-eyebrow{display:inline-flex;align-items:center;gap:8px}
+.lf-end h2{color:#fff;font-size:28px;line-height:1.1;font-weight:800;margin-top:8px}
+.lf-end h2 span{background:linear-gradient(90deg,#a5a7ff,#67e8f9);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lf-endsub{margin:10px 0 0;color:#c9c8d6;font-size:15px;max-width:52ch}
+.lf-steps{list-style:none;margin:22px 0 0;padding:0;display:grid;gap:10px;counter-reset:s}
+.lf-steps li{counter-increment:s;display:flex;gap:12px;align-items:flex-start;background:color-mix(in srgb,#fff 5%,transparent);border:1px solid color-mix(in srgb,#fff 10%,transparent);border-radius:16px;padding:13px 14px}
+.lf-steps li::before{content:counter(s);flex:none;width:28px;height:28px;border-radius:9px;background:var(--a);color:#fff;font:800 14px 'Plus Jakarta Sans',sans-serif;display:grid;place-items:center}
+.lf-steps b{display:block;color:#fff;font:800 15px 'Plus Jakarta Sans',Inter,sans-serif}
+.lf-steps span{display:block;color:#b9b8c6;font-size:13.5px;margin-top:2px}
+.lf-ctabox{display:grid;gap:8px;justify-items:stretch}
+.lf-btn{display:block;background:linear-gradient(180deg,#7c7ff7,var(--a));color:#fff;font:800 17px 'Plus Jakarta Sans',sans-serif;border-radius:16px;padding:17px 22px;text-decoration:none;text-align:center;box-shadow:0 12px 30px -10px color-mix(in srgb,var(--a) 80%,transparent),inset 0 1px 0 rgba(255,255,255,.25)}
+.lf-btn:hover{filter:brightness(1.08)}
+.lf-ctanote{text-align:center;font-size:12.5px;color:#a9a8b8}
+.lf-proof{margin-top:18px;padding-top:16px;border-top:1px solid color-mix(in srgb,#fff 10%,transparent);display:flex;gap:10px;align-items:center;color:#c9c8d6;font-size:13.5px}
+.lf-proof .lf-mark{width:24px;height:24px}
+.lf-printurl{display:none;font-weight:800;color:#fff;font-size:16px}
+.lf-sticky{position:fixed;left:12px;right:12px;bottom:12px;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#14152a;border:1px solid color-mix(in srgb,var(--a) 50%,var(--border));border-radius:16px;padding:10px 10px 10px 14px;box-shadow:0 12px 32px -8px rgba(0,0,0,.6);font-size:13px;color:#e6e5f0}
+.lf-sticky a{background:var(--a);color:#fff;text-decoration:none;font:800 13px 'Plus Jakarta Sans',sans-serif;border-radius:11px;padding:10px 14px;white-space:nowrap}
+.lf-sticky b{color:#fff}
+body.lf-has-sticky{padding-bottom:84px}
 .lf-foot{display:grid;gap:6px;border-top:1px solid var(--border);margin-top:28px;padding-top:16px;font-size:11.5px;color:var(--muted)}
 .lf-foot .lf-mark{width:20px;height:20px}
 .lf-footrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .lf-wait{text-align:center;padding:48px 16px}
 .lf-wait h1{font-size:26px;margin-bottom:10px}
 .lf-pulse{animation:lfp 1.4s ease-in-out infinite}@keyframes lfp{50%{opacity:.45}}
+@media (max-width:559px){.lf-headr>span{display:none}.lf-head{padding:12px 14px}.lf-word{font-size:16px}}
 @media (min-width:640px){.lf-wrap{padding:32px}}
 @media (min-width:760px){
   .lf-body{padding:32px}.lf-head{padding:18px 32px}
@@ -107,7 +126,12 @@ a{color:inherit}
   .lf-ring{width:160px;height:160px}.lf-ring>div{width:128px;height:128px}.lf-ring b{font-size:44px}
   .lf-lanes{grid-template-columns:1fr 1fr}
   .lf-pair{grid-template-columns:1fr 1fr}
-  .lf-end{grid-template-columns:1fr auto;padding:26px 34px}
+  .lf-end{padding:36px 38px}
+  .lf-endtop{grid-template-columns:minmax(0,1.4fr) minmax(260px,1fr)}
+  .lf-end h2{font-size:36px}
+  .lf-steps{grid-template-columns:1fr 1fr}
+  .lf-sticky{display:none}
+  body.lf-has-sticky{padding-bottom:0}
 }
 @media print{
   @page{size:A4;margin:0}
@@ -120,25 +144,38 @@ a{color:inherit}
   .lf-hero h1{font-size:30px}
   .lf-ring{width:120px;height:120px}.lf-ring>div{width:96px;height:96px}.lf-ring b{font-size:32px}
   .lf-lanes,.lf-pair{grid-template-columns:1fr 1fr}
-  .lf-end{grid-template-columns:1fr}
-  .lf-pdf,.lf-btn{display:none!important}
+  .lf-endtop{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}
+  .lf-steps{grid-template-columns:1fr 1fr}
+  .lf-pdf,.lf-btn,.lf-try,.lf-sticky,.lf-ctanote{display:none!important}
+  body.lf-has-sticky{padding-bottom:0}
   .lf-printurl{display:block}
   .lf-card,.lf-issue,.lf-end{break-inside:avoid;page-break-inside:avoid}
 }`;
 
-function page(title: string, inner: string, opts: { print?: boolean } = {}): string {
+/* ⛔ THE PAGE'S OWN ICON (Paul, 2026-11-15: "make sure it doesnt use lovable favicon"). Without a <link rel="icon"> a browser
+   asks the host for /favicon.ico, and on the app's host that was the old Lovable icon. The LeadFinderOS mark, inline. */
+export const LFOS_FAVICON = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="#6366f1"/><circle cx="14" cy="14" r="6.5" fill="none" stroke="#fff" stroke-width="3"/><path d="M19 19l6 6" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/></svg>')}`;
+
+function page(title: string, inner: string, opts: { print?: boolean; sticky?: boolean } = {}): string {
   const auto = opts.print ? `<script>addEventListener('load',function(){setTimeout(function(){window.print()},500)})</script>` : '';
+  /* Phone only: a slim bar that keeps the one action in reach while they read (hidden on desktop and in the PDF). */
+  const sticky = opts.sticky
+    ? `<div class="lf-sticky"><span><b>Like this report?</b> Run them for your clients.</span><a href="${LFOS_SITE_URL}" target="_blank" rel="noopener">Start free →</a></div>`
+    : '';
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
     `<meta name="viewport" content="width=device-width, initial-scale=1">` +
     `<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">` +
     `<meta name="description" content="AI visibility report made with LeadFinderOS.">` +
     `<meta name="theme-color" content="#101114">` +
+    `<meta property="og:site_name" content="LeadFinderOS"><meta property="og:title" content="${esc(title)}">` +
+    `<link rel="icon" type="image/svg+xml" href="${LFOS_FAVICON}"><link rel="apple-touch-icon" href="${LFOS_FAVICON}">` +
     `<title>${esc(title)}</title>${FONTS}<style>${CSS}</style></head>` +
-    `<body><div class="lf-wrap"><div class="lf-sheet">${inner}</div></div>${auto}</body></html>`;
+    `<body${opts.sticky ? ' class="lf-has-sticky"' : ''}><div class="lf-wrap"><div class="lf-sheet">${inner}</div></div>${sticky}${auto}</body></html>`;
 }
 
 function header(dateLabel: string): string {
   return `<header class="lf-head">${LOGO}<div class="lf-headr"><span>AI visibility report<br>${esc(dateLabel)}</span>` +
+    `<a class="lf-try" href="${LFOS_SITE_URL}" target="_blank" rel="noopener">Try it free</a>` +
     `<button class="lf-pdf" type="button" onclick="window.print()">PDF</button></div></header>`;
 }
 
@@ -148,12 +185,26 @@ function footer(dateLabel: string, asks: number): string {
     `<div>AI answers change from day to day. AI visibility can be improved; it cannot be guaranteed. These are measurements, not guarantees. Snapshot taken ${esc(dateLabel)}.</div></footer>`;
 }
 
+/* THE CLOSING SECTION (Paul, 2026-11-15: "make conversion better"). LeadFinderOS-themed, not an off-brand cream band: the CTA
+   line as the headline, what the app does in four steps (only what it really does: the same claims as the webdev_report /
+   webdev_hook templates), one big button, and "this report was made with it" as the proof. No price, no terms, no promise. */
+const STEPS: [string, string][] = [
+  ['Find local businesses', 'Search any trade in any town and get a list of businesses to pitch.'],
+  ['Audit them', 'Run SEO and AI visibility audits like this one on each business.'],
+  ['Reach out from the app', 'SMS, WhatsApp or call them, and send them their own report.'],
+  ['Show the difference', 'Pitch an AI-optimised website, then re-run the audit monthly to measure it.'],
+];
 function closing(): string {
-  /* LFOS_CTA_LINE, word for word, as a heading and its second sentence. */
+  /* LFOS_CTA_LINE, word for word: the headline and the line under it. */
   const [ctaHead, ...ctaRest] = LFOS_CTA_LINE.split('. ');
-  return `<section class="lf-end" aria-label="${esc(LFOS_CTA_LINE)}"><div><h2>${esc(ctaHead)}.</h2>` +
-    `<p>${esc(ctaRest.join('. '))}</p><p class="lf-printurl">${LFOS_SITE_URL}</p></div>` +
-    `<a class="lf-btn" href="${LFOS_SITE_URL}" target="_blank" rel="noopener">Start free at leadfinderos.com →</a></section>`;
+  return `<section class="lf-end" aria-label="${esc(LFOS_CTA_LINE)}"><div class="lf-endtop"><div>` +
+    `<div class="lf-eyebrow">For web designers, SEOs and agencies</div>` +
+    `<h2>${esc(ctaHead.replace(/ for your clients$/, ''))} <span>for your clients</span>.</h2>` +
+    `<p class="lf-endsub">${esc(ctaRest.join('. '))}. Find local businesses, audit them and send them a report like this one, all in one app.</p></div>` +
+    `<div class="lf-ctabox"><a class="lf-btn" href="${LFOS_SITE_URL}" target="_blank" rel="noopener">Start free at leadfinderos.com →</a>` +
+    `<span class="lf-ctanote">Free to try</span><p class="lf-printurl">Start free at leadfinderos.com</p></div></div>` +
+    `<ol class="lf-steps">${STEPS.map(([t, d]) => `<li><div><b>${esc(t)}</b><span>${esc(d)}</span></div></li>`).join('')}</ol>` +
+    `<div class="lf-proof">${LFOS_MARK}<span>This report was made with LeadFinderOS.</span></div></section>`;
 }
 
 const ENGINES: { key: 'chatgpt' | 'gemini'; label: string; mark: string }[] = [
@@ -244,7 +295,7 @@ export function renderLeadfinderReport(m: ReportModel, opts: LfosRenderOpts = {}
     `<li>The aim is to be named in the answer. This is not a ranking, and nobody can promise one.</li>` +
     `<li>AI answers change from day to day. These are measurements, not guarantees.</li></ul></div></section>`;
   const inner = header(m.dateLabel) + `<div class="lf-body">${hero}${searchSec}${pair}${notes}${closing()}${footer(m.dateLabel, m.asks)}</div>`;
-  return page(`${biz} - AI visibility report | LeadFinderOS`, inner, { print: opts.print });
+  return page(`${biz} - AI visibility report | LeadFinderOS`, inner, { print: opts.print, sticky: !opts.print });
 }
 
 /** While the audit is still running: no figures, LeadFinderOS-branded, no-store (the caller sets the header). */
