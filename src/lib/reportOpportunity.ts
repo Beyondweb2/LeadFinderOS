@@ -54,6 +54,8 @@ export const RULE_WORDS: { key: OppTier; label: string; short: string }[] = [
 ];
 
 import { cleanAnswerText, isJunkAnswer, isMapCardAnswer } from './answerText.ts';
+import { checkName, coreName, type BusinessIdentity } from './strictName.ts';
+import { decideVerdict, type AnswerFacts, type AuditVerdict } from './auditVerdict.ts';
 
 /** The shape of one stored answer cell this module reads (a subset of auditReport's EngineCell). */
 interface Cell { self_named?: boolean; named?: boolean; competitors?: string[]; citations?: { url?: string }[]; answer_text?: string }
@@ -100,6 +102,8 @@ export interface OppQuestion {
   engines: { chatgpt: EngineFacts; gemini: EngineFacts };
   /** Google's AI Overview for this search (shown for context, not scored): shown or not, named you, the firms it named. */
   overview: { shown: boolean; named: boolean; firms: string[]; snippet: string | null };
+  /** Rules v2 only (ctx.rules === 2): the verdict, its internal label and reason (auditVerdict.ts, docs/AUDIT_RULES.md). */
+  verdict?: AuditVerdict;
 }
 export interface EngineFacts { answers: number; named: number; firms: OppFirm[]; snippet: string | null }
 
@@ -141,8 +145,13 @@ export interface OppContext {
   /** Services the client said they do NOT offer (onboarding). Only these, or a search clearly outside their trade, are excluded;
    *  a service merely missing from the current site is "Not on your site yet" (we build the new site). */
   notOffered?: string[];
+  /** Verdict rules: 1 (before 2026-11-15, the room rule + big-city cap) or 2 (docs/AUDIT_RULES.md). Absent = 1. */
+  rules?: 1 | 2;
+  /** Rules v2: who the business is, for the strict name match (exact name, domain, Google profile). */
+  identity?: BusinessIdentity;
 }
-const namedOf = (ctx: Pick<OppContext, 'isNamed'>) => (c: Cell): boolean => (ctx.isNamed ? ctx.isNamed(c) : !!(c.self_named || c.named));
+const namedOf = (ctx: Pick<OppContext, 'isNamed' | 'rules' | 'identity'>) => (c: Cell): boolean =>
+  ctx.rules === 2 && ctx.identity ? checkName(c, ctx.identity).match === 'named' : (ctx.isNamed ? ctx.isNamed(c) : !!(c.self_named || c.named));
 
 const ENGINES = ['chatgpt', 'gemini'] as const;
 
@@ -463,11 +472,31 @@ export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): 
     if (!cell || typeof cell !== 'object') continue;
     const names = (cell.competitors ?? []).filter((n): n is string => typeof n === 'string');
     const hosts = (cell.citations ?? []).map((c) => hostOf(c.url)).filter(Boolean);
-    const wrong = !!area && placeMixup(area, names, hosts, cell.answer_text ? [String(cell.answer_text)] : [], 1);
+    /* Rules v2: only Gemini is judged for another place (Paul, 2026-11-15), and the search is never left out for it —
+       its verdict says "Local gap" instead (auditVerdict.ts). */
+    const wrong = !!area && (ctx.rules !== 2 || e === 'gemini') && placeMixup(area, names, hosts, cell.answer_text ? [String(cell.answer_text)] : [], 1);
     cells.push({ e, cell, wrong });
   }
   const wrongPlace = cells.filter((c) => c.wrong).length;
-  const mixup = cells.length > 0 && wrongPlace * 2 >= cells.length;
+  const mixup = ctx.rules !== 2 && cells.length > 0 && wrongPlace * 2 >= cells.length;
+  /* RULES v2: every answer read once into facts for decideVerdict. A row without an engine's answer is a FAILED
+     answer (re-run, never a verdict); only Gemini is checked for another place; near-names are another business. */
+  const facts: AnswerFacts[] = [];
+  if (ctx.rules === 2) {
+    const selfKey = firmKey(coreName(ctx.identity?.name ?? ctx.businessName));
+    for (const row of own) for (const e of ENGINES) {
+      const cell = (row.result ?? {})[e] as (Cell & { error?: unknown }) | undefined;
+      const text = cell && typeof cell === 'object' ? String(cell.answer_text ?? '') : '';
+      if (!cell || typeof cell !== 'object' || !text.trim() || cell.error) { facts.push({ engine: e, failed: true, you: 'no', near: [], firms: [], dirs: [], wrongPlace: false, text }); continue; }
+      const nc = ctx.identity ? checkName(cell, ctx.identity) : { match: (namedOf(ctx)(cell) ? 'named' : 'no') as 'named' | 'no', near: [] as string[] };
+      const firms = rivalsOf(cell, ctx, vocab).filter((f) => firmKey(f) !== selfKey);
+      for (const n of nc.near) { const clean = n.replace(/\s*\(different town or review count\)$/, ''); if (!firms.some((f) => firmKey(f) === firmKey(clean))) firms.push(clean); }
+      const names = (cell.competitors ?? []).filter((n): n is string => typeof n === 'string');
+      const hosts = (cell.citations ?? []).map((c) => hostOf(c.url)).filter(Boolean);
+      const wrong = e === 'gemini' && !!area && placeMixup(area, names, hosts, [text], 1);
+      facts.push({ engine: e, failed: false, you: nc.match, near: nc.near, firms, dirs: directoriesInAnswer(cell, ctx), wrongPlace: wrong, text });
+    }
+  }
   const cites = new Set<string>();
   for (const { e, cell } of cells.filter((c) => !c.wrong)) {
     answers++; per[e][1]++;
@@ -551,7 +580,14 @@ export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): 
     help = `${svc.hasPage ? (art === 'an' ? 'An' : 'A') : 'A new'} ${label} page${where}, plus Google reviews.`;
   }
 
+  let verdict: AuditVerdict | undefined;
+  if (ctx.rules === 2) {
+    verdict = decideVerdict({ question, answers: facts, head: headOf(question), leftOut: clientSaidNo ? 'not_offered' : !serviceOnSite ? 'not_on_site' : null, area, key: firmKey });
+    why = verdict.reason;
+  }
+
   return {
+    verdict,
     question, tier, easy: false, why, answers, empty, named, distinct, top, firms: firms.slice(0, 5), namedYou,
     chatgptNamed: per.chatgpt[0], chatgptAnswers: per.chatgpt[1], geminiNamed: per.gemini[0], geminiAnswers: per.gemini[1],
     area, scope, service: svc.offered ? label : null, hasPage: svc.hasPage, reasons, help, intent, dirs, droppedPhrases: [...dropped],

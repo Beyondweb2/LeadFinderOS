@@ -29,6 +29,7 @@ import {
   compareMeasurements, NOISE_BAND_PP, type MeasurementComparison, type Movement,
 } from '@/lib/measurementCompare';
 import { scoringMethodFor } from '@/lib/aiOverview';
+import { guaranteeIdentityFor } from '@/lib/auditVerdict';
 import { MeasurementCompareTable } from '@/components/MeasurementCompareTable';
 
 interface RunLite {
@@ -175,7 +176,8 @@ export default function CompareMeasurements() {
     const before = rows.filter((r) => beforeIds.has(r.run_id));
     const after = rows.filter((r) => afterIds.has(r.run_id));
     const beforeAudit = runs.filter((r) => beforeIds.has(r.id)).sort((x, y) => x.created_at.localeCompare(y.created_at))[0]?.audit_id ?? null;
-    return compareMeasurements(before, after, { businessName, ownWebsite: website, scoringMethod: scoringMethodFor(beforeAudit ? auditCreated.get(beforeAudit) ?? null : null) });
+    const beforeCreated = beforeAudit ? auditCreated.get(beforeAudit) ?? null : null;
+    return compareMeasurements(before, after, { businessName, ownWebsite: website, scoringMethod: scoringMethodFor(beforeCreated), strictIdentity: guaranteeIdentityFor(beforeCreated, businessName, website) });
   }, [rows, runs, beforeIds, afterIds, businessName, website, auditCreated]);
 
   if (isLoading) {

@@ -43,6 +43,8 @@ import { START_IN_PROGRESS_SKIP, canClaimStart, startClaimFilter } from "../../.
 import { findPaidBaseline, findAmbiguousMultiRun, FREE_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
 import { type BaselineContract } from "../../../src/lib/baselineContract.ts";
 import { cellNamed, type NamedContext } from "../../../src/lib/namedSignal.ts";
+import { strictNamed, type BusinessIdentity } from "../../../src/lib/strictName.ts";
+import { guaranteeIdentityFor } from "../../../src/lib/auditVerdict.ts";
 import { budgetPoolForPurpose } from "../../../src/lib/auditBudget.ts";
 import { measurementHealth, type HealthRow, type HealthRun, type MeasurementHealth } from "../../../src/lib/measurementHealth.ts";
 import { fullMeasureAllocation } from "../../../src/lib/fullMeasure.ts";
@@ -93,7 +95,7 @@ type Client = any;
 /** Aggregate a set of runs into per-question/per-engine answered+named counts.
  *  `ctx` (2026-10-04): the business, trade and town, so `named` is read from the ANSWER TEXT for a
  *  judgeable name (namedSignal.ts) — the client report's ruler. Absent = the old model-first reading. */
-export async function aggregateRuns(service: Client, runIds: string[], ctx?: NamedContext): Promise<BaselineSnapshot> {
+export async function aggregateRuns(service: Client, runIds: string[], ctx?: NamedContext, strict?: BusinessIdentity): Promise<BaselineSnapshot> {
   const questions: BaselineSnapshot["questions"] = {};
   let answeredCells = 0;
   let namedCells = 0;
@@ -113,7 +115,8 @@ export async function aggregateRuns(service: Client, runIds: string[], ctx?: Nam
         if (!er) continue;           // engine returned nothing this run — not an answered cell
         stat.answered += 1;
         answeredCells += 1;
-        if (cellNamed(er, ctx)) { stat.named += 1; namedCells += 1; }
+        /* A baseline on rules v2: the strict name match (guaranteeIdentityFor) — the client report's ruler. */
+        if (strict ? strictNamed(er as never, strict) : cellNamed(er, ctx)) { stat.named += 1; namedCells += 1; }
       }
     }
   }
@@ -369,7 +372,7 @@ export async function advanceBaseline(service: Client, auditId: string, source =
          (C-32: the model-only verdict "named" a business that exists nowhere 4 times in 120). */
       const snapshot = await aggregateRuns(service, usable.slice(0, target).map((r) => r.id), {
         businessName: audit.business_name ?? null, trade: audit.business_type ?? null, town: audit.location_text ?? null,
-      });
+      }, guaranteeIdentityFor(audit.created_at ?? null, audit.business_name, audit.website));
       if (coverage) snapshot.coverage = coverage;
       /* ⛔ CONDITIONAL, AND THE WINNER IS THE ONLY ONE THAT HANDS OFF. `advanceBaseline` runs from
          two places every 30s tick (finalisation and the sweep), so two ticks can both read

@@ -37,6 +37,7 @@ import { buildBaselineView, type QueueRowLite } from './baselineView.ts';
 import { allCellsModelRead, type NamedCell, type NamedMode, type NamedContext } from './namedSignal.ts';
 import { overviewFor, overviewTallyFromRows, type ScoringMethod } from './aiOverview.ts';
 import { SCORED_ENGINES, citationIsClient, domainOfSafe } from './auditReport.ts';
+import { strictNamed, type BusinessIdentity } from './strictName.ts';
 
 /** Measured sampling swing, in percentage points — see the header. Movement inside this band is
  *  not evidence. Paul tunes it only against re-measured run data, never to make a result read
@@ -207,8 +208,10 @@ function sideCounts(
   namedMode: NamedMode,
   context: { trade?: string | null; town?: string | null } = {},
   googleAi = false,
+  strict?: BusinessIdentity,
 ): { byQuestion: Map<string, SideCounts>; byEngine: Map<string, Record<string, { answered: number; named: number }>>; overall: OverallSide; label: Map<string, string> } {
-  const view = buildBaselineView(rows, { businessName, namedMode, trade: context.trade ?? null, town: context.town ?? null });
+  const view = buildBaselineView(rows, { businessName, namedMode, trade: context.trade ?? null, town: context.town ?? null,
+    isNamed: strict ? (c) => strictNamed(c as never, strict) : undefined });
   const cited = citedByQuestion(rows, businessName, ownWebsite);
   /* SCORING METHOD 2 (2026-10-19): Google AI on each answered row where Google SHOWED an AI answer — one more answer,
      named by the same ruler the report uses (aiOverview.ts overviewFor). None shown = not an answer, never a miss. */
@@ -336,7 +339,11 @@ export function compareMeasurements(
   opts: { businessName?: string | null; ownWebsite?: string | null; trade?: string | null; town?: string | null;
     /** THE BASELINE's scoring method (aiOverview.ts scoringMethodFor(baseline audit created_at)) — never the replay's,
      *  so both sides are judged like with like. 2 = Google AI counted where shown. Absent = 1 (every baseline before it). */
-    scoringMethod?: ScoringMethod } = {},
+    scoringMethod?: ScoringMethod;
+    /** THE BASELINE's name ruler (Paul, 2026-11-15): guaranteeIdentityFor(baseline created_at, …). Present = a baseline on rules
+     *  v2, judged on BOTH sides by the strict name match the client report uses (strictName.ts). Absent = the ruler below,
+     *  exactly as before — every existing and paid baseline. */
+    strictIdentity?: BusinessIdentity } = {},
 ): MeasurementComparison {
   const businessName = (opts.businessName ?? '').trim();
   const ownWebsite = (opts.ownWebsite ?? '').trim();
@@ -353,8 +360,8 @@ export function compareMeasurements(
   const namedMode: NamedMode = (allCellsModelRead(cellsOf(beforeRows)) && allCellsModelRead(cellsOf(afterRows)))
     ? 'auto' : 'legacy';
   const withGoogleAi = opts.scoringMethod === 2;
-  const b = sideCounts(beforeRows, businessName, ownWebsite, namedMode, context, withGoogleAi);
-  const a = sideCounts(afterRows, businessName, ownWebsite, namedMode, context, withGoogleAi);
+  const b = sideCounts(beforeRows, businessName, ownWebsite, namedMode, context, withGoogleAi, opts.strictIdentity);
+  const a = sideCounts(afterRows, businessName, ownWebsite, namedMode, context, withGoogleAi, opts.strictIdentity);
   /* BEFORE's order is the spine — it is the measurement the after side is being compared against,
      so its questions keep their positions and anything new is appended after them. */
   const bOrder = askOrder(beforeRows);

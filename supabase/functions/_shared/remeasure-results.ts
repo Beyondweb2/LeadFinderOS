@@ -23,6 +23,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { compareMeasurements, type MeasurementComparison } from "../../../src/lib/measurementCompare.ts";
 import { scoringMethodFor } from "../../../src/lib/aiOverview.ts";
+import { guaranteeIdentityFor } from "../../../src/lib/auditVerdict.ts";
 import type { QueueRowLite } from "../../../src/lib/baselineView.ts";
 import {
   remeasureResultsDecision, numberWentUp, resultsEmailSubject, resultsEmailParagraphs, REMEASURE_CLAIM_WINDOW_DAYS,
@@ -132,6 +133,8 @@ export async function loadRemeasureBundle(service: Client, remeasureAuditId: str
     /* ⛔ THE BASELINE'S METHOD, NEVER THE REPLAY'S (2026-10-19): a baseline created before Google AI was scored is judged on
        ChatGPT + Gemini on both sides; one created after counts Google AI on both sides. Like with like. */
     scoringMethod: scoringMethodFor((bl as { created_at?: string | null } | null)?.created_at ?? null),
+    /* ⛔ THE BASELINE'S NAME RULER (2026-11-15): strict only for a baseline created on rules v2; existing/paid ones unchanged. */
+    strictIdentity: guaranteeIdentityFor((bl as { created_at?: string | null } | null)?.created_at ?? null, businessName, audit.website ?? lead.website ?? ""),
   });
   const town = (audit.location_text ?? lead.derived_town ?? lead.search_location ?? "").trim() || null;
   return { bundle: { audit, lead, baselineRuns, replayRuns, comparison, town, terms, weeks }, reason: null };

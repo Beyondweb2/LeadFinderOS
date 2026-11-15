@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-15-audit-rules-v2', date: '2026-11-15', title: 'New Winnable rules: already named always counts as Winnable', audience: 'admin',
+    body: 'Audit reports now decide Winnable / Not winnable with the new rules. If AI already names the business in any answer, the search is Winnable. Winnable means room to be named, not to come first: a search is Not winnable only when the list is closed (the same firms fill every spot in every answer and no other firm ever appears). A firm that is always there is just one to beat. Everything else is Winnable: names that change, no clear leader, only directories named, or a category or local gap. The whole-city cap is gone. A name only counts when it is the exact business name, its website or its Google profile; a near-name like "MC Moments Wedding Content" is flagged and not counted. Failed searches are re-run, never given a verdict; only genuinely odd questions are flagged. New baselines count the guarantee with the same strict name match; existing and paid baselines are unchanged. Reports made before today keep the page they showed; new audits and re-scored copies use the new rules.',
+    report: {
+      added: ['The internal reason for every verdict (for example "Closed list" with the firms that lock it) in Create baseline.', 'A re-score tool that makes a new report version from the stored answers, with a new link.'],
+      changed: ['Searches where AI already names the business are always Winnable.', 'Whole-city searches are no longer capped at Not winnable.', 'Only the exact name, website or Google profile counts as being named.'],
+      removed: ['The whole-city cap and the old room thresholds for new reports.'],
+      effect: 'Clients see only Winnable / Not winnable. You see the reason. Old links do not change.',
+    } },
   { id: '2026-11-14-add-lead-from-website', date: '2026-11-14', title: 'Add a lead you found: paste the website and press Fill from website', audience: 'all',
     body: 'On Add a lead you found, paste the business website and press Fill from website. It fills the name, trade, phone, email, address, town, services and areas, but only what the site itself says. Anything the site does not say stays blank, and anything you typed is kept. The form is shorter now: Website, Name, Trade, Town, Phone (or a Maps link) and Where found are up front. Everything else is under More details, including Country.',
     report: {

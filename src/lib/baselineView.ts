@@ -135,7 +135,9 @@ export function buildBaselineView(
      the replay with the model and the baseline with the old string match is not a comparison, it
      is two different rulers, and that number decides a refund. compareMeasurements picks the mode
      once, for both sides — see namedSignal.ts. */
-  opts: { businessName?: string | null; trade?: string | null; town?: string | null; measuredAt?: string | null; namedMode?: NamedMode } = {},
+  opts: { businessName?: string | null; trade?: string | null; town?: string | null; measuredAt?: string | null; namedMode?: NamedMode;
+    /** The guarantee's strict name match for a baseline on rules v2 (measurementCompare.ts): replaces the ruler on this side. */
+    isNamed?: (cell: object) => boolean } = {},
 ): BaselineView {
   const businessName = (opts.businessName ?? '').trim();
   const namedMode: NamedMode = opts.namedMode ?? 'auto';
@@ -174,7 +176,7 @@ export function buildBaselineView(
       if (er && typeof er === 'object') {
         // `answered` is not stored per row: an engine that returned a result answered.
         cur.answered += 1;
-        if (namedInMode(er, namedMode, namedCtx)) cur.named += 1;
+        if (opts.isNamed ? opts.isNamed(er) : namedInMode(er, namedMode, namedCtx)) cur.named += 1;
         if (Array.isArray(er.competitors)) {
           acc.competitorCells += 1;
           for (const raw of er.competitors) {
