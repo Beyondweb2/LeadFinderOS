@@ -2577,7 +2577,8 @@ export function OutreachTable({
                       Remove
                     </Button>
                   )}
-                  {onResetSelected && !readOnly && perms.removeLeads && (
+                  {/* Reset (re-addable) is ADMIN ONLY (Paul, 2026-11-15): it deletes the lead and its added-history. */}
+                  {onResetSelected && !readOnly && perms.removeLeads && isAdmin && (
                     <Button
                       variant="outline"
                       size="sm"

@@ -1755,7 +1755,9 @@ export function useOutreach({ history = true, progressive = false, preload = tru
   // multi-select. DELIBERATELY different from deleteMultiple (which keeps the ledger
   // to prevent re-contacting).
   const resetMultiple = useCallback(async (leadIds: string[]) => {
+    /* Reset (re-addable) is ADMIN ONLY (Paul, 2026-11-15): it deletes the lead AND its added-history. */
     if (isSales()) { refuseForSales('Resetting leads'); return false; }
+    if (roleRef.current !== 'admin') { refuseForSales('Resetting leads'); return false; }
     if (leadIds.length === 0) return false;
     // Identity keys for the selected leads, captured from current state BEFORE delete.
     const sel = [...leads, ...archivedLeads].filter((l) => leadIds.includes(l.id));
