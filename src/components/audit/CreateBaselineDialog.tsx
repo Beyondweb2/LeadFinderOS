@@ -78,7 +78,7 @@ export function CreateBaselineDialog({ open, onOpenChange, audit, loadRows, toas
         const tierOf = (q: OppQuestion): string => {
           const v = q.verdict;
           if (!v) return q.tier;
-          return v.rule === 'hard' ? 'little' : v.rule === 'no_leader' ? 'nofirms' : v.rule === 'visible' ? 'named' : v.rule === 'open' && v.label === 'Names change' ? 'lots' : 'some';
+          return v.rule === 'closed' ? 'little' : v.rule === 'no_leader' ? 'nofirms' : v.rule === 'visible' ? 'named' : v.rule === 'open' && v.label === 'Names change' ? 'lots' : 'some';
         };
         const p = s.questions.map((q: OppQuestion) => ({ question: q.question, tier: tierOf(q), firms: q.distinct, verdict: winnableOf(q), why: q.verdict ? `${q.verdict.label} · ${q.verdict.reason}` : q.why, namedYou: q.namedYou }));
         /* The hook searches: the lead's newest AI check (an ordinary audit). Only those the Discovery also asked count. */

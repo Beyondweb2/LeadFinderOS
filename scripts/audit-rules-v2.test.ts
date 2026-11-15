@@ -1,9 +1,10 @@
 /* Audit verdict rules v2 (Paul, 2026-11-15; docs/AUDIT_RULES.md): the strict name match, the six rules in order, the
    rules switch (old links keep the old rule), and the real cases that started it (Moments: Mayo / Westport / iPhone Mayo). */
 import { checkName } from "../src/lib/strictName.ts";
-import { auditRulesFor, AUDIT_RULES_V2_FROM, clientLineOf, decideVerdict, emptyWhyOf, otherTrade, unnaturalReason, type AnswerFacts } from "../src/lib/auditVerdict.ts";
+import { guaranteeIdentityFor, auditRulesFor, AUDIT_RULES_V2_FROM, clientLineOf, decideVerdict, emptyWhyOf, otherTrade, unnaturalReason, type AnswerFacts } from "../src/lib/auditVerdict.ts";
 import { firmKey, oppQuestion, type OppContext, type OppRow } from "../src/lib/reportOpportunity.ts";
 import { winnableOf, winnableWhy } from "../src/lib/reportDesign.ts";
+import { compareMeasurements } from "../src/lib/measurementCompare.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
@@ -38,12 +39,17 @@ const six = (fn: (e: "chatgpt" | "gemini", i: number) => AnswerFacts) => [0, 1, 
 const S = (answers: AnswerFacts[], o: Partial<Parameters<typeof decideVerdict>[0]> = {}) => decideVerdict({ question: "wedding content creator in Mayo", answers, head: "wedding content creator", leftOut: null, area: "Mayo", key: firmKey, ...o });
 
 const owned = six((e) => A(e, ["Aisle Be There", "SocialWeds"]));
-ok(S(owned).rule === "hard" && S(owned).verdict === "not_winnable" && S(owned).strongFirm?.name === "Aisle Be There", "rule 2: one firm in 6/6 = Hard: strong competitor, Not winnable, firm stored");
+ok(S(owned).rule === "closed" && S(owned).verdict === "not_winnable" && S(owned).lockedBy.map((f) => f.name).join() === "Aisle Be There,SocialWeds", "rule 2: the same firms fill every answer, nothing else = Closed list, Not winnable, locking firms stored");
+const alwaysPlusRotating = S(six((e, i) => A(e, ["Aisle Be There", `F${i}${e}`])));
+ok(alwaysPlusRotating.rule === "open" && alwaysPlusRotating.verdict === "winnable" && alwaysPlusRotating.toBeat[0]?.name === "Aisle Be There" && /Always there: Aisle Be There \(6 of 6\)/.test(alwaysPlusRotating.reason), "fix 1: a firm in 6/6 with another spot rotating = Winnable; that firm is only 'always there', one to beat");
+const oneOdd = S(six((e, i) => A(e, i === 2 && e === "gemini" ? ["Aisle Be There", "SocialWeds", "New Firm"] : ["Aisle Be There", "SocialWeds"])));
+ok(oneOdd.verdict === "winnable", "fix 1: a single other firm appearing once means the list rotates = Winnable");
+ok(S(six((e, i) => A(e, i === 0 && e === "gemini" ? [] : ["Aisle Be There"]))).verdict === "winnable", "an answer that names nobody leaves a spot open = not closed");
 const ownedButNamed = six((e, i) => A(e, ["Aisle Be There"], { you: i === 0 && e === "gemini" ? "named" : "no" }));
 const v1 = S(ownedButNamed);
 ok(v1.rule === "visible" && v1.verdict === "winnable" && v1.label === "Already visible: 1 of 6", "rule 1 beats rule 2: named once = Winnable, \"Already visible: 1 of 6\"");
 ok(v1.perEngine.gemini.named === 1 && v1.perEngine.chatgpt.named === 0, "ChatGPT and Gemini are counted separately");
-ok(S(six((e, i) => A(e, i < 2 || e === "chatgpt" ? ["Toast"] : ["Other"]))).rule === "hard", "5 of 6 is Hard");
+ok(S(six((e, i) => A(e, i < 2 || e === "chatgpt" ? ["Toast"] : ["Other"]))).verdict === "winnable", "fix 1: 5 of 6 is no longer Not winnable");
 const four = S(six((e, i) => A(e, i < 2 ? ["Toast", `F${i}${e}`] : [`G${i}${e}`])));
 ok(four.rule === "open" && four.verdict === "winnable" && four.toBeat[0]?.name === "Toast" && four.label === "A few repeat", "rule 3: a firm in 4/6 = Winnable, stored as a firm to beat");
 const rotating = S(six((e, i) => A(e, [`F${i}${e}`, `H${i}${e}`])));
@@ -60,15 +66,16 @@ ok(cat.rule === "category_gap" && cat.verdict === "winnable", "rule 6: only anot
 const loc = S(six((e) => A(e, e === "gemini" ? ["Stratford-upon-Avon Plumbing"] : [], { wrongPlace: e === "gemini", text: "x" })).map((a) => a), { question: "plumber in Stratford", head: "plumber", area: "Stratford" });
 ok(loc.rule === "local_gap" || loc.rule === "no_leader", "rule 6: Gemini answering for another place is never scored as a firm there");
 const loc2 = S([...six((e) => A(e, [], { dirs: [] }))].map((a) => a.engine === "gemini" ? { ...a, wrongPlace: true, firms: ["Avon Plumbers"] } : { ...a, firms: [] }).map((a, i) => (a.engine === "chatgpt" && i < 2 ? { ...a, dirs: ["Checkatrade"] } : a)), { question: "plumber in Stratford", head: "plumber", area: "Stratford" });
-ok(loc2.rule !== "hard" && loc2.verdict === "winnable", "a wrong-place firm can never make a search Hard");
+ok(loc2.rule !== "closed" && loc2.verdict === "winnable", "a wrong-place firm can never close a list");
 ok(S(six((e, i) => A(e, ["Toast"], { failed: i === 2 && e === "gemini" }))).rule === "rerun" && S(six((e, i) => A(e, ["Toast"], { failed: i === 2 && e === "gemini" }))).verdict === null, "a failed answer = re-run, never a verdict");
-ok(S(owned, { question: "wedding content creator Ireland" }).rule === "unnatural" && S(owned, { question: "wedding content creator Ireland" }).verdict === null, "an unnatural question is flagged, not scored");
+ok(S(owned, { question: "wedding content creator wedding wedding" }).rule === "unnatural" && S(owned, { question: "wedding content creator wedding wedding" }).verdict === null, "a genuinely odd question is flagged, not scored");
+ok(unnaturalReason("wedding content creator Ireland") === null && S(ownedButNamed, { question: "wedding content creator Ireland" }).rule === "visible", "fix 2: a missing 'in' is how people search: never flagged, and she is named there");
 ok(unnaturalReason("EICR certificate in East London") === null && unnaturalReason("who is the best property maintenance company in London") === null && unnaturalReason("plumber plumber in Bow") !== null, "natural searches are not flagged");
 ok(S(rotating.toBeat.length ? owned : six((e, i) => A(e, [`F${i}${e}`])), { leftOut: "not_on_site" }).verdict === null, "a service not on their site is left out (after rule 1)");
 ok(S(ownedButNamed, { leftOut: "not_on_site" }).rule === "visible", "rule 1 beats left out");
 ok(otherTrade("Gary Collins Photography", "wedding content creator") && !otherTrade("Aisle Be There", "wedding content creator") && !otherTrade("Reel Content Studio", "wedding content creator"), "other trade only when the firm's name says so");
 for (const v of [v1, four, rotating, empty, dirs, cat]) ok(!/\d/.test(clientLineOf(v)) && !/Toast|Aisle|weddingsonline|Photography/.test(clientLineOf(v)), `client line has no counts or names (${v.rule})`);
-ok(S(owned).label.startsWith("Hard") && S(owned).reason.includes("6 of 6"), "every Not winnable stores a reason with its evidence");
+ok(S(owned).label === "Closed list" && S(owned).reason.includes("6 of 6") && S(owned).reason.includes("Aisle Be There"), "every Not winnable stores a reason and the firms that lock it");
 
 /* ── No big-city cap ───────────────────────────────────────────────────────────────────────── */
 const big = S(six((e, i) => A(e, [`F${i}${e}`, `G${i}${e}`])), { question: "best plumber in London", head: "plumber", area: "London" });
@@ -92,9 +99,22 @@ const q1 = oppQuestion("wedding content creator in Mayo", rows, { ...ctx, rules:
 ok(!q1.verdict && winnableOf(q1) === "not_winnable", "the old rule is unchanged for old links (it said Not winnable)");
 const kildare: OppRow[] = [0, 1, 2].map(() => ({ question: "wedding content creator in Kildare", result: { chatgpt: { answer_text: "1. MC Moments Wedding Content\nBased in Kildare\n2. Blackbird Studios", competitors: ["Blackbird Studios"], citations: [] }, gemini: { answer_text: "* **Mc Moments Wedding Content:** Kildare-based", competitors: [], citations: [] } } }));
 const qk = oppQuestion("wedding content creator in Kildare", kildare, ctx);
-ok(qk.namedYou === 0 && qk.verdict?.rule === "hard" && /MC Moments/i.test(qk.verdict.strongFirm?.name ?? "") && qk.verdict.nearNames.length > 0, "Kildare: MC Moments is another business — not counted, flagged, and it is the strong competitor");
+ok(qk.namedYou === 0 && qk.verdict?.rule === "open" && /MC Moments/i.test(qk.verdict.toBeat[0]?.name ?? "") && qk.verdict.nearNames.length > 0, "Kildare: MC Moments is another business — not counted, flagged, always there, but the list rotates (Winnable)");
 const failedRows: OppRow[] = [...rows.slice(0, 2), { question: "wedding content creator in Mayo", result: null }];
 ok(oppQuestion("wedding content creator in Mayo", failedRows, ctx).verdict?.rule === "rerun", "a failed queue row makes the search re-run, never a verdict");
+
+/* ── Fix 3: the guarantee's name ruler, NEW baselines only ─────────────────────────────────── */
+ok(guaranteeIdentityFor("2026-11-01T00:00:00Z", "Moments Wedding Content", "x.com") === undefined, "an existing / paid baseline keeps its ruler");
+ok(guaranteeIdentityFor(new Date(Date.parse(AUDIT_RULES_V2_FROM) + 1000).toISOString(), "Moments Wedding Content", "momentsweddingcontent.com")?.domains[0] === "momentsweddingcontent.com", "a new baseline gets the strict identity (name + website)");
+const mrow = (run: string, text: string) => ({ run_id: run, question: "wedding content creator in Kildare", engines: ["chatgpt", "gemini"], status: "done", result: { chatgpt: { answer_text: text, self_named: true, named: true, competitors: [] }, gemini: { answer_text: text, self_named: true, named: true, competitors: [] } } });
+const before = [mrow("b1", "1. MC Moments Wedding Content, Kildare"), mrow("b2", "1. MC Moments Wedding Content, Kildare"), mrow("b3", "1. MC Moments Wedding Content, Kildare")];
+const after = [mrow("a1", "1. Moments Wedding Content, Mayo"), mrow("a2", "1. MC Moments Wedding Content"), mrow("a3", "1. MC Moments Wedding Content")];
+const strictId = guaranteeIdentityFor(new Date(Date.parse(AUDIT_RULES_V2_FROM) + 1000).toISOString(), "Moments Wedding Content", "momentsweddingcontent.com");
+const cmpNew = compareMeasurements(before as never, after as never, { businessName: "Moments Wedding Content", trade: "Wedding content creator", strictIdentity: strictId });
+const cmpOld = compareMeasurements(before as never, after as never, { businessName: "Moments Wedding Content", trade: "Wedding content creator" });
+const qNew = cmpNew.questions[0], qOld = cmpOld.questions[0];
+ok(qNew.before?.named === 0 && qNew.after?.named === 2, "new baseline: the near-name is never counted on either side (0 before, 2 after)");
+ok(qOld.before?.named !== 0, "existing baseline: the ruler it was sold on is unchanged");
 
 if (f) { console.log(`\n${f} FAILED`); process.exit(1); }
 console.log("\nall passed");

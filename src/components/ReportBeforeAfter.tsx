@@ -30,6 +30,7 @@ import { renderReportHtml, type AiAuditReportData } from '@/lib/aiAuditReportHtm
 import type { QueueRow, RunRow } from '@/lib/auditReport';
 import type { QueueRowLite } from '@/lib/baselineView';
 import { scoringMethodFor } from '@/lib/aiOverview';
+import { guaranteeIdentityFor } from '@/lib/auditVerdict';
 import { compareMeasurements, googleAiExtraFigure, type MeasurementComparison, type Movement } from '@/lib/measurementCompare';
 import { MeasurementCompareTable } from '@/components/MeasurementCompareTable';
 import { usePersistedState } from '@/hooks/usePersistedState';
@@ -305,7 +306,7 @@ export function ReportBeforeAfter({
     /* The BEFORE side's audit decides the scoring method (like with like, aiOverview.ts scoringMethodFor). */
     const beforeAudit = runs.filter((r) => beforeIds.has(r.id)).sort((x, y) => x.created_at.localeCompare(y.created_at))[0]?.audit_id ?? null;
     const created = auditRows.find((a) => a.id === beforeAudit)?.created_at ?? null;
-    return compareMeasurements(split.before, split.after, { businessName, ownWebsite, scoringMethod: scoringMethodFor(created) });
+    return compareMeasurements(split.before, split.after, { businessName, ownWebsite, scoringMethod: scoringMethodFor(created), strictIdentity: guaranteeIdentityFor(created, businessName, ownWebsite) });
   }, [split, businessName, ownWebsite, runs, beforeIds, auditRows]);
 
   /* ⛔ CLIENT VERSION ON BOTH SIDES. `internal: false` is forced here rather than inherited: the

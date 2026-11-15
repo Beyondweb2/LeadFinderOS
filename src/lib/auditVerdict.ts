@@ -2,13 +2,16 @@
    AUDIT VERDICT RULES v2 (Paul, 2026-11-15). The full rule, in words: docs/AUDIT_RULES.md.
 
    One search, its answers (3 asks x ChatGPT + Gemini = 6), one verdict. First rule that fits wins:
-     0. not scored  — a failed answer -> re-run, never a verdict; an unnatural question -> flagged, not scored.
+     0. not scored  — a failed answer -> re-run, never a verdict; a genuinely odd question (a doubled word, a run-on)
+                      -> flagged, not scored. A missing "in" is how people search: never flagged (fix 2).
      1. VISIBLE     — the business is named (strict name match, strictName.ts) in ANY answer -> Winnable,
                       "Already visible: X of N". Beats everything below.
      -  left out    — a service they don't offer / not on their site yet (unchanged from before).
-     2. HARD        — one firm in 5+ of the 6 answers -> "Hard: strong competitor" (firm stored). Client: Not winnable.
-     3. OPEN        — the right firms are named and no firm reaches 5/6 -> Winnable; repeat firms stored as
-                      "ones to beat" ("Names change" / "A few repeat").
+     2. CLOSED      — the list is closed: every answer names firms and the SAME firms fill every spot in every answer, no
+                      other firm ever appears -> Not winnable, the locking firms stored. Winnable means room to be NAMED,
+                      not to come first, so a firm that is always there is only "one to beat" (Paul, 2026-11-15, fix 1).
+     3. OPEN        — any spot rotates -> Winnable; repeat firms stored as "ones to beat" ("Names change" / "A few repeat"),
+                      a firm in 5+ of 6 answers marked "always there".
      4. NO LEADER   — nobody named in most answers on BOTH engines -> Winnable "No clear leader" + why
                       (general advice / doesn't know anyone / refused).
      5. DIRECTORY   — only directories named -> Winnable "Directory gap" (listed).
@@ -25,7 +28,16 @@ export const AUDIT_RULES_VERSION = 2 as const;
 
 /* WHICH RULES A REPORT USES. An audit made before v2 shipped keeps the old rule, so a link already sent keeps the page it
    showed; an audit made after, or a re-scored copy (a run carrying results.report_rules = 2), uses v2. */
-export const AUDIT_RULES_V2_FROM = '2026-11-15T12:00:00Z';
+export const AUDIT_RULES_V2_FROM = '2026-11-15T06:00:00Z';
+/** THE GUARANTEE'S NAME RULER (Paul, 2026-11-15): a baseline created on rules v2 counts "named" by the strict match, on
+ *  both sides of its day-28 comparison and in its frozen day-0 snapshot. Name + website only (the same identity everywhere,
+ *  so the two sides can never differ). Older and paid baselines: undefined = the ruler they were sold on. */
+export function guaranteeIdentityFor(baselineCreatedAt: string | null | undefined, name: string | null | undefined, website: string | null | undefined): { name: string; domains: string[] } | undefined {
+  const n = String(name ?? '').trim();
+  if (!n || auditRulesFor({ createdAt: baselineCreatedAt }) !== 2) return undefined;
+  const w = String(website ?? '').trim();
+  return { name: n, domains: w ? [w] : [] };
+}
 export function auditRulesFor(o: { createdAt: string | null | undefined; runRules?: unknown[] }): 1 | 2 {
   if ((o.runRules ?? []).some((r) => Number(r) === 2)) return 2;
   const t = o.createdAt ? Date.parse(o.createdAt) : NaN;
@@ -34,7 +46,7 @@ export function auditRulesFor(o: { createdAt: string | null | undefined; runRule
 
 export type VerdictRule =
   | 'rerun' | 'unnatural' | 'left_out'
-  | 'visible' | 'hard' | 'open' | 'no_leader' | 'directory_gap' | 'category_gap' | 'local_gap';
+  | 'visible' | 'closed' | 'open' | 'no_leader' | 'directory_gap' | 'category_gap' | 'local_gap';
 export type EmptyWhy = 'general advice' | "doesn't know anyone" | 'refused';
 
 /** One answer, already read: who it named, which directories, whether it failed or answered for another place. */
@@ -73,7 +85,7 @@ export interface AuditVerdict {
   /** What the client sees. null = not shown (re-run, unnatural, left out). */
   verdict: 'winnable' | 'not_winnable' | null;
   rule: VerdictRule;
-  /** Internal label: "Already visible: 6 of 6", "Hard: strong competitor", "Directory gap"… */
+  /** Internal label: "Already visible: 6 of 6", "Closed list", "Directory gap"… */
   label: string;
   /** Internal reason, one sentence with its evidence (may name competitors: operator only). */
   reason: string;
@@ -81,9 +93,9 @@ export interface AuditVerdict {
   answers: number;
   nearNames: string[];
   perEngine: { chatgpt: EngineCount; gemini: EngineCount };
-  /** Rule 2: the firm that owns the answer. */
-  strongFirm: FirmCount | null;
-  /** Rule 3: firms that repeat (2+ answers), most first. */
+  /** Rule 2: the firms that lock a closed list (each in every answer). Empty otherwise. */
+  lockedBy: FirmCount[];
+  /** Rule 3: firms that repeat (2+ answers), most first; "always there" = in 5+ of 6. */
   toBeat: FirmCount[];
   /** Rule 5: the directories named. */
   directories: string[];
@@ -92,12 +104,11 @@ export interface AuditVerdict {
 }
 
 /* ── Unnatural questions: flagged, never scored ───────────────────────────────────────────── */
-const PLACE_TAIL = /\s(Ireland|UK|England|Scotland|Wales|Britain|Australia|London|Dublin|Belfast|Cork|Galway)\??$/;
-/** A search a real customer would not type: a place stuck on with no "in", a doubled word, or a run-on. */
+/** A search a real customer would not type: a doubled word or a run-on. A place with no "in" ("wedding content creator
+ *  Ireland") is how people search and is never flagged (Paul, 2026-11-15). */
 export function unnaturalReason(question: string): string | null {
   const q = question.trim().replace(/\s+/g, ' ');
   const words = q.split(' ');
-  if (PLACE_TAIL.test(q) && !/\b(in|near|across|around|from|for|of)\s+(the\s+)?(?:[A-Z][\w'’.-]*\s+){0,3}[A-Z][\w'’.-]*\??$/.test(q)) return 'a place with no "in" before it';
   for (let i = 1; i < words.length; i++) if (words[i].toLowerCase() === words[i - 1].toLowerCase() && /^[a-z]+$/i.test(words[i])) return `the word "${words[i]}" twice`;
   if (words.length > 14) return 'too long for a real search';
   return null;
@@ -164,9 +175,9 @@ export function decideVerdict(s: SearchFacts): AuditVerdict {
   const perEngine = { chatgpt: eng('chatgpt'), gemini: eng('gemini') };
   const namedYou = ok.filter((a) => a.you === 'named').length;
   const nearNames = [...new Set(ok.flatMap((a) => a.near))];
-  const base = { rules: AUDIT_RULES_VERSION, namedYou, answers: ok.length, nearNames, perEngine, strongFirm: null, toBeat: [], directories: [], emptyWhy: null } as const;
+  const base = { rules: AUDIT_RULES_VERSION, namedYou, answers: ok.length, nearNames, perEngine, lockedBy: [], toBeat: [], directories: [], emptyWhy: null } as const;
   const out = (verdict: AuditVerdict['verdict'], rule: VerdictRule, label: string, reason: string, extra: Partial<AuditVerdict> = {}): AuditVerdict =>
-    ({ ...base, toBeat: [], directories: [], verdict, rule, label, reason, ...extra });
+    ({ ...base, lockedBy: [], toBeat: [], directories: [], verdict, rule, label, reason, ...extra });
   const nearNote = nearNames.length ? ` Near-name flagged, not counted: ${list(nearNames)}.` : '';
 
   // 0. Not scored.
@@ -184,13 +195,15 @@ export function decideVerdict(s: SearchFacts): AuditVerdict {
   if (s.leftOut) return out(null, 'left_out', s.leftOut === 'not_offered' ? 'Not their service' : 'Not on their site yet',
     s.leftOut === 'not_offered' ? 'They told us they do not offer this.' : 'Not on their site yet: add a page if they offer it.');
 
-  // 2. One firm in 5+ of 6 answers -> hard.
+  // 2. A CLOSED list -> Not winnable: every answer names firms, and every firm named appears in every answer (no spot
+  //    ever rotates). One firm that is always there is NOT enough: the other spots still move.
   const local = ok.filter((a) => !a.wrongPlace);
   const all = countFirms(local, s.key, (a) => a.firms);
-  const top = all[0] ?? null;
-  if (top && top.count * 6 >= ok.length * 5) {
-    return out('not_winnable', 'hard', 'Hard: strong competitor', `${top.name} is named in ${top.count} of ${ok.length} answers.${nearNote}`, { strongFirm: top });
+  if (local.length > 0 && local.length === ok.length && all.length > 0 && local.every((a) => a.firms.length > 0) && all.every((f) => f.count === local.length)) {
+    return out('not_winnable', 'closed', 'Closed list',
+      `The same ${all.length === 1 ? 'firm fills' : `${all.length} firms fill`} every answer (${all.map((f) => f.name).join(', ')}, ${ok.length} of ${ok.length}); no other firm appears.${nearNote}`, { lockedBy: all });
   }
+  const always = all.filter((f) => f.count * 6 >= ok.length * 5);
 
   // 3. The right firms are named, nobody at 5/6 -> winnable; repeat firms are the ones to beat. "Named" means firms
   //    come up in most answers on at least one engine; when most answers on BOTH engines name nobody, that is rule 4.
@@ -199,11 +212,11 @@ export function decideVerdict(s: SearchFacts): AuditVerdict {
   const bothEmpty = mostEmpty('chatgpt') && mostEmpty('gemini');
   const right = countFirms(local, s.key, (a) => a.firms.filter((f) => !otherTrade(f, s.head)));
   if (right.length && !bothEmpty) {
-    const toBeat = right.filter((f) => f.count >= 2).slice(0, 5);
-    const few = right.some((f) => f.count * 2 >= ok.length);
+    const toBeat = [...always, ...right.filter((f) => f.count >= 2 && !always.some((x) => s.key(x.name) === s.key(f.name)))].slice(0, 5);
+    const few = always.length > 0 || right.some((f) => f.count * 2 >= ok.length);
     const named = local.filter((a) => a.firms.length).length;
     return out('winnable', 'open', few ? 'A few repeat' : 'Names change',
-      `${named} of ${ok.length} answers named ${right.length} different firms; none in 5 of 6.${toBeat.length ? ` Ones to beat: ${toBeat.map((f) => `${f.name} (${f.count})`).join(', ')}.` : ''}${nearNote}`, { toBeat });
+      `${named} of ${ok.length} answers named ${right.length} different firms; the list rotates.${always.length ? ` Always there: ${always.map((f) => `${f.name} (${f.count} of ${ok.length})`).join(', ')}.` : ''}${toBeat.length ? ` Ones to beat: ${toBeat.map((f) => `${f.name} (${f.count})`).join(', ')}.` : ''}${nearNote}`, { toBeat });
   }
 
   // 4. Nobody named in most answers on BOTH engines -> no clear leader.

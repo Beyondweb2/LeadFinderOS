@@ -10,7 +10,8 @@
      • <out>/rescore-table.md — search, old verdict, new verdict, reason, and old vs new named %.
    Apply a .sql with `npx supabase db query --remote=<ref> -f <file>` (an insert, nothing deleted or changed).
 
-   Usage: npx tsx scripts/audit-rescore-v2.ts <outDir> <code>[=<different-business note>] ...
+   Usage: npx tsx scripts/audit-rescore-v2.ts <outDir> [--refresh] <code> ...
+   --refresh: the codes are existing v2 copies; only their verdicts_v2 snapshot is rewritten (refresh-<code>.sql).
    Reads with `supabase db query --read-only` (no secret handled here).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { execSync } from 'node:child_process';
@@ -26,7 +27,10 @@ import { SHORT_CODE_ALPHABET, SHORT_CODE_LEN } from '../src/lib/reportSlug.ts';
 import { randomInt } from 'node:crypto';
 
 const REF = 'ruusxpkkmwtljxxulhbq';
-const [outDir, ...codes] = process.argv.slice(2);
+const [outDir, ...args] = process.argv.slice(2);
+/* --refresh: the codes are existing v2 copies; write refresh-<code>.sql (snapshot only) instead of a new copy. */
+const refresh = args.includes('--refresh');
+const codes = args.filter((x) => x !== '--refresh');
 if (!outDir || !codes.length) { console.error('usage: audit-rescore-v2.ts <outDir> <code> ...'); process.exit(2); }
 mkdirSync(outDir, { recursive: true });
 
@@ -82,10 +86,19 @@ for (const code of codes) {
   const all1 = new Map(m1.all.map((x) => [x.question, x]));
   const snapshot = [...all2.values()].map((x) => ({ question: x.question, ...x.verdict }));
 
-  // The copy: one statement, all or nothing.
-  const code2 = newCode();
   const latest = Math.max(...runs.map((r) => r.run_number));
   const tag = `$v2snap${randomInt(1e9)}$`;
+  /* REFRESH: an audit that is ALREADY a v2 copy (its runs carry report_rules = 2) keeps its link; only its stored
+     verdicts_v2 snapshot is rewritten from today's rules (one key on its latest run; nothing else changes). */
+  if (refresh) {
+    writeFileSync(join(outDir, `refresh-${code}.sql`), `-- Refresh the verdicts_v2 snapshot of the v2 copy ${code}. Changes only that key on its latest run.
+update ai_audit_runs set results = jsonb_set(results, '{verdicts_v2}', ${tag}${JSON.stringify(snapshot)}${tag}::jsonb) || jsonb_build_object('verdicts_refreshed_at', now())
+where audit_id = ${lit(a.id)} and run_number = ${latest} and results->>'report_rules' = '2'
+returning id, jsonb_array_length(results->'verdicts_v2') as searches;
+`);
+  }
+  // The copy: one statement, all or nothing.
+  const code2 = refresh ? code : newCode();
   const sql = `-- Re-score of ${code} on rules v2 -> new short code ${code2}. Inserts only; nothing is changed or deleted.
 with src_runs as materialized (
   select r.*, gen_random_uuid() as new_id from ai_audit_runs r where r.audit_id = ${lit(a.id)}
@@ -109,7 +122,7 @@ with src_runs as materialized (
 )
 select (select id from new_a) as new_audit_id, ${lit(code2)} as short_code, (select count(*) from ins_runs) as runs, (select count(*) from ins_q) as queue_rows;
 `;
-  writeFileSync(join(outDir, `rescore-${code}.sql`), sql);
+  if (!refresh) writeFileSync(join(outDir, `rescore-${code}.sql`), sql);
 
   // The table for Paul.
   const pct = (m: ReportModel) => m.score.value === null ? '—' : `${m.score.value}% (${m.score.named}/${m.score.denominator})`;

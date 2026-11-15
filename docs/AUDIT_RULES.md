@@ -6,16 +6,19 @@ The one written rule for **Winnable / Not winnable** on a V1 audit report. Code:
 
 Not a score (docs/architecture-rules.md): fixed rules over counts. The same answers always give the same verdict.
 
+**Winnable means room to be NAMED, not to come first** (Paul, 2026-11-15). A firm that is in every answer is only a
+firm to beat; a search is Not winnable only when the list is closed.
+
 ## Per search, over its answers (3 asks × ChatGPT + Gemini = 6). The first rule that fits wins.
 
 | # | Rule | Verdict (client) | Stored internally |
 |---|---|---|---|
 | 0a | Any answer failed or missing | not shown | "Re-run needed". It gets re-run and never gets a verdict |
-| 0b | Unnatural question (a place with no "in", a doubled word, a run-on) | not shown | "Unnatural question: not scored" + why |
+| 0b | Genuinely odd phrasing (a doubled word, a run-on of 15+ words). A missing "in" ("wedding content creator Ireland") is how people search and is **never** flagged | not shown | "Unnatural question: not scored" + why |
 | 1 | The business is named in **any** answer | **Winnable** | "Already visible: X of N", per engine. **Beats every rule below** |
 | – | A service they said they don't offer, or not on their site yet | not shown | as before |
-| 2 | One firm is named in **5+ of the 6** answers | **Not winnable** | "Hard: strong competitor" + the firm |
-| 3 | The right firms are named, nobody reaches 5/6 | **Winnable** | "Names change" / "A few repeat" + the ones to beat (firms in 2+ answers) |
+| 2 | **Closed list**: every answer names firms and the SAME firms fill every spot in every answer; no other firm ever appears | **Not winnable** | "Closed list" + the firms that lock it |
+| 3 | Any spot rotates (some other firm appears, or an answer leaves a spot open) | **Winnable** | "Names change" / "A few repeat" + the ones to beat (firms in 2+ answers); a firm in 5+ of 6 is listed first as "always there" |
 | 4 | Nobody named in most answers on **both** engines | **Winnable** | "No clear leader" + why (general advice / doesn't know anyone / refused) |
 | 5 | Only directories named | **Winnable** | "Directory gap" + the directories |
 | 6 | Only firms of another trade → "Category gap". Gemini answered for another place → "Local gap" (Gemini only) | **Winnable** | the label + the evidence |
@@ -43,10 +46,23 @@ A **near-name** is flagged and **not counted**. That covers:
 - the name next to a different home town or review count. This is checked only when those facts are known; today no audit stores them, so this check is dormant.
 
 A clean match anywhere in the answer wins over a near-name elsewhere in it. A near-name is another business, so
-it counts as a firm (it can be the strong competitor).
+it counts as a firm (it can be one to beat, or lock a closed list).
 
-This ruler is used by v2 reports only (the verdicts and the redesigned report's named %). It does **not** change
-`cellNamed` (`namedSignal.ts`), which the guarantee, the welcome pack and measurement read.
+This ruler is used by v2 reports (the verdicts and the redesigned report's named %) and by the guarantee for NEW
+baselines (below). `cellNamed` (`namedSignal.ts`) itself is unchanged.
+
+## The guarantee count (Paul, 2026-11-15)
+
+A baseline created on rules v2 (after `AUDIT_RULES_V2_FROM`) counts "named" with the same strict match, everywhere it
+is counted:
+- its frozen day-0 snapshot (`_shared/audit-baseline.ts` `aggregateRuns`);
+- BOTH sides of its day-28 comparison (`compareMeasurements` `strictIdentity`): the results email/page
+  (`_shared/remeasure-results.ts`), Compare measurements and the report's before/after.
+
+The switch is `guaranteeIdentityFor(baseline created_at, name, website)` — keyed on the BASELINE's date, like the
+Google AI scoring method, so the two sides can never use different rulers. Identity = name + website only.
+**Existing and paid baselines (created before the cut-off) keep the ruler they were sold on.** New baselines are on
+scoring method 1 (ChatGPT + Gemini), so Google AI's naming never enters their count.
 
 ## Which reports use v2
 
