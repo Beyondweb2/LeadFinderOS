@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-15-audit-progress-whole', date: '2026-11-15', title: 'Past audits: a running audit shows progress for the whole audit', audience: 'admin',
+    body: 'On the AI Audit page, Past audits, a running audit now says which run it is on and how far the whole audit has got, for example "Run 2 of 3 · 20 of 40 searches · 50%", with a progress bar. The % and the bar are for the whole audit (60 of 120 searches answered = 50%), not just the run in flight. Run counts are the same ones the report uses. An audit that has not started yet still says Queued.',
+    report: {
+      added: ['"Run X of Y" and a progress bar on a running audit\'s row.'],
+      changed: ['The % on a running audit is for the whole audit, not just the run in flight.'],
+      removed: [],
+      effect: 'A 3-run audit on its second run no longer looks half finished when it is a third of the way through.',
+    } },
   { id: '2026-11-15-initial-question-template', date: '2026-11-15', title: 'New WhatsApp opener: "Do you build websites or do SEO or AI visibility?"', audience: 'all',
     body: 'A new first-message template, Initial question, is in the WhatsApp template pickers. It says: "Hi mate, do you build websites or do SEO or AI visibility?" It has no name or link in it. If Meta has not approved it yet, the send is refused and the app says why.',
     report: {
