@@ -16,6 +16,7 @@
 //    so this function throws the upstream headers away and sets text/html itself.
 
 import { isLfosReportHost } from "../../src/lib/reportBrand.ts";
+import { LFOS_FAVICON } from "../../src/lib/leadfinderReport.ts";
 
 const SUPABASE_URL = "https://ruusxpkkmwtljxxulhbq.supabase.co";
 /* Public anon key — safe to embed (it ships in the SPA bundle and in findable-site's report proxies). render-audit-report is
@@ -44,7 +45,7 @@ function notFound(): Response {
   const html =
     `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
     `<meta name="viewport" content="width=device-width, initial-scale=1"><title>Report unavailable | LeadFinderOS</title>` +
-    `<meta name="robots" content="${NOINDEX}"></head>` +
+    `<meta name="robots" content="${NOINDEX}"><link rel="icon" type="image/svg+xml" href="${LFOS_FAVICON}"></head>` +
     `<body style="font-family:system-ui,sans-serif;max-width:640px;margin:80px auto;padding:0 20px;color:#e9e6df;background:#101114">` +
     `<h1>Report unavailable</h1><p>This report doesn&rsquo;t exist or isn&rsquo;t published.</p>` +
     `<p><a href="https://leadfinderos.com" style="color:#a5a7ff">leadfinderos.com</a></p></body></html>`;

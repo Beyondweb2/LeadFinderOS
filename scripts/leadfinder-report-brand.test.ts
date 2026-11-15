@@ -5,10 +5,11 @@
    by campaign (webdev_report {{2}} and Copy Report Link), the admin-only setting, and the web-dev hook questions.
    Run: npx tsx scripts/leadfinder-report-brand.test.ts */
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { buildReportModel, type WebsiteSection } from "../src/lib/reportModel.ts";
 import type { OppContext, OppRow } from "../src/lib/reportOpportunity.ts";
-import { renderLeadfinderReport, renderLeadfinderMeasuring, renderLeadfinderUnavailable } from "../src/lib/leadfinderReport.ts";
+import { renderLeadfinderReport, renderLeadfinderMeasuring, renderLeadfinderUnavailable, LFOS_FAVICON } from "../src/lib/leadfinderReport.ts";
 import { isLfosReportHost, lfosReportUrl, reportStyleOf, LFOS_CTA_LINE } from "../src/lib/reportBrand.ts";
 import { isWebdevTrade, webdevHookQuestions } from "../src/lib/webdevReport.ts";
 
@@ -33,11 +34,16 @@ for (const [k, html] of Object.entries(pages)) {
   ok(/LeadFinder<b>OS<\/b>|LeadFinderOS/.test(html), `${k}: LeadFinderOS name and logo`);
   ok(html.includes('name="robots" content="noindex'), `${k}: noindex`);
 }
+for (const [k, html] of Object.entries(pages)) ok(html.includes(`<link rel="icon" type="image/svg+xml" href="${LFOS_FAVICON}">`) && !/lovable/i.test(html), `${k}: its own LeadFinderOS icon (never the Lovable /favicon.ico)`);
 const r = pages.report;
 ok(r.includes(LFOS_CTA_LINE) && LFOS_CTA_LINE === "Run reports like this for your clients. Start free at leadfinderos.com", "the CTA line, word for word");
 ok(r.includes('href="https://leadfinderos.com"'), "the CTA links to https://leadfinderos.com");
 ok(/not guarantees/.test(r) && /cannot be guaranteed/.test(r), 'the "not guarantees" line is on the page');
 ok(!/Prepared by|Prepared for/i.test(r), "no organisation name");
+ok(r.split('href="https://leadfinderos.com"').length - 1 >= 3 && r.includes('class="lf-try"') && r.includes('class="lf-sticky"'), "conversion: header button, closing button and the phone bar all go to leadfinderos.com");
+ok(r.includes('class="lf-steps"') && /Find local businesses[\s\S]*Audit them[\s\S]*Reach out from the app[\s\S]*Show the difference/.test(r), "the closing section says what the app does, in four steps");
+ok(!pages.print.includes('class="lf-sticky"'), "no phone bar in the PDF");
+{ const ico = readFileSync(resolve(import.meta.dirname, "..", "public/favicon.ico")); const png = ico.subarray(ico.readUInt32LE(18)); ok(ico.readUInt16LE(2) === 1 && png.subarray(1, 4).toString() === "PNG" && png.length === ico.readUInt32LE(14), "public/favicon.ico is a valid icon"); ok(createHash("md5").update(ico).digest("hex") !== "9f504444f85a5af2eef9264b02ae40be", "public/favicon.ico is no longer the Lovable heart"); }
 ok(r.includes("Pixel Forge") && r.includes("RankRight"), "rivals from the stored answers");
 ok(r.includes("✓ Named you") && r.includes("✕ Not named"), "per-AI named / not named lanes");
 ok(r.includes("Named in 1 of the"), "the score sentence carries its evidence");
