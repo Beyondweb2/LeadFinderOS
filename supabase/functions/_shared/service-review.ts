@@ -5,8 +5,17 @@
 import { logOpenAiUsage } from "./openai-usage.ts";
 import type { ServiceReview } from "../../../src/lib/salesInsights.ts";
 
-const MODEL = "gpt-4o-mini";
+/** The model that reads service names (chosen on the bench, docs/WEBSITE_CHECK_ACCURACY.md). */
+export const SERVICE_REVIEW_MODEL = "gpt-4o-mini";
+const MODEL = SERVICE_REVIEW_MODEL;
 const REVIEW_TIMEOUT_MS = 20_000;
+/** What the model is told — one copy: the crawl and the bench (fn website-check-bench) send exactly this. */
+export const SERVICE_REVIEW_PROMPT =
+  "You read headings taken from a small UK business's website. Decide which are services a customer could buy from this business. " +
+  "NOT services: towns or areas, slogans, sentences, reasons to choose them, company policies such as health and safety, tools such as calculators, product names in a shop, " +
+  "calls to action (Arrange..., Discuss..., Book..., Get...), section headings about the process (Survey Scope, Next Steps, Design and Quotation), and lists of unrelated things (New Builds, Renovations and Finished Properties). When in doubt, leave it out. " +
+  "For each real service, give the address of the page that is mainly about that service, from the pages listed, or null if none is. A page about a wider topic or several services is not its page. " +
+  'Reply as JSON: {"services":[{"name":"<the heading exactly as given>","page":"<address or null>"}]}. Leave out anything that is not a service.';
 const MAX_NAMES = 60;
 const MAX_PAGES = 60;
 
@@ -47,14 +56,7 @@ export async function reviewServices(service: any, input: {
       body: JSON.stringify({
         model: MODEL, temperature: 0, response_format: { type: "json_object" },
         messages: [
-          {
-            role: "system",
-            content: "You read headings taken from a small UK business's website. Decide which are services a customer could buy from this business. " +
-              "NOT services: towns or areas, slogans, sentences, reasons to choose them, company policies such as health and safety, tools such as calculators, product names in a shop, " +
-              "calls to action (Arrange..., Discuss..., Book..., Get...), section headings about the process (Survey Scope, Next Steps, Design and Quotation), and lists of unrelated things (New Builds, Renovations and Finished Properties). When in doubt, leave it out. " +
-              "For each real service, give the address of the page that is mainly about that service, from the pages listed, or null if none is. A page about a wider topic or several services is not its page. " +
-              'Reply as JSON: {"services":[{"name":"<the heading exactly as given>","page":"<address or null>"}]}. Leave out anything that is not a service.',
-          },
+          { role: "system", content: SERVICE_REVIEW_PROMPT },
           { role: "user", content: JSON.stringify({ business: input.business, trade: input.trade, headings: names, pages }) },
         ],
       }),
