@@ -39,6 +39,10 @@ export function lfosReportUrl(code: string): string {
   return `${LFOS_REPORT_ORIGIN}/r/${code}`;
 }
 
+/** The permanent sample report (src/lib/leadfinderExample.ts, served by functions/r/[slug].ts with no database read). */
+export const LFOS_EXAMPLE_SLUG = 'example';
+export const LFOS_EXAMPLE_URL = lfosReportUrl(LFOS_EXAMPLE_SLUG);
+
 /** The one host the V1 proxy serves LeadFinderOS reports on: the app address (OPERATOR_APP_URL). Every other host keeps the 410. */
 export function isLfosReportHost(host: string): boolean {
   const h = (host || '').toLowerCase().split(':')[0];
