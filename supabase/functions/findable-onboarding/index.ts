@@ -17,6 +17,8 @@ import { effectiveAnswers } from "../../../src/lib/quickClose.ts";
 import { readContractEnd, readDesignChoice, contractEndWords, simpleAnswerFills, maskEmail } from "../../../src/lib/onboardingSimpleAnswers.ts";
 import { recordSetupSignupCreator } from "../_shared/setup-link-creator.ts";
 import { publicPlanCatalogue, readSignupPaymentPlan } from "../../../src/lib/paymentPlans.ts";
+import { onboardingAnswersAlert } from "../../../src/lib/onboardingAnswers.ts";
+import { sendOperatorAlert } from "../_shared/operator-alert.ts";
 
 // findable-onboarding — the PUBLIC backend for findable-site's /onboarding flow
 // (verify_jwt = false; the static site calls it with the anon apikey only). Actions:
@@ -543,9 +545,13 @@ Deno.serve(async (req) => {
       if (!UUID_RE.test(onboardingId)) return json({ ok: false, error: "bad_onboarding_id" }, 400);
       const { data: row } = await service
         .from("onboarding_responses")
-        .select("id, status, lead_id, services, services_list, areas_list, areas_wanted, confirmed_location")
+        .select("id, status, lead_id, services, services_list, areas_list, areas_wanted, confirmed_location, services_not_wanted, services_not_offered, coverage_area, top_requests")
         .eq("id", onboardingId).maybeSingle();
       if (!row) return json({ ok: false, error: "unknown_onboarding" }, 404);
+      /* Their own earlier answers to the optional questions (v1-onboarding-to-audit, migration 20261215090000), so a
+         reopened form shows them instead of blanks. Still never an email, contact name or address. */
+      const own = (k: string) => { const v = (row as Record<string, unknown>)[k]; return typeof v === "string" && v.trim() ? v.trim() : null; };
+      const answered = { services_not_wanted: own("services_not_wanted"), services_not_offered: own("services_not_offered"), coverage_area: own("coverage_area"), top_requests: own("top_requests") };
       /* + confirmed_location (2026-10-16): the main town they confirmed before paying, so the post-payment
          town box arrives filled on ANOTHER device too (the browser's own copy only exists in the tab that paid).
          Their own answer only — the same paid-row gate; absent = null and the box asks. */
@@ -575,7 +581,7 @@ Deno.serve(async (req) => {
           areas: k.areas ? { items: k.areas.items, source: k.areas.source, line: KNOWN_SOURCE_LINE[k.areas.source] } : null,
         };
       }
-      return json({ ok: true, phone, known, confirmed_location: confirmedLocation });
+      return json({ ok: true, phone, known, confirmed_location: confirmedLocation, answered });
     }
 
     /* ── complete_q2 ────────────────────────────────────────────────────────────────────────────
@@ -658,6 +664,10 @@ Deno.serve(async (req) => {
            customers contact them for most. Optional; in BOTH lists below (q2 + shedOrder). */
         services_not_offered: clip(a.services_not_offered, 2000),
         top_requests: clip(a.top_requests, 2000),
+        /* v1-onboarding-to-audit (2026-11-15): what they DO but don't want pushed, and the area they cover in
+           their own words. Optional; in BOTH lists here (q2 + shedOrder). Older site bundles never send them. */
+        services_not_wanted: clip(a.services_not_wanted, 2000),
+        coverage_area: clip(a.coverage_area, 500),
         photos_status: typeof a.photos_status === "string" && PHOTOS_STATUS.has(a.photos_status) ? a.photos_status : null,
         competitor_name: clip(a.competitor_name, 200),
         website_manager: typeof a.website_manager === "string" && WEBSITE_MANAGER.has(a.website_manager) ? a.website_manager : null,
@@ -704,6 +714,7 @@ Deno.serve(async (req) => {
         "gbp_verified", "gbp_consent", "gbp_exists", "gbp_status",
         "must_not_say", "photos_status", "competitor_name", "accreditations",
         "business_address", "confirmed_phone", "services_not_offered", "top_requests",
+        "services_not_wanted", "coverage_area",
       ];
       let payload = { ...q2 };
       let res = await service.from("onboarding_responses").update(payload).eq("id", onboardingId);
@@ -724,6 +735,38 @@ Deno.serve(async (req) => {
       if (existing.lead_id && !questionnaireComplete(existing as never)) {
         await recordLeadEvent(service, String(existing.lead_id), "onboarding_submitted", { source: "client", body: "Client submitted their details", data: { onboarding_id: onboardingId } });
       }
+        /* THE ANSWERS REACH PAUL (v1-onboarding-to-audit, 2026-11-15): email + bell with what they want found,
+           what they don't want pushed and where they cover, linking straight to Prepare baseline. ONCE per
+           onboarding row: the bell row is the claim (one conditional insert on user_id + dedupe_key), and the email
+           goes only when this call won it — so a correction or a double tap sends nothing new, and a row Sales had
+           already filled (town + services from the call) still alerts on the client's own first submit. Best-effort — the
+           answers are already saved, so a failed alert never fails the client's submit. */
+        if (existing.lead_id) try {
+          const lid = String(existing.lead_id);
+          const [{ data: owner }, { data: leadRow }, { data: saved }] = await Promise.all([
+            service.from("team_members").select("user_id").eq("is_book_owner", true).limit(1).maybeSingle(),
+            service.from("outreach_leads").select("business_name").eq("id", lid).maybeSingle(),
+            service.from("onboarding_responses").select("*").eq("id", onboardingId).maybeSingle(),
+          ]);
+          const alert = onboardingAnswersAlert({
+            businessName: String((leadRow as { business_name?: string | null } | null)?.business_name ?? ""),
+            leadId: lid, row: (saved ?? payload) as Record<string, unknown>,
+          });
+          const ownerId = (owner as { user_id?: string } | null)?.user_id;
+          if (ownerId) {
+            const { data: claimed, error: claimErr } = await service.from("notifications").upsert([{
+              user_id: ownerId, kind: "client_onboarding", title: alert.bellTitle, body: alert.bellBody,
+              link: alert.link, lead_id: lid, dedupe_key: `setup_answers:${onboardingId}`, priority: 2,
+            }], { onConflict: "user_id,dedupe_key", ignoreDuplicates: true }).select("id");
+            if (claimErr) console.error("[findable-onboarding] setup answers bell failed:", claimErr.message);
+            else if (Array.isArray(claimed) && claimed.length) {
+              const sent = await sendOperatorAlert(alert.subject, alert.lines);
+              if (!sent.ok) console.error(`[findable-onboarding] setup answers email not sent: ${sent.status} ${sent.error ?? ""}`);
+            }
+          }
+        } catch (e) {
+          console.error("[findable-onboarding] setup answers alert failed (non-blocking):", (e as Error)?.message ?? e);
+        }
       /* The baseline is NOT started here. process-ai-audit-queue's ensureBaselinesForPaidOnboardings
          sweeps every tick for any paid row whose lead has no baseline, and startPaidBaseline defers
          with awaiting_questionnaire_2 until exactly the two fields this action just wrote. So the

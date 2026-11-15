@@ -59,7 +59,7 @@ export const ONBOARDING_COPY = {
      the method rejects. Verbatim from findable-site's OnboardingFlow (same commit pair). */
   q2: { headline: 'What you do, and where', sub: "Each main service gets its own clear page. The towns you list tell us where to measure you and where real local pages make sense. That's the last thing we need." },
   services: { label: 'Services you offer', chipsHint: 'Tap the ones you do. Add anything missing below.', noChips: 'One service per line, in the words a customer would use.', add: 'Add another service' },
-  areas: { label: 'Towns you want work from', optional: 'Optional', placeholder: 'e.g. March', helper: 'We judge the refund on the same questions before and after, asked about your main town and the towns you list here.' },
+  areas: { label: 'Priority towns or areas', optional: 'Optional', placeholder: 'e.g. March', helper: 'We judge the refund on the same questions before and after, asked about your main town and the towns you list here.' },
 } as const;
 
 /* ⛔ LEGACY — OPTIMISE ONLY (no longer on the customer page since 2026-10-16, so NOT pinned): the old website questions,

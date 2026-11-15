@@ -43,7 +43,8 @@ console.log('── 3. findable-onboarding: ALL THREE LISTS ──');
   const optional = on.match(/const optional = \[([^\]]*)\]/)?.[1] ?? '';
   ok(optional.indexOf('"agency_contract_ends"') < optional.indexOf('"agency_contract"'), 'agency_contract_ends is shed-tested before agency_contract (substring rule)');
   ok(/They say their agency contract ends on \$\{ends\}/.test(on) && /contractEndWords\(/.test(on), 'the hold notice names the end date when given');
-  ok(/select\("id, status, lead_id, services, services_list, areas_list, areas_wanted, confirmed_location"\)/.test(on) && /confirmed_location: confirmedLocation \}\)/.test(on), 'q2_prefill returns the confirmed town');
+  /* + the four optional answers (v1-onboarding-to-audit, 2026-11-15) — still an explicit list, never "*". */
+  ok(/select\("id, status, lead_id, services, services_list, areas_list, areas_wanted, confirmed_location, services_not_wanted, services_not_offered, coverage_area, top_requests"\)/.test(on) && /confirmed_location: confirmedLocation, answered \}\)/.test(on), 'q2_prefill returns the confirmed town (and their own optional answers)');
   const q2 = on.slice(on.indexOf('action === "q2_prefill"'), on.indexOf('action === "complete_q2"'));
   ok(!/\bemail\b/.test(q2) && !/contact_name/.test(q2) && !/business_address/.test(q2), 'q2_prefill returns no email, contact name or address (prefill does — masked email only)');
 }

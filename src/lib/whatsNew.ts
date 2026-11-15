@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-15-onboarding-to-audit', date: '2026-11-15', title: 'Paid clients: setup answers go straight to Discovery and the baseline', audience: 'admin',
+    body: 'After paying, the client\'s setup form now also asks two optional questions: anything they do but don\'t want more of (for example emergency call-outs), and the area they cover in their own words (for example "all London boroughs inside the M25"). The towns box is now called "Priority towns or areas". When a paid client sends their setup answers you get an email and a bell alert listing them, with a link that opens Prepare baseline. The client page has a "Client\'s setup answers" card with two buttons: Run Discovery and Create baseline. Both write draft questions from the answers: only the services they want, their towns, never anything they don\'t offer or don\'t want pushed. Nothing is measured or frozen until you review and approve, and running Discovery still asks you to confirm the cost. The agreement, prices and guarantee are unchanged.',
+    report: {
+      added: ['Two optional setup questions on findable.live: "Anything you do but don\'t want more of?" and "What area do you cover?".', 'An email and bell alert with the client\'s answers when they finish setup.', 'A "Client\'s setup answers" card on the client page with Run Discovery and Create baseline.', 'Prepare baseline shows and saves both new answers.'],
+      changed: ['Discovery and baseline questions leave out the services a client doesn\'t want pushed, as well as the ones they don\'t offer.', '"Towns you want work from" is now "Priority towns or areas".'],
+      removed: [],
+      effect: 'A new client can go from setup answers to a reviewed baseline without anyone writing questions by hand. Old links and answers already given work as before.',
+    } },
   { id: '2026-11-15-campaign-reply-audit', date: '2026-11-15', title: 'Campaigns: "Run audit when they reply" on or off per campaign', audience: 'admin',
     body: 'Each campaign now has a switch, "Run audit when they reply" (Edit campaign). It is on for every campaign, so nothing changes unless you turn it off. When it is off, a prospect replying in that campaign does not start the website check or AI audit, on WhatsApp or SMS. You can still run an audit by hand. Inbox settings, "Audit after first reply", keeps its main switch and now says which campaigns are skipped, with a link to change them. It is off for Web devs/agencies · WhatsApp.',
     report: {

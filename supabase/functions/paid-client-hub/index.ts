@@ -128,6 +128,8 @@ const HUB_ONBOARDING_COLUMNS =
   "id,business_name,business_website,confirmed_location,business_address,services,services_list,areas_list,areas_wanted,contact_name,contact_email,confirmed_phone,baseline_status,baseline_questions,baseline_approved_at,website_route,domain_status,access_status,client_source,audit_id,standout,accreditations,must_not_say,website_platform,website_platform_other,willing_to_migrate,competitor_name,gbp_consent,gbp_exists,gbp_status,gbp_verified,gbp_manager_email,incomplete,status,website_manager,website_manager_email,website_addon,plan_tier,operator_edited_at,domain_owned,domain_access,domain_third_party,site_rights,authority_confirmed,dns_permission,materials_confirmed,domain_escalated_at," +
   /* wave 1 integration: Workstream 4 service truth for Website Build (migration 20261007040100 — run it first). */
   "services_not_offered," +
+  /* v1-onboarding-to-audit (migration 20261215090000 — run it first): what they don't want pushed, the area they cover. */
+  "services_not_wanted,coverage_area,top_requests," +
   /* The simple findable.live onboarding (migration 20261103090000 — run it first): design choice, agency contract end, access tick. */
   "design_choice,agency_contract_ends,access_ack_at,agency_contract";
 

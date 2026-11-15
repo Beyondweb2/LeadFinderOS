@@ -40,6 +40,7 @@ import { ManualOnboardingDialog } from '@/components/ManualOnboardingDialog';
 import { onboardingStatus } from '@/lib/manualOnboarding';
 import { simpleOnboardingLines } from '@/lib/onboardingSimpleAnswers';
 import { baselineReadiness } from '@/lib/baselineReadiness';
+import { onboardingAnswerLines } from '@/lib/onboardingAnswers';
 import type { LeadCrawlSummary } from '@/lib/leadCrawlSummary';
 import { WORK_LABEL, type ClientContract } from '@/lib/clientContract';
 import { ClientTimelineCard } from '@/components/ClientTimelineCard';
@@ -136,7 +137,7 @@ const BUSY_TEXT: Record<Exclude<Busy, null>, string> = {
 };
 /* services_not_offered / top_requests (2026-10-04, fix/04): the client's negatives and what they are
    called for most — saved with section A, read by Discovery and the final-20 checks. */
-const contextOf = (b: Baseline) => ({ location: b.location, services: b.services, services_list: b.services_list, areas_list: b.areas_list, business_type: b.business_type, website: b.website, services_not_offered: (b.services_not_offered ?? []).join(', '), top_requests: b.top_requests ?? '' });
+const contextOf = (b: Baseline) => ({ location: b.location, services: b.services, services_list: b.services_list, areas_list: b.areas_list, business_type: b.business_type, website: b.website, services_not_offered: (b.services_not_offered ?? []).join(', '), top_requests: b.top_requests ?? '', services_not_wanted: (b.services_not_wanted ?? []).join(', '), coverage_area: b.coverage_area ?? '' });
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    PREPARE BASELINE. One state transition at a time:
@@ -153,7 +154,11 @@ const contextOf = (b: Baseline) => ({ location: b.location, services: b.services
    paidBaselineFlow.ts, the parent is refreshed ONCE and without unmounting anything, every server
    refusal is shown inline in the server's own words, and the status line names exactly one state.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId: string; open: boolean; onOpenChange: (open: boolean) => void; onChanged: () => Promise<void> }) {
+/** What the dialog does by itself once it has loaded (the Setup answers card's one-click buttons). Only ever a
+ *  DRAFT step — writing questions — and only when there is nothing on screen yet; running Discovery against the
+ *  AI engines and freezing the 20 still need Paul's own click and cost confirm. */
+type BaselineAuto = null | 'discovery' | 'baseline';
+function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged, auto = null }: { leadId: string; open: boolean; onOpenChange: (open: boolean) => void; onChanged: () => Promise<void>; auto?: BaselineAuto }) {
   const { toast } = useToast();
   const flight = useRef(createSingleFlight());
   const [data, setData] = useState<Baseline | null>(null);
@@ -264,6 +269,17 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
     if (reason === null) return;
     void act('save', 'reopen_approved', { reason });
   };
+  /* ONE-CLICK FROM THE SETUP ANSWERS (v1-onboarding-to-audit): once per opening, after the first load. */
+  const autoDone = useRef(false);
+  useEffect(() => { if (!open) autoDone.current = false; }, [open]);
+  useEffect(() => {
+    if (!open || !auto || !data || busy || autoDone.current) return;
+    autoDone.current = true;
+    if (isFrozenBaselineStatus(data.status)) return;
+    if (auto === 'discovery' && !(data.discovery?.pool.length)) void generateDiscovery();
+    if (auto === 'baseline' && cleanAuditQuestions(questions).length === 0) void act('generate', 'generate', contextOf(data));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, auto, data, busy]);
   const duplicates = data ? nearDuplicateCount(data, cleanAuditQuestions(questions)) : 0;
   const qualityUnresolved = data ? unresolvedQuality(data, cleanAuditQuestions(questions), qualityReasons) : 0;
   /* Discovery runs on the server; while it runs, re-read its stored progress (discovery block and the
@@ -311,6 +327,9 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
             {(data.unconfirmed?.services.length ?? 0) > 0 && <p className="mt-1 text-xs text-muted-foreground">Also mentioned elsewhere, NOT included: {data.unconfirmed!.services.join(', ')}. Add one only if the client confirms it.</p>}</div>
           {/* 2026-10-04 (fix/04): the client's own negatives — a hard exclusion for Discovery, the 20 and the backlog. */}
           <div className="sm:col-span-2"><Label>Services they do NOT offer (comma separated)</Label><Input value={(data.services_not_offered ?? []).join(', ')} disabled={started || !!busy} placeholder="e.g. car keys, glass replacement" onChange={(e) => setData({ ...data, services_not_offered: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}/></div>
+          {/* v1-onboarding-to-audit (2026-11-15): what they DO but don't want pushed — excluded like the line above. */}
+          <div className="sm:col-span-2"><Label>Services they do NOT want pushed (comma separated)</Label><Input value={(data.services_not_wanted ?? []).join(', ')} disabled={started || !!busy} placeholder="e.g. emergency call-outs" onChange={(e) => setData({ ...data, services_not_wanted: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}/><p className="mt-1 text-xs text-muted-foreground">Never measured or pushed. Discovery and the 20 leave these out, like the services they don't offer.</p></div>
+          <div className="sm:col-span-2"><Label>Area they cover (their words)</Label><Input value={data.coverage_area ?? ''} disabled={started || !!busy} placeholder="e.g. all London boroughs inside the M25" onChange={(e) => setData({ ...data, coverage_area: e.target.value })}/><p className="mt-1 text-xs text-muted-foreground">Questions are written for the main town and the service areas above — add the real towns or boroughs from here that they want work in.</p></div>
           <div className="sm:col-span-2"><Label>What customers contact them for most</Label><Input value={data.top_requests ?? ''} disabled={started || !!busy} onChange={(e) => setData({ ...data, top_requests: e.target.value })}/></div>
         </div>
         {!started && <Button className="mt-3" size="sm" variant="outline" disabled={!!busy || !contextDirty} onClick={() => data && void act('save_context', 'save_context', contextOf(data))}><Save className="mr-1 h-4 w-4"/>Save client context</Button>}
@@ -728,6 +747,28 @@ function ClientSummary({ hub, bs, remeasure, opps }: { hub: Hub; bs: string; rem
   </div>;
 }
 
+/* ══ THE CLIENT'S SETUP ANSWERS → DISCOVERY / BASELINE IN ONE CLICK (v1-onboarding-to-audit, Paul 2026-11-15) ══
+   What the client told us on the post-payment form, read once (src/lib/onboardingAnswers.ts), with the two next
+   steps. Both open Prepare baseline with everything pre-filled from these answers; the questions are written by
+   the existing generator (wanted services, their towns, never the excluded services) and nothing is measured or
+   frozen until Paul reviews and approves. */
+function SetupAnswersCard({ onboarding, onRun }: { onboarding: AnyRecord; onRun: (auto: BaselineAuto) => void }) {
+  const lines = onboardingAnswerLines(onboarding);
+  return <section id="hub-setup-answers" className={cn(SURFACE, 'min-w-0 p-4 sm:p-5')}>
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0"><h2 className="text-base font-bold">Client's setup answers</h2>
+        <p className="text-xs text-muted-foreground">What they told us. Discovery and the baseline questions are written from this — review before anything runs.</p></div>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" onClick={() => onRun('discovery')}><Lightbulb className="mr-1 h-4 w-4"/>Run Discovery</Button>
+        <Button size="sm" onClick={() => onRun('baseline')}><Gauge className="mr-1 h-4 w-4"/>Create baseline</Button>
+      </div>
+    </div>
+    {lines.length
+      ? <dl className="mt-3 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">{lines.map((l) => <div key={l.label} className="min-w-0"><dt className="text-xs font-semibold text-muted-foreground">{l.label}</dt><dd className="break-words">{l.value}</dd></div>)}</dl>
+      : <p className="mt-3 text-sm text-muted-foreground">No setup answers yet. The client fills them in after paying; you can also complete onboarding manually.</p>}
+  </section>;
+}
+
 export default function ClientHub() {
   const { leadId = '' } = useParams();
   const [searchParams] = useSearchParams();
@@ -736,6 +777,8 @@ export default function ClientHub() {
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
   const [baselineOpen, setBaselineOpen] = useState(false);
+  const [baselineAuto, setBaselineAuto] = useState<BaselineAuto>(null);
+  const openBaseline = (auto: BaselineAuto = null) => { setBaselineAuto(auto); setBaselineOpen(true); };
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const fetchHub = useCallback(async () => (await call({ action: 'get', lead_id: leadId })).client as Hub, [leadId]);
   /* The first load shows the page spinner. Every later read is `refresh`: silent, in place, and it
@@ -785,6 +828,14 @@ export default function ClientHub() {
     const id = window.setTimeout(() => document.getElementById(`hub-${section}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
     return () => window.clearTimeout(id);
   }, [hubReady, section]);
+  /* ?baseline=open — the setup-answers alert's link lands with Prepare baseline already open. Once per visit. */
+  const baselineParam = searchParams.get('baseline');
+  const baselineParamDone = useRef(false);
+  useEffect(() => {
+    if (!hubReady || baselineParam !== 'open' || baselineParamDone.current || !hub?.onboarding) return;
+    baselineParamDone.current = true;
+    setBaselineAuto(null); setBaselineOpen(true);
+  }, [hubReady, baselineParam, hub?.onboarding]);
 
   if (loading) return <div className="flex justify-center py-16"><Spinner className="h-8 w-8"/></div>;
   const errorPanel = pageError && <Callout tone="red" icon={AlertCircle} title="Something went wrong" action={<Button size="sm" variant="outline" onClick={retry}><RefreshCw className="mr-1 h-4 w-4"/>Try again</Button>}><div role="alert">{pageError}</div></Callout>;
@@ -801,13 +852,14 @@ export default function ClientHub() {
   {/* CLIENT INTAKE (2026-10-06): everything gathered automatically at payment — who, what they bought, what Sales
       and the client told us, what we found, what is still needed. Above the setup checklist, which it feeds. */}
   {!ended && <ClientIntakeCard leadId={lead.id} initial={hub.intake} placeId={lead.place_id ?? null}/>}
+  {!ended && onboarding && (bs === 'needs_questions' || bs === 'needs_approval' || bs === 'approved' || bs === 'failed') && <SetupAnswersCard onboarding={onboarding} onRun={openBaseline}/>}
   {ended
     ? <EngagementEndedCard view={ended} at={lead.service_terminated_at} note={lead.service_termination_note}/>
     : hub.handoff?.setup && <ClientSetupCard leadId={lead.id} businessName={lead.business_name ?? null} h={hub.handoff as SetupHandoff} route={serviceRouteFromRow(onboarding)} onChanged={() => void refresh()} onOpenBaseline={() => setBaselineOpen(true)}/>}
   {!ended && <div className="flex justify-end"><EndEngagementButton leadId={lead.id} onChanged={() => void refresh()}/></div>}
   <ClientSummary hub={hub} bs={bs} remeasure={remeasureLine} opps={opps.data ? oppCounts : null}/>
   {hub.handoff && <ClientHandoffCard handoff={hub.handoff} leadId={lead.id} onChanged={refresh}/>}
-  <BaselineSetupDialog leadId={lead.id} open={baselineOpen} onOpenChange={setBaselineOpen} onChanged={refresh}/>
+  <BaselineSetupDialog leadId={lead.id} open={baselineOpen} onOpenChange={(o) => { setBaselineOpen(o); if (!o) setBaselineAuto(null); }} onChanged={refresh} auto={baselineAuto}/>
   <ManualOnboardingDialog leadId={lead.id} open={onboardingOpen} onOpenChange={setOnboardingOpen} onSaved={refresh}/>
   {/* minmax(0,1fr): a column never grows to its widest child, so nothing pushes the page sideways on a phone. */}
   <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
