@@ -6,6 +6,9 @@ import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { QUEUE_STATUS_KEY } from '@/lib/queueStatus';
 import { Switch } from '@/components/ui/switch';
 import { AiDraftOutcomes } from '@/components/AiDraftOutcomes';
+import { Link } from 'react-router-dom';
+import { useCampaigns } from '@/hooks/useCampaigns';
+import { skippedForLine } from '@/lib/campaignReplyAudit';
 import {
   INBOX_REPLY_MODES, INBOX_REPLY_MODE_HINTS, INBOX_REPLY_MODE_LABELS, INBOX_REPLY_MODE_QUESTION, parseInboxReplyMode, pitchNeedsAuditHint,
   REPLY_AUDIT_HINT, REPLY_AUDIT_OFF_PITCH_HINT, REPLY_AUDIT_QUESTION, type InboxReplyMode,
@@ -26,6 +29,9 @@ export function InboxReplyModeControl({ channel }: { channel: 'whatsapp' | 'sms'
   const [mode, setMode] = useState<InboxReplyMode>('manual');
   const [auditOn, setAuditOn] = useState<boolean | null>(null);
   const [saving, setSaving] = useState<null | 'mode' | 'audit'>(null);
+  /* Per-campaign "Run audit when they reply" (2026-11-15): the campaigns that skip it, listed under the main switch. */
+  const { allCampaigns } = useCampaigns();
+  const skipped = skippedForLine(allCampaigns);
 
   useEffect(() => {
     let live = true;
@@ -83,6 +89,7 @@ export function InboxReplyModeControl({ channel }: { channel: 'whatsapp' | 'sms'
         <div className="min-w-0">
           <p className="text-sm font-medium">{REPLY_AUDIT_QUESTION}</p>
           <p className="text-xs text-muted-foreground">{REPLY_AUDIT_HINT}</p>
+          {skipped && <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300" data-testid="reply-audit-skipped">{skipped} · <Link to="/campaigns" className="underline">Change in Campaigns</Link></p>}
         </div>
         <div className="flex shrink-0 items-center gap-2 pt-0.5">
           <span className="text-xs font-medium text-muted-foreground">{auditOn === null ? '…' : auditOn ? 'On' : 'Off'}</span>

@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-15-campaign-reply-audit', date: '2026-11-15', title: 'Campaigns: "Run audit when they reply" on or off per campaign', audience: 'admin',
+    body: 'Each campaign now has a switch, "Run audit when they reply" (Edit campaign). It is on for every campaign, so nothing changes unless you turn it off. When it is off, a prospect replying in that campaign does not start the website check or AI audit, on WhatsApp or SMS. You can still run an audit by hand. Inbox settings, "Audit after first reply", keeps its main switch and now says which campaigns are skipped, with a link to change them. It is off for Web devs/agencies · WhatsApp.',
+    report: {
+      added: ['"Run audit when they reply" on each campaign (admin).', '"Skipped for: …" under Audit after first reply in Inbox settings.'],
+      changed: ['A reply in a campaign with the switch off starts no website check and no audit.'],
+      removed: [],
+      effect: 'Replies from web developers no longer spend an audit. Every other campaign behaves as before.',
+    } },
   { id: '2026-11-15-baseline-already-named', date: '2026-11-15', title: 'Baselines: "You\'re already named on X searches" at the top', audience: 'admin',
     body: 'A baseline used to show only its 20 target searches, so a client AI already names elsewhere saw "0%" and "AI doesn\'t mention you yet". New baselines now open with the searches their Discovery already named them on (from the Discovery\'s stored answers, shown once, not re-checked for the client and not part of the guarantee), then "Here are 20 more we\'re going after". Every headline number says it is "on your 20 target searches". The 20 searches, their re-checks and the guarantee are unchanged. The report header now shows the business\'s real area (its town, its address, or the whole country for a nationwide business) instead of a place picked from the search list. Every quarter you get an internal re-check of the already-named searches; any that dropped is flagged in your bell.',
     report: {

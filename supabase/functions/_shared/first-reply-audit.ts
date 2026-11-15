@@ -12,6 +12,7 @@ import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts
 import { isAggregatorUrl } from "./aggregators.ts";
 import { replyAuditSource, smsReplyMode, type ReplyAuditRow, type ReplyRunRow } from "../../../src/lib/smsReplyAudit.ts";
 import { armStatusFor, effectiveReplyMode, firstReplyTemplate, autoReplyEnvOn, type FirstReplyMode } from "./auto-reply-rules.ts";
+import { campaignSkipsReplyAudit, replyAuditSkippedReason } from "../../../src/lib/campaignReplyAudit.ts";
 
 type Service = any; // Supabase edge functions intentionally use a service-role client here.
 
@@ -330,8 +331,21 @@ export async function reconcileFirstReplyAuditIntents(service: Service): Promise
     const attempt = Number(row.audit_attempts ?? 0) + 1;
     try {
       const { data: lead, error: leadError } = await service.from("outreach_leads")
-        .select("id, user_id, business_name, category, search_keyword, search_location, address, country, website")
+        .select("id, user_id, business_name, category, search_keyword, search_location, address, country, website, campaign_id")
         .eq("id", row.lead_id).maybeSingle();
+      /* ⛔ PER-CAMPAIGN "RUN AUDIT WHEN THEY REPLY" (Paul, 2026-11-15; src/lib/campaignReplyAudit.ts). Checked HERE, where the
+         reply audit is created, so the held whatsapp-status, the SMS webhook and the missed-reply sweep all obey it without
+         being redeployed. Off -> no website check, no audit: the intent closes as not_required with the reason. An unreadable
+         campaign retries (never runs an audit the campaign may have switched off). Manual audits never come through here. */
+      const campaignId = (lead as { campaign_id?: string | null } | null)?.campaign_id ?? null;
+      if (!leadError && campaignId) {
+        const { data: camp, error: campError } = await service.from("campaigns").select("name, audit_on_reply").eq("id", campaignId).maybeSingle();
+        if (campError) { await retryOrFail(service, row.id, attempt, `campaign read failed: ${campError.message}`); retried++; continue; }
+        if (campaignSkipsReplyAudit(camp as { audit_on_reply?: boolean | null } | null)) {
+          await mark(service, row.id, { audit_status: "not_required", audit_last_error: replyAuditSkippedReason((camp as { name?: string | null }).name), audit_next_attempt_at: null, audit_claimed_at: null });
+          continue;
+        }
+      }
       const businessType = String(lead?.category ?? lead?.search_keyword ?? "").trim();
       const locationText = String(lead?.search_location ?? lead?.address ?? "").trim();
       if (leadError || !lead?.user_id || !lead?.business_name || !businessType || !locationText) {
