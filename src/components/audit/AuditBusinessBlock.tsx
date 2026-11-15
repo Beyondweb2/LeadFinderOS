@@ -26,6 +26,7 @@ import { useAuditPooled } from '@/hooks/useAuditPooled';
 import { auditTypeOf, isRescoredCopy, type AuditTypeKey } from '@/lib/auditListSummary';
 import { shortReportUrl } from '@/lib/reportSlug';
 import { isClientBaseline } from '@/lib/auditKind';
+import { wholeAuditProgress } from '@/lib/auditRunningProgress';
 import type { AuditLite, BusinessGroup, RunLite } from '@/types/auditBook';
 
 const TYPE_STYLE: Record<AuditTypeKey, string> = {
@@ -100,20 +101,20 @@ export function HeaderPooled({ audit }: { audit: AuditLite }) {
   return <MentionPill rate={data.pct / 100} />;
 }
 
-/** Live progress of an audit still running, from the counts the page already loads for its in-flight runs. */
-export function progressOf(au: AuditLite): { done: number; total: number } | null {
-  const live = au.runs.filter((r) => r.status === 'pending' || r.status === 'running');
-  if (!live.length) return null;
-  return { done: live.reduce((n, r) => n + r.done, 0), total: live.reduce((n, r) => n + r.total, 0) };
-}
-
-/** Spinner + "18 of 40 searches · 45%" or "Queued". Becomes a normal row by itself when the run settles. */
+/** Spinner + "Run 2 of 3 · 20 of 40 searches · 50%" and a bar, both for the WHOLE audit
+ *  (wholeAuditProgress: measuringState's runs + the queue counts), or "Queued". */
 function RunningProgress({ audit }: { audit: AuditLite }) {
-  const p = progressOf(audit);
-  const label = p && p.total > 0 ? `${p.done} of ${p.total} searches · ${Math.round((100 * p.done) / p.total)}%` : 'Queued';
+  const p = wholeAuditProgress(audit.runs, audit.baseline_target_runs);
+  const label = p && p.pct !== null ? `${p.label} · ${p.pct}%` : 'Queued';
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--badge-waiting))]/40 bg-[hsl(var(--badge-waiting))]/15 px-2 py-1 text-[11px] font-semibold tabular-nums text-[hsl(var(--badge-waiting))]">
-      <Loader2 className="h-3 w-3 animate-spin" /> {label}
+    <span data-progress="whole-audit" title={p && p.pct !== null ? `${p.doneAll} of ${p.totalAll} searches across the whole audit` : undefined}
+      className="inline-flex flex-col gap-1 rounded-md border border-[hsl(var(--badge-waiting))]/40 bg-[hsl(var(--badge-waiting))]/15 px-2 py-1 text-[11px] font-semibold tabular-nums text-[hsl(var(--badge-waiting))]">
+      <span className="inline-flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" /> {label}</span>
+      {p && p.pct !== null && (
+        <span className="block h-1 w-full overflow-hidden rounded-full bg-[hsl(var(--badge-waiting))]/20">
+          <span className="block h-full rounded-full bg-[hsl(var(--badge-waiting))]" style={{ width: `${p.pct}%` }} />
+        </span>
+      )}
     </span>
   );
 }
