@@ -137,10 +137,30 @@ export function buildAuditRunRequest(
   };
 }
 
+const SERVICE_AREAS_LABEL = 'VERIFIED SERVICE AREAS:';
+const SERVICE_AREAS_END = '. Use these only';
+
 /** Prompt-only context: areas are verified facts, not an instruction to clone one query per town. */
 export function serviceAreaQuestionDirective(primaryLocation: string, value: unknown): string {
   const primaryKey = key(clean(primaryLocation));
   const areas = normalizeAuditList(value).filter((area) => key(area) !== primaryKey).slice(0, 12);
   if (!areas.length) return '';
-  return `VERIFIED SERVICE AREAS: ${areas.join(', ')}. Use these only for a balanced minority of relevant local questions. Do not repeat the same intent for every area or create a list of town-swapped near-duplicates; prioritise distinct services and realistic high-value service/location combinations.`;
+  return `${SERVICE_AREAS_LABEL} ${areas.join(', ')}${SERVICE_AREAS_END} for a balanced minority of relevant local questions. Never name any other town, county or region. Do not repeat the same intent for every area or create a list of town-swapped near-duplicates; prioritise distinct services and realistic high-value service/location combinations.`;
+}
+
+/* ── READ THE AREAS BACK OUT OF THE DIRECTIVE (Paul, 2026-11-15) ─────────────────────────────────
+   The generator's place guard (generatedQuestionGuard.ts) must know the verified areas, and the only
+   thing every generator call already carries is this directive, threaded through as `coverage` by
+   the money, discovery and per-area wrappers alike. Parsing it HERE, next to the one function that
+   writes it, keeps the two in step: change the wording above and
+   scripts/generated-question-guard.test.ts fails. normalizeAuditList already split the areas on
+   commas, so an area never contains one. */
+export function serviceAreasFromDirective(coverage: string): string[] {
+  const text = String(coverage ?? '');
+  const start = text.indexOf(SERVICE_AREAS_LABEL);
+  if (start < 0) return [];
+  const body = text.slice(start + SERVICE_AREAS_LABEL.length);
+  const end = body.indexOf(SERVICE_AREAS_END);
+  if (end < 0) return [];
+  return normalizeAuditList(body.slice(0, end).split(','));
 }

@@ -102,7 +102,9 @@ training, lessons or classes — those are treated as people wanting to ENTER th
 discarded. Frame it as the CUSTOMER'S SITUATION or NEED instead.
 ⚠️ These may be LONGER and more conversational than the standard questions — that is correct for
 this type, and overrides the "short, terse" instruction for these ${howMany} only.
-⚠️ Still exactly ONE intent each, still no business or brand names.`;
+⚠️ Still exactly ONE intent each, still no business or brand names, still at most 14 words.
+⛔ NEVER "who should I switch to for [service]" or "[trade] for [something] maintenance" — name the
+customer's problem instead ("… if my plumber never turns up"). Those are dropped as unnatural.`;
 }
 
 /* ⛔ THE FALLBACK MATTERS AS MUCH AS THE PROMPT. generateQuestions falls back to a deterministic

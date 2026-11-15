@@ -24,6 +24,36 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-15-question-generator-fit', date: '2026-11-15', title: 'AI audits: questions use the real trade, real places and natural wording', audience: 'admin',
+    body: 'New audit questions are now checked before they are asked. A question is replaced if it asks about a trade the business does not do, names a place outside its town and service areas, or is worded the way no customer types (for example "plumber for stove maintenance" or "who should I switch to for electrical maintenance"). Hybrid businesses keep their mix of local and wider questions. Irish businesses never get "UK" or a Northern Ireland town unless it is in their area. The number of questions is unchanged.',
+    report: {
+      added: ['A check on every generated question: own trade, own places, natural wording.'],
+      changed: ['Hybrid audits keep their local / wider split.', 'Irish audits never name the UK or a Northern Ireland town outside their area.'],
+      removed: ['Questions like "electrician for seasonal maintenance" and other trades.'],
+      effect: 'Audits measure searches real customers make. Audits already run are unchanged.',
+    } },
+  { id: '2026-11-15-no-popups', date: '2026-11-15', title: 'No more pop-ups in the bottom-right corner', audience: 'all',
+    body: 'The small messages that popped up in the bottom-right corner are gone everywhere in the app. If something goes wrong, the error now shows right next to the button you pressed (or as a slim bar at the top if that button has gone). An Undo shows there too. Every message is still kept in the bell, under "This session".',
+    report: {
+      added: ['Errors shown beside the button you pressed.', 'A "This session" list in the bell with every message.'],
+      changed: ['Success notes ("Saved", "Sent") go to the bell only.'],
+      removed: ['The bottom-right pop-ups.'],
+      effect: 'Nothing covers the screen; an error is next to what caused it.',
+    } },
+  { id: '2026-11-15-whatsapp-replied-not-cold', date: '2026-11-15', title: 'WhatsApp: a lead who has replied is never blocked by the cold-opener rules', audience: 'all',
+    body: 'Once a prospect has replied on WhatsApp, the rules for first messages (already contacted, UK mobiles only, already texted, daily cold limits) no longer block any template or message to them. Opt-outs still block marketing messages. The Initial question template ("Hi mate, do you build websites or do SEO or AI visibility?") is now a follow-up, not an opener: it only goes to a number we have already messaged on WhatsApp.',
+    report: {
+      added: ['Initial question refuses a number we have never messaged ("Send an opener first").'],
+      changed: ['A lead who has replied gets any template without "phone already contacted".', 'Initial question is a follow-up, not an opener.'],
+      removed: ['The false "May not send: phone_already_contacted" warning for leads who had replied.'],
+      effect: 'You can send follow-ups to people who answered you (Eon Graphics was blocked).',
+    } },
+  { id: '2026-11-15-reset-admin-only', date: '2026-11-15', title: 'Outreach: Reset (re-addable) is admin only', audience: 'admin',
+    body: 'Reset (re-addable) fully deletes a lead and its added-history, so only the admin sees and can use it now. Remove (which archives) is unchanged.',
+    report: { added: [], changed: ['Reset (re-addable) shows for the admin only.'], removed: [], effect: 'A salesperson can no longer wipe the history of a lead.' } },
+  { id: '2026-11-15-audit-page-progress', date: '2026-11-15', title: 'AI Audit: the open audit shows progress for the whole audit', audience: 'admin',
+    body: 'While an audit is running, its own page now shows the same progress as its Past audits row, for example "Run 2 of 3 · 20 of 40 searches · 50%", with the bar for the whole audit.',
+    report: { added: [], changed: ['The running audit page shows "Run X of Y" and whole-audit %.'], removed: ['"Running searches… 20/40" for one run only.'], effect: 'The page and the list always agree.' } },
   { id: '2026-11-15-audit-progress-whole', date: '2026-11-15', title: 'Past audits: a running audit shows progress for the whole audit', audience: 'admin',
     body: 'On the AI Audit page, Past audits, a running audit now says which run it is on and how far the whole audit has got, for example "Run 2 of 3 · 20 of 40 searches · 50%", with a progress bar. The % and the bar are for the whole audit (60 of 120 searches answered = 50%), not just the run in flight. Run counts are the same ones the report uses. An audit that has not started yet still says Queued.',
     report: {
