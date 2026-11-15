@@ -1,9 +1,9 @@
 /* Audit verdict rules v2 (Paul, 2026-11-15; docs/AUDIT_RULES.md): the strict name match, the six rules in order, the
    rules switch (old links keep the old rule), and the real cases that started it (Moments: Mayo / Westport / iPhone Mayo). */
 import { checkName } from "../src/lib/strictName.ts";
-import { guaranteeIdentityFor, auditRulesFor, AUDIT_RULES_V2_FROM, clientLineOf, decideVerdict, emptyWhyOf, otherTrade, unnaturalReason, type AnswerFacts } from "../src/lib/auditVerdict.ts";
+import { CROWDED_AT, guaranteeIdentityFor, auditRulesFor, AUDIT_RULES_V2_FROM, clientLineOf, decideVerdict, emptyWhyOf, otherTrade, unnaturalReason, type AnswerFacts } from "../src/lib/auditVerdict.ts";
 import { firmKey, oppQuestion, type OppContext, type OppRow } from "../src/lib/reportOpportunity.ts";
-import { winnableOf, winnableWhy } from "../src/lib/reportDesign.ts";
+import { splitLine, verdictSplitOf, winnableOf, winnableWhy } from "../src/lib/reportDesign.ts";
 import { compareMeasurements } from "../src/lib/measurementCompare.ts";
 
 let f = 0;
@@ -39,17 +39,29 @@ const six = (fn: (e: "chatgpt" | "gemini", i: number) => AnswerFacts) => [0, 1, 
 const S = (answers: AnswerFacts[], o: Partial<Parameters<typeof decideVerdict>[0]> = {}) => decideVerdict({ question: "wedding content creator in Mayo", answers, head: "wedding content creator", leftOut: null, area: "Mayo", key: firmKey, ...o });
 
 const owned = six((e) => A(e, ["Aisle Be There", "SocialWeds"]));
-ok(S(owned).rule === "closed" && S(owned).verdict === "not_winnable" && S(owned).lockedBy.map((f) => f.name).join() === "Aisle Be There,SocialWeds", "rule 2: the same firms fill every answer, nothing else = Closed list, Not winnable, locking firms stored");
+ok(S(owned).rule === "crowded" && S(owned).verdict === "not_winnable" && S(owned).lockedBy.map((f) => f.name).join() === "Aisle Be There,SocialWeds", "rule 2: two firms take every mention = Crowded, Not winnable, the top firms stored");
+ok(CROWDED_AT === 0.7, "rule 2's line is 70% (Paul's pick from the Moments / LDM table, 2026-11-15)");
+/* Crowding = the top 3 firms' share of every firm mention. 6 answers x 4 firms: top 3 in every answer = 18 of 24 = 75%. */
+const top3Fixed = S(six((e, i) => A(e, ["Aisle Be There", "SocialWeds", "Toast", `F${i}${e}`])));
+ok(top3Fixed.rule === "crowded" && top3Fixed.crowding?.topShare === 0.75 && top3Fixed.crowding.distinct === 9, "the same 3 firms in every answer with one spot rotating: 75% = Crowded");
+const shuffled = S(six((e, i) => A(e, i === 0 && e === "chatgpt" ? ["Aisle Be There", "SocialWeds", "Other A", "Other B"] : ["Aisle Be There", "SocialWeds", "Toast"])));
+ok(shuffled.rule === "crowded", "THE BUG: a tiny shuffle no longer opens a crowded list (the closed rule said Winnable)");
+const twoOfFive = S(six((e, i) => A(e, ["Aisle Be There", "SocialWeds", `F${i}${e}`, `G${i}${e}`, `H${i}${e}`])));
+ok(twoOfFive.verdict === "winnable" && Math.round(twoOfFive.crowding!.topShare * 100) === 43, "two regulars in five-firm answers (43%) = Winnable, room to be named");
+const halfEmpty = S(six((e, i) => A(e, i === 0 ? ["Gas First"] : [], { text: "I don't have a list of specific businesses in that area." })));
+ok(halfEmpty.verdict === "winnable" && halfEmpty.rule !== "crowded", "a search where most answers name nobody is never crowded (100% of 2 mentions)");
+const exactlyHalf = S(six((e, i) => A(e, i === 0 || (i === 1 && e === "chatgpt") ? ["Gas First", "Best Gas"] : [], { text: "Look for reviews." })));
+ok(exactlyHalf.rule !== "crowded", "3 of 6 answers naming firms is not most answers: not crowded");
 const alwaysPlusRotating = S(six((e, i) => A(e, ["Aisle Be There", `F${i}${e}`])));
 ok(alwaysPlusRotating.rule === "open" && alwaysPlusRotating.verdict === "winnable" && alwaysPlusRotating.toBeat[0]?.name === "Aisle Be There" && /Always there: Aisle Be There \(6 of 6\)/.test(alwaysPlusRotating.reason), "fix 1: a firm in 6/6 with another spot rotating = Winnable; that firm is only 'always there', one to beat");
 const oneOdd = S(six((e, i) => A(e, i === 2 && e === "gemini" ? ["Aisle Be There", "SocialWeds", "New Firm"] : ["Aisle Be There", "SocialWeds"])));
-ok(oneOdd.verdict === "winnable", "fix 1: a single other firm appearing once means the list rotates = Winnable");
-ok(S(six((e, i) => A(e, i === 0 && e === "gemini" ? [] : ["Aisle Be There"]))).verdict === "winnable", "an answer that names nobody leaves a spot open = not closed");
+ok(oneOdd.rule === "crowded", "crowding: a single other firm appearing once does not open the list (it did under the closed rule)");
+ok(S(six((e, i) => A(e, i === 0 && e === "gemini" ? [] : ["Aisle Be There"]))).rule === "crowded", "crowding: one firm in 5 of 6 answers and nobody else = Crowded");
 const ownedButNamed = six((e, i) => A(e, ["Aisle Be There"], { you: i === 0 && e === "gemini" ? "named" : "no" }));
 const v1 = S(ownedButNamed);
 ok(v1.rule === "visible" && v1.verdict === "winnable" && v1.label === "Already visible: 1 of 6", "rule 1 beats rule 2: named once = Winnable, \"Already visible: 1 of 6\"");
 ok(v1.perEngine.gemini.named === 1 && v1.perEngine.chatgpt.named === 0, "ChatGPT and Gemini are counted separately");
-ok(S(six((e, i) => A(e, i < 2 || e === "chatgpt" ? ["Toast"] : ["Other"]))).verdict === "winnable", "fix 1: 5 of 6 is no longer Not winnable");
+ok(S(six((e, i) => A(e, i < 2 || e === "chatgpt" ? ["Toast", `F${i}${e}`, `G${i}${e}`] : ["Other", `F${i}${e}`, `G${i}${e}`]))).verdict === "winnable", "fix 1 kept: a firm in 5 of 6 with the other spots rotating is only one to beat = Winnable");
 const four = S(six((e, i) => A(e, i < 2 ? ["Toast", `F${i}${e}`] : [`G${i}${e}`])));
 ok(four.rule === "open" && four.verdict === "winnable" && four.toBeat[0]?.name === "Toast" && four.label === "A few repeat", "rule 3: a firm in 4/6 = Winnable, stored as a firm to beat");
 const rotating = S(six((e, i) => A(e, [`F${i}${e}`, `H${i}${e}`])));
@@ -66,7 +78,7 @@ ok(cat.rule === "category_gap" && cat.verdict === "winnable", "rule 6: only anot
 const loc = S(six((e) => A(e, e === "gemini" ? ["Stratford-upon-Avon Plumbing"] : [], { wrongPlace: e === "gemini", text: "x" })).map((a) => a), { question: "plumber in Stratford", head: "plumber", area: "Stratford" });
 ok(loc.rule === "local_gap" || loc.rule === "no_leader", "rule 6: Gemini answering for another place is never scored as a firm there");
 const loc2 = S([...six((e) => A(e, [], { dirs: [] }))].map((a) => a.engine === "gemini" ? { ...a, wrongPlace: true, firms: ["Avon Plumbers"] } : { ...a, firms: [] }).map((a, i) => (a.engine === "chatgpt" && i < 2 ? { ...a, dirs: ["Checkatrade"] } : a)), { question: "plumber in Stratford", head: "plumber", area: "Stratford" });
-ok(loc2.rule !== "closed" && loc2.verdict === "winnable", "a wrong-place firm can never close a list");
+ok(loc2.rule !== "crowded" && loc2.verdict === "winnable", "a wrong-place firm can never crowd a list");
 ok(S(six((e, i) => A(e, ["Toast"], { failed: i === 2 && e === "gemini" }))).rule === "rerun" && S(six((e, i) => A(e, ["Toast"], { failed: i === 2 && e === "gemini" }))).verdict === null, "a failed answer = re-run, never a verdict");
 ok(S(owned, { question: "wedding content creator wedding wedding" }).rule === "unnatural" && S(owned, { question: "wedding content creator wedding wedding" }).verdict === null, "a genuinely odd question is flagged, not scored");
 ok(unnaturalReason("wedding content creator Ireland") === null && S(ownedButNamed, { question: "wedding content creator Ireland" }).rule === "visible", "fix 2: a missing 'in' is how people search: never flagged, and she is named there");
@@ -75,7 +87,14 @@ ok(S(rotating.toBeat.length ? owned : six((e, i) => A(e, [`F${i}${e}`])), { left
 ok(S(ownedButNamed, { leftOut: "not_on_site" }).rule === "visible", "rule 1 beats left out");
 ok(otherTrade("Gary Collins Photography", "wedding content creator") && !otherTrade("Aisle Be There", "wedding content creator") && !otherTrade("Reel Content Studio", "wedding content creator"), "other trade only when the firm's name says so");
 for (const v of [v1, four, rotating, empty, dirs, cat]) ok(!/\d/.test(clientLineOf(v)) && !/Toast|Aisle|weddingsonline|Photography/.test(clientLineOf(v)), `client line has no counts or names (${v.rule})`);
-ok(S(owned).label === "Closed list" && S(owned).reason.includes("6 of 6") && S(owned).reason.includes("Aisle Be There"), "every Not winnable stores a reason and the firms that lock it");
+ok(S(owned).label === "Crowded" && S(owned).reason.includes("6 of 6") && S(owned).reason.includes("Aisle Be There") && S(owned).reason.includes("100%"), "every Not winnable stores a reason, its share and the firms that crowd it");
+ok(!/\d/.test(clientLineOf(S(owned))) || clientLineOf(S(owned)) === "", "no client line for a Not winnable (no counts, no names)");
+
+/* ── The three-way split (report summary + Past audits row) ────────────────────────────────── */
+const sp = verdictSplitOf([{ verdict: v1 }, { verdict: rotating }, { verdict: S(owned) }, { verdict: S(owned, { leftOut: "not_on_site" }) }, { verdict: undefined }]);
+ok(sp?.named === 1 && sp.winnable === 1 && sp.notWinnable === 1, "split: Already named / Winnable / Not winnable; left out and unscored are not counted");
+ok(splitLine(sp!) === "Already named 1 · Winnable 1 · Not winnable 1", "the summary line reads Already named X · Winnable Y · Not winnable Z");
+ok(verdictSplitOf([{ verdict: undefined }]) === null, "an audit before v2 has no split (its page is unchanged)");
 
 /* ── No big-city cap ───────────────────────────────────────────────────────────────────────── */
 const big = S(six((e, i) => A(e, [`F${i}${e}`, `G${i}${e}`])), { question: "best plumber in London", head: "plumber", area: "London" });
@@ -99,7 +118,7 @@ const q1 = oppQuestion("wedding content creator in Mayo", rows, { ...ctx, rules:
 ok(!q1.verdict && winnableOf(q1) === "not_winnable", "the old rule is unchanged for old links (it said Not winnable)");
 const kildare: OppRow[] = [0, 1, 2].map(() => ({ question: "wedding content creator in Kildare", result: { chatgpt: { answer_text: "1. MC Moments Wedding Content\nBased in Kildare\n2. Blackbird Studios", competitors: ["Blackbird Studios"], citations: [] }, gemini: { answer_text: "* **Mc Moments Wedding Content:** Kildare-based", competitors: [], citations: [] } } }));
 const qk = oppQuestion("wedding content creator in Kildare", kildare, ctx);
-ok(qk.namedYou === 0 && qk.verdict?.rule === "open" && /MC Moments/i.test(qk.verdict.toBeat[0]?.name ?? "") && qk.verdict.nearNames.length > 0, "Kildare: MC Moments is another business — not counted, flagged, always there, but the list rotates (Winnable)");
+ok(qk.namedYou === 0 && qk.verdict?.rule === "crowded" && /MC Moments/i.test(qk.verdict.lockedBy[0]?.name ?? "") && qk.verdict.nearNames.length > 0, "Kildare: MC Moments is another business: not counted, flagged, and counted as a firm (two firms only here = Crowded)");
 const failedRows: OppRow[] = [...rows.slice(0, 2), { question: "wedding content creator in Mayo", result: null }];
 ok(oppQuestion("wedding content creator in Mayo", failedRows, ctx).verdict?.rule === "rerun", "a failed queue row makes the search re-run, never a verdict");
 

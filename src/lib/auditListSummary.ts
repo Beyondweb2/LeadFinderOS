@@ -14,7 +14,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { buildReportModel, type ReportModel } from './reportModel.ts';
 import { theirAreas, type OppContext, type OppRow } from './reportOpportunity.ts';
-import { chooseReportDesign, winnableOf } from './reportDesign.ts';
+import { chooseReportDesign, verdictSplitOf, winnableOf, type VerdictSplit } from './reportDesign.ts';
 import { auditRulesFor } from './auditVerdict.ts';
 import { cellNamed } from './namedSignal.ts';
 import { isRealCompetitor, SCORED_ENGINES } from './auditReport.ts';
@@ -72,6 +72,8 @@ export interface PooledSummary {
   answers: number;
   /** Winnable X of N — only the report designs that show it (the Discovery's opportunity report). */
   winnable: { x: number; n: number } | null;
+  /** Rules v2: "Already named X · Winnable Y · Not winnable Z", the report's own split (reportDesign.verdictSplitOf). */
+  split: VerdictSplit | null;
   /** Distinct searches asked. */
   searches: number;
 }
@@ -112,11 +114,13 @@ export function pooledSummary(inp: PooledInput): PooledSummary {
     };
     const m: ReportModel = buildReportModel(rows, ctx, { kind: designKind, businessName: bizName, town, dateLabel: '', website: { state: 'not_checked', issues: [] }, order: questions, bestCount: 10 });
     let winnable: PooledSummary['winnable'] = null;
+    let split: VerdictSplit | null = null;
     if (designKind === 'opportunity') {
+      split = verdictSplitOf(m.all.filter((q) => winnableOf(q) !== null));
       const live = m.all.map((q) => winnableOf(q)).filter((v) => v !== null);
       winnable = { x: live.filter((v) => v === 'winnable').length, n: live.length };
     }
-    return { pct: m.score.value, named: m.score.named, answers: m.score.denominator, winnable, searches: m.counts.searches };
+    return { pct: m.score.value, named: m.score.named, answers: m.score.denominator, winnable, split, searches: m.counts.searches };
   }
 
   /* The classic report's headline: named cells over answered ChatGPT + Gemini cells, every run pooled. */
@@ -130,5 +134,5 @@ export function pooledSummary(inp: PooledInput): PooledSummary {
       if (cellNamed(cell as never, nctx)) named++;
     }
   }
-  return { pct: answers > 0 ? Math.round((100 * named) / answers) : null, named, answers, winnable: null, searches };
+  return { pct: answers > 0 ? Math.round((100 * named) / answers) : null, named, answers, winnable: null, split: null, searches };
 }

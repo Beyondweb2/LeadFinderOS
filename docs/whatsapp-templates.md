@@ -768,21 +768,27 @@ SERVER_ONLY_TEMPLATE_LABELS (never in a picker). New variable `needed_item` (cle
   (`dashboardTranscriptView`, `dashboardTemplatePreview`); the stored line and the sender are unchanged, so no edge redeploy.
   ⛔ A template edited at Meta must be pasted here too, or the Inbox shows the old words.
 
-## `initial_question` — the question opener (2026-11-15, Paul)
+## `initial_question` — a follow-up, not an opener (2026-11-15, Paul)
 
 Body, exactly: "Hi mate, do you build websites or do SEO or AI visibility?". English (`lang: "en"`), **no variables**, no
 header, footer or buttons. Meta approval was still in progress when it was added; Paul: treat it as approved.
 - **Sender:** V1's WhatsApp sends go straight to Meta's Cloud API (`sendViaGraph`) on **Move37's Meta app and number** —
   the same sender as every other V1 template. Not the Findable number. No Twilio Content SID is involved (Twilio is SMS and
   calls only).
-- **Cold opener** (`INITIAL_OPENER_D` in `src/lib/openerVariant.ts`, in `WHATSAPP_OPENERS`, not the SMS lane): every cold
-  guard applies (UK mobile, `whatsappColdGuard`, opt-out, phone history). Not swapped by `coldOpenerFor`.
+- **A follow-up (changed the same day, Paul: "initial_question is a follow-up, not an opener").** It is in
+  `CONTINUATION_TEMPLATES` (`src/lib/coldOutreach.ts`) and NOT in `WHATSAPP_OPENERS` (so it is not in the salesperson's
+  bulk-opener list or the opener rules). ⛔ It is never a first touch: `NEEDS_PRIOR_WHATSAPP` refuses it at BOTH senders
+  (`follow_up_needs_contact`) when the number has no WhatsApp message yet (sent or received; failed sends not counted).
+  Opt-outs still block it (marketing). Not swapped by `coldOpenerFor`.
+- **Cold rules stop once the prospect has replied** (same day, the Eon Graphics bug: "May not send: phone_already_contacted"
+  on a lead who had replied). `coldRulesApply(template, prospectHasReplied)`: in `send-whatsapp-message`, phone history,
+  UK-only / country switch, already-texted, logged-contact and the cold cap/gap apply only while the number has never written
+  to us (any inbound row in the book). Opt-outs, the mobile check, Meta's approval and the repeat-pitch confirm still apply.
+  The queue's drip of cold openers keeps its phone-history guard (a cold opener into a live thread is never right there).
 - **Approval is not a flag:** like `initial_contact_short`, both senders read Meta's LIVE status first
   (`META_STATUS_GATED` in the queue, the gate in `send-whatsapp-message`, BUILD_ID `2026-11-15a-initial-question`).
   PENDING / REJECTED / … → refused with Meta's word, nothing sent. When Meta's status cannot be read (UNKNOWN —
   `no_waba` today) the send is tried and Meta decides; a refusal (132001) is now worded for every screen by
   `whatsAppSendRequest` (`sendErrorMeaning`), not shown as raw Meta text.
-- **Not done:** `sales_queue_opener`'s SQL allowlist was NOT widened (no migration), so a salesperson's BULK queue of this
-  template is refused with `not_an_initial_opener`. Admin bulk queues and single sends work.
 - Registered in: openerVariant, WHATSAPP_TEMPLATES (picker), WA_TEMPLATE_REQS, both body tables, Inbox TEMPLATE_DISPLAY,
   campaign wording, WA_TEMPLATES + queue mirror. Test: `scripts/initial-question-template.test.ts`.

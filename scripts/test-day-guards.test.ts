@@ -15,7 +15,7 @@ const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "u
 console.log("── Job 1: roles and double contact ──");
 {
   const swm = read("supabase/functions/send-whatsapp-message/index.ts");
-  ok(/isColdOutreachTemplate\(templateName\) && \(!allowResend \|\| actor\.role !== "admin"\)/.test(swm),
+  ok(/coldSend && \(!allowResend \|\| actor\.role !== "admin"\)/.test(swm),
     "A: the cross-row phone-history check runs for a salesperson even with allow_resend");
   ok(/!allowResend \|\| !resolvedLeadId \|\| m\.lead_id !== resolvedLeadId/.test(swm),
     "A: with allow_resend, only this lead's OWN thread is waved through");

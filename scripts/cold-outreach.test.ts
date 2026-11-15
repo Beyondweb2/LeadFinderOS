@@ -130,6 +130,8 @@ const EXPECTED_CONTINUATIONS = [
   "agreement_next_steps",
   "nudge_24h",
   "pick_up_conversation",
+  /* Paul, 2026-11-15: "initial_question is a follow-up, not an opener" — never a first touch (NEEDS_PRIOR_WHATSAPP). */
+  "initial_question",
 ].sort();
 const actual = [...CONTINUATION_TEMPLATES].sort();
 const added = actual.filter((t) => !EXPECTED_CONTINUATIONS.includes(t));

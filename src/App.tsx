@@ -1,7 +1,6 @@
 import { useEffect, Component, type ReactNode, lazy, Suspense } from "react";
 
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
+import { ActionNotices } from "@/components/ActionNotices";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { installLeadSync } from "@/lib/leadSync";
@@ -189,8 +188,8 @@ const App = () => {
       <SubscriptionProvider>
       <AccentInitializer>
         <TooltipProvider>
-          <Toaster />
-          <Sonner />
+          {/* No bottom-right pop-ups (Paul, 2026-11-15): errors show inline beside the action; the bell keeps the list. */}
+          <ActionNotices />
            <LeadSearchProvider>
             <BrowserRouter>
               <ScrollToTop />

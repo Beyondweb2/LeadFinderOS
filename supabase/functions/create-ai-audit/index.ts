@@ -14,7 +14,8 @@ import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { DEFAULT_FIRST_REPLY_TEMPLATE, effectiveReplyMode, firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { pitchMayFollowAudit, pitchRefusalNote } from "../../../src/lib/auditPitchRule.ts";
 import { dropResearchIntent, dropOffTrade, dropMissingTown, qualifyPlace, placeSuffixForCountry, placeNamesCountry, placeJoin, dedupeQuestions, coverageDirective, stripRepeatedWords, capHeadTerms, headTermCap, hookPlaceFor } from "../../../src/lib/seedGuard.ts";
-import { normalizeAuditList, serviceAreaQuestionDirective } from "../../../src/lib/auditQuestionContext.ts";
+import { normalizeAuditList, serviceAreaQuestionDirective, serviceAreasFromDirective } from "../../../src/lib/auditQuestionContext.ts";
+import { dropUnfitQuestions, balanceHybrid, namesAreaPlace } from "../../../src/lib/generatedQuestionGuard.ts";
 import {
   nationalIntentDirective, hybridIntentDirective, nationalFallbackQuestions, marketVocabulary,
   hybridAllocation, type MarketContext,
@@ -2143,6 +2144,24 @@ async function generateQuestions(
     ? `\n- The client asked that we never describe them like this: ${style.mustNotSay}`
     : "";
 
+  /* ⛔ REAL TRADE, REAL PLACE, NATURAL WORDING (Paul, 2026-11-15). Stored audits carried "who should I
+     switch to for reliable electrical maintenance in Shrewsbury UK", "plumber for stove maintenance
+     in Gloucester UK" and "best plumbing service for boiler maintenance in Southport UK". The prompt
+     never said what NOT to write, so it says so now; src/lib/generatedQuestionGuard.ts is the check
+     behind it (dropUnfitQuestions below), so a question that ignores these lines is dropped and
+     topped up from the templates, never measured. */
+  const placesGiven = [locationText, ...serviceAreasFromDirective(coverage)].filter(Boolean);
+  const irelandLine = abroadQ === "Ireland"
+    ? `\n- This business is in the Republic of Ireland. NEVER write "UK", "England", "Scotland" or "Wales". NEVER name a Northern Ireland place (Belfast, Derry, Newry, Antrim, Armagh, Down, Fermanagh, Tyrone) unless it is one of the places given.`
+    : "";
+  const NATURAL_RULES = `- Use ONLY this business's own trade (${type}) and the services it lists. NEVER ask about a different trade (a plumber's questions never ask for an electrician, roofer or builder).
+- Write it the way a customer actually types it: "[service] in [place]" or "[trade] in [place]" — e.g. "emergency plumber in Hackney", "boiler service in Bow", "EICR certificate for landlords in London". NEVER "[trade] for [something] maintenance", never "who should I switch to for …", never "best [trade] service for [a service]", never two quality adjectives in a row ("best affordable", "reliable trusted"). At most 14 words.
+- Places: ${forceNational || !placesGiven.length
+    ? `the ${(market?.region ?? abroadQ ?? "uk").toUpperCase()} market only — never a town`
+    : forceHybrid
+    ? `the local questions name ONLY ${placesGiven.join(", ")}; the wider questions name no town at all`
+    : `ONLY ${placesGiven.join(", ")}`}. NEVER invent or add another town, county or region.${irelandLine}`;
+
   // Shared across all scopes.
   const ALWAYS_RULES = customer
     ? `RULES THAT ALWAYS APPLY:
@@ -2151,13 +2170,15 @@ async function generateQuestions(
 - Put the kind of business (the trade word) or the specific service in every question, so it cannot be read as a different trade.
 - Ground EVERY question in the business's ACTUAL services listed under "Known for". NEVER invent a service it doesn't offer.${notOfferedLine}${mustNotSayLine}
 - SPREAD the questions across the business's services and the real situations customers are in — no near-duplicates, and never the same service reworded.
-- Do NOT include the business's own name or any brand name (the customer is trying to DISCOVER it). No quotes.`
+- Do NOT include the business's own name or any brand name (the customer is trying to DISCOVER it). No quotes.
+${NATURAL_RULES}`
     : `RULES THAT ALWAYS APPLY:
 - EXACTLY ONE intent per question. Never combine two services or needs. No "and" joining two things (NOT "tax returns and payroll", NOT "bar with kava and pool").
 - Natural phrasing a real person would type or ask an AI — short, terse, plain lowercase.
 - Ground EVERY question in the business's ACTUAL services and the "known for" field. NEVER invent a service it doesn't offer.
 - SPREAD the questions across the business's main services / niches — no near-duplicates.
-- Do NOT include the business's own name or any brand name (the customer is trying to DISCOVER it). No quotes.`;
+- Do NOT include the business's own name or any brand name (the customer is trying to DISCOVER it). No quotes.
+${NATURAL_RULES}`;
 
   const LOCAL_RULES = customer
     ? `- Name the place in EVERY question, written exactly "${placeQ}" — the country after the comma stops AI answering about a same-named town abroad.
@@ -2345,6 +2366,30 @@ Do not otherwise widen the question to a country or region: no "for [audience] i
         + onTrade.rejected.map((r) => `"${r.question}" (${r.reason})`).join(" | "),
       );
     }
+    /* ⛔ REAL TRADE, REAL PLACE, NATURAL WORDING — CHECKED, NOT REQUESTED (Paul, 2026-11-15).
+       "plumber for stove maintenance in Gloucester UK" passed every guard above: it names the trade,
+       the town and the country. generatedQuestionGuard.ts drops unnatural wording, a trade the
+       business does not list, and a place outside its town / service areas (Ireland: never "UK", no
+       Northern Ireland place unless stated). Topped up from a WIDER template list than `fallback`
+       (twice the count, the size fillGenerated uses) because the guards above may already have spent
+       some of `fallback`; the count asked for is unchanged. The templates pass by construction. */
+    const fitPool = fallbackQuestions(businessType, locationText, hasWebsite, specialisms, Math.max(n * 2, 12), scope, country, moneyN, market);
+    const fitAreas = serviceAreasFromDirective(coverage);
+    const fit = dropUnfitQuestions(onTrade.questions, [...fallback, ...fitPool], n, {
+      businessType,
+      services: [...normalizeAuditList(specialisms), ...(market?.topics ?? [])],
+      town: hasUsableTown(locationText) && !forceNational ? locationText.trim() : "",
+      areas: forceNational ? [] : fitAreas,
+      country,
+      marketWords: market ? [market.region] : [],
+    });
+    if (fit.rejected.length) {
+      console.warn(
+        `[create-ai-audit] unfit questions dropped (${fit.rejected.length}) for "${businessType}": `
+        + fit.rejected.map((r) => `"${r.question}" (${r.reason})`).join(" | "),
+      );
+    }
+    onTrade.questions = fit.questions;
     /* ⛔ AND THE SPREAD, ON JUDGED SETS ONLY. White Sparks' frozen baseline is 11 of 12 head terms —
        one question wearing twelve adjectives, and it is the set his refund is measured against.
        AD Locksmithing's, the same day, is 5 of 11, so this is chance rather than a broken generator
@@ -2410,7 +2455,20 @@ Do not otherwise widen the question to a country or region: no "for [audience] i
        is half national by design. */
     if (scope === "hybrid" && hasUsableTown(locationText)) {
       const town = locationText.trim();
-      const pinned = qualifyPlace(spread.questions, town, placeSuffixForCountry(country));
+      /* ⛔ THE MIX IS CHECKED TOO (Paul, 2026-11-15: "respect Hybrid"). A model that returns twelve
+         local questions has produced a local audit wearing a hybrid label. Each side is held to
+         hybridAllocation's share and topped up from the same side of the hybrid templates; the count
+         is unchanged. Only when a market context exists — that is when the hybrid prompt and the
+         hybrid templates exist at all (forceHybrid). */
+      let hybridSet = spread.questions;
+      if (forceHybrid) {
+        const balanced = balanceHybrid(spread.questions, fitPool, n, (q) => namesAreaPlace(q, town, fitAreas));
+        if (balanced.toppedUp.length) {
+          console.warn(`[create-ai-audit] hybrid: mix held at ${balanced.local} local / ${balanced.wider} wider — topped up ${balanced.toppedUp.map((q) => `"${q}"`).join(" | ")}`);
+        }
+        hybridSet = balanced.questions;
+      }
+      const pinned = qualifyPlace(hybridSet, town, placeSuffixForCountry(country));
       if (pinned.repaired.length) {
         console.warn(
           `[create-ai-audit] hybrid: country marker added to ${pinned.repaired.length} local question(s) for "${town}": `

@@ -81,7 +81,8 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
   initial_opener_v2:      { needsUrl: false, needsAudit: false, group: 'opener' },
   /* initial_contact_short (2026-10-15) - the short opener. Same shape as initial_contact: one variable (the cleaned name), no link, no audit. */
   initial_contact_short:  { needsUrl: false, needsAudit: false, group: 'opener' },
-  /* initial_question (2026-11-15) - opener with NO variables: no name, no link, no audit. */
+  /* initial_question (2026-11-15) - a FOLLOW-UP with NO variables: no name, no link, no audit. Group 'opener' is the label only
+     (as contact_followup's); it is a continuation (coldOutreach.ts) and only goes to a number already messaged. */
   initial_question:       { needsUrl: false, needsAudit: false, group: 'opener' },
   // audit_reply is not yet wired into the manual send path; its rule lives here so the guard is
   // ready the moment it's added to the picker + sender (no drift when that happens).

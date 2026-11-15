@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, Bell, BellRing, CalendarClock, CheckCheck, FileCheck2, Flame, Megaphone, MessageCircleReply, MessageSquareHeart,
@@ -16,6 +16,7 @@ import { useAiReplyDrafts, SHELL_DRAFTS_POLL_MS } from '@/hooks/useAiReplyDrafts
 import { needsYou } from '@/lib/aiReplyDraft';
 import { GROUPED_NOTIFICATION_KINDS, NEEDS_YOU_CARD_LINK, REPLY_CARD_LINK, bellCount, replyCardBody, replyCardTitle, replySummary, type ReplySummary } from '@/lib/notificationGrouping';
 import { TONE, ago, type Tone } from '@/components/salesDash/ui';
+import { clearNoticeLog, getNoticeLog, subscribeNotices } from '@/lib/actionNotices';
 
 /* ══ THE NOTIFICATION CENTRE (Sales Experience release 3, 2026-09-28) ═════════════════════════════════
    Desktop: a bell at the bottom-right. Phone: the bell in the top bar. Newest first, unread marked,
@@ -54,6 +55,7 @@ const readAlerts = () => { try { return localStorage.getItem(ALERTS_KEY) === 'on
 function List({ n, onGo, onClose, replies, onReplies, count, needsYouCount, onNeedsYou }: { n: ReturnType<typeof useNotifications>; onGo: (x: AppNotification) => void; onClose?: () => void; replies: ReplySummary; onReplies: () => void; count: number; needsYouCount: number; onNeedsYou: () => void }) {
   /* Replies are ONE card (notificationGrouping.ts); their stored rows are never drawn one by one. */
   const shown = n.rows.filter((r) => !GROUPED_NOTIFICATION_KINDS.has(r.kind));
+  const session = useSyncExternalStore(subscribeNotices, getNoticeLog, getNoticeLog);
   const [alerts, setAlerts] = useState(readAlerts);
   const canAlert = typeof window !== 'undefined' && 'Notification' in window;
   const toggleAlerts = async (on: boolean) => {
@@ -99,7 +101,7 @@ function List({ n, onGo, onClose, replies, onReplies, count, needsYouCount, onNe
             </button>
           </li>
         )}
-        {shown.length === 0 && replies.messages === 0 && needsYouCount === 0 && <li className="px-3 py-8 text-center text-xs text-muted-foreground">You're all caught up. New replies, payments and follow-ups will appear here.</li>}
+        {shown.length === 0 && replies.messages === 0 && needsYouCount === 0 && !session.length && <li className="px-3 py-8 text-center text-xs text-muted-foreground">You're all caught up. New replies, payments and follow-ups will appear here.</li>}
         {shown.map((x) => {
           const k = KIND[x.kind] ?? { icon: Bell, tone: 'grey' as Tone };
           return (
@@ -117,6 +119,27 @@ function List({ n, onGo, onClose, replies, onReplies, count, needsYouCount, onNe
             </li>
           );
         })}
+        {/* THIS SESSION (Paul, 2026-11-15): every message that used to pop up bottom-right, newest first (src/lib/actionNotices.ts). */}
+        {session.length > 0 && (
+          <li className="mt-1 border-t border-border/60 pt-1.5" data-testid="session-messages">
+            <div className="flex items-center justify-between px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <span>This session</span>
+              <button type="button" onClick={clearNoticeLog} className="normal-case tracking-normal hover:text-foreground hover:underline">Clear</button>
+            </div>
+            <ul>
+              {session.map((m) => (
+                <li key={m.id} className="flex items-start gap-2 rounded-lg px-2.5 py-1.5">
+                  <span className={cn('mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full', m.error ? 'bg-red-500' : 'bg-muted-foreground/50')} />
+                  <span className="min-w-0 flex-1">
+                    <span className={cn('block text-xs leading-snug', m.error ? 'font-semibold text-destructive' : 'font-medium')}>{m.title || m.description}</span>
+                    {m.title && m.description && <span className="mt-0.5 line-clamp-2 block text-[11px] text-muted-foreground">{m.description}</span>}
+                    <span className="block text-[10px] text-muted-foreground">{ago(new Date(m.at).toISOString())}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </li>
+        )}
       </ul>
       <div className="flex items-center justify-between gap-2 border-t border-border/60 px-3 py-2 text-xs text-muted-foreground">
         {canAlert ? <label className="flex items-center gap-2"><Switch checked={alerts} onCheckedChange={(v) => void toggleAlerts(v)} aria-label="Desktop alerts" />Desktop alerts for replies and payments</label> : <span />}

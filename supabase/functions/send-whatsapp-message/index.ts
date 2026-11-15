@@ -24,7 +24,7 @@ import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
    `scripts/check-edge-undefined.mjs` is the gate. */
 import { rivalHookDecision, templateNeedsRivals } from "../../../src/lib/rivalHook.ts";
 import { pitchEverSent } from "../_shared/auto-reply-rules.ts";
-import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
+import { coldRulesApply, NEEDS_PRIOR_WHATSAPP, NEEDS_PRIOR_WHATSAPP_REASON } from "../../../src/lib/coldOutreach.ts";
 import { DASHBOARD_PENDING_QUEUE_STATUSES, DASHBOARD_RESEND_WINDOW_MS, DASHBOARD_TEMPLATES, RECENTLY_SENT_REASON, cleanNeededItem, noDoubleSendTemplate, dashboardGreeting, dashboardTemplateTranscript, isDashboardTemplate, neededItemFromTranscript } from "../../../src/lib/dashboardTemplates.ts";
 import { displayBusinessName } from "../../../src/lib/displayName.ts";
 import { isUkColdDestination, NOT_A_UK_MOBILE } from "../../../src/lib/ukColdDestination.ts";
@@ -128,7 +128,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    a queued needs_from_you whose words cannot be read back sends those words if the window is open, else refuses with a reason. */
 /* 2026-11-02: a person's cold send asks the cold guard (src/lib/whatsappColdGuard.ts): one cap, one gap, the cool-down, the tripwire. */
 /* 2026-11-15a: initial_question opener (no variables) - Meta's LIVE status is read first, like initial_contact_short. */
-const BUILD_ID = "2026-11-15a-initial-question";
+const BUILD_ID = "2026-11-15b-replied-not-cold";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -561,12 +561,26 @@ Deno.serve(async (req) => {
          Property of the digits we would send to; a continuation or a free-form reply never reaches this. */
       /* 2026-10-14 (src/lib/outreachMarkets.ts): a Malaysia / Singapore mobile may take a cold template while its
          country's WhatsApp switch is on; while it is off the answer is country_off. The UK rule is unchanged. */
-      const coldMarket = isColdOutreachTemplate(templateName) ? mobileMarketOf(to) : null;
+      /* ⛔ COLD RULES ONLY WHILE THE PROSPECT HAS NEVER WRITTEN (Paul, 2026-11-15, coldRulesApply): the Eon Graphics bug was
+         "phone_already_contacted" on a lead who had replied. Once they have replied (lastInboundAt, the book's own inbound rows),
+         every template below is a message into a live conversation: phone history, UK-only, already-texted, logged-contact and the
+         cold cap/gap do not block it. Opt-outs (above), the mobile check, Meta's approval and the repeat-pitch confirm still do. */
+      const prospectReplied = lastInboundAt != null;
+      const coldSend = coldRulesApply(templateName, prospectReplied);
+      /* ⛔ A FOLLOW-UP THAT MUST NEVER BE A FIRST TOUCH (initial_question, NEEDS_PRIOR_WHATSAPP): refused when the number has no
+         WhatsApp message yet, sent or received (a failed send is not contact). Fails closed. */
+      if (NEEDS_PRIOR_WHATSAPP.has(templateName) && !prospectReplied) {
+        const { data: priorWa, error: priorWaErr } = await service.from("whatsapp_messages").select("id").eq("phone", to)
+          .or("status.is.null,status.not.in.(failed,failed_temporary,simulated)").limit(1);
+        if (priorWaErr) return json({ ok: false, error: "contact_guard_unreadable", template: templateName, reason: "Could not check this number's WhatsApp history - nothing was sent." }, 200);
+        if (!priorWa || priorWa.length === 0) return json({ ok: false, error: "follow_up_needs_contact", template: templateName, reason: NEEDS_PRIOR_WHATSAPP_REASON }, 200);
+      }
+      const coldMarket = coldSend ? mobileMarketOf(to) : null;
       if (coldMarket && coldMarket !== "UK" && !channelOn(await loadCountrySettings(service), coldMarket, "whatsapp")) {
         return json({ ok: false, error: COUNTRY_OFF, template: templateName,
           reason: `WhatsApp to ${MARKET_NAME[coldMarket]} is switched off, so nothing was sent. Paul can turn it on in the WhatsApp queue settings.` }, 200);
       }
-      if (isColdOutreachTemplate(templateName) && !isUkColdDestination(to) && !(coldMarket && coldMarket !== "UK")) {
+      if (coldSend && !isUkColdDestination(to) && !(coldMarket && coldMarket !== "UK")) {
         return json({ ok: false, error: NOT_A_UK_MOBILE, template: templateName,
           /* 2026-10-22 (src/lib/phoneCountry.ts): what is actually wrong with the number, never the stale "UK only". */
           reason: `${phoneProblemWords(rawPhone, country) ?? "This is not a mobile we message."} Nothing was sent. Use a reply or a follow-up in an open conversation.` }, 200);
@@ -582,7 +596,7 @@ Deno.serve(async (req) => {
          across lead rows (test-day roles check, 2026-10-14): a number already messaged on ANOTHER row — a duplicate
          that may belong to someone else — refuses the cold opener whatever the flag says. The admin keeps the
          override, as before. */
-      if (isColdOutreachTemplate(templateName) && (!allowResend || actor.role !== "admin")) {
+      if (coldSend && (!allowResend || actor.role !== "admin")) {
         const { data: priorAny } = await service
           .from("whatsapp_messages")
           .select("id, lead_id")
@@ -598,7 +612,7 @@ Deno.serve(async (req) => {
       /* ⛔ A NUMBER ALREADY TEXTED NEVER GETS A COLD WHATSAPP OPENER (2026-10-14) — the mirror of the text queue's
          rule (queue_sms_openers 'already_texted'), across every lead row and owner, both roles. One SQL rule,
          public.phone_already_texted (the drip asks the same function); not overridable; fails closed. */
-      if (isColdOutreachTemplate(templateName)) {
+      if (coldSend) {
         const { data: texted, error: textedErr } = await service.rpc("phone_already_texted", { _phone: to });
         if (textedErr) return json({ ok: false, error: "contact_guard_unreadable", template: templateName, reason: "Could not check whether this number was already texted - nothing was sent." }, 200);
         if (texted === true) {
@@ -612,7 +626,7 @@ Deno.serve(async (req) => {
          after a real conversation is never the right message — a continuation template, or a reply in the open
          24-hour window, is. Free-form replies and continuations never reach this (isColdOutreachTemplate).
          Fails closed: an unreadable answer refuses the cold send. */
-      if (isColdOutreachTemplate(templateName) && resolvedLeadId) {
+      if (coldSend && resolvedLeadId) {
         const { data: block, error: blockErr } = await service.rpc("opener_contact_block", { _lead_id: resolvedLeadId });
         if (blockErr) return json({ ok: false, error: "contact_guard_unreadable", template: templateName, reason: "Could not check the lead's logged contact history — nothing was sent." }, 200);
         if (block === "contacted_by_phone" || block === "contacted_logged") {
@@ -1042,7 +1056,7 @@ Deno.serve(async (req) => {
        the cap and the gap. Inside the hours it now asks the same rule as the queue. A stop, a cool-down or a cap is refused with the
        reason. The gap or a probe waiting for its reports only queues it for the next slot. The drain's own row already took its slot.
        Free text, in-window sends and continuations never reach this; a QA fixture is simulated and spends nothing. */
-    if (!sched && !dryRun && usedTemplate && messageType === "template" && isColdOutreachTemplate(usedTemplate) && qa.kind === "live") {
+    if (!sched && !dryRun && usedTemplate && messageType === "template" && coldRulesApply(usedTemplate, lastInboundAt != null) && qa.kind === "live") {
       const coldM = mobileMarketOf(to);
       const facts = await loadColdFacts(service);
       if (!facts) return json({ ok: false, error: "cold_guard_unreadable", template: usedTemplate, reason: "Could not check today's WhatsApp limits, so nothing was sent. Try again." }, 200);

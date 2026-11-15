@@ -55,7 +55,8 @@ export const INITIAL_OPENER_D = 'initial_question';
 export const INITIAL_OPENERS = [INITIAL_OPENER_A, INITIAL_OPENER_B] as const;
 
 /** Every cold WhatsApp opener (what isInitialOpener answers for). */
-export const WHATSAPP_OPENERS = [INITIAL_OPENER_A, INITIAL_OPENER_B, INITIAL_OPENER_C, INITIAL_OPENER_D] as const;
+/* initial_question (INITIAL_OPENER_D) is NOT here: Paul, 2026-11-15 — it is a follow-up, not an opener (coldOutreach.ts). */
+export const WHATSAPP_OPENERS = [INITIAL_OPENER_A, INITIAL_OPENER_B, INITIAL_OPENER_C] as const;
 export type InitialOpener = (typeof INITIAL_OPENERS)[number];
 
 /** ⛔ THE COLD OPENER IS THE ORIGINAL (Paul, 2026-11-02, RED since 25 Oct): the short opener was ramped to about 200 a day just
