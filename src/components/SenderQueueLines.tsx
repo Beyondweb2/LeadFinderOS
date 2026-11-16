@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle } from 'lucide-react';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
+import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 
 /* ══ YOUR QUEUE, IN ONE LINE (Paul, 2026-11-16) ═════════════════════════════════════════════════════════════════════════════
@@ -20,14 +21,35 @@ const TONE: Record<SenderLine['state'], string> = {
   empty: 'border-border/60 bg-muted/20 text-muted-foreground',
 };
 
+/* SHOWN AT ONCE (Paul, 2026-11-16): the last line this person saw is kept in this browser and drawn immediately, marked
+   "updating", while the fresh one loads (the server read is light too: process-whatsapp-queue my_queue). A per-viewer
+   convenience only — storage can be empty or blocked, and then the line simply appears when it arrives. */
+const cacheKey = (userId: string) => `fos.myQueueLine.v1:${userId}`;
+function readCached(userId: string | null): MyQueue | undefined {
+  if (!userId) return undefined;
+  try { const v = localStorage.getItem(cacheKey(userId)); return v ? (JSON.parse(v) as MyQueue) : undefined; } catch { return undefined; }
+}
+function writeCached(userId: string | null, v: MyQueue) {
+  if (!userId) return;
+  try { localStorage.setItem(cacheKey(userId), JSON.stringify(v)); } catch { /* blocked or full: nothing kept */ }
+}
+
 export function SenderQueueLines({ showTeam }: { showTeam: boolean }) {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
   const q = useQuery({
-    queryKey: MY_QUEUE_KEY,
-    queryFn: () => invokeEdge<MyQueue>('process-whatsapp-queue', { mode: 'my_queue' }),
+    queryKey: [...MY_QUEUE_KEY, userId],
+    queryFn: async () => {
+      const v = await invokeEdge<MyQueue>('process-whatsapp-queue', { mode: 'my_queue' });
+      if (v?.ok) writeCached(userId, v);
+      return v;
+    },
+    placeholderData: () => readCached(userId),
+    enabled: !!userId,
     staleTime: 30_000,
     refetchInterval: 120_000,
   });
-  if (q.isLoading) return null;
+  if (q.isLoading && !q.data) return null;
   if (q.isError || !q.data) {
     return <p className="mt-2 text-[11px] text-muted-foreground" data-testid="my-queue-error">Your queue line could not be read: {edgeErrorMessage(q.error, 'try Refresh')}</p>;
   }
@@ -35,6 +57,7 @@ export function SenderQueueLines({ showTeam }: { showTeam: boolean }) {
   return (
     <div className="mt-2 space-y-1.5" data-testid="my-queue">
       <Line label="Your queue" s={q.data.mine} testId="my-queue-line" />
+      {q.isPlaceholderData && <p className="text-[10px] text-muted-foreground" data-testid="my-queue-updating">Last seen — updating…</p>}
       {showTeam && others.length > 0 && (
         <div className="space-y-1" data-testid="team-queue-lines">
           {others.map((s) => <Line key={s.sender} label={s.name} s={s} testId={`sender-queue-${s.sender}`} />)}
