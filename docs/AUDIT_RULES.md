@@ -61,6 +61,16 @@ still picks targets on v2 (its source Discoveries predate `firms_read`).
 NEW short code, runs stamped `report_rules = 3`, a `verdicts_v3` snapshot, and marks `firms_read` on a copied answer only
 when its run's firm-reading receipt says complete; plus an old-vs-new table.
 
+2026-11-16 v3 re-scores (stored answers, no new searches; firm reading re-run first where it had failed):
+
+| Audit | Old (v2) | New (v3) | Named |
+|---|---|---|---|
+| LDM Discovery `qs44zg` → `tge2ue` | Winnable 39 · left out 1 | Winnable 18 · Not winnable 20 · AI doesn't name businesses 1 · left out 1 | 0 of 128 → 0 of 240 |
+| Moments Discovery `ukuarx` → `rfussx` | Already named 13 · Winnable 25 · Not winnable 2 | Already named 13 · Winnable 24 · Not winnable 3 · AI doesn't name businesses 0 | 37 of 240 |
+
+LDM's 3 runs were re-read on 16 Nov after the OpenAI key moved to a new organisation (~$0.76). Moments' copy had run 2
+re-read ($0.23): on 15 Nov the model skipped 24 of its answers, so v3 first showed every search as Couldn't measure.
+
 ---
 
 # Audit verdict rules (v2, Paul, 2026-11-15)
