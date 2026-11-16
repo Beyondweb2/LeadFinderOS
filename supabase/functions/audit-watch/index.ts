@@ -61,10 +61,12 @@ Deno.serve(async (req) => {
   // 1. Verdict counts.
 
   let q = service.from("ai_audits")
-    .select("id, lead_id, business_name, business_type, location_text, website, audit_purpose, created_at, verdict_counts, ai_audit_runs(id, status, created_at, scored_at)")
+    .select("id, lead_id, business_name, business_type, location_text, website, audit_purpose, baseline_target_runs, created_at, verdict_counts, ai_audit_runs(id, status, created_at, scored_at)")
     /* Since v2's start, not v3's: the v3/v4 RE-SCORED copies were made earlier and carry the rule only as a run stamp.
-       verdictCountsOf decides the rules (auditRulesFor, stamps first); a v2 Discovery gets the "none" mark once. */
-    .eq("audit_purpose", "discovery").gte("created_at", AUDIT_RULES_V2_FROM)
+       verdictCountsOf decides the rules (auditRulesFor, stamps first); a v2 Discovery gets the "none" mark once.
+       The prospect re-check (2026-11-16, src/lib/prospectRecheck.ts) is counted the same way: the Opportunity score
+       reads its counts once it replaces a hook. */
+    .in("audit_purpose", ["discovery", "recheck"]).gte("created_at", AUDIT_RULES_V2_FROM)
     .order("created_at", { ascending: false }).limit(only.length ? only.length : 500);
   if (only.length) q = q.in("id", only);
   const { data: audits, error } = await q;
@@ -76,6 +78,11 @@ Deno.serve(async (req) => {
     out.checked++;
     const runs = (a.ai_audit_runs ?? []) as Array<{ id: string; status: string | null; created_at: string; scored_at: string | null }>;
     if (!runs.length || runs.some((r) => WORKING.has(String(r.status ?? "")))) { out.unsettled++; continue; }
+    /* A re-check's runs 2 and 3 start staggered after run 1: never count it from fewer runs than it asks, unless the
+       chain has stopped (no new run for 30 minutes — e.g. run 1 was refused by the budget), so it never waits for ever. */
+    const targetRuns = Number((a as { baseline_target_runs?: number | null }).baseline_target_runs ?? 0);
+    const newestRunAt = Math.max(...runs.map((r) => Date.parse(r.created_at) || 0));
+    if (a.audit_purpose === "recheck" && runs.length < targetRuns && Date.now() - newestRunAt < 30 * 60_000) { out.unsettled++; continue; }
     const prevAt = Date.parse(String((a.verdict_counts as { at?: unknown } | null)?.at ?? "")) || 0;
     const newestInput = Math.max(...runs.map((r) => Date.parse(r.scored_at ?? r.created_at) || 0));
     if (!force && prevAt && prevAt >= newestInput) { out.current++; continue; }

@@ -43,3 +43,20 @@ No migration. Backend first: `create-ai-audit`, `render-audit-report` (and `audi
 function needs redeploying for it — and ⛔ never `whatsapp-status`. Then the SPA.
 
 Tests: `scripts/prospect-recheck.test.ts`, `scripts/role-rules.test.ts` (re-check cases).
+
+## Added before release (Paul, 2026-11-16)
+
+1. **The Opportunity score uses the re-check.** audit-watch now stores `verdict_counts` for a settled re-check as for a
+   Discovery (`verdictCountsOf`, purposes `discovery` + `recheck`), plus the named share over every answer
+   (`namedAnswers` / `answers`). It never counts a re-check from fewer runs than it asks (unless no new run for 30 min).
+   The cron gate `invoke_audit_watch()` wakes for re-checks too (migration `20261222090000_audit_watch_recheck_counts.sql`,
+   one-line change; rollback = re-run `20261220090000`). In the lists, `oppAuditByLead` (`src/lib/oppAuditInputs.ts`)
+   attaches the lead's newest re-check when it is newer than the hook the score reads (or there is no hook); the AI part
+   then comes from the re-check ("AI named them in 2 of 18 answers (re-check)", winnable searches from its split). While it
+   is still asking the score says "Incomplete — Re-check still running", never the replaced hook's number.
+2. **Admins can re-check any lead** (any owner, clients included): create-ai-audit's sales checks never applied to an admin,
+   `can_work_lead` lets an admin save details on any lead, and the per-lead daily limit is now reps-only. Budget, person
+   guard and the in-flight dedupe still apply to everyone.
+3. **Queue status line fast.** process-whatsapp-queue `mode: 'my_queue'` skips the panel-only reads (six head counts, the
+   audit-ready count, number health, pause history, test-held count). Everything the line uses is the same code as the
+   tick; the tick and every other mode are unchanged. The answer carries `x-queue-timing: auth=…;my_queue=…`.

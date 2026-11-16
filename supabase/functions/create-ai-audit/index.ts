@@ -814,7 +814,10 @@ Deno.serve(async (req) => {
        · it is always a NEW audit on a lead (a repeat of it is only advanceBaseline's internal run 2 / 3);
        · exactly RECHECK_QUESTIONS searches, none blank, none repeated, NONE CONTAINING THE BUSINESS'S OWN NAME
          (checkRecheckQuestions — the same rule the panel shows; the server is the rule);
-       · one check in flight per lead (the hook's dedupe, same window), and at most RECHECK_PER_LEAD_PER_DAY a day. */
+       · one check in flight per lead (the hook's dedupe, same window), and — for a REP — at most RECHECK_PER_LEAD_PER_DAY a day.
+       ⛔ ADMINS CAN RE-CHECK ANY LEAD (Paul, 2026-11-16): an admin skips salesAuditRefusal / canWorkLead / the client refusal
+       above (as for every admin audit) and the per-lead daily limit; the budget, the person guard and the in-flight dedupe
+       still apply. */
     if (isRecheck && !isInternal) {
       if (reuseAuditId) return json({ ok: false, error: "recheck_is_a_new_audit", detail: "A re-check is always a new audit; it never adds runs to an existing one." }, 400);
       if (!leadId) return json({ ok: false, error: "audit_needs_lead" }, 400);
@@ -831,12 +834,14 @@ Deno.serve(async (req) => {
       if (liveErr) return json({ ok: false, error: "in_flight_check_failed" }, 503);
       const running = (live ?? [])[0] as { audit_id?: string } | undefined;
       if (running?.audit_id) return json({ ok: true, already_running: true, audit_id: running.audit_id });
-      const day = new Date(Date.now() - 86_400_000).toISOString();
-      const { count, error: cErr } = await service.from("ai_audits").select("id", { count: "exact", head: true })
-        .eq("lead_id", leadId).eq("audit_purpose", RECHECK_AUDIT_PURPOSE).gte("created_at", day);
-      if (cErr) return json({ ok: false, error: "recheck_count_failed" }, 503);
-      if ((count ?? 0) >= RECHECK_PER_LEAD_PER_DAY) {
-        return json({ ok: false, error: "recheck_limit_for_lead", detail: `This lead already had ${RECHECK_PER_LEAD_PER_DAY} re-checks today. Open the latest one on the lead.` }, 429);
+      if (actor?.role !== "admin") {
+        const day = new Date(Date.now() - 86_400_000).toISOString();
+        const { count, error: cErr } = await service.from("ai_audits").select("id", { count: "exact", head: true })
+          .eq("lead_id", leadId).eq("audit_purpose", RECHECK_AUDIT_PURPOSE).gte("created_at", day);
+        if (cErr) return json({ ok: false, error: "recheck_count_failed" }, 503);
+        if ((count ?? 0) >= RECHECK_PER_LEAD_PER_DAY) {
+          return json({ ok: false, error: "recheck_limit_for_lead", detail: `This lead already had ${RECHECK_PER_LEAD_PER_DAY} re-checks today. Open the latest one on the lead.` }, 429);
+        }
       }
     }
     /* ⛔ ABUSE / COST PROTECTION (2026-09-29, docs/abuse-cost-protection.md). AFTER the in-flight dedupe
