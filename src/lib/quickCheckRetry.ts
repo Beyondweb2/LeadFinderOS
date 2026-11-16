@@ -90,6 +90,15 @@ export function lateRetryVerdict(o: { audit: RetryAudit; runs: RetryRun[]; rows:
 export function reopenPatch(run: RetryRun, why: string, nowIso: string, maxAttempts: number) {
   const prev = { ...((run.results ?? {}) as Record<string, unknown>) };
   delete prev.error;
+  /* A step-by-step Quick check (results.hook) stopped itself with "provider_failure" when the asks failed. Left in place,
+     the finaliser skips the step and the report says "This check didn't finish" even after the retry answers (found on
+     the 12 manual re-runs, 16 Nov). Cleared, the step re-reads the retried ask like a first-time answer. */
+  const hook = prev.hook;
+  if (hook && typeof hook === 'object' && (hook as Record<string, unknown>).stop_reason === 'provider_failure') {
+    const h = { ...(hook as Record<string, unknown>) };
+    delete h.stop_reason;
+    prev.hook = h;
+  }
   return {
     run: { status: 'running', results: { ...prev, late_retry: { at: nowIso, kind: 'auto', why } } },
     row: { status: 'pending', attempts: Math.max(0, maxAttempts - 1), result: null },
