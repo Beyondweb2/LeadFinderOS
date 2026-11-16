@@ -14,7 +14,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isInternalCall, requireAdmin } from "../_shared/access.ts";
 import { verdictCountsOf } from "../../../src/lib/auditVerdictCounts.ts";
-import { AUDIT_RULES_V3_FROM } from "../../../src/lib/auditVerdict.ts";
+import { AUDIT_RULES_V2_FROM } from "../../../src/lib/auditVerdict.ts";
 import { apifyUsageAlert, type ApifyUsageRow } from "../../../src/lib/apifyUsageAlert.ts";
 import { raiseOperatorAlert } from "../_shared/audit-alerts.ts";
 
@@ -56,7 +56,9 @@ Deno.serve(async (req) => {
 
   let q = service.from("ai_audits")
     .select("id, lead_id, business_name, business_type, location_text, website, audit_purpose, created_at, verdict_counts, ai_audit_runs(id, status, created_at, scored_at)")
-    .eq("audit_purpose", "discovery").gte("created_at", AUDIT_RULES_V3_FROM)
+    /* Since v2's start, not v3's: the v3/v4 RE-SCORED copies were made earlier and carry the rule only as a run stamp.
+       verdictCountsOf decides the rules (auditRulesFor, stamps first); a v2 Discovery gets the "none" mark once. */
+    .eq("audit_purpose", "discovery").gte("created_at", AUDIT_RULES_V2_FROM)
     .order("created_at", { ascending: false }).limit(only.length ? only.length : 500);
   if (only.length) q = q.in("id", only);
   const { data: audits, error } = await q;

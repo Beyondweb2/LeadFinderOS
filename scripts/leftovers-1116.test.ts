@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { leadVerdictCounts, oppWinnableOf, parseVerdictCounts, verdictCountsOf, VERDICT_COUNTS_VERSION, type StoredVerdictCounts } from '../src/lib/auditVerdictCounts.ts';
 import { opportunityForLead } from '../src/lib/opportunityForLead.ts';
-import { AUDIT_RULES_V3_FROM } from '../src/lib/auditVerdict.ts';
+import { AUDIT_RULES_V2_FROM, auditRulesFor } from '../src/lib/auditVerdict.ts';
 import { apifyPctOf, apifyUsageAlert, APIFY_ALERT_PCT } from '../src/lib/apifyUsageAlert.ts';
 import { APIFY_RESERVE_PCT } from '../src/lib/auditBudget.ts';
 import { REASON_TEXT, startRefusalReason } from '../src/lib/salesCheck.ts';
@@ -56,9 +56,12 @@ ok(read('src/hooks/useOpportunityInputs.ts').includes('verdict_counts') && !/OPP
 const watch = read('supabase/functions/audit-watch/index.ts');
 ok(watch.includes('isInternalCall(req)') && watch.includes('requireAdmin(req, service)'), 'audit-watch: CRON_SECRET or admin only');
 ok(!/send-whatsapp|sendWhatsApp|twilio|qaSendHold|create-ai-audit/i.test(watch), 'audit-watch never sends to anyone or starts an audit');
-ok(watch.includes(`gte("created_at", AUDIT_RULES_V3_FROM)`) && AUDIT_RULES_V3_FROM === '2026-11-16T10:30:00Z', 'audit-watch looks only at v3/v4-era Discoveries');
+ok(watch.includes(`gte("created_at", AUDIT_RULES_V2_FROM)`) && AUDIT_RULES_V2_FROM === '2026-11-15T06:00:00Z', 'audit-watch looks at every Discovery since v2 (re-scored v3/v4 copies were made before v3 started)');
+ok(auditRulesFor({ createdAt: '2026-11-16T09:21:01Z', runRules: [4, 4, 4] }) === 4, 'a copy made before v3 but stamped 4 is judged on v4 (6kjpm7 / db7nmj)');
+const fix = read('supabase/migrations/20261218090100_audit_watch_rescored_copies.sql');
+ok(fix.includes("timestamptz '2026-11-15 06:00:00+00'"), 'the cron gate uses the same v2 start time');
 const mig = read('supabase/migrations/20261218090000_audit_watch.sql');
-ok(mig.includes("timestamptz '2026-11-16 10:30:00+00'") && mig.includes('add column if not exists verdict_counts jsonb'), 'the cron gate uses the same v3 start time; the column is additive');
+ok(mig.includes('add column if not exists verdict_counts jsonb'), 'the column is additive');
 ok(!/generated\s+always|stored\s*;/i.test(mig) && !/drop\s+table|delete\s+from|truncate/i.test(mig), 'the migration rewrites and deletes nothing');
 ok(/\[functions\.audit-watch\]\s*\nverify_jwt = false/.test(read('supabase/config.toml')) && /\[functions\.coverage-towns\]\s*\nverify_jwt = true/.test(read('supabase/config.toml')), 'both new functions have their config.toml entry');
 

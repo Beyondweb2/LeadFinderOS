@@ -10,7 +10,7 @@
 | 5 | "Expand into towns (AI)" in Prepare baseline; the two Q2 questions on the details form. | `coverage-towns`, `src/lib/coverageTowns.ts`, `CoverageTownsSuggest.tsx`, `src/lib/clientOnboardingForm.ts`, `_shared/client-onboarding.ts`, `docs/onboarding-to-audit.md` |
 
 **audit-watch** runs on pg_cron `audit-watch` every 5 minutes through `invoke_audit_watch()`, which posts only when there is work
-(a finished v3/v4-era Discovery with no counts, or re-scored since; or Apify ≥ 80% with this cycle's alert not raised). It sends
+(a finished Discovery since the v2 start with no counts, or re-scored since — v2 start, because the v3/v4 re-scored copies were made before v3 started and carry the rule only as a run stamp (follow-up migration `20261218090100`); or Apify ≥ 80% with this cycle's alert not raised). It sends
 nothing to prospects or clients and starts no audit.
 
 **Not redeployed on purpose:** `salesCheck.ts` is also reached by process-ai-audit-queue, twilio-webhook and whatsapp-status (HELD),
