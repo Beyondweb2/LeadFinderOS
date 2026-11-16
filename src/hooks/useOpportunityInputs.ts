@@ -4,8 +4,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchAllRowsParallel } from '@/lib/fetchAllRows';
-import { leadAuditScores, type LeadAuditScore, type ScoredAudit } from '@/lib/auditScore';
-import { leadVerdictCounts, type StoredVerdictCounts } from '@/lib/auditVerdictCounts';
+import type { ScoredAudit } from '@/lib/auditScore';
+import { oppAuditByLead, type OppAuditInput } from '@/lib/oppAuditInputs';
 import { fetchSuppressedLeadIds } from '@/lib/leadSuppression';
 import { LEAD_CRAWL_LIST_SELECT, type LeadCrawlListRow } from '@/hooks/useLeadCrawls';
 import type { CrawlRow } from '@/lib/crawlResult';
@@ -20,16 +20,11 @@ import type { CrawlRow } from '@/lib/crawlResult';
 export const OPP_AUDIT_SELECT = 'id, lead_id, created_at, verdict_counts, is_market, audit_purpose, baseline_target_runs, is_measurement, baseline_contract, ai_audit_runs(id, status, run_number, created_at, hook_score, score_dirty_at)';
 export const OPP_INPUTS_STALE_MS = 5 * 60_000;
 
-/** A lead's audit score plus its newest Discovery's stored verdict counts (ai_audits.verdict_counts, small jsonb). */
-export type OppLeadAudit = LeadAuditScore & { verdicts: StoredVerdictCounts | null };
+/** A lead's audit score plus its newest Discovery's stored verdict counts (ai_audits.verdict_counts, small jsonb), and the
+ *  prospect re-check that replaced its hook, if any (opportunityForLead.oppAuditByLead). */
+export type OppLeadAudit = OppAuditInput;
 
-function withVerdicts(rows: readonly ScoredAudit[]): Map<string, OppLeadAudit> {
-  const scores = leadAuditScores(rows);
-  const counts = leadVerdictCounts(rows as unknown as Array<{ lead_id: string | null; created_at: string; audit_purpose?: string | null; verdict_counts?: unknown }>);
-  const out = new Map<string, OppLeadAudit>();
-  for (const [lead, s] of scores) out.set(lead, { ...s, verdicts: counts.get(lead) ?? null });
-  return out;
-}
+const withVerdicts = (rows: readonly ScoredAudit[]): Map<string, OppLeadAudit> => oppAuditByLead(rows);
 
 async function fetchAuditScores(leadIds?: readonly string[]): Promise<Map<string, OppLeadAudit>> {
   const sb = supabase as unknown as SupabaseClient;

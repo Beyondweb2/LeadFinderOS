@@ -166,6 +166,9 @@ export interface OppAuditFacts {
   updating: boolean;
   /** Rules v3 only, when stored: searches judged Winnable / all judged. Absent = not stored (never guessed). */
   v3?: { winnable: number; judged: number } | null;
+  /** A prospect re-check replaced the hook (2026-11-16, prospectRecheck.ts): its named share over every answer is used
+   *  INSTEAD of the hook score. null = the re-check has no usable share yet. Absent = no re-check (the hook score). */
+  recheckShare?: { named: number; total: number } | null;
 }
 
 export interface OppReason { text: string; points: number; kind: 'website' | 'ai' | 'worth' | 'lowered' }
@@ -237,8 +240,13 @@ export function opportunityScore(lead: OppLeadFacts, site: OppWebsiteFacts | nul
   // AI audit part.
   const missing: string[] = [];
   if (!web.known) missing.push(site?.depth === 'quick' ? 'only a quick website check (deep check not run yet)' : site?.depth === 'failed' ? 'website could not be read' : 'no website scan yet');
-  const share = audit?.score ? namedShare(audit.score) : null;
-  if (!share) missing.push(audit?.updating && audit.score ? 'AI audit still updating' : audit?.score ? 'AI audit incomplete' : 'no AI audit yet');
+  const fromRecheck = !!audit && audit.recheckShare !== undefined;
+  const share = fromRecheck ? audit!.recheckShare ?? null : audit?.score ? namedShare(audit.score) : null;
+  if (!share) {
+    missing.push(fromRecheck
+      ? (audit!.updating ? 'Re-check still running' : 'Re-check incomplete')
+      : audit?.updating && audit.score ? 'AI audit still updating' : audit?.score ? 'AI audit incomplete' : 'no AI audit yet');
+  }
 
   const partial = website + worth;
   if (missing.length) return { kind: 'incomplete', missing, critical, reasons: topReasons(reasons), partial };
@@ -250,7 +258,7 @@ export function opportunityScore(lead: OppLeadFacts, site: OppWebsiteFacts | nul
   else if (pct <= 1 / 3) ai = OPP_AI_LOW;
   else if (pct <= OPP_NAMED_WIDELY) ai = OPP_AI_SOME;
   else lowered = `Already named widely by AI (${share!.named} of ${share!.total} answers)`;
-  const aiText = share!.named === 0 ? `AI never named them (0 of ${share!.total} answers)` : `AI named them in ${share!.named} of ${share!.total} answers`;
+  const aiText = (share!.named === 0 ? `AI never named them (0 of ${share!.total} answers)` : `AI named them in ${share!.named} of ${share!.total} answers`) + (fromRecheck ? ' (re-check)' : '');
   if (!lowered) reasons.push({ text: aiText, points: ai, kind: 'ai' });
   const v3 = audit?.v3;
   if (v3 && v3.judged > 0 && !lowered) {

@@ -190,8 +190,8 @@ function page(title: string, inner: string, opts: { print?: boolean; sticky?: bo
     `<body${opts.sticky ? ' class="lf-has-sticky"' : ''}><div class="lf-wrap"><div class="lf-sheet">${inner}</div></div>${sticky}${auto}</body></html>`;
 }
 
-function header(dateLabel: string): string {
-  return `<header class="lf-head">${LOGO}<div class="lf-headr"><span>AI visibility report<br>${esc(dateLabel)}</span>` +
+function header(dateLabel: string, recheckLabel?: string | null): string {
+  return `<header class="lf-head">${LOGO}<div class="lf-headr"><span>${recheckLabel ? `<span data-recheck="1">${esc(recheckLabel)}</span>` : 'AI visibility report'}<br>${esc(dateLabel)}</span>` +
     `<a class="lf-try" href="${LFOS_SITE_URL}" target="_blank" rel="noopener">Try it free</a>` +
     `<button class="lf-pdf" type="button" onclick="window.print()">PDF</button></div></header>`;
 }
@@ -308,7 +308,7 @@ export function renderLeadfinderReport(m: ReportModel, opts: LfosRenderOpts = {}
   const biz = shortName(m.businessName);
   /* AUDIT INCOMPLETE (rules v3, docs/AUDIT_RULES.md): never presented as a finished report — no figures at all. */
   if (m.incomplete) {
-    const inner = header(m.dateLabel) + `<div class="lf-body"><div class="lf-wait"><div class="lf-eyebrow">Audit incomplete</div>` +
+    const inner = header(m.dateLabel, m.recheckLabel) + `<div class="lf-body"><div class="lf-wait"><div class="lf-eyebrow">Audit incomplete</div>` +
       `<h1>The report for ${esc(biz)} isn't finished yet</h1>` +
       `<p class="lf-sub">We couldn't read ${m.incomplete.unmeasured} of the ${m.incomplete.answers} AI answers, so no figures are shown. We have been alerted and will check them again; this page shows the finished report when that is done.</p></div>` +
       `${closing()}${footer(m.dateLabel, m.asks)}</div>`;
@@ -343,7 +343,7 @@ export function renderLeadfinderReport(m: ReportModel, opts: LfosRenderOpts = {}
     `<li>AI answers change from day to day. These are measurements, not guarantees.</li></ul></div></section>`;
   const split = judgeable ? splitBlock(m) : '';
   const sample = opts.example ? `<div class="lf-sample" role="note">Example report · sample data<span>A made-up business, to show what a report looks like.</span></div>` : '';
-  const inner = sample + header(m.dateLabel) + `<div class="lf-body">${hero}${split}${searchSec}${pair}${notes}${closing()}${footer(m.dateLabel, m.asks)}</div>`;
+  const inner = sample + header(m.dateLabel, m.recheckLabel) + `<div class="lf-body">${hero}${split}${searchSec}${pair}${notes}${closing()}${footer(m.dateLabel, m.asks)}</div>`;
   return page(`${opts.example ? 'Example report · sample data | LeadFinderOS' : `${biz} - AI visibility report | LeadFinderOS`}`, inner, { print: opts.print, sticky: !opts.print });
 }
 

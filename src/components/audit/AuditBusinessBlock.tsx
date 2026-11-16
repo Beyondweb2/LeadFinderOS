@@ -38,6 +38,7 @@ const TYPE_STYLE: Record<AuditTypeKey, string> = {
   website: 'bg-teal-600 text-white dark:bg-teal-500',
   measurement: 'bg-amber-600 text-white dark:bg-amber-500',
   weekly: 'bg-zinc-600 text-white dark:bg-zinc-500',
+  recheck: 'bg-indigo-600 text-white dark:bg-indigo-500',
 };
 
 /** The quarterly named re-check's result (weekly-visibility folds it onto run 1): "12 still named · 1 dropped". Admin page only. */

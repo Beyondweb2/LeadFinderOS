@@ -91,7 +91,8 @@ ok(!auditIntentIsDue({ status: 'queued', nextAttemptAt: null, claimedAt: null, n
 ok(/const freshAudit: boolean = body\.fresh_audit === true && \(isInternal \|\| hookAuditRequested\);/.test(createAudit), 'create-ai-audit honours fresh_audit for internal callers and declared hooks only');
 ok(/fresh_audit: true,[^\n]*\n\s*hook_audit: true,/.test(helper), 'the first-reply audit is an explicit hook (adaptive) and always fresh — two separate flags');
 /* 2026-09-30: the weekly visibility check (its own purpose) joined the reuse exemptions beside it. */
-ok(/&& !isRemeasure && !isWeeklyCheck && !isNamedRecheck && !freshAudit && !isHookAudit\) \{/.test(createAudit), 'fresh_audit bypasses the per-lead reuse and nothing else');
+/* 2026-11-16: the prospect re-check (its own purpose) joined them too. */
+ok(/&& !isRemeasure && !isWeeklyCheck && !isNamedRecheck && !isRecheck && !freshAudit && !isHookAudit\) \{/.test(createAudit), 'fresh_audit bypasses the per-lead reuse and nothing else');
 ok((createAudit.match(/freshAudit/g) ?? []).length === 2, 'fresh_audit touches exactly the declaration and the reuse condition (paid baseline paths untouched)');
 
 // Queued recovery and completion live in the reconciler, on the intent's own audit.

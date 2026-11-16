@@ -315,6 +315,7 @@ function headBlock(m: ReportModel): string {
   return `<header class="rp-head"><div class="rp-brand"><div class="rp-wm">Findable<i>.</i></div><div class="rp-sub">${TYPE_LABEL[m.kind]}</div></div>` +
     `<div class="rp-meta"><div class="rp-meta-top"><span>Report for</span><span class="rp-date">${esc(m.dateLabel)}</span></div>` +
     `<h1 class="rp-biz">${esc(shortName(m.businessName))}</h1>${(m.place === undefined ? m.where : m.place) ? `<div class="rp-where">${esc(String(m.place === undefined ? m.where : m.place))}</div>` : ''}` +
+    (m.recheckLabel ? `<div class="rp-method" data-recheck="1"><strong>${esc(m.recheckLabel)}</strong> &middot; ${esc(m.dateLabel)}</div>` : '') +
     `<div class="rp-method">${plural(searches, 'search', 'searches')} &times; 2 AI${m.asks > 1 ? ` &times; ${m.asks} asks` : ''} &middot; ${plural(m.score.answers, 'answer')}${m.overview.shown ? ' &middot; plus Google AI, shown for context' : ''}</div></div></header>`;
 }
 
@@ -721,5 +722,8 @@ export function chooseReportDesign(o: {
   if (String(o.auditPurpose ?? '').trim().toLowerCase() === 'targeted') return 'baseline';
   if (o.paidKind) return null;
   if (String(o.auditPurpose ?? '').trim().toLowerCase() === 'discovery') return 'opportunity';
+  /* The prospect re-check (prospectRecheck.ts, 2026-11-16): 3 searches × 3 asks per AI — judged by the audit rules
+     exactly like a Discovery's searches, so it uses the same page (with its "Re-check: …" label). */
+  if (String(o.auditPurpose ?? '').trim().toLowerCase() === 'recheck') return 'opportunity';
   return null;
 }

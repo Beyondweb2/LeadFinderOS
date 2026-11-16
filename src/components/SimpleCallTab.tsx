@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AiOverviewChip } from '@/components/AiOverviewChip';
 import { LeadHookPanel, useAddWebsite } from '@/components/LeadCrmPanel';
+import { ProspectRecheckPanel } from '@/components/ProspectRecheckPanel';
 import { LogCallBar, Objections, ScriptLocked } from '@/components/ColdCallPlaybook';
 import { CallBlock as Block } from '@/components/CallBlock';
 import { ClosePanel } from '@/components/ClosePanel';
@@ -164,6 +165,8 @@ function WhatWeFound({ p, leadId }: { p: ColdCallPlaybook; leadId: string }) {
         <Issues p={p} leadId={leadId} />
         <p className={GREY} data-testid="found-say-it">{SAY_IT_LINE}</p>
       </div>
+      {/* Details wrong? Fix the trade / areas / services and re-check (2026-11-16, src/lib/prospectRecheck.ts). */}
+      <ProspectRecheckPanel leadId={leadId} />
       {/* The AI check's own controls (run / re-run, full audit, report) — folded; open when there is no result to show yet. */}
       <details className="rounded-xl border border-border/60 px-3 py-2" open={noResult} data-testid="found-ai-tools">
         <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Full audit and re-run</summary>

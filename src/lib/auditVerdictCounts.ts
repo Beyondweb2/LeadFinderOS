@@ -30,11 +30,19 @@ export interface StoredVerdictCounts {
   unmeasured: number;
   /** Distinct searches asked. */
   searches: number;
+  /** The report's named count over EVERY ChatGPT + Gemini answer (pooledSummary named / answers). Stored since the
+   *  prospect re-check (2026-11-16), whose counts replace a wrong-details hook in the Opportunity score's AI part.
+   *  Absent on older rows (never guessed). */
+  namedAnswers?: number;
+  answers?: number;
 }
 
-/** The counts to store for a finished audit, or null when it has none (not a Discovery, or not rules v3/v4). */
+/** The audits that store counts: the Discovery, and the prospect re-check (src/lib/prospectRecheck.ts). */
+const COUNTED_PURPOSES: ReadonlySet<string> = new Set(['discovery', 'recheck']);
+
+/** The counts to store for a finished audit, or null when it has none (not a Discovery / re-check, or not rules v3/v4). */
 export function verdictCountsOf(inp: PooledInput, nowIso: string): StoredVerdictCounts | null {
-  if (String(inp.audit.audit_purpose ?? '').trim().toLowerCase() !== 'discovery') return null;
+  if (!COUNTED_PURPOSES.has(String(inp.audit.audit_purpose ?? '').trim().toLowerCase())) return null;
   const rules = auditRulesFor({ createdAt: inp.audit.created_at, runRules: inp.runMeta.map((r) => r.rules) });
   if (rules !== 3 && rules !== 4) return null;
   const s = pooledSummary(inp);
@@ -47,6 +55,7 @@ export function verdictCountsOf(inp: PooledInput, nowIso: string): StoredVerdict
     ...base, incomplete: false,
     named: s.split.named, winnable: s.split.winnable, notWinnable: s.split.notWinnable,
     noNames: s.split.noNames ?? 0, unmeasured: s.split.unmeasured ?? 0,
+    ...(s.answers > 0 ? { namedAnswers: s.named, answers: s.answers } : {}),
   };
 }
 
@@ -59,7 +68,35 @@ export function parseVerdictCounts(raw: unknown): StoredVerdictCounts | null {
   if (r.v !== VERDICT_COUNTS_VERSION || (r.rules !== 3 && r.rules !== 4) || typeof r.at !== 'string' || typeof r.incomplete !== 'boolean') return null;
   const named = n(r.named), winnable = n(r.winnable), notWinnable = n(r.notWinnable), noNames = n(r.noNames), unmeasured = n(r.unmeasured), searches = n(r.searches);
   if (named === null || winnable === null || notWinnable === null || noNames === null || unmeasured === null || searches === null) return null;
-  return { v: VERDICT_COUNTS_VERSION, rules: r.rules, at: r.at, incomplete: r.incomplete, named, winnable, notWinnable, noNames, unmeasured, searches };
+  const out: StoredVerdictCounts = { v: VERDICT_COUNTS_VERSION, rules: r.rules, at: r.at, incomplete: r.incomplete, named, winnable, notWinnable, noNames, unmeasured, searches };
+  /* The named share: both present, valid, and named ≤ answers — else left off (the score then says it is incomplete). */
+  const na = n(r.namedAnswers), an = n(r.answers);
+  if (na !== null && an !== null && an > 0 && na <= an) { out.namedAnswers = na; out.answers = an; }
+  return out;
+}
+
+/** The newest prospect re-check per lead: its stored counts (null = none yet: still asking, or audit-watch has not
+ *  counted it) and when it was made. A re-check REPLACES the lead's earlier checks (prospectRecheck.replacedAuditIds),
+ *  so the Opportunity score reads it instead of an older hook (opportunityForLead). */
+export interface LeadRecheckCounts { auditId: string; createdAt: string; counts: StoredVerdictCounts | null }
+export function leadNewestRechecks<T extends { id: string; lead_id?: string | null; created_at: string; audit_purpose?: string | null; verdict_counts?: unknown }>(audits: readonly T[]): Map<string, LeadRecheckCounts> {
+  const out = new Map<string, LeadRecheckCounts>();
+  for (const a of audits) {
+    if (!a.lead_id || String(a.audit_purpose ?? '').trim().toLowerCase() !== 'recheck') continue;
+    const prev = out.get(a.lead_id);
+    if (prev && (Date.parse(prev.createdAt) || 0) >= (Date.parse(a.created_at) || 0)) continue;
+    out.set(a.lead_id, { auditId: a.id, createdAt: a.created_at, counts: parseVerdictCounts(a.verdict_counts) });
+  }
+  return out;
+}
+
+/** The Opportunity score's AI facts from a re-check: the named share over every answer and the winnable split.
+ *  share null = not usable yet (no counts, Audit incomplete, or an older row without the share). */
+export function recheckAiFacts(r: LeadRecheckCounts): { share: { named: number; total: number } | null; v3: { winnable: number; judged: number } | null; updating: boolean } {
+  const c = r.counts;
+  if (!c) return { share: null, v3: null, updating: true };
+  if (c.incomplete || !c.answers || c.namedAnswers === undefined) return { share: null, v3: null, updating: false };
+  return { share: { named: c.namedAnswers, total: c.answers }, v3: oppWinnableOf(c), updating: false };
 }
 
 /** The Opportunity score's "winnable searches" input: winnable of all searches given a verdict. null = not usable

@@ -729,6 +729,13 @@ Deno.serve(async (req) => {
     const tStatus = Date.now();
     const authMs = tStatus - tRequest;
     const dayStart = londonDayStartUtcIso();
+    /* ⚡ THE STATUS LINE, FAST (2026-11-16, Paul: "Queued: 12, next send ~14:20" took 15–20 s). mode my_queue is a read-only
+       line per sender; it needs the pause flag, the pace, the countries, the cold guard and the queue scan — NOT the panel's
+       counts, the audit-ready count, the number health, the pause history or the test-held count. Those reads are skipped
+       for it (and only for it). Every input the line does use is computed by the same code as the tick, so the words cannot
+       drift from how the queue sends; the tick and every other mode are unchanged. */
+    const lite = mode === "my_queue";
+    const NO_COUNT = Promise.resolve({ count: null as number | null });
     /* ⚡ EVERY STATUS READ AT ONCE (2026-09-27). These ran one after another — ~15 round trips, several
        seconds on the Outreach and Inbox loads AND on every one-minute cron tick. None depends on
        another, so they run in parallel; the payload is built from the same values, unchanged. */
@@ -740,10 +747,10 @@ Deno.serve(async (req) => {
          for the same reason they are excluded from the selection below. The archived-but-queued count
          is reported alongside it rather than silently dropped, so "nothing to send" and "skipping N
          archived" are distinguishable from the outside. */
-      service
+      lite ? NO_COUNT : service
         .from("outreach_leads").select("id", { count: "exact", head: true })
         .eq("status", "queued").eq("is_archived", false),
-      service
+      lite ? NO_COUNT : service
         .from("outreach_leads").select("id", { count: "exact", head: true })
         .eq("status", "queued").eq("is_archived", true),
       /* ⛔ THE TOWN GATE'S SKIP COUNT — reported, never a silent shrink (Paul's rule, 2026-08-14:
@@ -751,23 +758,23 @@ Deno.serve(async (req) => {
          it holds the plain opener too). Counted the same way archived-but-queued is, so "nothing to
          send" and "N held back as unverifiable" are distinguishable from the outside. The predicate
          is townVerdict's: settled note + no town; unchecked leads are NOT counted and NOT gated. */
-      service
+      lite ? NO_COUNT : service
         .from("outreach_leads").select("id", { count: "exact", head: true })
         .eq("status", "queued").eq("is_archived", false)
         .is("derived_town", null).in("town_fetch_note", [...SETTLED_TOWN_NOTES]),
       /* The phone-history seatbelt's tally — how many rows it has bounced, ever. Its own count so a
          skip is never silent (Paul's rule from the duplicate-openers incident, 2026-08-18). */
-      service
+      lite ? NO_COUNT : service
         .from("outreach_leads").select("id", { count: "exact", head: true })
         .eq("whatsapp_delivery_status", "phone_already_contacted"),
       /* The hook_followup lane's depth — leads marked for the report follow-up, awaiting their paced
          turn. Reported so the panel/observer can see the backlog draining. Counted like queuedCount. */
-      service
+      lite ? NO_COUNT : service
         .from("outreach_leads").select("id", { count: "exact", head: true })
         .not("hook_followup_queued_at", "is", null).eq("is_archived", false),
       /* The contact_followup lane's depth — leads marked for the OPENER follow-up (never replied),
          awaiting their paced turn. Same shape as hookQueuedCount. */
-      service
+      lite ? NO_COUNT : service
         .from("outreach_leads").select("id", { count: "exact", head: true })
         .not("contact_followup_queued_at", "is", null).eq("is_archived", false),
       service
@@ -782,7 +789,7 @@ Deno.serve(async (req) => {
       })(),
       firstReplyTemplate(service),
       firstReplyMode(service),
-      (async () => {
+      lite ? Promise.resolve(null) : (async () => {
         try {
           const { data: rows, error: rErr } = await service
             .from("whatsapp_auto_replies").select("lead_id").eq("status", AUDIT_ONLY_STATUS).limit(500);
@@ -816,7 +823,7 @@ Deno.serve(async (req) => {
     } catch { paceRow = null; }
     /* WHO LAST PAUSED / RESUMED THE QUEUE, AND WHEN (2026-10-15). Read on its own: a missing column only hides the line. */
     let pauseChange: { at: string | null; byUserId: string | null; byName: string | null; source: string | null } | null = null;
-    try {
+    if (!lite) try {
       const { data: pc, error: pcErr } = await service.from("whatsapp_outreach_state")
         .select("pause_changed_at, pause_changed_by, pause_changed_source").eq("id", 1).maybeSingle();
       if (!pcErr && pc?.pause_changed_at) {
@@ -828,7 +835,7 @@ Deno.serve(async (req) => {
     /* ⛔ THE NUMBER'S QUALITY RATING (2026-10-21, src/lib/whatsappNumberHealth.ts). Read on its own: a missing column or a
        failed read is "cannot be read", which never slows or pauses sending. Display only: no rating changes a cap (2026-11-02). */
     let healthRow: StoredHealth | null = null;
-    try {
+    if (!lite) try {
       const { data: hr, error: hrErr } = await service.from("whatsapp_outreach_state")
         .select("meta_quality_rating, meta_messaging_tier, meta_health_ok_at, meta_health_checked_at, meta_health_error").eq("id", 1).maybeSingle();
       if (!hrErr) healthRow = (hr ?? null) as StoredHealth | null;
@@ -887,7 +894,7 @@ Deno.serve(async (req) => {
        "Waiting" for a send that was never going to happen. Counted here so the panel can say so. Display only;
        null = could not be read (the panel then says nothing rather than a wrong number). */
     let testHeldQueuedCount: number | null = null;
-    try {
+    if (!lite) try {
       const { data: exRows, error: exErr } = await service.from("metric_exclusions").select("value").eq("kind", "user");
       if (!exErr) {
         const ids = ((exRows ?? []) as Array<{ value: string }>).map((r) => r.value).filter(Boolean);
@@ -1002,7 +1009,10 @@ Deno.serve(async (req) => {
       const me = callerId ?? "";
       const mine = await lineFor(me);
       const senders = isAdmin ? await Promise.all([...facts.keys()].map(lineFor)) : undefined;
-      return json({ ok: true, mine, ...(senders ? { senders } : {}) });
+      return new Response(JSON.stringify({ ok: true, mine, ...(senders ? { senders } : {}) }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json", "x-queue-timing": `auth=${authMs};my_queue=${Date.now() - tStatus}`, "Access-Control-Expose-Headers": "x-queue-timing" },
+      });
     }
 
     // Status-only probe (the dashboard panel).

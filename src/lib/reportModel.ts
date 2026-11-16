@@ -73,6 +73,9 @@ export interface ReportModel {
   alreadyNamed?: { dateLabel: string; searches: string[] } | null;
   /** The header's place, from what is known about the business (alreadyNamed.ts reportPlaceLabel). Absent = `where`. */
   place?: string | null;
+  /** A prospect re-check (prospectRecheck.ts recheckLabel): "Re-check: 3 searches, asked 3 times each", shown beside the
+   *  report date. Absent / null = not a re-check. */
+  recheckLabel?: string | null;
   /** Rules v3 "Audit incomplete" (brief item 1): too many answers could not be measured, so the page shows no results.
    *  null = complete (or not a v3 discovery / first-contact report). */
   incomplete?: { unmeasured: number; answers: number } | null;

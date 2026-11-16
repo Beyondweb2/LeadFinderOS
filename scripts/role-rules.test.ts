@@ -58,6 +58,13 @@ for (const p of ["measurement", "discovery", "baseline", "remeasure", "free_chec
 ok(salesAuditRefusal({ ...hook, leadId: null }) === "audit_needs_lead", "no lead (a market audit) → refused");
 ok(salesAuditRefusal({ ...hook, reuseAuditId: "A" }) === "audit_mode_admin_only", "a repeat of an existing audit → refused");
 ok(salesAuditRefusal({ ...hook, hookAudit: false }) === "audit_mode_admin_only", "not declared a hook → refused");
+/* The prospect re-check (2026-11-16, src/lib/prospectRecheck.ts): the one other audit a rep may start. */
+const re = { purpose: "recheck", hookAudit: false, leadId: "L", reuseAuditId: null };
+ok(salesAuditRefusal(re) === null, "re-check on a lead → allowed");
+ok(salesAuditRefusal({ ...re, leadId: null }) === "audit_needs_lead", "re-check with no lead → refused");
+ok(salesAuditRefusal({ ...re, reuseAuditId: "A" }) === "audit_mode_admin_only", "re-check adding to an existing audit → refused");
+ok(salesAuditRefusal({ ...re, hookAudit: true }) === "audit_mode_admin_only", "re-check declared a hook → refused");
+ok(salesAuditRefusal({ ...re, purpose: " Recheck" }) === "audit_mode_admin_only", "only the exact purpose → anything else stays admin-only");
 
 console.log("\n── SQL agrees with the TypeScript ──");
 const mig = read("supabase/migrations/20260927100100_multi_user_sales.sql");
