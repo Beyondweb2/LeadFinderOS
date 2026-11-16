@@ -93,11 +93,15 @@ const kindOf = (d: string): CallNumberKind | null => {
 };
 
 /** Which of the lead's numbers a browser call rings: a mobile, else a landline, else a non-geographic one; 09 never. */
-export function pickCallNumber(raw: string | null | undefined, country?: string | null): CallPick {
+export function pickCallNumber(raw: string | null | undefined, country?: string | null, settings?: CountrySettings | null): CallPick {
   const parts = splitPhones(raw);
+  /* settings given (2026-11-16, v1-tps-templates-callable): a number in a country whose calling switch is off is not a
+     candidate, so a lead with a Malaysian mobile AND a UK landline rings the landline while Malaysia is off. Omitted =
+     every country counts (the server then refuses a switched-off one with COUNTRY_OFF, as before). */
   const all = (parts.length ? parts : [String(raw ?? '')])
     .map((p) => oneNumberDigits(p, country ?? null)).filter((d): d is string => !!d)
-    .map((d) => ({ d, k: kindOf(d) })).filter((x): x is { d: string; k: CallNumberKind } => !!x.k);
+    .map((d) => ({ d, k: kindOf(d) })).filter((x): x is { d: string; k: CallNumberKind } => !!x.k)
+    .filter((x) => settings === undefined || x.k === 'premium' || browserCallAllowed(browserCallMarket(x.d), settings));
   const count = parts.length;
   const usable = all.filter((x) => x.k !== 'premium').sort((a, b) => RANK[a.k] - RANK[b.k]);
   const best = usable[0] ?? null;
@@ -188,3 +192,43 @@ export const lowBalanceDedupeKey = (now: Date = new Date()) => `twilio_balance_l
 /* ── Do Not Contact ──────────────────────────────────────────────────────────────────────────────────────────── */
 export const OPTED_OUT_CALL_WORDS = 'Blocked: this business asked not to be contacted (Do Not Contact). Do not call them.';
 export const WRONG_NUMBER_CALL_WORDS = 'Blocked: this number is marked wrong. Find the right number before calling.';
+
+/* ── Can we call this lead at all? (2026-11-16, v1-tps-templates-callable) ───────────────────────────────────────
+   ONE answer for Find leads, Outreach and "Open next ready", built only from pickCallNumber / browserCallMarket /
+   browserCallAllowed above (never a second copy of the rule):
+     callable  — a mobile or landline we can ring;
+     freephone — only a freephone / non-geographic number (0800 / 03 / 084 / 087…): shown, sorted after callable leads, warned;
+     no_phone  — the phone field is empty (on Find leads the number may simply not be looked up yet): shown, sorted after;
+     cannot    — a number is there but we can't ring it: 09 premium only, not a valid number, or a country whose calling
+                 is not switched on.
+   A "cannot" lead is HIDDEN by default on those lists (a toggle shows it, greyed, with the reason) — never deleted. */
+export type CallableStatus = 'callable' | 'freephone' | 'no_phone' | 'cannot';
+export interface CallableVerdict { status: CallableStatus; reason: string | null }
+export const CANNOT_CALL_REASONS = {
+  premium: 'Only a 09 premium-rate number',
+  none: 'Not a phone number we can call',
+  country: 'Calling to this country is not switched on',
+} as const;
+
+export function callableVerdict(phone: string | null | undefined, country: string | null | undefined, settings: CountrySettings | null | undefined): CallableVerdict {
+  if (!String(phone ?? '').replace(/\D/g, '')) return { status: 'no_phone', reason: 'No phone number' };
+  const pick = pickCallNumber(phone, country ?? null, settings ?? null);
+  if (pick.digits) return pick.kind === 'non_geographic' ? { status: 'freephone', reason: NON_GEOGRAPHIC_WORDS } : { status: 'callable', reason: null };
+  if (pick.premiumOnly) return { status: 'cannot', reason: CANNOT_CALL_REASONS.premium };
+  /* Nothing left once switched-off countries are dropped: was there a number in a known calling country at all? */
+  const any = pickCallNumber(phone, country ?? null);
+  if (any.digits) return { status: 'cannot', reason: CANNOT_CALL_REASONS.country };
+  return { status: 'cannot', reason: any.premiumOnly ? CANNOT_CALL_REASONS.premium : CANNOT_CALL_REASONS.none };
+}
+
+/** Sort key: callable first, then freephone-only, then no phone, then cannot. */
+export const CALLABLE_RANK: Record<CallableStatus, number> = { callable: 0, freephone: 1, no_phone: 2, cannot: 3 };
+
+/** Stable re-order of a list by CALLABLE_RANK (ties keep their order). */
+export function sortByCallable<T>(list: readonly T[], verdictOf: (x: T) => CallableVerdict): T[] {
+  return list.map((x, i) => ({ x, i, r: CALLABLE_RANK[verdictOf(x).status] })).sort((a, b) => a.r - b.r || a.i - b.i).map((y) => y.x);
+}
+
+/* ── TPS / CTPS (2026-11-16) — the words; the rule is src/lib/tpsCheck.ts, the check _shared/tps-screen.ts ────────── */
+export const TPS_CALL_WORDS = 'TPS – do not call: this number is on the Telephone Preference Service (TPS or CTPS) register. Marketing calls to it are not allowed.';
+export const TPS_UNCHECKED_WORDS = 'Could not check this number against the TPS / CTPS register, so no call was made. Try again in a minute; if it keeps happening tell Paul.';

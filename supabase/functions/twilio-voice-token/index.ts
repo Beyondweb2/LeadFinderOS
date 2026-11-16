@@ -7,9 +7,10 @@ import { qaSendVerdict } from "../../../src/lib/qaSafety.ts";
 import { VOICE_TOKEN_CALL_TTL_S, voiceAccessToken } from "../../../src/lib/twilioAuth.ts";
 import { resolveTwilioEnv } from "../_shared/twilio.ts";
 import { COUNTRY_OFF } from "../../../src/lib/outreachMarkets.ts";
-import { ALWAYS_CALLABLE, LOW_BALANCE_WORDS, NON_GEOGRAPHIC_WORDS, NOT_CALLABLE_WORDS, OPTED_OUT_CALL_WORDS, WRONG_NUMBER_CALL_WORDS, PREMIUM_WORDS, balanceVerdict, browserCallAllowed, browserCallMarket, callHoursVerdict, pickCallNumber } from "../../../src/lib/callRules.ts";
+import { ALWAYS_CALLABLE, LOW_BALANCE_WORDS, NON_GEOGRAPHIC_WORDS, NOT_CALLABLE_WORDS, OPTED_OUT_CALL_WORDS, WRONG_NUMBER_CALL_WORDS, PREMIUM_WORDS, TPS_CALL_WORDS, TPS_UNCHECKED_WORDS, balanceVerdict, browserCallAllowed, browserCallMarket, callHoursVerdict, pickCallNumber } from "../../../src/lib/callRules.ts";
 import { alertLowBalance, twilioBalance } from "../_shared/twilio-balance.ts";
 import { loadCountrySettings } from "../_shared/country-settings.ts";
+import { probeTpsMyData, screenNumberForCall } from "../_shared/tps-screen.ts";
 
 // twilio-voice-token — "I want to call THIS lead from my browser" (2026-10-09).
 //
@@ -25,6 +26,8 @@ import { loadCountrySettings } from "../_shared/country-settings.ts";
 //    E.164 first (callDigits); premium / special-rate ranges are refused; outside the PROSPECT'S calling hours and with
 //    the Twilio balance gone nothing is written or dialled (low credit alerts Paul once a day). { refresh: true } mints a
 //    fresh token for a call already live (the SDK's tokenWillExpire) — no row, no dial: the webhook only dials a row.
+// ⛔ 2026-11-16 (v1-tps-templates-callable): TPS / CTPS screening before a UK call (switched off until the tpsmydata secrets
+//    exist): on a register → tps_registered, could not check → tps_unchecked. Numbers in switched-off countries are skipped.
 // ⛔ (until 2026-11-16) UK numbers only (mobile or landline); premium / non-geographic ranges are refused. Opt-out / wrong number
 //    (contact_suppressions, unreadable = refuse) block a call exactly as they block a text.
 // ⛔ A QA fixture is SIMULATED (no token — the screen runs the call in pretend mode); a real business held by a test
@@ -64,6 +67,13 @@ Deno.serve(async (req) => {
       });
       return json({ ok: true, refreshed: true, token: fresh });
     }
+    /* Admin-only: what tpsmydata answers for one number (docs/tps-screening.md — read once after the secrets are added). Stores nothing. */
+    if (typeof body.tps_probe === "string") {
+      if (who.actor.role !== "admin") return json({ ok: false, error: "forbidden" }, 403);
+      const d = pickCallNumber(body.tps_probe, "GB").digits;
+      if (!d) return json({ ok: false, error: "not_callable" });
+      return json({ ok: true, probe: await probeTpsMyData(d) });
+    }
     const leadId = String(body.lead_id ?? "");
     if (!UUID_RE.test(leadId)) return json({ ok: false, error: "bad_request", detail: "Missing lead." }, 400);
 
@@ -75,14 +85,19 @@ Deno.serve(async (req) => {
     if (lead.is_archived === true) return json({ ok: false, error: "archived", detail: "That lead is archived." }, 409);
 
     /* The best of the lead's numbers (mobile, landline, non-geographic; never 09), E.164 first (07… → 447…, an Irish 08… → 3538…, "+44 (0)7…" → 447…), then the one browser-calling rule. */
-    const pick = pickCallNumber(lead.phone as string, (lead.country as string | null) ?? null);
+    /* 2026-11-16 (v1-tps-templates-callable): a number in a country whose calling is off is skipped, so a lead with another
+       callable number rings that one. Nothing left but a switched-off country's number = the COUNTRY_OFF refusal below. */
+    const countrySettings = await loadCountrySettings(service);
+    const anyPick = pickCallNumber(lead.phone as string, (lead.country as string | null) ?? null);
+    const onPick = pickCallNumber(lead.phone as string, (lead.country as string | null) ?? null, countrySettings);
+    const pick = onPick.digits ? onPick : anyPick;
     if (pick.premiumOnly) return json({ ok: false, error: "premium_number", detail: PREMIUM_WORDS });
     const digits = pick.digits;
     const callMarket = browserCallMarket(digits);
     /* 2026-11-16: a UK 0800 lead ("+44 800 774 7951") was refused HERE with "covers UK, Malaysia and Singapore numbers
        only", which read as a country block. A UK-shaped number that still is not callable now says it is the TYPE. */
     if (!digits || !callMarket) return json({ ok: false, error: "not_callable", detail: digits?.startsWith("44") ? NON_GEOGRAPHIC_WORDS : NOT_CALLABLE_WORDS });
-    if (!browserCallAllowed(callMarket, ALWAYS_CALLABLE.has(callMarket) ? null : await loadCountrySettings(service))) {
+    if (!browserCallAllowed(callMarket, ALWAYS_CALLABLE.has(callMarket) ? null : countrySettings)) {
       return json({ ok: false, error: COUNTRY_OFF, detail: "Browser calling to this country is switched off. Paul can turn it on in the WhatsApp queue settings." });
     }
 
@@ -101,6 +116,13 @@ Deno.serve(async (req) => {
     const simulated = env.testMode || qa.kind === "simulate";
     if (!simulated && !env.voiceConfigured) return json({ ok: false, error: "not_configured", detail: "Browser calling is not set up yet — the Twilio settings are missing." });
     if (!simulated) {
+      /* TPS / CTPS (src/lib/tpsCheck.ts, _shared/tps-screen.ts): switched off until Paul adds the tpsmydata secrets. Once on,
+         a UK number on either register is refused like Do Not Contact; a check that could not be made refuses too. Cached
+         per number for 28 days, so a number is never paid for twice in that time. A pretend call (test mode / QA) is never
+         screened: nothing is dialled, nothing is charged. */
+      const tps = await screenNumberForCall(service, digits, leadId);
+      if (tps.state === "registered") return json({ ok: false, error: "tps_registered", detail: TPS_CALL_WORDS });
+      if (tps.state === "unchecked") return json({ ok: false, error: "tps_unchecked", detail: TPS_UNCHECKED_WORDS });
       /* The prospect's own calling hours (their number's country). A pretend QA call has no prospect, so it is never held. */
       const hours = callHoursVerdict(callMarket);
       if (!hours.open) return json({ ok: false, error: "outside_hours", detail: hours.words });

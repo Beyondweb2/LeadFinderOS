@@ -167,6 +167,9 @@ export function refusalText(code: string | null | undefined, ownerName?: string 
     case 'no_role': return 'Your account has no access';
     case 'template_required': return 'Choose which approved opener to send first';
     case 'not_an_initial_opener': return 'Bulk initial outreach sends an approved opener only';
+    /* sales_queue_opener since 2026-11-16 (every approved template). */
+    case 'template_blocked': return 'That template is blocked (it quotes the old price) — pick another';
+    case 'not_a_queue_template': return 'That template cannot be queued — pick one from the list';
     case 'stage_not_allowed': return 'Only the admin can set that status';
     /* lead_set_follow_up's stale-screen check (migration 20261007105000). */
     case 'stale_next_action': return 'Kept the newer Next Action — it was changed somewhere else since you opened this';
@@ -252,6 +255,13 @@ export const QUEUE_SKIP_LABEL: Record<string, string> = {
   opted_out: 'opted out',
   daily_limit: 'over your daily limit',
   call_campaign: 'in a Call campaign (queue again and confirm to send WhatsApp anyway)',
+  /* Follow-ups (2026-11-16): never cold, never twice, never after a no. */
+  follow_up_needs_contact: 'not messaged on WhatsApp yet — a follow-up never goes first',
+  template_already_sent: 'already got this message',
+  already_queued: 'already queued',
+  not_interested: 'not interested',
+  not_awaiting_reply: 'not waiting on a reply to the opener',
+  too_recent: 'opener sent under 3 days ago',
 };
 
 /* ⛔ THE OUTCOME LIST IS lead_log_contact's ALLOWLIST (newest: migration 20260930140000) — the server refuses

@@ -171,7 +171,7 @@ console.log('── Open next ready ──');
   ok([...CLIENT_STATUSES].every((s) => NEXT_READY_EXCLUDED_STATUSES.has(s)), 'every client status is skipped');
   ok(!isCallableLead({ id: 'z', amount_paid: '50' }) && isCallableLead({ id: 'z', amount_paid: null, status: 'contacted' }), 'paid means amount_paid > 0');
   const table = read('src/components/OutreachTable.tsx');
-  ok(/nextReadyLead<OutreachLead>\(filteredAndSortedLeads, rowCheck, nextOpened\)/.test(table), 'it walks filteredAndSortedLeads — the owner scope, every filter and the sort already applied');
+  ok(/nextReadyLead<OutreachLead>\(callQueueLeads, rowCheck, nextOpened\)/.test(table) && /const callQueueLeads = useMemo\(\(\) => filteredAndSortedLeads\.filter\(\(l\) => callOfLead\(l\)\.status !== 'cannot'\)/.test(table), 'it walks filteredAndSortedLeads — the owner scope, every filter and the sort already applied');
   ok(/data-testid="outreach-next-ready"/.test(read('src/components/OutreachAiCheck.tsx')) && /<OutreachCheckBar/.test(table), 'the button lives in the one-line bar at the top of the list');
 }
 

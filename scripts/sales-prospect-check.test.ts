@@ -609,7 +609,7 @@ console.log('── the screens ──');
   ok(/client_request_id: pressRef\.current\.id/.test(hook) && /e\.status !== null\) throw e;/.test(hook), 'a dropped connection is retried with the SAME request id (never a second batch)');
   ok(/data-testid="sales-check-button"/.test(table) && /perms\.salesChecks/.test(table), 'the Outreach selection toolbar has "Run AI audit" for sales');
   ok(!/\$\{?usd|cost|\bspend\b/i.test(panel.replace(/\/\*[\s\S]*?\*\//g, '')), 'no cost is shown to a salesperson');
-  ok(/nextReadyLead<OutreachLead>\(filteredAndSortedLeads, rowCheck, nextOpened\)/.test(table) && /rowCheckState\(auditsByLead\[l\.id\], checkItemByLead\.get\(l\.id\)\)/.test(table), 'only leads whose check is ready (a finished audit) are offered by Open next ready');
+  ok(/nextReadyLead<OutreachLead>\(callQueueLeads, rowCheck, nextOpened\)/.test(table) && /const callQueueLeads = useMemo\(\(\) => filteredAndSortedLeads\.filter\(\(l\) => callOfLead\(l\)\.status !== 'cannot'\)/.test(table) && /rowCheckState\(auditsByLead\[l\.id\], checkItemByLead\.get\(l\.id\)\)/.test(table), 'only leads whose check is ready (a finished audit) are offered by Open next ready');
   ok(/SalesChecksAdminCard/.test(read('src/pages/AdminApiUsage.tsx')), 'the admin sees batches, reps, spend and problems on API Usage & Security');
   // One ruler: the panel's line IS the call screen's line.
   const input: PlaybookInput = {

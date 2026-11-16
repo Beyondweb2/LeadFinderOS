@@ -235,3 +235,4 @@
 - `docs/report-room-rule-v2-copy-note.md` — 2026-11-12: the room rule and thresholds, "AI named you in X% of answers", "Not on your site yet", the baseline split (hooks + 3-4 main + ~14 with most room), and the V2 copy note
 - `docs/google-ai-mode.md` — 2026-11-12: Google AI = AI Mode for new audits, context only (not scored); which audits, cost, never-rules.
 - `docs/onboarding-to-audit.md` — 2026-11-15: onboarding → payment → baseline map; the two new answers (not wanted pushed, area covered); one exclusion rule; the setup-answers alert; Run Discovery / Create baseline from the client page
+- `docs/tps-screening.md` — TPS / CTPS screening before a UK call (2026-11-16, built, OFF until Paul adds TPSMYDATA_API_KEY + TPSMYDATA_API_URL; cost per check; PECR advice for SMS / WhatsApp to sole traders), the sales templates per role, and hiding leads we can't call.

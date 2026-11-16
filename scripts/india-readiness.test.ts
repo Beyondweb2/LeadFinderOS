@@ -189,7 +189,9 @@ console.log('\n── Sales can NOT queue an Indian mobile any more; UK rule unc
   /* 2026-10-15: 20261030090000 re-creates it (the live body + 'initial_contact_short' in the allowlist); the market rule is unchanged. */
   /* 2026-10-22: 20261123090000 re-creates it (the live body; mobile_market is given phone_market_country(country, phone) so an
      explicit +44 is UK whatever the label — docs/country-refusals.md). The market rule is otherwise unchanged; India never a market. */
-  ok(latest === '20261123090000_phone_prefix_country.sql', 'the newest sales_queue_opener is the phone-prefix migration (' + latest + ')');
+  /* 2026-11-16: 20261219090000 re-creates it (the live body, read back; salespeople queue every approved template — follow-ups in
+     their own branch). The cold branch and the market rule are unchanged. */
+  ok(latest === '20261219090000_sales_queue_every_template.sql', 'the newest sales_queue_opener is the every-template migration (' + latest + ')');
   ok(fn.includes("elsif public.mobile_market(public.phone_market_country(v_lead.country, v_lead.phone), v_pk) is null then v_reason := 'not_a_uk_mobile';")
     && fn.includes("elsif not public.outreach_channel_on(public.mobile_market(public.phone_market_country(v_lead.country, v_lead.phone), v_pk), 'whatsapp') then v_reason := 'country_off';"),
     'the one cold test: a mobile in a market whose WhatsApp switch is on');

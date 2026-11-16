@@ -10,7 +10,7 @@
      · KEYPAD_KEYS        — the only characters the keypad sends (DTMF).
    ⛔ PURE, NO IMPORTS from React or the SDK. callErrorWords stays the one code → sentence table. */
 import { callErrorWords } from './callErrorWords.ts';
-import { NON_GEOGRAPHIC_WORDS } from './callRules.ts';
+import { NON_GEOGRAPHIC_WORDS, TPS_CALL_WORDS, TPS_UNCHECKED_WORDS } from './callRules.ts';
 
 /** The failure keys the hook uses → plain words. A server refusal carries its own words (twilio-voice-token detail). */
 export const CALL_FAILURE_WORDS: Record<string, string> = {
@@ -25,12 +25,15 @@ export const CALL_FAILURE_WORDS: Record<string, string> = {
   declined: 'The call was declined.',
   opted_out: 'Blocked: this business asked not to be contacted (Do Not Contact). Do not call them.',
   wrong_number: 'Blocked: this number is marked wrong. Find the right number before calling.',
+  /* TPS / CTPS (2026-11-16): a block like Do Not Contact (never redialled); a failed check may be tried again. */
+  tps_registered: TPS_CALL_WORDS,
+  tps_unchecked: TPS_UNCHECKED_WORDS,
   outside_hours: 'It is outside calling hours for them (Mon–Fri 8am–8pm, Sat 9am–5pm, their time). No call was made.',
   low_balance: 'Calling is paused: the phone account is out of credit. Paul has been told. For now, call from your own phone.',
 };
 
 /** Failures a redial can fix: the bar and the panel offer Call again for these. Others say who fixes it instead. */
-export const REDIAL_FAILURES: ReadonlySet<string> = new Set(['network', 'offline', 'dropped', 'declined']);
+export const REDIAL_FAILURES: ReadonlySet<string> = new Set(['network', 'offline', 'dropped', 'declined', 'tps_unchecked']);
 
 export interface ConnectionLike { onLine?: boolean; connection?: { effectiveType?: string; rtt?: number; saveData?: boolean } | null }
 export interface Precheck { ok: boolean; failure?: 'offline'; warning: string | null }

@@ -77,7 +77,8 @@ const NOW = Date.parse('2026-11-16T12:00:00Z');
 
   const q = read('supabase/functions/process-whatsapp-queue/index.ts');
   ok(/import \{ freeWindowSwap, lastInboundMsFor \} from "\.\.\/_shared\/free-window\.ts";/.test(q), 'the queue reads the one shared swap');
-  ok((q.match(/freeWindowSwap\(/g) ?? []).length === 2, 'exactly two lanes convert: the automatic audit reply and the report follow-up');
+  ok((q.match(/freeWindowSwap\(/g) ?? []).length === 3, 'exactly three lanes convert: the automatic audit reply, the report follow-up and (2026-11-16) a queued follow-up');
+  ok(/const campaignSwap = isColdOutreachTemplate\(templateName\) \? null : freeWindowSwap\(/.test(q), '…a queued follow-up only — a cold opener is never swapped');
   const ar = q.slice(q.indexOf('const arQa = await qaSendHold('), q.indexOf('/* And the send-audit row.'));
   ok(ar.indexOf('freeWindowSwap(') > 0 && ar.indexOf('freeWindowSwap(') < ar.indexOf('sendViaGraph('), 'audit reply: decided before the Graph POST');
   ok(ar.includes('message_type: arMessageType, template_name: templateName') && ar.includes('payload: arTemplatePayload'), 'audit reply: the row keeps the template name, records the real shape, snapshot from the template payload');

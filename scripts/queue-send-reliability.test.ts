@@ -160,7 +160,7 @@ console.log('9. Meta acceptance is the only thing that makes a send "sent"');
   const afterSend = code(raw.slice(raw.indexOf('// Route the lead by outcome:'), raw.indexOf('// Pace the next send after ANY')));
   const sentBranch = afterSend.slice(0, afterSend.lastIndexOf('} else {'));
   const failBranch = afterSend.slice(afterSend.lastIndexOf('} else {'));
-  ok(/status: "initial_contact"[\s\S]*whatsapp_sent_at: nowIso[\s\S]*whatsapp_message_id: messageId/.test(sentBranch), 'only the accepted branch marks the lead Contacted and stamps sent_at + message id');
+  ok(/status: [^\n]*"initial_contact"[\s\S]*whatsapp_sent_at: nowIso[\s\S]*whatsapp_message_id: messageId/.test(sentBranch), 'only the accepted branch marks the lead Contacted and stamps sent_at + message id');
   ok(!/initial_contact|whatsapp_sent_at/.test(failBranch) && /leadFailurePatch\(/.test(failBranch), 'the failure branch never marks contacted (16)');
   for (const [code2, label] of [[131026, 'permanent'], [131000, 'temporary'], [undefined, 'unknown']] as const) {
     const p = leadFailurePatch(code2 as number | undefined, 0, '2026-10-08T09:00:00Z', false);

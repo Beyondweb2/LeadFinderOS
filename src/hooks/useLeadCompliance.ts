@@ -1,12 +1,14 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { tpsCallDecision, type TpsCheckRow } from '@/lib/tpsCheck';
 import { businessTypeOf, type BusinessTypeRecord, type BusinessTypeSource, type BusinessType, type BusinessTypeVerdict, type ChEvidence } from '@/lib/businessType';
 
 /* A LEAD'S LEGAL FORM — read-only evidence (2026-10-05, docs/salesperson-onboarding.md §6). Two small
    reads under the caller's own session (RLS: admin any lead, sales their own): the stored Companies House
    check for the lead's place id (never a new lookup — that costs and belongs to Find Leads) and people's
    business-type records. A failed read is "no evidence" — the verdict then says unknown, never anything
-   better. Nothing here allows or blocks a call or a message. TPS/CTPS is postponed (no read here). */
+   better. Nothing here allows or blocks a call or a message — except useLeadTpsBlock below, which only SHOWS the server's
+   TPS / CTPS block before dialling (twilio-voice-token refuses the call itself; docs/tps-screening.md). */
 
 // lead_business_type_records and companies_house_checks are not in the generated types.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -51,4 +53,20 @@ export function useRecordBusinessType(leadId: string) {
     if (r?.ok) await qc.invalidateQueries({ queryKey: ['lead-compliance', leadId] });
     return r ?? { ok: false, error: 'no_answer' };
   };
+}
+
+/** TPS / CTPS (2026-11-16): true when the lead's stored answers say the number is on a register now (≤ 28 days). Read under
+ *  the caller's own session (RLS: admin any, sales their own leads). A failed read = false: the server still refuses the call. */
+export function useLeadTpsBlock(leadId: string | null | undefined): boolean {
+  const q = useQuery({
+    queryKey: ['lead-tps', leadId ?? null],
+    enabled: !!leadId,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await sb.from('phone_tps_checks').select('lead_id, phone, register, result, provider, provider_reference, checked_at')
+        .eq('lead_id', leadId).order('checked_at', { ascending: false }).limit(10);
+      return error ? [] : ((data ?? []) as TpsCheckRow[]);
+    },
+  });
+  return tpsCallDecision(q.data ?? []) === 'block';
 }

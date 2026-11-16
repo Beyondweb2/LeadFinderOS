@@ -34,6 +34,8 @@ import { CONTACT_METHOD_OPTIONS, REP_CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPT
 
 interface OutreachMobileCardProps {
   lead: OutreachLead;
+  /** Shown only when "Show N we can't call" is on (src/lib/callRules.ts callableVerdict): the card is greyed with this reason. */
+  cantCallReason?: string | null;
   /** The lead's sales state (leadState.salesStateOf), from the table (rowSalesState). The card draws ONE
    *  status pill (the pipeline badge; the stage only in its tooltip, 2026-10-01). */
   salesState?: SalesStateView | null;
@@ -73,6 +75,7 @@ interface OutreachMobileCardProps {
 }
 
 export const OutreachMobileCard = memo(function OutreachMobileCard({
+  cantCallReason,
   salesState,
   lead,
   campaignName,
@@ -127,7 +130,9 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
 
   return (
     <div 
-      className={`py-3.5 px-3.5 border-b border-border/50 border-l-[3px] ${statusBorderColor} ${lead.is_potential_work ? 'bg-primary/5' : ''} ${isHighlighted ? 'ring-1 ring-primary/30 ring-inset bg-primary/5' : ''}`}
+      className={`py-3.5 px-3.5 border-b border-border/50 border-l-[3px] ${statusBorderColor} ${lead.is_potential_work ? 'bg-primary/5' : ''} ${isHighlighted ? 'ring-1 ring-primary/30 ring-inset bg-primary/5' : ''} ${cantCallReason ? 'opacity-50 grayscale' : ''}`}
+      title={cantCallReason ? `We can't call this lead: ${cantCallReason}` : undefined}
+      data-cant-call={cantCallReason ? 'true' : undefined}
       onClick={onLeadClick}
     >
       <div className="flex items-start gap-2.5">
