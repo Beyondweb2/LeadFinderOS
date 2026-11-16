@@ -36,8 +36,9 @@ export const AUDIT_RULES_V2_FROM = '2026-11-15T06:00:00Z';
 /** Rules v3 (Paul, 2026-11-16, docs/AUDIT_RULES.md): set to just after extract-competitors began marking each answer it read
  *  (`firms_read`), so every v3 audit's answers can carry that mark. */
 export const AUDIT_RULES_V3_FROM = '2026-11-16T10:30:00Z';
-/** Rules v4 (Paul, 2026-11-16, docs/AUDIT_RULES.md): "locked spots" (B′) + one firm's spellings merged. Set to after its deploy. */
-export const AUDIT_RULES_V4_FROM = '2026-11-16T14:00:00Z';
+/** Rules v4 (Paul, 2026-11-16, docs/AUDIT_RULES.md): "locked spots" (B′) + one firm's spellings merged. Deployed before v3's own
+ *  start time, so it takes v3's slot: new audits go from v2 straight to v4, and v3 is read only by copies stamped 3. */
+export const AUDIT_RULES_V4_FROM = AUDIT_RULES_V3_FROM;
 /** THE GUARANTEE'S NAME RULER (Paul, 2026-11-15): a baseline created on rules v2 (or later) counts "named" by the strict
  *  match, on both sides of its day-28 comparison and in its frozen day-0 snapshot. Name + website only (the same identity
  *  everywhere, so the two sides can never differ). Older and paid baselines: undefined = the ruler they were sold on. */

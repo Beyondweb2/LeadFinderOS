@@ -5,7 +5,9 @@
 v4 is v3 below with ONE change to step 2b/2c and ONE to how firms are counted. Everything else (Couldn't measure,
 Already named, AI doesn't name businesses, registers, named % over every answer, Audit incomplete, alerts) is v3's.
 Code: `decideVerdictV3(…, { lockedSpots: true })` and `makeFirmMatchKey` (`reportOpportunity.ts`). Tests:
-`scripts/audit-rules-v4.test.ts`. From `AUDIT_RULES_V4_FROM`, or a copy whose runs carry `report_rules = 4`.
+`scripts/audit-rules-v4.test.ts`. From `AUDIT_RULES_V4_FROM`, or a copy whose runs carry `report_rules = 4`. v4 was deployed
+before v3's own start time, so it took that slot (both 2026-11-16 10:30 UTC): new audits go from v2 straight to v4; v3 is
+read only by the copies stamped 3 (`tge2ue`, `rfussx`).
 
 **Locked spots** replace the 70% line. For each AI, over the asks in which it named firms (3 of 3, or 2 of 3):
 - it is **locked** when at least **2 firms are in every one of those asks** (`LOCKED_MIN_EVERY`) AND **fewer than 2 firms

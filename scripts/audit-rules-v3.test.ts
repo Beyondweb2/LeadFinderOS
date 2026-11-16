@@ -99,7 +99,7 @@ const mb = buildReportModel(allUnread, ctx3, { kind: "baseline", businessName: "
 ok(mb.incomplete === null, "a baseline's numbers never come from the firm lists, so it is never gated by them");
 
 /* ── Which rules: v3 from its date, or a copy stamped 3; the guarantee ruler is unchanged ─────── */
-ok(auditRulesFor({ createdAt: new Date(Date.parse(AUDIT_RULES_V3_FROM) + 1000).toISOString() }) === 3, "an audit made after v3 shipped uses v3");
+ok(auditRulesFor({ createdAt: new Date(Date.parse(AUDIT_RULES_V3_FROM) + 1000).toISOString() }) >= 3, "an audit made after v3's start uses v3 or later (v4 took v3's start time, 2026-11-16)");
 ok(auditRulesFor({ createdAt: new Date(Date.parse(AUDIT_RULES_V3_FROM) - 1000).toISOString() }) === 2, "the 16 Nov London Discovery (made before v3) keeps v2 on its own link");
 ok(auditRulesFor({ createdAt: "2026-11-11T09:33:15Z", runRules: [3, null] }) === 3, "a re-scored copy stamped report_rules 3 uses v3");
 ok(Date.parse(AUDIT_RULES_V3_FROM) > Date.parse(AUDIT_RULES_V2_FROM), "v3 starts after v2");

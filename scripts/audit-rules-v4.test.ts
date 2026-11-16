@@ -66,7 +66,7 @@ ok(V(asks([["A Gas", "B Gas"], ["A Gas", "B Gas"], ["A Gas", "B Gas"]], [["A Gas
 const v3 = decideVerdictV3({ question: "q", answers: asks([["H3GS", "Heatjet", "Ecotek", "RH"], ["H3GS", "Ecotek", "Heatjet", "RH"], ["H3GS", "Ecotek", "Heatjet", "RH"]]), head: null, leftOut: null, area: null, key: firmKey });
 ok(v3.rules === 3 && v3.label === "Crowded", "rules v3 (the morning's links) keep the 70% line");
 ok(auditRulesFor({ createdAt: new Date(Date.parse(AUDIT_RULES_V4_FROM) + 1000).toISOString() }) === 4, "an audit made after v4 shipped uses v4");
-ok(auditRulesFor({ createdAt: new Date(Date.parse(AUDIT_RULES_V4_FROM) - 1000).toISOString() }) === 3 && Date.parse(AUDIT_RULES_V4_FROM) > Date.parse(AUDIT_RULES_V3_FROM), "an audit made between v3 and v4 keeps v3");
+ok(auditRulesFor({ createdAt: new Date(Date.parse(AUDIT_RULES_V4_FROM) - 1000).toISOString() }) === 2 && Date.parse(AUDIT_RULES_V4_FROM) >= Date.parse(AUDIT_RULES_V3_FROM), "v4 took v3's start time (deployed before it): an audit made just before is still v2");
 ok(auditRulesFor({ createdAt: "2026-11-11T09:00:00Z", runRules: [4] }) === 4 && auditRulesFor({ createdAt: "2026-11-11T09:00:00Z", runRules: [3] }) === 3, "a copy stamped 4 uses v4; one stamped 3 keeps v3");
 
 /* ── Through the real reader ──────────────────────────────────────────────────────────────────────────── */
