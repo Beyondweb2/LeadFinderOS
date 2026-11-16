@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-16-incomplete-summary', date: '2026-11-16', title: 'One "audits incomplete" alert per cause, not one per audit', audience: 'admin',
+    body: 'When several audits come back incomplete together, you now get one bell row and one email per cause, at most once an hour: "12 audits incomplete since 12:08. Cause: the AI search on Apify did not finish in time", with the reports listed. OpenAI or Apify refusing us is also at most one email an hour per provider. The incomplete rule itself is unchanged: Quick checks are firm-read like every audit, so "incomplete" means the answers really are missing.',
+    report: {
+      added: ['The cause on the alert (AI search did not finish, AI search failed, firms not read, OpenAI or Apify refused).'],
+      changed: ['"Audit incomplete" alerts are one summary per cause per hour, emailed a few minutes after the first one so a burst is one email.', 'Provider refused alerts: at most once an hour per provider (was once a day); repeats raise the bell count.'],
+      removed: ['One email per incomplete audit.'],
+      effect: 'A provider hiccup during a batch of checks is one email that says what went wrong, not a dozen.',
+    } },
   { id: '2026-11-16-tps-templates-callable', date: '2026-11-16', title: 'Every template in the sales queue, leads we can\'t call hidden, TPS check ready', audience: 'all',
     body: 'Salespeople can now queue every approved WhatsApp template, the same list Paul has. A follow-up only goes to a lead you have already messaged on WhatsApp and never twice to the same lead, and inside their 24-hour window it goes free. Opt-outs and daily limits still apply. On Find leads and Outreach, leads whose only number we can\'t call (09 premium, not a real number, or a country calling isn\'t switched on for) are hidden. Press "Show N we can\'t call" to see them greyed out with the reason. Nothing is deleted. Freephone-only leads (0800, 03, 084, 087) still show, after leads with a mobile or landline. "Open next ready" skips leads we can\'t call. A TPS / CTPS check before each UK call is built but stays off until Paul connects it. Once it is on, a number on the register shows "TPS – do not call".',
     report: {

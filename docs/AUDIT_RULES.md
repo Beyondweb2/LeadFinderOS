@@ -72,9 +72,19 @@ from firm lists, and it keeps its own completeness checks.
 
 ### Alerts (bell + email, operator only)
 
-- **Audit incomplete** — once per audit, when its last run settles (`process-ai-audit-queue` → `checkAuditCompleteness`).
+- **Audits incomplete** — ONE SUMMARY PER CAUSE AT MOST ONCE AN HOUR (v1-incomplete-fix, 2026-11-16). When an audit's last
+  run settles (`process-ai-audit-queue` → `checkAuditCompleteness`) it is given one cause (`incompleteCause`: OpenAI
+  refused / Apify refused / AI search did not finish in time / AI search failed / firms not read) and added to that cause's
+  bell row for the rolling hour ("12 audits incomplete since 12:08", key `audit_incomplete:<cause>:<minute>`). audit-watch
+  sends that row's ONE email 3+ minutes after it opened (`sendDueIncompleteSummaries`; its cron gate wakes for it). Quiet
+  claim rows written already cleared (`audit_incomplete_counted:<audit>`, `audit_incomplete_emailed:<key>`) make "count
+  once" and "email once" hold. Why: at 12:08 on 16 Nov twelve Quick checks failed together and Paul got twelve emails.
+- **Quick checks are judged like every audit.** They are firm-read (`firms_read` on both answers), so "2 of 2 could not be
+  measured" only means the answers really failed (16 Nov: Apify's AI search hung 3 × 12 min, `run_age_exceeded`) or were
+  really unread. Never loosen the rule to quieten an alert.
 - **Provider refused** — OpenAI ("no credits remaining", insufficient quota) or Apify (HTTP 402 / 403, our Apify reserve):
-  once per provider per UTC day, from the firm-reading step at once and from any settled audit's stored errors.
+  at most once an hour per provider (rolling; key carries the minute), emailed at once; a repeat inside the hour only
+  raises the bell row's count. From the firm-reading step and from any settled audit's stored errors.
 - The bell row is the claim (dedupe key); the email (Resend, `OPERATOR_ALERT_TO`) goes only when the claim wins. Bell kinds
   reuse `audit_finished` / `team_update` (no migration).
 

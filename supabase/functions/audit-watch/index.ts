@@ -7,6 +7,9 @@
 //    (ai_audit_runs.scored_at newer than verdict_counts.at) is counted again. Read by the Opportunity score.
 // 2. APIFY PAST 80% (rule: src/lib/apifyUsageAlert.ts). The newest apify_account_usage reading at or over the line → ONE
 //    bell row + ONE email to Paul per Apify billing cycle (raiseOperatorAlert: the bell row is the claim).
+// 3. AUDITS INCOMPLETE SUMMARY (v1-incomplete-fix, 2026-11-16; src/lib/auditAlerts.ts): the finaliser adds each incomplete
+//    audit to one bell row per cause per hour; this job sends that row's ONE email a few minutes after it opened, so a
+//    burst of twelve is one email ("12 audits incomplete since 12:08"), never twelve.
 //
 // ⛔ INTERNAL ONLY (CRON_SECRET, isInternalCall), or an admin (requireAdmin) for a manual backfill.
 // ⛔ Reads stored answers and usage readings; writes one jsonb column and the operator alert. Asks no AI, starts no audit,
@@ -16,7 +19,7 @@ import { isInternalCall, requireAdmin } from "../_shared/access.ts";
 import { verdictCountsOf } from "../../../src/lib/auditVerdictCounts.ts";
 import { AUDIT_RULES_V2_FROM } from "../../../src/lib/auditVerdict.ts";
 import { apifyUsageAlert, type ApifyUsageRow } from "../../../src/lib/apifyUsageAlert.ts";
-import { raiseOperatorAlert } from "../_shared/audit-alerts.ts";
+import { raiseOperatorAlert, sendDueIncompleteSummaries } from "../_shared/audit-alerts.ts";
 
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } });
 const MAX_AUDITS = 40;
@@ -52,6 +55,9 @@ Deno.serve(async (req) => {
     console.error("[audit-watch] apify check failed:", e instanceof Error ? e.message : String(e));
   }
 
+  // 3. The incomplete summaries due an email. Best-effort, never blocks the counts.
+  const summaries = await sendDueIncompleteSummaries(service);
+
   // 1. Verdict counts.
 
   let q = service.from("ai_audits")
@@ -62,7 +68,7 @@ Deno.serve(async (req) => {
     .order("created_at", { ascending: false }).limit(only.length ? only.length : 500);
   if (only.length) q = q.in("id", only);
   const { data: audits, error } = await q;
-  if (error) return json({ ok: false, apify, error: error.message }, 500);
+  if (error) return json({ ok: false, apify, summaries, error: error.message }, 500);
 
   const out = { checked: 0, stored: 0, none: 0, unsettled: 0, current: 0, failed: 0, left: false };
   for (const a of (audits ?? []) as Row[]) {
@@ -106,5 +112,5 @@ Deno.serve(async (req) => {
       console.error(`[audit-watch] ${a.id}:`, e instanceof Error ? e.message : String((e as { message?: unknown })?.message ?? e));
     }
   }
-  return json({ ok: true, apify, ...out });
+  return json({ ok: true, apify, summaries, ...out });
 });
