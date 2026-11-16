@@ -5,7 +5,7 @@ import { recordOptOut } from "../_shared/suppression.ts";
 import { bookOwnerId } from "../_shared/access.ts";
 import { resolveTwilioEnv, twiml, webhookUrlFor, xmlEscape } from "../_shared/twilio.ts";
 import { syncLeadFromSms } from "../_shared/sms-lead-sync.ts";
-import { callMarketOf, channelOn } from "../../../src/lib/outreachMarkets.ts";
+import { ALWAYS_CALLABLE, browserCallAllowed, browserCallMarket } from "../../../src/lib/callRules.ts";
 import { isOptOut } from "../../../src/lib/replyTriage.ts";
 import { loadCountrySettings } from "../_shared/country-settings.ts";
 import { handleInboundSmsReply, resolveSmsOwner } from "../_shared/sms-inbound.ts";
@@ -113,10 +113,11 @@ async function voiceTwiml(service: Service, env: ReturnType<typeof resolveTwilio
   const since = new Date(Date.now() - 10 * 60_000).toISOString();
   const { data: claimed } = await service.from("call_logs").update({ call_sid: p.CallSid, status: "dialing" })
     .eq("id", callId).eq("user_id", identity).eq("status", "initiated").gte("created_at", since).select("phone").maybeSingle();
-  // UK numbers as before; Malaysia / Singapore only while that country's calling switch is on (2026-10-14).
-  const market = callMarketOf(claimed?.phone);
-  const callable = !!claimed?.phone && (/^44[1237]\d{8,9}$/.test(claimed.phone)
-    || (!!market && market !== "UK" && channelOn(await loadCountrySettings(service), market, "call")));
+  /* The one browser-calling rule (src/lib/callRules.ts, 2026-11-16): UK and Ireland always; Malaysia / Singapore only
+     while that country's calling switch is on. The same rule twilio-voice-token asked before writing the row. */
+  const market = browserCallMarket(claimed?.phone);
+  const callable = !!claimed?.phone && !!market
+    && browserCallAllowed(market, ALWAYS_CALLABLE.has(market) ? null : await loadCountrySettings(service));
   if (!callable) return hangup("This call could not be set up.");
   const cb = `${env.webhookBase}?type=voice-status`;
   return twiml(

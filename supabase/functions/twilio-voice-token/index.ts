@@ -4,10 +4,11 @@ import { checkSuppressed } from "../_shared/suppression.ts";
 import { guardAction } from "../_shared/protection.ts";
 import { loadQaExclusions } from "../_shared/qa-guard.ts";
 import { qaSendVerdict } from "../../../src/lib/qaSafety.ts";
-import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
 import { VOICE_TOKEN_CALL_TTL_S, voiceAccessToken } from "../../../src/lib/twilioAuth.ts";
 import { resolveTwilioEnv } from "../_shared/twilio.ts";
-import { COUNTRY_OFF, callMarketOf, channelOn } from "../../../src/lib/outreachMarkets.ts";
+import { COUNTRY_OFF } from "../../../src/lib/outreachMarkets.ts";
+import { ALWAYS_CALLABLE, LOW_BALANCE_WORDS, NON_GEOGRAPHIC_WORDS, NOT_CALLABLE_WORDS, OPTED_OUT_CALL_WORDS, WRONG_NUMBER_CALL_WORDS, PREMIUM_WORDS, balanceVerdict, browserCallAllowed, browserCallMarket, callHoursVerdict, pickCallNumber } from "../../../src/lib/callRules.ts";
+import { alertLowBalance, twilioBalance } from "../_shared/twilio-balance.ts";
 import { loadCountrySettings } from "../_shared/country-settings.ts";
 
 // twilio-voice-token — "I want to call THIS lead from my browser" (2026-10-09).
@@ -20,7 +21,11 @@ import { loadCountrySettings } from "../_shared/country-settings.ts";
 //    call may run (VOICE_TOKEN_CALL_TTL_S, one hour; it was 5 minutes until 2026-11-10 and Twilio reports an expired
 //    token on the Device mid-call).
 // ⛔ Lead access = the same rule as everything else (assigned and not a client for a rep; their book for admin).
-// ⛔ UK numbers only (mobile or landline); premium / non-geographic ranges are refused. Opt-out / wrong number
+// ⛔ 2026-11-16 (src/lib/callRules.ts): UK and Irish numbers always, Malaysia / Singapore behind their switch; the number is
+//    E.164 first (callDigits); premium / special-rate ranges are refused; outside the PROSPECT'S calling hours and with
+//    the Twilio balance gone nothing is written or dialled (low credit alerts Paul once a day). { refresh: true } mints a
+//    fresh token for a call already live (the SDK's tokenWillExpire) — no row, no dial: the webhook only dials a row.
+// ⛔ (until 2026-11-16) UK numbers only (mobile or landline); premium / non-geographic ranges are refused. Opt-out / wrong number
 //    (contact_suppressions, unreadable = refuse) block a call exactly as they block a text.
 // ⛔ A QA fixture is SIMULATED (no token — the screen runs the call in pretend mode); a real business held by a test
 //    account is refused. TWILIO_TEST_MODE (default on) simulates every call.
@@ -34,8 +39,6 @@ const corsHeaders = {
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** UK geographic (1,2), non-geographic business (3) and mobile (7). Not 08/09 premium or special-rate ranges. */
-const UK_CALLABLE = /^44[1237]\d{8,9}$/;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -45,6 +48,22 @@ Deno.serve(async (req) => {
     const who = await resolveActor(req, service);
     if (!who.ok) return json(refusalBody(who), who.status);
     const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+
+    /* A call that is already live asks for a fresh token before the old one runs out (an hour). Only while this rep has a
+       live call row: the token itself can dial nobody — twilio-webhook dials only a row written below, once. */
+    if (body.refresh === true) {
+      const env = resolveTwilioEnv();
+      if (env.testMode || !env.voiceConfigured) return json({ ok: false, error: "not_configured" });
+      const since = new Date(Date.now() - 3 * 3600_000).toISOString();
+      const { data: liveRow } = await service.from("call_logs").select("id").eq("user_id", who.actor.id)
+        .in("status", ["dialing", "ringing", "in-progress"]).gte("created_at", since).limit(1).maybeSingle();
+      if (!liveRow) return json({ ok: false, error: "no_live_call" });
+      const fresh = await voiceAccessToken({
+        accountSid: env.accountSid, apiKeySid: env.apiKeySid, apiKeySecret: env.apiKeySecret, twimlAppSid: env.twimlAppSid,
+        identity: who.actor.id, ttlSeconds: VOICE_TOKEN_CALL_TTL_S,
+      });
+      return json({ ok: true, refreshed: true, token: fresh });
+    }
     const leadId = String(body.lead_id ?? "");
     if (!UUID_RE.test(leadId)) return json({ ok: false, error: "bad_request", detail: "Missing lead." }, 400);
 
@@ -55,27 +74,42 @@ Deno.serve(async (req) => {
     if (error || !lead) return json({ ok: false, error: "lookup_failed", detail: "Could not read the lead." }, 503);
     if (lead.is_archived === true) return json({ ok: false, error: "archived", detail: "That lead is archived." }, 409);
 
-    const digits = toWhatsAppDigits(lead.phone as string, (lead.country as string | null) ?? null);
-    /* 2026-10-14 (src/lib/outreachMarkets.ts): Malaysia / Singapore numbers (mobile or landline) are callable while that
-       country's calling switch is on. The UK test is unchanged (UK_CALLABLE). */
-    const callMarket = callMarketOf(digits);
-    if (callMarket && callMarket !== "UK" && !channelOn(await loadCountrySettings(service), callMarket, "call")) {
+    /* The best of the lead's numbers (mobile, landline, non-geographic; never 09), E.164 first (07… → 447…, an Irish 08… → 3538…, "+44 (0)7…" → 447…), then the one browser-calling rule. */
+    const pick = pickCallNumber(lead.phone as string, (lead.country as string | null) ?? null);
+    if (pick.premiumOnly) return json({ ok: false, error: "premium_number", detail: PREMIUM_WORDS });
+    const digits = pick.digits;
+    const callMarket = browserCallMarket(digits);
+    /* 2026-11-16: a UK 0800 lead ("+44 800 774 7951") was refused HERE with "covers UK, Malaysia and Singapore numbers
+       only", which read as a country block. A UK-shaped number that still is not callable now says it is the TYPE. */
+    if (!digits || !callMarket) return json({ ok: false, error: "not_callable", detail: digits?.startsWith("44") ? NON_GEOGRAPHIC_WORDS : NOT_CALLABLE_WORDS });
+    if (!browserCallAllowed(callMarket, ALWAYS_CALLABLE.has(callMarket) ? null : await loadCountrySettings(service))) {
       return json({ ok: false, error: COUNTRY_OFF, detail: "Browser calling to this country is switched off. Paul can turn it on in the WhatsApp queue settings." });
     }
-    if (!digits || !(UK_CALLABLE.test(digits) || (callMarket && callMarket !== "UK"))) return json({ ok: false, error: "not_callable", detail: "Browser calling covers UK, Malaysia and Singapore numbers only, and this number is not one." });
 
     const sup = await checkSuppressed(service, { phone: `+${digits}`, email: lead.email as string | null, leadId });
     if (sup.suppressed) {
       return json({ ok: false, error: sup.matchedOn === "lookup_failed" ? "suppression_unreadable" : sup.wrongNumber ? "wrong_number" : "opted_out",
-        detail: sup.matchedOn === "lookup_failed" ? "Could not check whether they have opted out, so no call was started." : sup.wrongNumber ? "This number is marked wrong." : "They have asked not to be contacted." });
+        detail: sup.matchedOn === "lookup_failed" ? "Could not check whether they have opted out, so no call was started." : sup.wrongNumber ? WRONG_NUMBER_CALL_WORDS : OPTED_OUT_CALL_WORDS });
     }
 
     const env = resolveTwilioEnv();
+    /* Started now, read below: the credit check runs alongside the QA read instead of after it (no added wait). */
+    const balanceP = env.testMode ? null : twilioBalance(env);
     const ex = await loadQaExclusions(service);
     const qa = qaSendVerdict(ex, { leadId, phones: [lead.phone as string, digits], holderUserId: (lead.assigned_to_user_id as string | null) ?? null, actorUserId: who.actor.id });
     if (qa.kind === "refuse") return json({ ok: false, error: "qa_refused", detail: "This is a real business held by a test account, so no call was started." });
     const simulated = env.testMode || qa.kind === "simulate";
     if (!simulated && !env.voiceConfigured) return json({ ok: false, error: "not_configured", detail: "Browser calling is not set up yet — the Twilio settings are missing." });
+    if (!simulated) {
+      /* The prospect's own calling hours (their number's country). A pretend QA call has no prospect, so it is never held. */
+      const hours = callHoursVerdict(callMarket);
+      if (!hours.open) return json({ ok: false, error: "outside_hours", detail: hours.words });
+      const bal = balanceP ? await balanceP : null;
+      const verdict = balanceVerdict(bal?.balance);
+      if (verdict === "unknown") console.warn("[twilio-voice-token] balance not read:", bal?.error ?? "none");
+      if (bal && (verdict === "low" || verdict === "empty")) await alertLowBalance(service, bal);
+      if (verdict === "empty") return json({ ok: false, error: "low_balance", detail: LOW_BALANCE_WORDS });
+    }
 
     const g = await guardAction(service, who.actor.id, "voice_call", { fn: "twilio-voice-token", leadId, role: who.actor.role });
     if (!g.ok) return json(g.body, g.status);
@@ -86,12 +120,12 @@ Deno.serve(async (req) => {
     }).select("id").single();
     if (insErr || !row) return json({ ok: false, error: "log_failed", detail: "Could not record the call, so it was not started." }, 500);
 
-    if (simulated) return json({ ok: true, simulated: true, callId: row.id, phoneTail: digits.slice(-4) });
+    if (simulated) return json({ ok: true, simulated: true, callId: row.id, phoneTail: digits.slice(-4), numberKind: pick.kind });
     const token = await voiceAccessToken({
       accountSid: env.accountSid, apiKeySid: env.apiKeySid, apiKeySecret: env.apiKeySecret, twimlAppSid: env.twimlAppSid,
       identity: who.actor.id, ttlSeconds: VOICE_TOKEN_CALL_TTL_S,
     });
-    return json({ ok: true, simulated: false, callId: row.id, token, identity: who.actor.id, phoneTail: digits.slice(-4) });
+    return json({ ok: true, simulated: false, callId: row.id, token, identity: who.actor.id, phoneTail: digits.slice(-4), numberKind: pick.kind });
   } catch (e) {
     console.error("[twilio-voice-token] error:", (e as Error).message);
     return json({ ok: false, error: "internal" }, 500);

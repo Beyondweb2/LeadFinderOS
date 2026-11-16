@@ -6,6 +6,8 @@ import { useEffect } from 'react';
 import { fmtDuration, type TwilioCall } from '@/hooks/useTwilioCall';
 import { useLiveCall, useLiveCallActions } from '@/components/LiveCall';
 import { callNumberView } from '@/lib/callNumber';
+import { REDIAL_FAILURES } from '@/lib/callManager';
+import { pickCallNumber } from '@/lib/callRules';
 
 /* THE CALL PANEL (2026-10-09) — top of the Call tab: the Call in browser button (and a small Call on WhatsApp) and, when you choose to
    call from the browser, the live call (Calling… / Ringing / Connected 02:13 / Ended / Failed), Mute and Hang up.
@@ -28,6 +30,7 @@ export function CallPanel({ leadId, businessName, phone, country, onLogCall }: {
   const here = call.leadId === leadId;
   const otherLead = call.active && !here;
   const view = callNumberView(phone, country);
+  const pick = pickCallNumber(phone, country);
   return (
     <section className="space-y-2 rounded-2xl border border-amber-500/30 bg-amber-500/[0.04] p-3 sm:p-3.5" data-testid="call-panel" data-call-state={here ? call.state : 'idle'}>
       {otherLead ? (
@@ -54,11 +57,16 @@ export function CallPanel({ leadId, businessName, phone, country, onLogCall }: {
               </div>
             )}
           </div>
+          {call.active && (call.reconnecting || call.warning) && (
+            <p className="rounded-lg bg-amber-500/10 px-2.5 py-2 text-xs text-amber-800 dark:text-amber-200" data-testid="call-panel-warning">{call.reconnecting ? 'Reconnecting… the call is trying to recover the connection.' : call.warning}</p>
+          )}
           {call.state === 'failed' && call.error && <p className="rounded-lg bg-red-500/10 px-2.5 py-2 text-xs text-red-700 dark:text-red-300" data-testid="call-error">{call.error}</p>}
+          {call.state === 'ended' && call.outcome && <p className="rounded-lg bg-muted px-2.5 py-2 text-xs" data-testid="call-outcome">{call.outcome}</p>}
           {(call.state === 'ended' || call.state === 'failed') && (
             <div className="flex flex-wrap items-center gap-2">
-              {call.state === 'ended' && <Button size="sm" className="h-10 gap-1.5 font-bold" onClick={() => { onLogCall(); call.reset(); }} data-testid="call-log"><ClipboardPen className="h-4 w-4" />Log this call</Button>}
-              <Button size="sm" variant="outline" className="h-10 gap-1.5" onClick={() => { call.reset(); void call.start(leadId, businessName); }} data-testid="call-again"><PhoneCall className="h-4 w-4" />Call again</Button>
+              {(call.state === 'ended' || call.failure === 'dropped') && <Button size="sm" className="h-10 gap-1.5 font-bold" onClick={() => { onLogCall(); call.reset(); }} data-testid="call-log"><ClipboardPen className="h-4 w-4" />Log this call</Button>}
+              {/* Call again only where a redial can help: a block (Do Not Contact, hours, credit, a refused country) says who fixes it instead. */}
+              {(call.state === 'ended' || (!!call.failure && REDIAL_FAILURES.has(call.failure))) && <Button size="sm" variant="outline" className="h-10 gap-1.5" onClick={() => { call.reset(); void call.start(leadId, businessName); }} data-testid="call-again"><PhoneCall className="h-4 w-4" />Call again</Button>}
               <Button size="sm" variant="ghost" className="h-10" onClick={call.reset}>Dismiss</Button>
             </div>
           )}
@@ -66,8 +74,8 @@ export function CallPanel({ leadId, businessName, phone, country, onLogCall }: {
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <Button className="h-11 gap-2 rounded-xl bg-amber-500 font-bold text-white hover:bg-amber-600" onClick={() => void call.start(leadId, businessName)} disabled={!view} data-testid="call-start-browser">
-              <PhoneCall className="h-4 w-4" />Call in browser
+            <Button className="h-11 gap-2 rounded-xl bg-amber-500 font-bold text-white hover:bg-amber-600" onClick={() => void call.start(leadId, businessName)} disabled={!view || pick.premiumOnly} data-testid="call-start-browser">
+              <PhoneCall className="h-4 w-4" />{pick.kind === 'non_geographic' ? 'Call anyway' : 'Call in browser'}
             </Button>
             {view?.whatsappUrl && (
               <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => window.open(view.whatsappUrl, '_blank', 'noopener,noreferrer')} data-testid="call-start-whatsapp">
@@ -76,6 +84,11 @@ export function CallPanel({ leadId, businessName, phone, country, onLogCall }: {
             )}
             <p className="text-[11px] text-muted-foreground">Not recorded. Allow your microphone when asked.</p>
           </div>
+          {/* Before dialling (src/lib/callRules.ts pickCallNumber): a freephone / non-geographic number may not connect, a 09
+              is never dialled, and with several numbers on the lead it says which one rings. */}
+          {pick.warning && (
+            <p data-testid="call-number-warning" className={cn('rounded-lg px-2.5 py-2 text-xs', pick.premiumOnly ? 'bg-red-500/10 text-red-700 dark:text-red-300' : pick.kind === 'non_geographic' ? 'bg-amber-500/10 text-amber-800 dark:text-amber-200' : 'bg-muted text-muted-foreground')}>{pick.warning}</p>
+          )}
         </>
       )}
     </section>

@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-16-calling-solid', date: '2026-11-16', title: 'Calls keep going while you use the app', audience: 'all',
+    body: 'A browser call now stays live while you move around the app. A call bar on the right of every page shows who you are talking to, the timer, Mute, a Keypad and End call. It warns you when the connection is poor, and if a call drops it offers Call again. Irish numbers can now be called. Freephone and other non-geographic numbers (0800, 03, 084, 087) are flagged before you dial, and 09 premium numbers are never dialled. If a lead has more than one number, the call rings the mobile first. Calls are only placed in the prospect\'s calling hours: Mon–Fri 8am–8pm, Sat 9am–5pm, never Sunday.',
+    report: {
+      added: ['A call bar on every page while a call is live: who, timer, Mute, Keypad, End call.', 'A "Poor connection" or "Reconnecting…" warning during a call.', 'Call again on a dropped call, from any page.', 'Browser calls to Irish numbers.', 'A "may not connect" flag on freephone / non-geographic numbers before you dial.'],
+      changed: ['A call that is not answered says why: busy, no answer, or refused.', 'Do Not Contact numbers say clearly that they are blocked.', 'Calls outside the prospect\'s calling hours are stopped, with their local time shown.', 'When a lead\'s phone field holds two numbers, the mobile (or landline) is the one rung.', 'Long calls renew their calling session by themselves, so it no longer runs out mid-call.', '09 premium numbers stay blocked, and now say why.'],
+      removed: ['The red End call strip, replaced by the fuller call bar.'],
+      effect: 'You can look things up mid-call without losing the call, and when a call fails you are told the real reason.',
+    } },
   { id: '2026-11-16-leftovers-skip-reasons', date: '2026-11-16', title: 'Skipped AI checks say why on the row', audience: 'all',
     body: 'When an AI check is skipped, the Outreach row now says why next to "Skipped", in words for the real cause: "Monthly search limit reached, ask Paul to raise it" (that one does not clear by itself) or "Daily budget used, try tomorrow". Hover for the full sentence.',
     report: {
