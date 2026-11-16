@@ -13,6 +13,7 @@ import { getTemplateSendability } from '@/lib/whatsappTemplates';
 import { readableTemplateBody } from '@/lib/templateBodies';
 import { unresolvedTokens } from '@/lib/leadUtils';
 import { serviceWindowState } from '@/lib/serviceWindow';
+import { FREE_SEND_LABEL, sendCostFromLastInbound, sendCostLabel } from '@/lib/freeWindowLabels';
 import { resolveLeadReport, type ResolvableAudit } from '@/lib/auditReportResolver';
 import { whatsAppLinkForLead } from '@/lib/conversationState';
 import { LEAD_CHANGED_EVENT, notifyLeadChanged } from '@/lib/leadSync';
@@ -113,6 +114,8 @@ export function LeadWhatsAppPanel({ lead, height = 'max-h-[320px]', className }:
   useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }); }, [rows.length]);
   const lastInboundAt = [...rows].reverse().find((m) => m.direction === 'inbound')?.created_at ?? null;
   const win = serviceWindowState(lastInboundAt);
+  /* Free or paid (2026-11-16): inside their 24 hours the sender sends the template's wording as a normal message (inWindowFreeText.ts). */
+  const sendCost = sendCostFromLastInbound(lastInboundAt);
 
   const sendability = (name: string) => getTemplateSendability(name, { shareToken: null }, { reportSlug: report.data?.auditId ?? null, hasSiteFault: false, hasSiteFindings: false });
   const [tpl, setTpl] = useState(DEFAULT_TEMPLATE);
@@ -137,7 +140,8 @@ export function LeadWhatsAppPanel({ lead, height = 'max-h-[320px]', className }:
       toast({ title: 'Queued', description: `Outside their send hours. ${queuedLabel(r.scheduled.send_at, r.scheduled.tz)}. You can edit or cancel it until then.` });
       return true;
     }
-    toast({ title: r.simulated ? 'Sent (simulated — test mode)' : 'Sent ✓' });
+    toast({ title: r.simulated ? 'Sent (simulated — test mode)' : 'Sent ✓',
+      description: r.sentAs === 'text' ? `${FREE_SEND_LABEL}: it went as a normal message with the same wording, recorded as the template.` : r.noFreeText ?? undefined });
     void thread.refetch();
     notifyLeadChanged(lead.id); // every screen re-reads the lead (the server may have moved its status)
     return true;
@@ -205,6 +209,9 @@ export function LeadWhatsAppPanel({ lead, height = 'max-h-[320px]', className }:
             </Select>
             <p className="whitespace-pre-wrap break-words rounded-lg bg-emerald-600 px-3 py-2 text-sm text-white" data-testid="whatsapp-template-preview">{preview}</p>
             {!chosenOk.ok && <p className="text-[11px] text-amber-700 dark:text-amber-300" data-testid="whatsapp-template-blocked">{chosenOk.reason}</p>}
+            <p className={cn('text-[11px] font-medium', sendCost === 'free' ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400')} data-testid="whatsapp-send-cost">
+              {sendCostLabel(sendCost)}{sendCost === 'free' ? ' — it goes as a normal message with this wording.' : ''}
+            </p>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-[11px] text-muted-foreground">The server fills in the details and checks it is allowed before it goes.</p>
               <Button size="sm" className="h-9 gap-1.5 bg-emerald-600 font-bold text-white hover:bg-emerald-700" disabled={!!busy || !tpl || !chosenOk.ok} onClick={() => void sendTemplate()} data-testid="whatsapp-send-template">

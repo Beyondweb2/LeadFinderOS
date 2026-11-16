@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-16-free-window-sends', date: '2026-11-16', title: 'Templates go free while their 24 hours are open, from every screen', audience: 'all',
+    body: 'When someone has messaged you in the last 24 hours, any template you send now goes as a normal WhatsApp message with the same wording, which is free. Only when their 24 hours have run out does the paid template go. This now works from the Outreach WhatsApp popup, the dashboard buttons, Quick Close, the welcome pack, the Inbox bulk send and the automatic audit reply, not just the Inbox. A message that would arrive in the last few minutes of the 24 hours goes as the template, so it is never refused. The Inbox bulk confirm shows how many are free and how many need a paid template, with "Send only the free ones" or "Send all". Single sends show "Free (window open)" or "Paid template".',
+    report: {
+      added: ['The free / paid split in the Inbox bulk confirm, with "Send only the N free" and "Send all N".', '"Free (window open)" or "Paid template (window closed, about £…)" under the template picker in the Inbox and the Outreach WhatsApp popup.'],
+      changed: ['Every template send to someone who wrote in the last 24 hours goes as a normal message with the same wording. It still counts as that template.', 'The automatic audit reply and the report follow-up do the same.'],
+      removed: [],
+      effect: 'We stop paying for a template when a free message would do. "Send only the free ones" never sends a paid one: if their 24 hours ran out in the meantime, or it is outside their send hours, that lead is listed as not sent.',
+    } },
   { id: '2026-11-16-audit-locked-spots', date: '2026-11-16', title: 'Not winnable now means "the same few firms every time"', audience: 'admin',
     body: 'New Discovery audits no longer use the 70% line. For each AI, over the asks where it named firms, a search is locked when at least 2 firms come back in every one of those asks and fewer than 2 firms appear only once. A search is Not winnable only when every AI that names firms is locked; otherwise it is Winnable. An AI that names firms in just 2 of its 3 asks is judged on those 2. The same firm written two ways ("HomeCert Ltd" and "HomeCert Ltd - Electricians & Gas Engineers London") now counts once.',
     report: {

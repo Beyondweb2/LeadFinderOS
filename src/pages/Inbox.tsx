@@ -13,6 +13,7 @@ import { hookAuditRequestBody } from '@/lib/hookAuditRequest';
 import { auditButtonCopy, auditStartedDescription, pitchMayFollowAudit } from '@/lib/auditPitchRule';
 import { getDraft, setDraft, type DraftMap } from '@/lib/inboxDrafts';
 import { planBulkSend, groupSkips, applyBulkChecks, bulkSummaryText, type BulkCandidate, type BulkCheck } from '@/lib/inboxBulkSend';
+import { bulkFreePaidLine, FREE_SEND_LABEL, PAID_SEND_LABEL, PAID_TEMPLATE_COST_WORDS } from '@/lib/freeWindowLabels';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useInbox, windowFor, normalizeWaNumber, type WaConversation, type LeadLite, type WaMessage } from '@/hooks/useInbox';
 import { getTemplateSendability, WA_TEMPLATE_REQS, canonicalTemplate } from '@/lib/whatsappTemplates';
@@ -1424,7 +1425,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       let r: BulkCheck;
       try {
         const res = await preview({ phone: target.phone, leadId: target.leadId, templateName: template });
-        r = { ok: res.ok === true, error: res.error, reason: res.reason };
+        /* free: the sender's own dry run says it goes as a normal message (their 24 hours are open) — src/lib/freeWindowLabels.ts. */
+        r = { ok: res.ok === true, error: res.error, reason: res.reason, free: res.ok === true && res.sentAs === 'text' };
       } catch (e) {
         r = { ok: false, error: 'check_failed', reason: e instanceof Error ? e.message : 'The check could not be run.' };
       }
@@ -1453,10 +1455,14 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     if (sms) void markSmsRead(phone).then(() => queryClient.invalidateQueries({ queryKey: smsKeys.unread }));
     else void markRead(phone);
   };
-  const runBulkSend = async () => {
+  /* onlyFree (2026-11-16): "Send only the free ones" — only the leads the dry run said go free, each sent free_only, so a window
+     that shut in the meantime is refused (would_be_paid) and listed, never sent as the paid template. */
+  const runBulkSend = async (onlyFree = false) => {
     // ⛔ ONLY LEADS THAT PASSED THE SERVER'S DRY RUN, and never while a check is still running.
     if (bulkBusy || bulkChecking || bulkChecked.pending.length || !bulkChecked.ready.length) return;
-    const targets = bulkChecked.ready;
+    const freeOnly = onlyFree && !sms;
+    const targets = freeOnly ? bulkChecked.free : bulkChecked.ready;
+    if (!targets.length) return;
     setBulkBusy(true);
     setBulkReport(null);
     setBulkProgress({ done: 0, total: targets.length });
@@ -1490,6 +1496,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           phone: target.phone,
           leadId: target.leadId,
           templateName: bulkTemplate,
+          ...(freeOnly ? { freeOnly: true } : {}),
         });
         /* Queued for their send hours is NOT sent (src/lib/inboxSendWindow.ts) — counted on its own. */
         if (res.ok) clearUnreadAfterSend(target.phone);
@@ -1821,9 +1828,15 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           </Button>
         )}
       </div>
-      {inWindowWa && (
+      {inWindowWa && !templateGoesAsTemplate && (
         <p className="mt-1 text-[11px] text-muted-foreground" data-testid="picker-free-text-note">
-          Their 24 hours are open, so a template goes as a normal message: it fills the message box with its wording for you to check, edit and send.
+          <span className="font-medium text-emerald-700 dark:text-emerald-400">{FREE_SEND_LABEL}.</span> Their 24 hours are open, so a template goes as a normal message: it fills the message box with its wording for you to check, edit and send.
+        </p>
+      )}
+      {/* The same free/paid label as the bulk confirm (src/lib/freeWindowLabels.ts). */}
+      {!sms && (!inWindowWa || templateGoesAsTemplate) && (
+        <p className="mt-1 text-[11px] font-medium text-amber-700 dark:text-amber-400" data-testid="picker-paid-note">
+          {inWindowWa ? `Paid template (no free version, ${PAID_TEMPLATE_COST_WORDS})` : PAID_SEND_LABEL}
         </p>
       )}
       {/* A dashboard template: Meta's approved wording (as Paul pasted it, DASHBOARD_TEMPLATE_WORDING) filled with this lead's
@@ -3283,9 +3296,15 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> Checking each one with the server first (nothing is sent)… {bulkPlan.send.length - bulkChecked.pending.length}/{bulkPlan.send.length}
               </p>
             )}
+            {/* Free or paid (2026-11-16): from each lead's own dry run — window open = a normal message, closed = the paid template. */}
+            {!sms && bulkChecked.pending.length === 0 && bulkChecked.ready.length > 0 && (
+              <p className="rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 font-medium text-foreground" data-testid="bulk-free-paid">
+                {bulkFreePaidLine(bulkChecked.free.length, bulkChecked.paid.length)}
+              </p>
+            )}
             <SubSection tone="blue" title={<>Checked, will be sent ({bulkChecked.ready.length})</>}>
               <ul className="space-y-0.5 text-muted-foreground">
-                {bulkChecked.ready.slice(0, 12).map((t) => <li key={t.key} className="truncate">· {t.label}</li>)}
+                {bulkChecked.ready.slice(0, 12).map((t) => <li key={t.key} className="truncate">· {t.label}{!sms && <span className="text-[10px]"> — {bulkChecked.free.includes(t) ? 'free' : 'paid'}</span>}</li>)}
                 {bulkChecked.ready.length > 12 && <li>· and {bulkChecked.ready.length - 12} more</li>}
               </ul>
             </SubSection>
@@ -3310,10 +3329,16 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           </div>
           <DialogFooter>
             <Button variant="ghost" size="sm" disabled={bulkBusy} onClick={() => setBulkConfirm(false)}>Cancel</Button>
+            {/* Some free, some paid: send only the free ones (nothing paid), or all. */}
+            {!sms && !bulkBusy && bulkChecked.pending.length === 0 && bulkChecked.free.length > 0 && bulkChecked.paid.length > 0 && (
+              <Button variant="outline" size="sm" disabled={bulkChecking} onClick={() => void runBulkSend(true)} data-testid="bulk-send-free-only">
+                Send only the {bulkChecked.free.length} free
+              </Button>
+            )}
             <Button size="sm" disabled={bulkBusy || bulkChecking || bulkChecked.pending.length > 0 || bulkChecked.ready.length === 0} onClick={() => void runBulkSend()}>
               {bulkBusy
                 ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Sending {bulkProgress.done}/{bulkProgress.total}</>
-                : bulkChecked.pending.length > 0 ? 'Checking…' : sms && isColdSmsTemplate(bulkTemplate) ? `Queue ${bulkChecked.ready.length}` : `Send ${bulkChecked.ready.length} now`}
+                : bulkChecked.pending.length > 0 ? 'Checking…' : sms && isColdSmsTemplate(bulkTemplate) ? `Queue ${bulkChecked.ready.length}` : !sms && bulkChecked.free.length > 0 && bulkChecked.paid.length > 0 ? `Send all ${bulkChecked.ready.length}` : `Send ${bulkChecked.ready.length} now`}
             </Button>
           </DialogFooter>
         </DialogContent>

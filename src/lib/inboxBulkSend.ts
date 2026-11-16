@@ -158,7 +158,8 @@ export function groupSkips(skipped: readonly BulkSkip[]): { reason: string; coun
    ready — fail closed. The real send still re-runs every guard.
    ════════════════════════════════════════════════════════════════════════════════════════════ */
 
-export interface BulkCheck { ok: boolean; error?: string; reason?: string }
+/** free: the dry run said it goes as a normal (free) message inside their 24 hours (src/lib/freeWindowLabels.ts). Absent = paid. */
+export interface BulkCheck { ok: boolean; error?: string; reason?: string; free?: boolean }
 
 export interface BulkCheckedPlan {
   /** Passed the server's dry run: these, and only these, may be sent. */
@@ -167,19 +168,24 @@ export interface BulkCheckedPlan {
   refused: BulkSkip[];
   /** Not checked yet. Never sent. */
   pending: BulkCandidate[];
+  /** Of ready: the server said it goes FREE (window open). The rest of ready need the paid template — absent is paid. */
+  free: BulkCandidate[];
+  paid: BulkCandidate[];
 }
 
 export function applyBulkChecks(send: readonly BulkCandidate[], checks: Readonly<Record<string, BulkCheck | undefined>>): BulkCheckedPlan {
   const ready: BulkCandidate[] = [];
   const refused: BulkSkip[] = [];
   const pending: BulkCandidate[] = [];
+  const free: BulkCandidate[] = [];
+  const paid: BulkCandidate[] = [];
   for (const c of send) {
     const k = checks[c.key];
     if (!k) pending.push(c);
-    else if (k.ok === true) ready.push(c);
+    else if (k.ok === true) { ready.push(c); (k.free === true ? free : paid).push(c); }
     else refused.push({ key: c.key, label: c.label, reason: explainBulkRefusal(k.error, k.reason) });
   }
-  return { ready, refused, pending };
+  return { ready, refused, pending, free, paid };
 }
 
 /** A server refusal, in the words Paul acts on. Unknown refusals keep the server's own reason. */

@@ -111,6 +111,8 @@ console.log('3. every channel conditional is a DECLARED difference');
     [/\{!sms && \(win\.open \?/, 'window'],
     /* 2026-10-31: in-window free text — a saved template fills the composer only where there IS a 24-hour window (WhatsApp). */
     [/const inWindowWa = !sms && win\.open;/, 'window'],
+    /* 2026-11-16: free / paid (src/lib/freeWindowLabels.ts) exists only where there IS a 24-hour window (WhatsApp). */
+    [/const freeOnly = onlyFree && !sms;|\{!sms && \(!inWindowWa \|\| templateGoesAsTemplate\) && \(|\{!sms && bulkChecked\.pending\.length === 0 && bulkChecked\.ready\.length > 0 && \(|\{!sms && <span className="text-\[10px\]"> — \{bulkChecked\.free|\{!sms && !bulkBusy && bulkChecked\.pending\.length === 0 && bulkChecked\.free\.length > 0/, 'window'],
     [/^\{!sms && \($/, 'no-whatsapp-app'],
     [/!sms && active\.leadId/, 'no-voice-attach'],
     [/\{sms && <p .*sms-cost-note/, 'cost'],

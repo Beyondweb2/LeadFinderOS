@@ -23,6 +23,7 @@ import { rivalHookDecision, templateNeedsRivals } from "../../../src/lib/rivalHo
    its entire life. Payloads come from claimTemplatePayload, which reads the registry. */
 import { renderTemplateBody, claimTemplatePayload, sendViaGraph, errorColumns, WA_TEMPLATES, TEMPLATES_NEEDING_REAL_NAME, firstNameFrom, templateAwaitingApproval, type TemplateVar } from "../_shared/whatsapp-send.ts";
 import { hookFollowupEligible } from "../_shared/hook-followup-eligibility.ts";
+import { freeWindowSwap, lastInboundMsFor } from "../_shared/free-window.ts";
 import { contactFollowupEligible } from "../_shared/contact-followup-eligibility.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
 import { classifyLineType } from "../_shared/line-type.ts";
@@ -1629,6 +1630,13 @@ Deno.serve(async (req) => {
           const arQa = await qaSendHold(service, { leadId: row.lead_id, to: row.phone });
           if (arQa.kind === "refuse") { await finish("flagged_error", `qa_${arQa.reason}`); results[row.lead_id] = "flagged_error"; continue; }
           const arLive = live && arQa.kind === "live";
+          /* ⛔ INSIDE THEIR 24 HOURS, THE SAME WORDING AS A FREE MESSAGE (2026-11-16, _shared/free-window.ts). This reply fires
+             minutes after they wrote, so the window is almost always open; the paid template only when it is not. Still that
+             template on the row (pitchEverSent, report_sent and the snapshot see it); the snapshot keeps the template payload. */
+          const arTemplatePayload = payload;
+          let arMessageType: "template" | "text" | "video" = "template";
+          const arSwap = freeWindowSwap(payload, renderedBody, await lastInboundMsFor(service, toWhatsAppNumber(String(row.phone ?? ""), null) ?? row.phone));
+          if (arSwap) { payload = arSwap.payload; arMessageType = arSwap.messageType; renderedBody = arSwap.body; }
           if (arLive) {
             const r = await sendViaGraph(accessToken, phoneNumberId, row.phone, payload);
             if (r.ok) { sendStatus = "sent"; messageId = r.messageId; } else { sendStatus = "failed"; sendErr = r.error; sendParts = r.errorParts ?? null; }
@@ -1638,9 +1646,9 @@ Deno.serve(async (req) => {
           // Log the outbound row so the send lands in the lead's Inbox thread.
           await service.from("whatsapp_messages").insert({
             direction: "outbound", user_id: (lead.user_id as string | null) ?? null, lead_id: row.lead_id,
-            phone: row.phone, body: renderedBody, message_type: "template", template_name: templateName,
+            phone: row.phone, body: renderedBody, message_type: arMessageType, template_name: templateName,
             wa_message_id: messageId, status: sendStatus, test_mode: !arLive, error: sendErr, ...errorColumns(sendParts),
-            template_snapshot: createTemplateSnapshot({ templateName, language: tmpl.lang, body: renderedBody, payload }),
+            template_snapshot: createTemplateSnapshot({ templateName, language: tmpl.lang, body: renderedBody, payload: arTemplatePayload }),
             ...(replyFindingsShown?.length ? { findings_shown: replyFindingsShown } : {}),
           });
           /* And the send-audit row. This branch wrote only the message log, so auto-replies were
@@ -1954,10 +1962,14 @@ Deno.serve(async (req) => {
         let hOutcome: "sent" | "no_whatsapp" | "temporary" = "sent";
         let hError: string | null = null;
         let hParts: SendErrorParts | null = null;
-        const hBody = renderTemplateBody("hook_followup", (hookLead.business_name as string) ?? "", "", undefined, undefined, first);
+        let hBody = renderTemplateBody("hook_followup", (hookLead.business_name as string) ?? "", "", undefined, undefined, first);
         const hPayload = claimTemplatePayload("hook_followup", hLang, (hookLead.business_name as string) ?? "", "", { contactName: first });
+        /* ⛔ Their 24 hours still open (2026-11-16, _shared/free-window.ts) → the same wording as a free message, recorded as hook_followup. */
+        const hSwap = freeWindowSwap(hPayload, hBody, await lastInboundMsFor(service, to));
+        const hMessageType: "template" | "text" | "video" = hSwap ? hSwap.messageType : "template";
+        if (hSwap) hBody = hSwap.body;
         if (hLive) {
-          const payload = hPayload;
+          const payload = hSwap ? hSwap.payload : hPayload;
           const r = await sendViaGraph(accessToken, phoneNumberId, to, payload);
           if (r.ok) { hMessageId = r.messageId; hDelivery = "sent"; hOutcome = "sent"; }
           else {
@@ -1987,7 +1999,7 @@ Deno.serve(async (req) => {
             await service.from("whatsapp_messages").insert({
               direction: "outbound", user_id: (hookLead.user_id as string | null) ?? null, lead_id: hookLead.id,
               phone: to, body: hBody,
-              message_type: "template", template_name: "hook_followup", wa_message_id: hMessageId,
+              message_type: hMessageType, template_name: "hook_followup", wa_message_id: hMessageId,
               status: hDelivery, test_mode: hTestMode,
               template_snapshot: createTemplateSnapshot({ templateName: "hook_followup", language: hLang, body: hBody, payload: hPayload }),
             });

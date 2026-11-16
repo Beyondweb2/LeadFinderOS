@@ -56,4 +56,35 @@ which the drain stores on the failed row and the Inbox shows as "Not sent — �
 `scoringMethodFor`) a shown Google AI answer that did not name them adds its names; the client's own name is never counted.
 WSH Electrical 2026-10-31: "3 of 3 answers didn't name you. 4 other businesses were named instead." → "… 8 other businesses …".
 
-Tests: `scripts/in-window-free-text.test.ts`.
+## Every door, the landing margin, free only (2026-11-16, `v1-free-window-sends`)
+
+Paul: "never pay for a template when it doesn't have to." The conversion is no longer Inbox-only.
+
+- **Every door converts.** `inWindowShape` no longer returns the template for origin `other`: the Outreach WhatsApp popup
+  (`via:"lead_panel"`), the admin dashboard buttons, Quick Close, the welcome pack, the questionnaire / submissions buttons
+  and the Inbox bulk send all send the template's wording as free text while the window is open. Only the Inbox can send
+  TYPED words (`as_free_text`). A template with buttons (none today) has no free version (`has_buttons`).
+- **The automatic sends** (`process-whatsapp-queue`): the first-reply / audit_complete pitch (fires minutes after they wrote,
+  so nearly always in-window) and the hook_followup lane ask `_shared/free-window.ts` `freeWindowSwap` — the same rule, the
+  window read as the NUMBER's newest inbound row (a failed read = closed = the template). Row keeps `template_name`,
+  `message_type` is text / video, snapshot from the template payload. Not converted, because their window cannot be open by
+  their own eligibility: the cold opener drip and contact_followup (never replied). Not touched: `stripe-webhook` payment
+  confirmation and the free-check result (window almost never open; payment code).
+- **The landing margin.** Template → free is judged by `freeWindowOpen(lastInbound, now)` (`inWindowFreeText.ts`; kept out of `serviceWindow.ts`, which 20 functions import): open only
+  if `now + WINDOW_LANDING_MARGIN_MS` (5 minutes) is still inside the 24 hours; an inbound "from the future" is closed. A typed
+  free-text reply's own gate (`WINDOW_MS`, no margin) is unchanged. A queued send is judged when it runs.
+- **free_only** (`WhatsAppSendArgs.freeOnly` → `free_only: true`): anything that would go as the paid template is refused
+  `would_be_paid` (`WOULD_BE_PAID_REASON`); outside the lead's send hours it is refused too (`queueGate` `beforeInsert`),
+  nothing queued, because a queued send could go paid when it runs. BUILD_ID `2026-11-16a-free-window-sends`.
+- **Screens** (`src/lib/freeWindowLabels.ts`, price = `CHANNEL_COST_GBP.whatsapp_marketing`, absent = paid): the Inbox bulk
+  confirm shows "X free (window open) · Y need a paid template (window closed, about £… each)" from each lead's own dry run,
+  with **Send only the X free** (free_only) and **Send all N**; the Inbox picker and the Outreach WhatsApp popup show
+  "Free (window open)" / "Paid template (window closed, about £…)". The dashboard buttons have no label (the server still converts).
+
+## How the bulk "Send N now" worked before this (2026-11-16 check)
+
+Inbox `runBulkSend` → `useInbox.send` → `sendWhatsAppRequest(sb, { ...args, via: 'inbox' })` per lead, so since 31 Oct the
+Inbox bulk send ALREADY went as free text inside the window (origin `inbox`). What paid every time: the Outreach popup, the
+dashboard buttons, Quick Close, and the automatic audit reply / report follow-up in `process-whatsapp-queue`.
+
+Tests: `scripts/in-window-free-text.test.ts`, `scripts/free-window-sends.test.ts`.
