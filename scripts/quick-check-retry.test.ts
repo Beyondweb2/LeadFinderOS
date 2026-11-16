@@ -43,6 +43,11 @@ ok(v({ rows: rows('cost_cap') }).kind === 'final' && v({ audit: { ...quick, audi
 const p = reopenPatch(run(), 'provider_did_not_finish', '2026-11-16T12:40:00Z', 3);
 ok(p.run.status === 'running' && !('error' in p.run.results) && (p.run.results.late_retry as { kind: string }).kind === 'auto' && 'engines' in p.run.results, 'the run goes back to running, old error dropped, stamped, the rest kept');
 ok(p.row.status === 'pending' && p.row.attempts === 2 && p.row.result === null, 'each ask back to pending with ONE start left (attempts = 3 - 1)');
+const hooked = reopenPatch(run({ hook: { sequential: true, version: 2, next_index: 1, executed: 1, planned: ['a', 'b', 'c'], stop_reason: 'provider_failure' } }), 'x', '2026-11-16T12:40:00Z', 3);
+const h = hooked.run.results.hook as Record<string, unknown>;
+ok(!('stop_reason' in h) && h.next_index === 1 && Array.isArray(h.planned), 'a step-by-step check\'s "provider_failure" stop is cleared, so the retried ask is read (else the report says "didn\'t finish")');
+const notNamed = reopenPatch(run({ hook: { stop_reason: 'not_named' } }), 'x', '2026-11-16T12:40:00Z', 3);
+ok((notNamed.run.results.hook as Record<string, unknown>).stop_reason === 'not_named', 'any other stop is left alone');
 ok(lateRetryVerdict({ audit: quick, runs: [p.run], rows: rows(), newerAudit: false, nowMs: t0 + LATE_RETRY_AFTER_MS }).kind === 'final', 'after re-opening it can never be retried again');
 
 /* ── The public link ── */
