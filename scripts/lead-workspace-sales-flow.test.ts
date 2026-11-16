@@ -7,7 +7,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync } from "node:fs";
 import {
-  DEFAULT_LOG_CHANNEL, INTERESTED_NEXT_CHOICES, LOG_CHOICES, allowedOutcomes, choicesFor, followStepOf, interestedPreset, moreOutcomesFor, retryPreset,
+  DEFAULT_LOG_CHANNEL, INTERESTED_NEXT_CHOICES, LOG_CHOICES, allowedOutcomes, choicesFor, followStepOf, interestedPreset, logNoteFor, moreOutcomesFor, retryPreset,
 } from "../src/lib/logOutcomeFlow.ts";
 import { CALL_OUTCOMES, SALES_SETTABLE_STATUSES } from "../src/lib/salesCrm.ts";
 import { NO_ANSWER_RETRY_DAYS, VOICEMAIL_RETRY_DAYS, outcomePlan, outcomeRule } from "../src/lib/leadState.ts";
@@ -59,16 +59,21 @@ ok(/const \[note, setNote\] = useState\(''\);/.test(flow.slice(flow.indexOf("exp
 
 console.log("── 4. what happened: the buttons ──");
 const callKeys = choicesFor("call").map((c) => c.key);
-ok(JSON.stringify(callKeys) === JSON.stringify(["interested", "not_interested", "no_answer", "call_back", "send_onboarding", "wrong_number", "left_voicemail"]), `a call: ${callKeys.join(", ")}`);
+ok(JSON.stringify(callKeys) === JSON.stringify(["interested", "not_interested", "no_answer", "call_back", "info_email", "info_sms", "send_onboarding", "wrong_number", "left_voicemail"]), `a call: ${callKeys.join(", ")}`);
 const legal = new Set(CALL_OUTCOMES.map((o) => o.value));
 ok(LOG_CHOICES.every((c) => legal.has(c.outcome) && outcomeRule(c.outcome).offered), "every button records an existing, offered lead_log_contact outcome (the server allowlist)");
 const map = Object.fromEntries(LOG_CHOICES.map((c) => [c.key, c.outcome]));
 ok(map.interested === "interested" && map.not_interested === "not_interested" && map.no_answer === "no_answer" && map.call_back === "call_back" && map.send_onboarding === "interested" && map.wrong_number === "wrong_number" && map.left_voicemail === "left_voicemail", "the mapping: Didn't answer = no_answer; Send onboarding records Interested");
 ok(JSON.stringify(moreOutcomesFor("call")) === JSON.stringify(["spoke_to_owner", "meeting_booked"]), "More (call): Spoke to owner, Meeting booked — nothing lost, nothing in the way");
 ok(!choicesFor("email").some((c) => ["no_answer", "wrong_number", "left_voicemail"].includes(c.key)) && moreOutcomesFor("email").includes("message_sent"), "another channel drops the call-only buttons and offers 'Sent, no reply yet'");
-ok(JSON.stringify(allowedOutcomes("whatsapp")) === JSON.stringify(["interested", "meeting_booked", "call_back", "not_interested"]) && /!recordedBySend, recordedBySend \? null : note/.test(flow), "WhatsApp: what came of it, never a second record of the messages");
+ok(JSON.stringify(allowedOutcomes("whatsapp")) === JSON.stringify(["interested", "meeting_booked", "call_back", "not_interested"]) && /!recordedBySend, recordedBySend \? null : logNoteFor\(key, note\)/.test(flow), "WhatsApp: what came of it, never a second record of the messages");
 ok(DEFAULT_LOG_CHANNEL === "call" && /useState\(DEFAULT_LOG_CHANNEL\)/.test(flow) && /setChannel\(DEFAULT_LOG_CHANNEL\)/.test(flow) && /Logged as:/.test(flow) && /data-testid="log-channel-change"/.test(flow), "Logged as: Call by default, a quiet Change; back to Call each time the window closes");
 ok(!choicesFor("call", { paid: true }).some((c) => c.key === "send_onboarding"), "a paying client is never offered Send onboarding");
+
+console.log("── 4b. Wants info (2026-11-17) ──");
+ok(map.info_email === "spoke_to_owner" && map.info_sms === "spoke_to_owner" && followStepOf("info_email", "spoke_to_owner") === "send_info" && followStepOf("info_sms", "spoke_to_owner") === "send_info", "Wants info: logs Spoke to owner (no star, no status), then opens Send more info");
+ok(logNoteFor("info_sms", " ring Tue ") === "Wants info: send SMS — ring Tue" && logNoteFor("no_answer", "x") === "x", "the log note records that they asked for info on the call");
+ok(/initialChannel=\{infoChannel\} askedOnCall/.test(flow), "reuses the existing Send more info dialog — no new sending code");
 
 console.log("── 5. outcome → the next step ──");
 const L = { id: "l", status: "initial_contact", is_potential_work: false, next_action: null } as never;

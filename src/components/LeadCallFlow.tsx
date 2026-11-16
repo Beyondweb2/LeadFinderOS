@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode } from 'react';
-import { CalendarClock, Check, ChevronDown, ClipboardPen, Loader2, MessageSquarePlus, Pencil, PhoneMissed, PhoneOff, PhoneForwarded, Plus, Send, Star, ThumbsDown, Voicemail, X } from 'lucide-react';
+import { CalendarClock, Check, ChevronDown, ClipboardPen, Loader2, Mail, MessageSquare, MessageSquarePlus, Pencil, PhoneMissed, PhoneOff, PhoneForwarded, Plus, Send, Star, ThumbsDown, Voicemail, X } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { DialogHero, LoadState } from '@/components/operator/ui';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -17,9 +17,10 @@ import { londonLocalInput, nextActionView } from '@/lib/nextActionView';
 import { outcomeLabel, outcomeRule } from '@/lib/leadState';
 import { isPaidLead } from '@/lib/leadPayment';
 import {
-  DEFAULT_LOG_CHANNEL, INTERESTED_NEXT_CHOICES, channelRecordedBySend, choicesFor, followStepOf, interestedPreset, moreOutcomesFor,
+  DEFAULT_LOG_CHANNEL, INFO_CHOICES, INTERESTED_NEXT_CHOICES, channelRecordedBySend, choicesFor, followStepOf, interestedPreset, logNoteFor, moreOutcomesFor,
   type FollowStep, type InterestedNextKey, type LogTone,
 } from '@/lib/logOutcomeFlow';
+import { SendMoreInfoDialog } from '@/components/SendMoreInfo';
 import { cn } from '@/lib/utils';
 
 /* ══ THE CALL WORKSPACE'S LOG FLOW (2026-10-06, Paul: "record WHAT HAPPENED") ═════════════════════════
@@ -45,7 +46,7 @@ const TONE: Record<LogTone, string> = {
 };
 const ICON: Record<string, ComponentType<{ className?: string }>> = {
   interested: Star, not_interested: ThumbsDown, no_answer: PhoneMissed, call_back: PhoneForwarded,
-  send_onboarding: Send, wrong_number: PhoneOff, left_voicemail: Voicemail,
+  info_email: Mail, info_sms: MessageSquare, send_onboarding: Send, wrong_number: PhoneOff, left_voicemail: Voicemail,
 };
 
 /** Outcomes after which the prospect may be ready to pay: the result line offers Quick Close right there. */
@@ -151,6 +152,8 @@ export function LeadCallFlow({ leadId, businessName, logOpen, onLogOpenChange, n
   const [busy, setBusy] = useState<string | null>(null);
   const [last, setLast] = useState<{ key: string; outcome: string; done: LoggedOutcome } | null>(null);
   const [formPreset, setFormPreset] = useState<NextActionPreset | null>(null);
+  /* "Wants info": Send more info, opened right after the call is logged (the log is the record they asked). */
+  const [infoChannel, setInfoChannel] = useState<'email' | 'sms' | null>(null);
   /* The note outlives the window (it lives here, not in the window), so closing the window keeps it and
      leaving the lead with it typed asks first — the workspace's one draft guard. */
   useUnsavedDraft(`log-outcome-note-${useId()}`, note.trim() !== '');
@@ -175,7 +178,7 @@ export function LeadCallFlow({ leadId, businessName, logOpen, onLogOpenChange, n
     if (busy) return;
     setBusy(key);
     try {
-      const done = await work.logOutcome(outcome, channel, !recordedBySend, recordedBySend ? null : note);
+      const done = await work.logOutcome(outcome, channel, !recordedBySend, recordedBySend ? null : logNoteFor(key, note));
       if (!done || !done.ok || !done.result) return; // in flight, or refused (the toast says why) — the window stays
       if (!recordedBySend) { setNote(''); setNoteOpen(false); }
       setLast({ key, outcome, done });
@@ -183,6 +186,7 @@ export function LeadCallFlow({ leadId, businessName, logOpen, onLogOpenChange, n
       const next = followStepOf(key, outcome);
       if (next === 'none') { setLogOpen(false); return; }
       if (next === 'quick_close') { setLogOpen(false); onSendOnboarding(); return; }
+      if (next === 'send_info') { setLogOpen(false); setInfoChannel(INFO_CHOICES[key].channel); return; }
       if (next === 'retry_when') setFormPreset(done.preset);
       setStep(next);
     } finally { setBusy(null); }
@@ -233,9 +237,9 @@ export function LeadCallFlow({ leadId, businessName, logOpen, onLogOpenChange, n
             return (
               <button key={c.key} type="button" disabled={busy !== null} data-testid={`outcome-${c.key}`} title={c.key === 'send_onboarding' ? 'Records Interested and takes you to Close, at the bottom of the page.' : outcomeRule(c.outcome).does}
                 onClick={() => void tap(c.key, c.outcome)}
-                className={cn('flex h-12 items-center gap-2 rounded-xl border px-3 text-left text-sm font-semibold transition-colors disabled:opacity-50', TONE[c.tone], c.key === 'send_onboarding' && 'col-span-2 justify-center')}>
+                className={cn('flex h-12 items-center gap-2 rounded-xl border px-3 text-left text-sm font-semibold transition-colors disabled:opacity-50', TONE[c.tone], c.key === 'send_onboarding' && 'col-span-2 justify-center', c.key in INFO_CHOICES && 'h-auto min-h-12 py-1.5 leading-tight')}>
                 {busy === c.key ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : <Icon className="h-4 w-4 shrink-0" />}
-                <span className="min-w-0 truncate">{c.label}</span>
+                <span className={cn('min-w-0', c.key in INFO_CHOICES ? 'break-words' : 'truncate')}>{c.label}</span>
               </button>
             );
           })}
@@ -330,6 +334,7 @@ export function LeadCallFlow({ leadId, businessName, logOpen, onLogOpenChange, n
           {body}
         </DialogContent>
       </Dialog>
+      {infoChannel && <SendMoreInfoDialog leadId={leadId} initialChannel={infoChannel} askedOnCall onClose={() => setInfoChannel(null)} />}
       <Dialog open={nextOpen} onOpenChange={onNextOpenChange}>
         <DialogContent className="max-h-[90dvh] w-[calc(100%-1.5rem)] max-w-md gap-3 overflow-y-auto rounded-2xl p-4 sm:p-5" onKeyDown={keepKeysHere} data-testid="next-action-window">
           <DialogHero icon={CalendarClock} tone="blue" title="Next action" subtitle={businessName} />

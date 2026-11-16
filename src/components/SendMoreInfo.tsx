@@ -33,7 +33,9 @@ export function SendMoreInfo({ leadId }: { leadId: string }) {
 
 const ukDay = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' });
 
-function SendMoreInfoDialog({ leadId, onClose }: { leadId: string; onClose: () => void }) {
+/** `initialChannel` + `askedOnCall`: opened from Log call's "Wants info" — the channel is picked and the call-consent box is already ticked
+ *  (the logged call is the record that they asked; the server still gets callConsent true, so the History line is the same). */
+export function SendMoreInfoDialog({ leadId, onClose, initialChannel, askedOnCall = false }: { leadId: string; onClose: () => void; initialChannel?: MoreInfoChannel; askedOnCall?: boolean }) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [refusal, setRefusal] = useState<string | null>(null);
@@ -47,7 +49,7 @@ function SendMoreInfoDialog({ leadId, onClose }: { leadId: string; onClose: () =
   const [error, setError] = useState<string | null>(null);
   const [key, setKey] = useState(newSendKey);
   /* "They asked for this info on a call" — required to send (text or email); it is the consent recorded on History. */
-  const [callConsent, setCallConsent] = useState(false);
+  const [callConsent, setCallConsent] = useState(askedOnCall);
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -56,7 +58,7 @@ function SendMoreInfoDialog({ leadId, onClose }: { leadId: string; onClose: () =
     else {
       setRefusal(null); setP(r);
       setSubject(r.email.subject); setEmailBody(r.email.body); setSmsBody(r.sms.body); setPriceLine(r.price_line);
-      setChannel(r.email.to ? 'email' : !r.sms.refusal ? 'sms' : 'email');
+      setChannel(initialChannel ?? (r.email.to ? 'email' : !r.sms.refusal ? 'sms' : 'email'));
     }
     setLoading(false);
   };

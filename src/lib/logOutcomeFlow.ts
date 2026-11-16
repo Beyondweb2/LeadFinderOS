@@ -29,6 +29,16 @@ import { CONTACT_METHODS } from './contactMethods.ts';
 /** The channel a Log starts on in the call workspace. */
 export const DEFAULT_LOG_CHANNEL = 'call';
 
+/** The "Wants info" buttons: the channel Send more info opens on, and the note logged with the call. */
+export const INFO_CHOICES: Record<string, { channel: 'email' | 'sms'; note: string }> = {
+  info_email: { channel: 'email', note: 'Wants info: send email' },
+  info_sms: { channel: 'sms', note: 'Wants info: send SMS' },
+};
+/** The note saved with a Log: the Wants-info line first, then anything the rep typed. */
+export function logNoteFor(key: string, typed: string): string {
+  return [INFO_CHOICES[key]?.note, typed.trim()].filter(Boolean).join(' — ');
+}
+
 /** The follow-up step an outcome opens after it is saved. 'none' = the window closes. */
 export type FollowStep =
   | 'none'
@@ -36,7 +46,8 @@ export type FollowStep =
   | 'call_back_when'    // "When should we call?" — the Call the rule just saved, its day and time
   | 'retry_when'        // "Try again when?" — optional, pre-filled from suggestNextAction, Skip is fine
   | 'meeting_when'      // "When is the meeting?" — the Meeting the rule just saved, its day and time
-  | 'quick_close';      // straight to the Close tab (Quick Close)
+  | 'quick_close'      // straight to the Close tab (Quick Close)
+  | 'send_info';        // straight to Send more info (email or text, pre-filled), 2026-11-17
 
 export type LogTone = 'good' | 'strong' | 'info' | 'quiet' | 'stop';
 
@@ -55,6 +66,10 @@ export const LOG_CHOICES: readonly LogChoice[] = [
   { key: 'not_interested', outcome: 'not_interested', label: 'Not interested', tone: 'stop' },
   { key: 'no_answer', outcome: 'no_answer', label: "Didn't answer", tone: 'quiet' },
   { key: 'call_back', outcome: 'call_back', label: 'Call back', tone: 'info' },
+  /* ⛔ "WANTS INFO" (Paul, 2026-11-17): logs the call as Spoke to owner (a real conversation, no star, no status change) with the
+     note "Wants info: send email/SMS", then opens the existing Send more info on that channel. The log IS the record that they asked. */
+  { key: 'info_email', outcome: 'spoke_to_owner', label: 'Wants info: send email', tone: 'info' },
+  { key: 'info_sms', outcome: 'spoke_to_owner', label: 'Wants info: send SMS', tone: 'info' },
   { key: 'send_onboarding', outcome: 'interested', label: 'Close — take payment', tone: 'strong' },
   { key: 'wrong_number', outcome: 'wrong_number', label: 'Wrong number', tone: 'stop' },
   { key: 'left_voicemail', outcome: 'left_voicemail', label: 'Left voicemail', tone: 'quiet' },
@@ -83,7 +98,8 @@ export function choicesFor(channel: string, opts: { paid?: boolean } = {}): LogC
 
 /** The "More" outcomes: everything the channel offers that no main button already records. */
 export function moreOutcomesFor(channel: string): string[] {
-  const main = new Set(choicesFor(channel).map((c) => c.outcome));
+  /* A button whose key is not its outcome (Close, Wants info) is a different action, so it does not hide the plain outcome from More. */
+  const main = new Set(choicesFor(channel).filter((c) => c.key === c.outcome).map((c) => c.outcome));
   return allowedOutcomes(channel).filter((o) => !main.has(o));
 }
 
@@ -91,6 +107,7 @@ export function moreOutcomesFor(channel: string): string[] {
  *  recorded. Driven by the outcome's own rule — never by the button's label. */
 export function followStepOf(key: string, outcome: string): FollowStep {
   if (key === 'send_onboarding') return 'quick_close';
+  if (INFO_CHOICES[key]) return 'send_info';
   switch (outcome) {
     case 'interested': return 'interested_next';
     case 'call_back': return 'call_back_when';
