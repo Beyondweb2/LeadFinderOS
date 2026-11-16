@@ -210,9 +210,10 @@ export function opportunityScore(lead: OppLeadFacts, site: OppWebsiteFacts | nul
   // Excluded: never contact, or already a client.
   if (lead.suppressed || STOP_STATUSES.has(status) || STOP_STATUSES.has(fl)) {
     const why = status === 'wrong_number' || fl === 'wrong_number' ? 'Wrong number' : 'Do Not Contact / opted out';
-    return { kind: 'excluded', why, critical, reasons: [{ text: why, points: 0, kind: 'lowered' }] };
+    /* ⛔ Never 'critical': the 'Has critical website issues' filter must not surface a lead nobody may contact. */
+    return { kind: 'excluded', why, critical: false, reasons: [{ text: why, points: 0, kind: 'lowered' }] };
   }
-  if (CLIENT_STATUSES.has(status) || fl === 'client') return { kind: 'excluded', why: 'Already a client', critical, reasons: [{ text: 'Already a client', points: 0, kind: 'lowered' }] };
+  if (CLIENT_STATUSES.has(status) || fl === 'client') return { kind: 'excluded', why: 'Already a client', critical: false, reasons: [{ text: 'Already a client', points: 0, kind: 'lowered' }] };
 
   // Website part.
   const strong = !critical && web.known && typeof site?.siteScore === 'number' && site.siteScore >= OPP_STRONG_SITE_AT;
