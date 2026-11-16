@@ -62,7 +62,7 @@ ok(!/doesn.t mention you yet/i.test(renderReport({ ...model, kind: "opportunity"
 
 console.log("\n── wiring ──");
 const rr = read("supabase/functions/render-audit-report/index.ts");
-ok(/designKind === "baseline" && rules === 2/.test(rr) && rr.includes("alreadyNamedForBaseline("), "renderer: section only on rules-v2 baselines (older paid baselines unchanged)");
+ok(/designKind === "baseline" && rules >= 2/.test(rr) && rr.includes("alreadyNamedForBaseline("), "renderer: section only on rules-v2 (or v3) baselines (older paid baselines unchanged)");
 ok(rr.includes("NAMED_RECHECK_AUDIT_PURPOSE].includes("), "renderer refuses the internal re-check");
 const wv = read("supabase/functions/weekly-visibility/index.ts");
 ok(wv.includes("purpose: NAMED_RECHECK_AUDIT_PURPOSE") && !/NAMED_RECHECK_AUDIT_PURPOSE, userId: [^}]*leadId/.test(wv), "re-check carries no lead (can never arm a WhatsApp pitch)");

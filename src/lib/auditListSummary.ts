@@ -77,6 +77,8 @@ export interface PooledSummary {
   split: VerdictSplit | null;
   /** Distinct searches asked. */
   searches: number;
+  /** Rules v3: too many answers could not be measured — the row reads "Audit incomplete", never a result. */
+  incomplete?: { unmeasured: number; answers: number } | null;
 }
 
 interface Crawl { insights?: { services?: { name?: string; coverage?: string }[] }; signals?: { checkedPages?: { url?: string }[] } }
@@ -101,7 +103,7 @@ export function pooledSummary(inp: PooledInput): PooledSummary {
     const crawl = (runMeta.map((r) => r.crawl as Crawl | null).find((c) => Array.isArray(c?.insights?.services) && c!.insights!.services!.length) ?? null);
     const services = crawl ? crawl.insights!.services!.map((x) => ({ name: String(x.name ?? ''), dedicated: x.coverage === 'dedicated' })) : [];
     const pageUrls = crawl ? (crawl.signals?.checkedPages ?? []).map((x) => String(x.url ?? '')) : [];
-    const rows: OppRow[] = queue.filter((r) => r.status === 'done' || r.result || (rules === 2 && r.status === 'failed')).map((r) => ({ question: r.question, result: r.result }));
+    const rows: OppRow[] = queue.filter((r) => r.status === 'done' || r.result || (rules >= 2 && r.status === 'failed')).map((r) => ({ question: r.question, result: r.result }));
     const questions = [...new Set(rows.map((r) => r.question.trim()))];
     const ctx: OppContext = {
       businessName: bizName, services, pageUrls, town,
@@ -111,17 +113,19 @@ export function pooledSummary(inp: PooledInput): PooledSummary {
       isNamed: (c: unknown) => cellNamed(c as never, nctx),
       isRival: (n: string) => isRealCompetitor(n, town),
       rules,
-      identity: rules === 2 ? { name: bizName, domains: ownWebsite ? [ownWebsite] : [], placeIds: lead?.place_id ? [lead.place_id] : [] } : undefined,
+      identity: rules >= 2 ? { name: bizName, domains: ownWebsite ? [ownWebsite] : [], placeIds: lead?.place_id ? [lead.place_id] : [] } : undefined,
     };
     const m: ReportModel = buildReportModel(rows, ctx, { kind: designKind, businessName: bizName, town, dateLabel: '', website: { state: 'not_checked', issues: [] }, order: questions, bestCount: 10 });
     let winnable: PooledSummary['winnable'] = null;
     let split: VerdictSplit | null = null;
     if (designKind === 'opportunity') {
-      split = verdictSplitOf(m.all.filter((q) => winnableOf(q) !== null));
+      split = verdictSplitOf(m.all.filter((q) => winnableOf(q) !== null || q.verdict?.rule === 'unmeasured'));
       const live = m.all.map((q) => winnableOf(q)).filter((v) => v !== null);
       winnable = { x: live.filter((v) => v === 'winnable').length, n: live.length };
     }
-    return { pct: m.score.value, named: m.score.named, answers: m.score.denominator, winnable, split, searches: m.counts.searches };
+    /* Rules v3 "Audit incomplete": the list says so instead of a result (the report page shows no figures either). */
+    if (m.incomplete) return { pct: null, named: 0, answers: 0, winnable: null, split: null, searches: m.counts.searches, incomplete: m.incomplete };
+    return { pct: m.score.value, named: m.score.named, answers: m.score.denominator, winnable, split, searches: m.counts.searches, incomplete: null };
   }
 
   /* The classic report's headline: named cells over answered ChatGPT + Gemini cells, every run pooled. */
@@ -135,5 +139,5 @@ export function pooledSummary(inp: PooledInput): PooledSummary {
       if (cellNamed(cell as never, nctx)) named++;
     }
   }
-  return { pct: answers > 0 ? Math.round((100 * named) / answers) : null, named, answers, winnable: null, split: null, searches };
+  return { pct: answers > 0 ? Math.round((100 * named) / answers) : null, named, answers, winnable: null, split: null, searches, incomplete: null };
 }

@@ -26,7 +26,7 @@ export const PICK_SOURCE_LABEL: Record<PickSource, string> = {
 export interface PickInput {
   question: string;
   /** reportDesign.winnableOf: winnable / not_winnable, null = left out (not their service, another place). */
-  verdict: 'winnable' | 'not_winnable' | null;
+  verdict: 'winnable' | 'not_winnable' | 'no_names' | null;
   /** The room tier (reportOpportunity): lots / some / little / nofirms / named / … */
   tier: string;
   /** Distinct firms AI named across the answers (directories never count). */
@@ -61,7 +61,7 @@ export function pickTargetedSearches(pool: PickInput[], hook: string[], target =
   for (const p of harder) take(p, 'harder');
 
   // 4. fill if short: other winnable, other little room, anything else, no-firms last
-  const fillRank = (p: PickInput) => (p.verdict === 'winnable' ? 0 : p.tier === 'little' ? 1 : p.tier === 'nofirms' ? 3 : 2);
+  const fillRank = (p: PickInput) => (p.verdict === 'winnable' ? 0 : p.tier === 'little' ? 1 : p.tier === 'nofirms' || p.verdict === 'no_names' ? 3 : 2);
   const left = pool.filter((p) => !seen.has(norm(p.question)) && p.verdict !== null).sort((a, b) => fillRank(a) - fillRank(b) || byFirms(a, b));
   for (const p of left) take(p, p.tier === 'nofirms' ? 'nofirms' : 'fill');
   return out;

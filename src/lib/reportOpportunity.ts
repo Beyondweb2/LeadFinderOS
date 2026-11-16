@@ -55,10 +55,11 @@ export const RULE_WORDS: { key: OppTier; label: string; short: string }[] = [
 
 import { cleanAnswerText, isJunkAnswer, isMapCardAnswer } from './answerText.ts';
 import { checkName, coreName, type BusinessIdentity } from './strictName.ts';
-import { decideVerdict, type AnswerFacts, type AuditVerdict } from './auditVerdict.ts';
+import { decideVerdict, decideVerdictV3, isRegisterName, registersInAnswer, type AnswerFacts, type AuditRules, type AuditVerdict } from './auditVerdict.ts';
 
-/** The shape of one stored answer cell this module reads (a subset of auditReport's EngineCell). */
-interface Cell { self_named?: boolean; named?: boolean; competitors?: string[]; citations?: { url?: string }[]; answer_text?: string }
+/** The shape of one stored answer cell this module reads (a subset of auditReport's EngineCell). `firms_read` = the
+ *  firm-reading step (extract-competitors) read this answer; rules v3 counts an answer without it as not measured. */
+interface Cell { self_named?: boolean; named?: boolean; competitors?: string[]; citations?: { url?: string }[]; answer_text?: string; firms_read?: boolean }
 export interface OppRow { question: string; result: Record<string, unknown> | null }
 
 export interface OppQuestion {
@@ -145,13 +146,13 @@ export interface OppContext {
   /** Services the client said they do NOT offer (onboarding). Only these, or a search clearly outside their trade, are excluded;
    *  a service merely missing from the current site is "Not on your site yet" (we build the new site). */
   notOffered?: string[];
-  /** Verdict rules: 1 (before 2026-11-15, the room rule + big-city cap) or 2 (docs/AUDIT_RULES.md). Absent = 1. */
-  rules?: 1 | 2;
+  /** Verdict rules: 1 (before 2026-11-15, the room rule + big-city cap), 2 or 3 (docs/AUDIT_RULES.md). Absent = 1. */
+  rules?: AuditRules;
   /** Rules v2: who the business is, for the strict name match (exact name, domain, Google profile). */
   identity?: BusinessIdentity;
 }
 const namedOf = (ctx: Pick<OppContext, 'isNamed' | 'rules' | 'identity'>) => (c: Cell): boolean =>
-  ctx.rules === 2 && ctx.identity ? checkName(c, ctx.identity).match === 'named' : (ctx.isNamed ? ctx.isNamed(c) : !!(c.self_named || c.named));
+  (ctx.rules ?? 1) >= 2 && ctx.identity ?checkName(c, ctx.identity).match === 'named' : (ctx.isNamed ? ctx.isNamed(c) : !!(c.self_named || c.named));
 
 const ENGINES = ['chatgpt', 'gemini'] as const;
 
@@ -474,27 +475,31 @@ export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): 
     const hosts = (cell.citations ?? []).map((c) => hostOf(c.url)).filter(Boolean);
     /* Rules v2: only Gemini is judged for another place (Paul, 2026-11-15), and the search is never left out for it —
        its verdict says "Local gap" instead (auditVerdict.ts). */
-    const wrong = !!area && (ctx.rules !== 2 || e === 'gemini') && placeMixup(area, names, hosts, cell.answer_text ? [String(cell.answer_text)] : [], 1);
+    const wrong = !!area && ((ctx.rules ?? 1) < 2 || e === 'gemini') && placeMixup(area, names, hosts, cell.answer_text ? [String(cell.answer_text)] : [], 1);
     cells.push({ e, cell, wrong });
   }
   const wrongPlace = cells.filter((c) => c.wrong).length;
-  const mixup = ctx.rules !== 2 && cells.length > 0 && wrongPlace * 2 >= cells.length;
-  /* RULES v2: every answer read once into facts for decideVerdict. A row without an engine's answer is a FAILED
-     answer (re-run, never a verdict); only Gemini is checked for another place; near-names are another business. */
+  const mixup = (ctx.rules ?? 1) < 2 && cells.length > 0 && wrongPlace * 2 >= cells.length;
+  /* RULES v2 / v3: every answer read once into facts for the verdict. A row without an engine's answer is a FAILED
+     answer (re-run, never a verdict); only Gemini is checked for another place; near-names are another business.
+     v3 also counts an answer whose firms were never read (no `firms_read` mark) as failed: an unread list is not
+     "AI named nobody" (the 16 Nov London Discovery), and registers are kept apart from firms and directories. */
   const facts: AnswerFacts[] = [];
-  if (ctx.rules === 2) {
+  const v3 = ctx.rules === 3;
+  if ((ctx.rules ?? 1) >= 2) {
     const selfKey = firmKey(coreName(ctx.identity?.name ?? ctx.businessName));
     for (const row of own) for (const e of ENGINES) {
       const cell = (row.result ?? {})[e] as (Cell & { error?: unknown }) | undefined;
       const text = cell && typeof cell === 'object' ? String(cell.answer_text ?? '') : '';
-      if (!cell || typeof cell !== 'object' || !text.trim() || cell.error) { facts.push({ engine: e, failed: true, you: 'no', near: [], firms: [], dirs: [], wrongPlace: false, text }); continue; }
+      if (!cell || typeof cell !== 'object' || !text.trim() || cell.error || (v3 && cell.firms_read !== true)) { facts.push({ engine: e, failed: true, you: 'no', near: [], firms: [], dirs: [], wrongPlace: false, text }); continue; }
       const nc = ctx.identity ? checkName(cell, ctx.identity) : { match: (namedOf(ctx)(cell) ? 'named' : 'no') as 'named' | 'no', near: [] as string[] };
-      const firms = rivalsOf(cell, ctx, vocab).filter((f) => firmKey(f) !== selfKey);
+      const firms = rivalsOf(cell, ctx, vocab).filter((f) => firmKey(f) !== selfKey && !(v3 && isRegisterName(f)));
       for (const n of nc.near) { const clean = n.replace(/\s*\(different town or review count\)$/, ''); if (!firms.some((f) => firmKey(f) === firmKey(clean))) firms.push(clean); }
       const names = (cell.competitors ?? []).filter((n): n is string => typeof n === 'string');
       const hosts = (cell.citations ?? []).map((c) => hostOf(c.url)).filter(Boolean);
       const wrong = e === 'gemini' && !!area && placeMixup(area, names, hosts, [text], 1);
-      facts.push({ engine: e, failed: false, you: nc.match, near: nc.near, firms, dirs: directoriesInAnswer(cell, ctx), wrongPlace: wrong, text });
+      const dirs = directoriesInAnswer(cell, ctx);
+      facts.push({ engine: e, failed: false, you: nc.match, near: nc.near, firms, dirs: v3 ? dirs.filter((d) => !isRegisterName(d)) : dirs, wrongPlace: wrong, text, ...(v3 ? { registers: registersInAnswer(text, hosts) } : {}) });
     }
   }
   const cites = new Set<string>();
@@ -581,8 +586,9 @@ export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): 
   }
 
   let verdict: AuditVerdict | undefined;
-  if (ctx.rules === 2) {
-    verdict = decideVerdict({ question, answers: facts, head: headOf(question), leftOut: clientSaidNo ? 'not_offered' : !serviceOnSite ? 'not_on_site' : null, area, key: firmKey });
+  if ((ctx.rules ?? 1) >= 2) {
+    const sf = { question, answers: facts, head: headOf(question), leftOut: clientSaidNo ? 'not_offered' as const : !serviceOnSite ? 'not_on_site' as const : null, area, key: firmKey };
+    verdict = v3 ? decideVerdictV3(sf) : decideVerdict(sf);
     why = verdict.reason;
   }
 

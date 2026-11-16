@@ -12,6 +12,7 @@ import {
   hookFromRows, scoreAnswers, searchPhrase, summariseOpportunity, buildVocab, type OppContext, type OppDirectory, type OppFirm, type OppQuestion, type OppRow,
 } from './reportOpportunity.ts';
 import type { AiReadability } from './aiReadability.ts';
+import { auditCompleteness } from './auditVerdict.ts';
 
 export type ReportKind = 'opportunity' | 'hook' | 'baseline';
 
@@ -33,7 +34,8 @@ export interface ReportModel {
   what: string;
   where: string;
   /** The AI score: share of the answers that named any business that named THIS business. null = no answer named a business. */
-  score: { value: number | null; named: number; denominator: number; answers: number };
+  /** `overAll` = the denominator is every answer returned (baselines and rules v3), not only the answers that named a business. */
+  score: { value: number | null; named: number; denominator: number; answers: number; overAll?: boolean };
   /** none = never named; some = named but under half the answers that named a business; high = half or more. */
   band: 'none' | 'some' | 'high';
   /** The firm named in the most answers, and everyone AI recommends instead (most first). */
@@ -71,6 +73,9 @@ export interface ReportModel {
   alreadyNamed?: { dateLabel: string; searches: string[] } | null;
   /** The header's place, from what is known about the business (alreadyNamed.ts reportPlaceLabel). Absent = `where`. */
   place?: string | null;
+  /** Rules v3 "Audit incomplete" (brief item 1): too many answers could not be measured, so the page shows no results.
+   *  null = complete (or not a v3 discovery / first-contact report). */
+  incomplete?: { unmeasured: number; answers: number } | null;
 }
 
 export interface ReportModelInput {
@@ -113,8 +118,11 @@ export function buildReportModel(rows: OppRow[], ctx0: OppContext, o: ReportMode
   const counted = new Set(s.questions.filter((q) => q.tier !== 'flagged').map((q) => q.question));
   const sc0 = scoreAnswers(rows, ctx, counted);
   /* ⛔ THE CLIENT BASELINE COUNTS EVERY ANSWER (V2, Paul 2026-11-13): "named in N of M answers" over ALL ChatGPT + Gemini
-     answers — the same count the welcome pack and the guarantee use — never only the answers that named a business. */
-  const sc = o.kind === 'baseline' ? { ...sc0, denominator: sc0.answers } : sc0;
+     answers — the same count the welcome pack and the guarantee use — never only the answers that named a business.
+     ⛔ RULES v3 (Paul, 2026-11-16, brief item 6): every report on v3 does the same. "0 of 25" on the 16 Nov London
+     Discovery was 0 of the 25 answers that happened to keep a firm list, out of 240 returned. Older links keep theirs. */
+  const allAnswers = o.kind === 'baseline' || ctx0.rules === 3;
+  const sc = allAnswers ? { ...sc0, denominator: sc0.answers } : sc0;
   const value = sc.denominator > 0 ? (sc.named > 0 ? Math.max(1, Math.round((100 * sc.named) / sc.denominator)) : 0) : null;
   const band: ReportModel['band'] = !sc.named ? 'none' : value !== null && value >= 50 ? 'high' : 'some';
 
@@ -152,11 +160,15 @@ export function buildReportModel(rows: OppRow[], ctx0: OppContext, o: ReportMode
     ? (exampleQs.find((q) => q.firms.length && q.namedYou === 0) ?? exampleQs.find((q) => q.firms.length) ?? exampleQs[0] ?? null)
     : (targets.find((q) => q.firms.length) ?? targets[0] ?? null);
   const all = o.kind === 'hook' ? exampleQs : o.kind === 'baseline' ? targets : [...live].sort((a, b) => a.question.localeCompare(b.question));
+  /* The baseline's numbers come from the answers themselves (the strict name match), never from the firm lists, so a
+     firm-reading gap cannot make it wrong; it keeps its own completeness checks (measurementHealth). */
+  const comp = ctx0.rules === 3 && o.kind !== 'baseline' ? auditCompleteness(s.questions.map((q) => q.verdict)) : null;
   return {
+    incomplete: comp && comp.incomplete ? { unmeasured: comp.unmeasured, answers: comp.answers } : null,
     engines: { chatgpt: eng('chatgpt'), gemini: eng('gemini') }, overview, asks, featured, all,
     kind: o.kind, businessName: o.businessName, dateLabel: o.dateLabel, shareUrl: o.shareUrl,
     what: phrase.what, where: phrase.where,
-    score: { value, named: sc.named, denominator: sc.denominator, answers: sc.answers }, band,
+    score: { value, named: sc.named, denominator: sc.denominator, answers: sc.answers, overAll: allAnswers }, band,
     top: sc.firms[0] ?? null, rivals: sc.firms,
     website: o.website,
     counts: { lots: s.lots, some: s.some, little: s.little, nofirms: s.nofirms, named: s.named, flagged: s.flagged, notoffered: s.notoffered, notonsite: s.notonsite, room: s.room, searches: s.questions.length - s.flagged },
