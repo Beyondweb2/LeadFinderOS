@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-16-opportunity-score', date: '2026-11-16', title: 'Opportunity score: Hot, Warm or Cold on every lead', audience: 'all',
+    body: 'Outreach and Find Leads now show an Opportunity score for each lead: Hot, Warm or Cold, with its top reasons in plain words. It puts first the businesses AI does not name AND whose website is the reason (AI blocked, services not on their own pages, no areas, no contact details), that are active and have a mobile. Filter by band or by "Has critical website issues", and sort best first. Team only.',
+    report: {
+      added: ['Opportunity column on Outreach, with Filters → Opportunity score and Sort → "Opportunity: best first".', 'The same score under each business in Find Leads, with Filter → Opportunity score (sort best first, critical website issues, one band).', 'Top 3 reasons on every lead, e.g. "AI never named them (0 of 6 answers)".'],
+      changed: [],
+      removed: [],
+      effect: 'Work Hot leads first. A lead with no website scan or no AI audit says Incomplete and what is missing; Do Not Contact and clients say Excluded.',
+    } },
   { id: '2026-11-16-audit-locked-spots', date: '2026-11-16', title: 'Not winnable now means "the same few firms every time"', audience: 'admin',
     body: 'New Discovery audits no longer use the 70% line. For each AI, over the asks where it named firms, a search is locked when at least 2 firms come back in every one of those asks and fewer than 2 firms appear only once. A search is Not winnable only when every AI that names firms is locked; otherwise it is Winnable. An AI that names firms in just 2 of its 3 asks is judged on those 2. The same firm written two ways ("HomeCert Ltd" and "HomeCert Ltd - Electricians & Gas Engineers London") now counts once.',
     report: {

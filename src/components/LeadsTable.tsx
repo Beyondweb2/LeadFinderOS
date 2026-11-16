@@ -33,6 +33,10 @@ import type { OutreachLead } from '@/types/outreach';
 import { SearchLeadContact } from './SearchLeadContact';
 import { useAuth } from '@/hooks/useAuth';
 import { readSearchResultsView, writeSearchResultsView, readSiteFilters, writeSiteFilters } from '@/lib/searchResultsPrefs';
+import { OpportunityCell } from '@/components/OpportunityCell';
+import { OPP_GROUPS, OPP_GROUP_LABELS, oppGroupOf, oppSortKey, type OppGroup, type OppResult } from '@/lib/opportunityScore';
+import { opportunityForLead } from '@/lib/opportunityForLead';
+import { useLeadCrawlsFor, useOpportunityAuditScores } from '@/hooks/useOpportunityInputs';
 import { resultSetSignature } from '@/lib/searchResultsCache';
 import { visibleResults } from '@/lib/searchResultsView';
 import { SelectionModeBar } from './SelectionModeBar';
@@ -197,7 +201,29 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
   }, []);
   /* ⛔ NO BUSINESS AGE (2026-10-09, Paul): the Business age column, its filter, its sort boost and its Companies House lookups are
      gone from Find Leads. Nothing here calls Companies House any more; the stored data and the companies-house-check function are untouched. */
-  const clearFilters = useCallback(() => { setStatusFilters(ALL_STATUSES); setSocialFilters([]); setSiteFilters(ALL_SITE_FILTERS); }, [ALL_STATUSES]);
+  /* OPPORTUNITY SCORE (2026-11-16, opportunityScore.ts, docs/OPPORTUNITY_SCORE.md): a result already in the CRM is scored from its
+     stored website check + audit; a new result has neither, so it reads "Incomplete" (a no-website result still shows its
+     critical issue). View only: team only, nothing is added or skipped by it. */
+  const [oppGroup, setOppGroup] = useState<OppGroup | 'all'>('all');
+  const [oppCriticalOnly, setOppCriticalOnly] = useState(false);
+  const [oppSort, setOppSort] = useState(false);
+  const oppLeadIdOf = useCallback((l: Lead) => ownership?.(l)?.leadId ?? getCrmState?.(l)?.crmLeadId ?? null, [ownership, getCrmState]);
+  const oppIds = useMemo(() => leads.map(oppLeadIdOf).filter((x): x is string => !!x), [leads, oppLeadIdOf]);
+  const oppCrawls = useLeadCrawlsFor(oppIds);
+  const { auditByLead: oppAudits } = useOpportunityAuditScores({ leadIds: oppIds });
+  const oppById = useMemo(() => {
+    const m = new Map<string, OppResult>();
+    for (const l of leads) {
+      const id = oppLeadIdOf(l);
+      const own = ownership?.(l);
+      m.set(l.id, opportunityForLead({
+        website: l.websiteStatus === 'NO_WEBSITE' ? null : (l.websiteUrl ?? null), phone: l.phone ?? null, country: l.searchCountry ?? null,
+        findLeadsStatus: own?.leadStatus ?? null, hasGoogleListing: !!l.googleMapsUrl, reviewCount: l.reviewCount ?? null, rating: l.rating ?? null,
+      }, id ? oppCrawls?.get(id) : null, id ? oppAudits?.get(id) ?? null : null));
+    }
+    return m;
+  }, [leads, oppLeadIdOf, ownership, oppCrawls, oppAudits]);
+  const clearFilters = useCallback(() => { setStatusFilters(ALL_STATUSES); setSocialFilters([]); setSiteFilters(ALL_SITE_FILTERS); setOppGroup('all'); setOppCriticalOnly(false); }, [ALL_STATUSES]);
   const hasOwnSite = useCallback((l: Lead) => l.websiteStatus === 'HAS_OWN_WEBSITE' && !!agencyCheckDomain(l.websiteUrl), []);
   const agencyItems = useMemo(() => leads.map((l) => ({ websiteUrl: l.websiteUrl, hasOwnWebsite: hasOwnSite(l) })), [leads, hasOwnSite]);
   const agency = useAgencyChecks(agencyItems);
@@ -230,18 +256,27 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
         if (!kind || !socialFilters.includes(kind)) return false;
       }
       if (!passesSiteFilter(siteFilters, siteStateOf(hasOwnSite(lead), agency.rowFor(lead.websiteUrl)))) return false;
+      const opp = oppById.get(lead.id);
+      if (oppGroup !== 'all' && (!opp || oppGroupOf(opp) !== oppGroup)) return false;
+      if (oppCriticalOnly && opp?.critical !== true) return false;
       return true;
     });
     /* Shown out-of-town and not-a-match rows come after the rest. */
     const aside = (l: Lead) => outsideSearchedTown(l) || isNotMatch(l);
-    const shown = [...kept.filter((l) => !aside(l)), ...kept.filter((l) => aside(l))];
+    let shown = [...kept.filter((l) => !aside(l)), ...kept.filter((l) => aside(l))];
+    /* Sort by opportunity: best first; ties keep the search order (a stable sort). */
+    if (oppSort) {
+      const k = (l: Lead) => { const o = oppById.get(l.id); return o ? oppSortKey(o) : 400; };
+      shown = shown.map((l, i) => ({ l, i })).sort((a, b) => k(a.l) - k(b.l) || a.i - b.i).map((x) => x.l);
+      return shown;
+    }
     /* High-confidence agency sites go to the bottom (kept, never hidden) once every check has finished —
        rows never jump under the cursor while results are still arriving. The rest keep their order. */
     if (agency.pending > 0) return shown;
     const last = shown.filter((l) => highAgency(l));
     const rest = shown.filter((l) => !highAgency(l));
     return [...rest, ...last];
-  }, [baseLeads, statusFilters, socialFilters, siteFilters, agency, hasOwnSite, highAgency, isNotMatch]);
+  }, [baseLeads, statusFilters, socialFilters, siteFilters, agency, hasOwnSite, highAgency, isNotMatch, oppById, oppGroup, oppCriticalOnly, oppSort]);
 
   useEffect(() => { onShownChange?.(filteredLeads); }, [filteredLeads, onShownChange]);
   const visible = visibleResults(baseLeads.length, filteredLeads.length);
@@ -516,13 +551,20 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
           <span className="flex items-center gap-1.5 text-sm"><Facebook className="h-3.5 w-3.5 text-blue-600" /> Listing = Facebook</span>
         </DropdownMenuCheckboxItem>
         <DropdownMenuSeparator />
+        <DropdownMenuLabel className="px-2 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Opportunity score</DropdownMenuLabel>
+        <DropdownMenuCheckboxItem checked={oppSort} onCheckedChange={(on) => setOppSort(!!on)} onSelect={(e) => e.preventDefault()} className="py-1 text-sm" data-testid="opp-sort">Sort: best opportunity first</DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem checked={oppCriticalOnly} onCheckedChange={(on) => setOppCriticalOnly(!!on)} onSelect={(e) => e.preventDefault()} className="py-1 text-sm" data-testid="opp-filter-critical">Has critical website issues</DropdownMenuCheckboxItem>
+        {OPP_GROUPS.map((g) => (
+          <DropdownMenuCheckboxItem key={g} checked={oppGroup === g} onCheckedChange={() => setOppGroup((cur) => (cur === g ? 'all' : g))} onSelect={(e) => e.preventDefault()} className="py-1 text-sm" data-testid={`opp-filter-${g}`}>{OPP_GROUP_LABELS[g]}</DropdownMenuCheckboxItem>
+        ))}
+        <DropdownMenuSeparator />
         <DropdownMenuLabel className="px-2 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Website · site management</DropdownMenuLabel>
         {SITE_FILTERS.map((f) => (
           <DropdownMenuCheckboxItem key={f.value} checked={siteFilters.includes(f.value)} onCheckedChange={(on) => toggleSiteFilter(f.value, !!on)} onSelect={(e) => e.preventDefault()} className="py-1 text-sm" data-testid={`site-filter-${f.value}`}>{f.label}</DropdownMenuCheckboxItem>
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
-  ), [statusFilters, toggleFilter, statusFilterOptions, socialFilters, toggleSocialFilter, siteFilters, toggleSiteFilter]);
+  ), [statusFilters, toggleFilter, statusFilterOptions, socialFilters, toggleSocialFilter, siteFilters, toggleSiteFilter, oppSort, oppCriticalOnly, oppGroup]);
 
   // Bulk action buttons (shared by the mobile + desktop headers), mirroring the
   // Outreach pattern: appear with a selection; "Add all shown" when none selected.
@@ -758,6 +800,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                     <WebsiteStatusToggle lead={lead} onSet={onSetWebsiteStatus} compact />
                     {hasOwnSite(lead) && <SiteManagementCell row={agency.rowFor(lead.websiteUrl)} checking={agency.isChecking(lead.websiteUrl)} hasWebsite compact />}
                   </div>
+                  {oppById.get(lead.id) && <div className="mt-1"><OpportunityCell result={oppById.get(lead.id)!} compact /></div>}
                   {onEnrichPatch && (
                     <div className="mt-1.5">
                       <SearchLeadContact
@@ -921,6 +964,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-600 dark:text-blue-300 font-medium shrink-0" data-testid="result-town">{lead.searchTown}</span>
                       )}
                     </div>
+                    {oppById.get(lead.id) && <div className="mt-1"><OpportunityCell result={oppById.get(lead.id)!} compact /></div>}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
