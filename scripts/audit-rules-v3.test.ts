@@ -9,7 +9,7 @@ import { firmKey, oppQuestion, type OppContext, type OppRow } from "../src/lib/r
 import { buildReportModel } from "../src/lib/reportModel.ts";
 import { renderReport, splitLine, verdictSplitOf, winnableOf } from "../src/lib/reportDesign.ts";
 import { renderLeadfinderReport } from "../src/lib/leadfinderReport.ts";
-import { incompleteAlert, isIncomplete, providerAlert, providerRefusal, refusalsIn, unmeasuredAnswers } from "../src/lib/auditAlerts.ts";
+import { incompleteCause, incompleteSummary, isIncomplete, providerAlert, providerRefusal, refusalsIn, unmeasuredAnswers } from "../src/lib/auditAlerts.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
@@ -119,10 +119,10 @@ const rowsQ = [
 ];
 const u = unmeasuredAnswers(rowsQ);
 ok(u.answers === 6 && u.unread === 1 && u.failed === 2 && u.unmeasured === 3 && isIncomplete(u), "the finaliser's count: 3 of 6 settled answers unmeasured (pending rows not judged) = incomplete");
-const al = incompleteAlert({ businessName: "London Domestic Maintenance Ltd", shortCode: "qs44zg", auditId: "a1", ...u, refusals: refusalsIn(["no credits remaining"]) });
-ok(al.dedupeKey === "audit_incomplete:a1" && /OpenAI refused/.test(al.body) && al.link.startsWith("/"), "one alert per audit, saying why, linking inside the app");
-const pa = providerAlert({ provider: "OpenAI", why: "OpenAI refused: no credit left on the account", where: "x", dayIso: "2026-11-16T07:00:00Z" });
-ok(pa.dedupeKey === "provider_refused:openai:2026-11-16", "one provider alert per provider per day");
+/* The per-audit alert became an hourly summary per cause (v1-incomplete-fix): scripts/audit-alert-summary.test.ts. */
+ok(incompleteCause(rowsQ, refusalsIn(["no credits remaining"])) === "openai_refused" && /OpenAI refused/.test(incompleteSummary({ cause: "openai_refused", count: 1, sinceIso: "2026-11-16T12:08:00Z", names: ["London Domestic Maintenance Ltd (qs44zg)"] }).body), "the summary says why");
+const pa = providerAlert({ provider: "OpenAI", why: "OpenAI refused: no credit left on the account", where: "x", nowIso: "2026-11-16T07:00:31Z" });
+ok(pa.dedupeKey === "provider_refused:openai:2026-11-16T07:00", "a provider alert carries the minute it opened (the writer allows one per provider per hour)");
 
 if (f) { console.log(`\n${f} FAILED`); process.exit(1); }
 console.log("\nall passed");
