@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-16-send-more-info', date: '2026-11-16', title: '"Send more info" on the prospect page', audience: 'all',
+    body: 'When a prospect asks for more info on a call, press "Send more info" in the Close section. Choose Email or Text, check the message (it fills in their business name, their latest report link, their trade, the price and your first name), edit it if you need to, then send. Emails come from Findable and replies go to your own email. Texts keep the usual opt-out, do-not-contact and texting-hours checks. It needs a report first. After it sends, the lead’s History says "More info sent by <you> via SMS/email" and its Next Action becomes a Follow up in two days.',
+    report: {
+      added: ['A "Send more info" button in the prospect page’s Close section: email or text, previewed and editable.', 'Admin: the price line both messages use, editable in the same window.'],
+      changed: ['Sending it sets the lead’s Next Action to a Follow up in two days.'],
+      removed: [],
+      effect: 'A prospect who says "send me some info" gets their report and the offer in a minute, and you have a reminder to follow up.',
+    } },
   { id: '2026-11-16-quick-check-retry', date: '2026-11-16', title: 'Failed Quick checks try once more by themselves, and "Run again" on the row', audience: 'all',
     body: 'If a Quick check fails because the AI search didn’t finish, it now tries once more by itself about 30 minutes later. It doesn’t use another check from your daily allowance. If it still fails, the row says "Check failed" with a "Run again" button, and the report link says "This check couldn’t be completed, ask your contact to run it again" instead of "check back shortly".',
     report: {

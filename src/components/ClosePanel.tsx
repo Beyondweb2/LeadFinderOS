@@ -13,6 +13,7 @@ import { OnboardingLinkCard } from '@/components/OnboardingLinkCard';
 import { QuickClosePanel, quickCloseKey, useQuickClose } from '@/components/QuickCloseDialog';
 import { CustomerEmailControl } from '@/components/CustomerEmailControl';
 import { SmsLinkSend } from '@/components/SmsLinkSend';
+import { SendMoreInfo } from '@/components/SendMoreInfo';
 import { cn } from '@/lib/utils';
 
 /* ══ THE CLOSE SECTION (Paul, 2026-11-04, docs/prospect-one-page-close.md) ═════════════════════════════════════════════
@@ -30,6 +31,8 @@ export function ClosePanel({ leadId, active = true, framed = false }: { leadId: 
       {v.state === 'needs_review' && noAnswers && <SelfServeHold leadId={leadId} reasons={v.review.reasons} />}
       {v.state === 'declined' && noAnswers && <SelfServeDeclined reasons={v.review.reasons} />}
       <QuickClosePanel leadId={leadId} active={active} />
+      {/* Send more info (2026-11-16): for a prospect who asked for more on the call, beside the sign-up sends. */}
+      <SendMoreInfo leadId={leadId} />
       <details className="group rounded-xl border border-border/60 px-3 py-2" open={setupSent} data-testid="close-full-setup">
         <summary className="flex min-h-[36px] cursor-pointer list-none items-center gap-1.5 text-sm font-semibold [&::-webkit-details-marker]:hidden">
           <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />Or let them fill it in themselves<ChevronDown className="ml-auto h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden />

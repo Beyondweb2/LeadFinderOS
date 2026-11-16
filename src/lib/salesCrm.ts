@@ -366,6 +366,8 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   call_made: 'Browser call',
   /* lead_close_work (2026-10-10): a person closed this lead's items on the Sales dashboard. Who = the row's actor. */
   work_closed: 'Closed on the dashboard',
+  /* fn send-more-info (2026-11-16): body = "More info sent by Valentin via SMS". */
+  more_info_sent: 'More info sent',
   onboarding_submitted: 'Client submitted onboarding',
   delivery_submitted: 'Ready for delivery',
   discovery_run: 'Discovery run',
@@ -469,6 +471,7 @@ export function activityDetail(
       const why = d.reason === 'dead' ? `Dead lead — ${d.outcome === 'wrong_number' ? 'Wrong number' : 'Not interested'}` : 'Done, no action needed';
       return `${why}${cleared}`;
     }
+    case 'more_info_sent': return `${a.body ?? 'More info sent'}${d.simulated ? ' (test mode - not sent)' : ''}`;
     case 'sms_sent': return d.simulated ? 'Test mode - not sent' : d.link_kind ? 'With a link (sent from Close)' : 'A text message';
     case 'call_made': {
       const secs = Number(d.duration_s);

@@ -49,7 +49,7 @@ export interface ProtectionLimits {
 export const GUARD_ACTIONS = [
   'lead_search', 'place_details', 'enrich', 'site_scrape', 'hook_audit', 'hook_preview', 'ai_draft',
   'prospect_preview', 'niche_check', 'audit_manual', 'admin_ai', 'claim', 'lead_add', 'lead_lookup',
-  'copy_numbers', 'export_csv', 'whatsapp_send', 'whatsapp_queue', 'sales_check', 'lead_import', 'sms_send', 'voice_call',
+  'copy_numbers', 'export_csv', 'whatsapp_send', 'whatsapp_queue', 'sales_check', 'lead_import', 'sms_send', 'voice_call', 'email_send',
 ] as const;
 export type GuardAction = typeof GUARD_ACTIONS[number];
 
@@ -97,6 +97,8 @@ export const DEFAULT_PROTECTION_LIMITS: ProtectionLimits = {
     /* Twilio texts and browser calls (2026-10-09, migration 20261018090000): people pressing buttons, unpaid, burst-limited. */
     sms_send: { paid: false, per_min: 6, per_hour: 60, per_day: 200 },
     voice_call: { paid: false, per_min: 6, per_hour: 120, per_day: 400 },
+    /* Send more info by email (2026-11-16, fn send-more-info, migration 20261221090000): a person pressing Send, unpaid, burst-limited. */
+    email_send: { paid: false, per_min: 6, per_hour: 60, per_day: 200 },
   },
 };
 
