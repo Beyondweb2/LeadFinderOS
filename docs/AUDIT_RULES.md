@@ -96,6 +96,8 @@ when its run's firm-reading receipt says complete; plus an old-vs-new table.
 |---|---|---|---|
 | LDM Discovery `qs44zg` → `tge2ue` | Winnable 39 · left out 1 | Winnable 18 · Not winnable 20 · AI doesn't name businesses 1 · left out 1 | 0 of 128 → 0 of 240 |
 | Moments Discovery `ukuarx` → `rfussx` | Already named 13 · Winnable 25 · Not winnable 2 | Already named 13 · Winnable 24 · Not winnable 3 · AI doesn't name businesses 0 | 37 of 240 |
+| **v4** LDM `tge2ue` → `6kjpm7` | (v3) Winnable 18 · Not winnable 20 · AI doesn't name 1 · left out 1 | Winnable 28 · Not winnable 10 · AI doesn't name businesses 1 · left out 1 | 0 of 240 |
+| **v4** Moments `rfussx` → `db7nmj` | (v3) Already named 13 · Winnable 24 · Not winnable 3 | Already named 13 · Winnable 27 · Not winnable 0 · AI doesn't name businesses 0 | 37 of 240 |
 
 LDM's 3 runs were re-read on 16 Nov after the OpenAI key moved to a new organisation (~$0.76). Moments' copy had run 2
 re-read ($0.23): on 15 Nov the model skipped 24 of its answers, so v3 first showed every search as Couldn't measure.
