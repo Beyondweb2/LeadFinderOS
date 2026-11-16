@@ -147,7 +147,7 @@ console.log('\n── THE SET-UP PAGE (findable-site OnboardingFlow) ──');
     const code = flow.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
     ok(!/if you want one/i.test(code), 'the Build wording "A brand new website if you want one" is gone');
     ok(/"A new website built and optimised for AI visibility, so customers, search engines and AI understand exactly what you do and where you work"/.test(code), 'Build: "A new website built and optimised for AI visibility…"');
-    ok(/Let&rsquo;s get Findable set up for \{businessName\}/.test(code) && /We already know some of your details, so we just need to confirm a few things before we get started\./.test(code), 'the page opens personal: "Let\'s get Findable set up for [Business]"');
+    ok(/Let&rsquo;s get Findable set up for \{businessName\}/.test(code) && /Confirm a few details, then choose your plan\./.test(code), 'the page opens personal: "Let\'s get Findable set up for [Business]"');
     const introAt = code.indexOf('phase === "intro" && (');
     const intro = code.slice(introAt, code.indexOf('phase === "questions"', introAt));
     ok(introAt > 0 && !/£|PriceText|SETUP_PRICE|CONTINUATION_MONTHLY/.test(intro), 'F: the first screen names no price');

@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-16-onboarding-wording-sync', date: '2026-11-16', title: 'Fill in for them: shorter wording, same as the customer page', audience: 'admin',
+    body: 'The "fill in onboarding for them" form now uses the same shorter wording as the customer’s own set-up page on findable.live (for example "Confirmations" / "Tick to confirm."). The questions and answers are unchanged.',
+    report: {
+      added: [],
+      changed: ['Four lines of helper wording on the fill-in-for-them form, matching findable.live’s shorter onboarding copy.'],
+      removed: ['The longer explanations under "Is this right?", Business name, "What you do, and where" and the confirmations step.'],
+      effect: 'What you read when filling it in for a client matches what the client sees on their own link.',
+    } },
   { id: '2026-11-16-send-more-info', date: '2026-11-16', title: '"Send more info" on the prospect page', audience: 'all',
     body: 'When a prospect asks for more info on a call, press "Send more info" in the Close section. Choose Email or Text, check the message (it fills in their business name, their latest report link, their trade, the price and your first name), edit it if you need to, then send. Emails come from Findable and replies go to your own email. Texts keep the usual opt-out, do-not-contact and texting-hours checks. It needs a report first. After it sends, the lead’s History says "More info sent by <you> via SMS/email" and its Next Action becomes a Follow up in two days.',
     report: {
