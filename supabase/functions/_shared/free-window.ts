@@ -12,6 +12,25 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { textPayload, videoPayload } from "./whatsapp-send.ts";
 import { freeTextVersionOf, freeWindowOpen, inWindowShape } from "../../../src/lib/inWindowFreeText.ts";
+import { bareTrade, normaliseTrade, withTradeArticle } from "../../../src/lib/templateVars.ts";
+
+/* ⛔ "an <trade>" IN FREE TEXT (Paul, 2026-11-16) — the queue's copy of send-whatsapp-message's rule. A template whose body says
+   "for a {{trade}}" (audit_reply, video_template, audit_reply_warm) HOLDS a vowel trade as a PAID template (Meta's registered
+   "a"). Inside the open 24-hour window it goes as FREE TEXT, so the words say "an electrician" instead. freeTextOnly = build
+   the payload with the bare trade; the caller MUST then refuse to send unless it really goes as free text. The words also get
+   the normalised trade ("a plumber", not the typed "a Plumbers"). */
+export interface TradeForWords { freeTextOnly: boolean; bodyTrade: string | undefined; fixWords: (w: string) => string }
+export function tradeForFreeText(vars: readonly string[], rawTrade: string | undefined, lastInboundMs: number | null, nowMs: number = Date.now()): TradeForWords {
+  const same = (w: string) => w;
+  if (!vars.includes("trade") || !rawTrade) return { freeTextOnly: false, bodyTrade: rawTrade, fixWords: same };
+  const n = normaliseTrade(rawTrade);
+  if (n.ok) return { freeTextOnly: false, bodyTrade: n.value, fixWords: same };
+  if (n.reason === "trade_starts_with_vowel_sound" && freeWindowOpen(lastInboundMs, nowMs)) {
+    const b = bareTrade(rawTrade);
+    if (b.ok) return { freeTextOnly: true, bodyTrade: b.value, fixWords: (w) => withTradeArticle(w, rawTrade) };
+  }
+  return { freeTextOnly: false, bodyTrade: rawTrade, fixWords: same };
+}
 
 // deno-lint-ignore no-explicit-any
 type Service = { from: (table: string) => any }; // eslint-disable-line @typescript-eslint/no-explicit-any

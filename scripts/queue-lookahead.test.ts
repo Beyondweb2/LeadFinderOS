@@ -58,8 +58,9 @@ ok(/\.order\("queued_at", \{ ascending: true \}\)/.test(q), 'the READ is still o
    "the order never changes", which stopped being true the moment one campaign could no longer drain
    before the next one started. Within a campaign the order is still exactly FIFO — that property is
    asserted in campaign-interleave.test.ts, where it belongs. */
-ok(/interleaveByCampaign\(scanned\)\.slice\(0, QUEUE_LOOKAHEAD\)/.test(q),
-   'and the look-ahead is taken from the campaign round-robin, not from raw FIFO');
+/* 2026-11-16: senders take turns across ticks, campaigns inside each sender (_shared/queue-fairness.ts, queue-fairness.test.ts). */
+ok(/fairQueueOrder\(scanned, lastQueueSendBySender\)\.slice\(0, QUEUE_LOOKAHEAD\)/.test(q),
+   'and the look-ahead is taken from the per-sender (then per-campaign) round-robin, not from raw FIFO');
 
 console.log('\n-- 🔴 skipping writes NOTHING to the lead it passes over --');
 /* The block starts at the scan read (renamed scannedAll 2026-09-28, when the per-lead send window

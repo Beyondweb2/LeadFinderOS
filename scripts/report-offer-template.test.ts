@@ -88,7 +88,7 @@ ok(reportOfferRefusal({ ...good, competitors: '' }) === 'no_competitors', 'G3. n
 ok(reportOfferRefusal({ ...good, score: '' }) === 'no_score', 'G4. no score → refused');
 ok(reportOfferRefusal({ ...good, link: '' }) === 'no_report_link' && reportOfferRefusal({ ...good, link: 'https://findable.live/r/ABC234?preview=1' }) === 'no_report_link', 'G5. no (or a preview) report link → refused');
 ok(reportOfferRefusal({ ...good, namedInAnswers: true }) === 'named_in_answers', 'G6. the lead was named in the answers → refused');
-ok(/mode === "report_offer_check"/.test(q) && /mode === "report_offer_check"\)\) salesActor/.test(q), 'G7. the pre-check exists and a salesperson may ask it');
+ok(/mode === "report_offer_check"/.test(q) && /mode === "report_offer_check"(?: \|\| mode === "my_queue")?\)\) salesActor/.test(q), 'G7. the pre-check exists and a salesperson may ask it');
 ok(/if \(salesActor\) q = q\.eq\("assigned_to_user_id", salesActor\.id\)/.test(q), 'G8. a salesperson is answered only for their own leads');
 ok(/HOOK_NO_GAP_REASON\)\) return "named_in_answers"/.test(q), 'G9. "named in every answer" maps to named_in_answers');
 const ot = read('src/components/OutreachTable.tsx');

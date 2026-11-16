@@ -62,3 +62,22 @@ Paul: fix the article in free text inside the open window instead of holding; ke
 ## Queue fairness status (asked 2026-11-16)
 Not built. process-whatsapp-queue round-robins by CAMPAIGN (`interleaveByCampaign`), not by sender; there is no per-sender
 round-robin (Valentin's leads alongside Paul's) and no 30-minute stuck-queue alert on main or any branch.
+
+## Queue fairness by sender, stuck alert, rep status line, queue "an <trade>" (branch v1-queue-fairness)
+- **Bug found:** `interleaveByCampaign` was re-derived every tick and broke rank ties by `queued_at`, so with one send per tick the
+  first-queued campaign/sender kept winning (proved in `scripts/queue-fairness.test.ts`: the old order sent 20 of Paul's before any
+  of Valentin's).
+- **Fix:** `_shared/queue-fairness.ts` `fairQueueOrder(leads, lastSentBySender)`: senders (queued_by → holder → book owner) take
+  turns ACROSS ticks, least recently served first (each sender's last queue send today, read from `whatsapp_sends` + the lead);
+  campaigns still take turns inside a sender. Stateless (no cursor). One send per tick, caps, hours, cold guard, opt-outs, DNC,
+  free-window rules untouched. Test: 2 senders × 50 → strict A,B,A,B; a cap of 30 → 15/15.
+- **Stuck alert:** in a due tick (past pause, hours, cap, pacing), a sender with leads that could go and nothing sent for
+  max(30 min, 1.5 × senders × pace gap) → `raiseOperatorAlert` (one bell row + one email per episode; dedupe key
+  `queue_stuck:<sender>:<since>`). Reason words: `stuckReasonWords`. The threshold grows with many senders so the rotation itself
+  never trips it.
+- **Status line:** `process-whatsapp-queue` mode `my_queue` (sales + admin, read-only) → `senderQueueLine`: "Queued: 12, next send
+  ~14:20", "Paused: daily limit reached / the queue is paused / outside send hours", or "Not moving since 13:10: <reason>". Rep sees
+  their own; admin sees every sender (`src/components/SenderQueueLines.tsx` on the queue page).
+- **Queue "an <trade>":** `_shared/free-window.ts` `tradeForFreeText` used by the reply lane and main lane: inside the 24 hours the
+  three audit templates go as free text with "an <trade>"; the payload is built `freeTextOnly` and the send is refused if it would
+  go as the paid template. Closed window = the old hold.

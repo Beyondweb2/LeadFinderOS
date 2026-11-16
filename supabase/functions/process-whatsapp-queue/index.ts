@@ -23,14 +23,14 @@ import { rivalHookDecision, templateNeedsRivals } from "../../../src/lib/rivalHo
    its entire life. Payloads come from claimTemplatePayload, which reads the registry. */
 import { renderTemplateBody, claimTemplatePayload, sendViaGraph, errorColumns, WA_TEMPLATES, TEMPLATES_NEEDING_REAL_NAME, firstNameFrom, templateAwaitingApproval, type TemplateVar } from "../_shared/whatsapp-send.ts";
 import { hookFollowupEligible } from "../_shared/hook-followup-eligibility.ts";
-import { freeWindowSwap, lastInboundMsFor } from "../_shared/free-window.ts";
+import { freeWindowSwap, lastInboundMsFor, tradeForFreeText } from "../_shared/free-window.ts";
 import { contactFollowupEligible } from "../_shared/contact-followup-eligibility.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
 import { classifyLineType } from "../_shared/line-type.ts";
 import {
   runOutreachAuditAhead, decideOutreachAudit, readAuditStates, templateNeedsAudit,
 } from "../_shared/outreach-audit.ts";
-import { interleaveByCampaign, campaignsRepresented } from "../_shared/campaign-interleave.ts";
+import { campaignsRepresented } from "../_shared/campaign-interleave.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
 import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
 import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, FIRST_REPLY_MODES, autoReplyEnvOn, autoReplyToggleOn, firstReplyMode, firstReplyTemplate, isDecline, isStaleAutoReply, modeSends, parseFirstReplyMode, phoneSuppressed, pitchEverSent } from "../_shared/auto-reply-rules.ts";
@@ -46,6 +46,12 @@ import { loadQaExclusions, qaSendHold } from "../_shared/qa-guard.ts";
 import { formatVisibilityScore, REPORT_OFFER_REFUSAL_WORDS, REPORT_OFFER_TEMPLATE, REPORT_OFFER_WARNING_WORDS, reportOfferRefusal, reportOfferWarnings, ukWordedTemplateRefusal, UK_WORDED_TEMPLATES, type ReportOfferRefusal } from "../../../src/lib/reportOfferTemplate.ts";
 import { prospectOnlyTemplateRefusal } from "../../../src/lib/prospectOnly.ts";
 import { senderMessageName } from "../_shared/sender-name.ts";
+import {
+  fairQueueOrder, hhmmLondon, NO_SENDER_KEY, senderKeyOf, senderNextSendAt, senderQueueLine, sendersRepresented, stuckDedupeKey,
+  stuckReasonWords, stuckSince, type SenderLead,
+} from "../_shared/queue-fairness.ts";
+import { raiseOperatorAlert } from "../_shared/audit-alerts.ts";
+import { operatorAppUrl } from "../../../src/config/operatorApp.ts";
 import { templateAvailability } from "../_shared/template-status.ts";
 import { TEMPLATE_UNAVAILABLE_CODES } from "../../../src/lib/whatsappLinkTemplates.ts";
 import { HOOK_INCOMPLETE_REASON, HOOK_NO_GAP_REASON } from "../_shared/audit-reply.ts";
@@ -448,6 +454,87 @@ function isNoAutoRetryMarket(digits: string | null | undefined): boolean {
 }
 
 /** A team member's name for "Paused by …" (display name, then message name). Null when unknown — never an email. */
+/* ⛔ PER-SENDER FAIRNESS (2026-11-16, _shared/queue-fairness.ts): each sender's MOST RECENT queue send today, the only fact the
+   stateless round-robin needs. Queue lanes write whatsapp_sends with user_id NULL and the lead; the lead says whose turn it was.
+   An unreadable answer is an empty map: the order then falls back to who has waited longest (never a refusal to send). */
+// deno-lint-ignore no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function lastQueueSendsBySender(service: any, dayStartIso: string): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  try {
+    const { data: sends, error } = await service.from("whatsapp_sends").select("lead_id, created_at")
+      .is("user_id", null).not("lead_id", "is", null).gte("created_at", dayStartIso).order("created_at", { ascending: false }).limit(2000);
+    if (error || !Array.isArray(sends) || sends.length === 0) return out;
+    const ids = [...new Set((sends as Array<{ lead_id: string }>).map((s) => s.lead_id))];
+    const keyOf = new Map<string, string>();
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data: ls } = await service.from("outreach_leads").select("id, queued_by_user_id, assigned_to_user_id, user_id").in("id", ids.slice(i, i + 200));
+      for (const l of (ls ?? []) as Array<SenderLead & { id: string }>) keyOf.set(l.id, senderKeyOf(l));
+    }
+    /* Newest first, so the first row per sender is that sender's last send. */
+    for (const s of sends as Array<{ lead_id: string; created_at: string }>) {
+      const k = keyOf.get(s.lead_id);
+      if (k && !out.has(k)) out.set(k, s.created_at);
+    }
+  } catch { /* empty map: fall back to who has waited longest */ }
+  return out;
+}
+
+/** About how long one paced send takes now: the floor, or what is left of the London window spread over what is left today. */
+function approxGapMin(coldLeft: number, gapFloorMin: number): number {
+  const n = londonNow();
+  const minutesLeft = Math.max(0, WINDOW_END_MIN - (n.hour * 60 + n.minute));
+  const spread = coldLeft > 0 && Number.isFinite(coldLeft) ? minutesLeft / coldLeft : 0;
+  return Math.max(Number(gapFloorMin) || 0, spread);
+}
+
+type SenderRow = SenderLead & { id: string; queued_at?: string | null };
+/** Per sender: how many queued, which could go now, the oldest of those, how many of those wait on an audit. */
+function senderFacts(all: readonly SenderRow[], sendable: readonly SenderRow[], auditWaiting: ReadonlySet<string>) {
+  const by = new Map<string, { queued: number; sendable: number; oldest: string | null; waiting: number }>();
+  for (const l of all) { const k = senderKeyOf(l); const e = by.get(k) ?? { queued: 0, sendable: 0, oldest: null, waiting: 0 }; e.queued++; by.set(k, e); }
+  for (const l of sendable) {
+    const k = senderKeyOf(l);
+    const e = by.get(k) ?? { queued: 1, sendable: 0, oldest: null, waiting: 0 };
+    e.sendable++;
+    const q = l.queued_at ?? null;
+    if (q && (!e.oldest || q < e.oldest)) e.oldest = q;
+    if (auditWaiting.has(l.id)) e.waiting++;
+    by.set(k, e);
+  }
+  return by;
+}
+
+/* ⛔ THE STUCK ALERT (2026-11-16). Reached only by a due tick that passed pause, send hours, the cap and pacing, so "nothing
+   explains it" holds. One bell row + one email per EPISODE (dedupe key = sender + the moment it stopped moving): never
+   repeating, and a new one only after that sender has moved and then stuck again. Never blocks the send. */
+// deno-lint-ignore no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function alertStuckSenders(service: any, a: { all: readonly SenderRow[]; sendable: readonly SenderRow[]; lastSent: ReadonlyMap<string, string>; auditWaiting: ReadonlySet<string>; gapMin: number }) {
+  const facts = senderFacts(a.all, a.sendable, a.auditWaiting);
+  const active = [...facts.values()].filter((e) => e.sendable > 0).length;
+  for (const [k, e] of facts) {
+    const since = stuckSince({ nowMs: Date.now(), shouldBeMoving: true, lastSentAt: a.lastSent.get(k) ?? null, oldestSendableQueuedAt: e.oldest, activeSenders: active, gapMin: a.gapMin });
+    if (!since) continue;
+    const name = k === NO_SENDER_KEY ? "Unassigned leads" : ((await personName(service, k)) ?? "Someone");
+    const reason = stuckReasonWords({ queued: e.queued, sendable: e.sendable, waitingOnAudit: e.waiting });
+    const r = await raiseOperatorAlert(service, "team_update", {
+      title: `WhatsApp queue: ${name}'s messages are not moving`,
+      body: `Nothing has gone for ${name} since ${hhmmLondon(since)} during send hours: ${reason}. ${e.queued} queued.`,
+      link: "/whatsapp-queue",
+      subject: `WhatsApp queue: ${name}'s messages not moving since ${hhmmLondon(since)}`,
+      lines: [
+        `Nothing has been sent for ${name} since ${hhmmLondon(since)} (London), during send hours, with the queue running and today's limit not used.`,
+        "", `Why: ${reason}.`, `Queued: ${e.queued}. Could go now: ${e.sendable}. Waiting on an audit: ${e.waiting}.`,
+        "", "Open the WhatsApp queue: " + operatorAppUrl("/whatsapp-queue"),
+        "You get this once for this stop. Nothing was sent or changed by this alert.",
+      ],
+      dedupeKey: stuckDedupeKey(k, since),
+    });
+    console.log(`[queue] stuck sender ${k} since ${since}: alert ${r}`);
+  }
+}
+
 // deno-lint-ignore no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function personName(service: any, userId: string | null): Promise<string | null> {
@@ -591,7 +678,7 @@ Deno.serve(async (req) => {
       if (!who.ok) return json({ ok: false, error: who.error === "no_role" ? "forbidden" : who.error, detail: who.detail }, who.status);
       callerId = who.actor.id;
       if (who.actor.role === "admin") isAdmin = true;
-      else if (who.actor.role === "sales" && (mode === "contact_check" || mode === "suppress_lead" || mode === "queue_state" || mode === "report_offer_check")) salesActor = { ...who.actor, role: "sales" };
+      else if (who.actor.role === "sales" && (mode === "contact_check" || mode === "suppress_lead" || mode === "queue_state" || mode === "report_offer_check" || mode === "my_queue")) salesActor = { ...who.actor, role: "sales" };
       else return json({ ok: false, error: "forbidden" }, 403);
     }
     /* ⛔ queue_state — READ-ONLY, BOTH ROLES (2026-09-28). Is the queue sending right now? A salesperson
@@ -873,6 +960,50 @@ Deno.serve(async (req) => {
          rather than a wrong number. */
       auditOnlyReadyCount: auditOnlyReadyCountV,
     };
+
+    /* ⛔ MY QUEUE (2026-11-16) — READ-ONLY, BOTH ROLES. One line per sender in plain words: "Queued: 12, next send ~14:20",
+       "Paused: daily limit reached", or "Not moving since 13:10: <reason>". A salesperson gets ONLY their own line; the admin
+       gets their own and every sender's. Same scan, same holds and same fair order as the tick; nothing is written or sent. */
+    if (mode === "my_queue") {
+      const { data: rows, error: rowsErr } = await service.from("outreach_leads")
+        .select(`id, phone, country, campaign_id, queued_at, queued_by_user_id, assigned_to_user_id, user_id, ${AU_ZONE_COLUMNS}`)
+        .eq("status", "queued").eq("is_archived", false).not("phone", "is", null)
+        .or(`derived_town.not.is.null,town_fetch_note.is.null,town_fetch_note.not.in.(${[...SETTLED_TOWN_NOTES].join(",")})`)
+        .order("queued_at", { ascending: true }).limit(QUEUE_SCAN);
+      if (rowsErr) return json({ ok: false, error: "queue_read_failed", detail: "Could not read the queue. Try again in a moment." }, 503);
+      const all = (rows ?? []) as Array<SenderRow & QRow>;
+      const sendableNow = all.filter(leadSendable);
+      const lastSent = await lastQueueSendsBySender(service, dayStart);
+      const order = fairQueueOrder(sendableNow, lastSent);
+      const senderOrder: string[] = [];
+      for (const l of order) { const k = senderKeyOf(l); if (!senderOrder.includes(k)) senderOrder.push(k); }
+      const facts = senderFacts(all, sendableNow, new Set());
+      const gap = approxGapMin(coldLeft, pace.gapFloorMin);
+      const queueNext = nextEligibleSendAt(!allCapsUsed, nextSendAt);
+      const coldStop = coldFacts?.stopReason ? "WhatsApp cold sending is stopped" : null;
+      const active = [...facts.values()].filter((e) => e.sendable > 0).length;
+      const lineFor = async (k: string) => {
+        const e = facts.get(k) ?? { queued: 0, sendable: 0, oldest: null, waiting: 0 };
+        const since = stuckSince({ nowMs: Date.now(), shouldBeMoving: !paused && anyWindowOpen && !allCapsUsed && !coldStop, lastSentAt: lastSent.get(k) ?? null, oldestSendableQueuedAt: e.oldest, activeSenders: active, gapMin: gap });
+        let waiting = 0;
+        if (since) {
+          const ids = sendableNow.filter((l) => senderKeyOf(l) === k).slice(0, 60).map((l) => l.id);
+          const st = ids.length ? await readAuditStates(service, ids) : new Map();
+          waiting = ids.filter((id) => !st.get(id)?.completedAt).length;
+        }
+        const ahead = Math.max(0, senderOrder.indexOf(k));
+        const words = senderQueueLine({
+          queued: e.queued, paused, windowOpen: anyWindowOpen, windowStart: `${String(WINDOW_START).padStart(2, "0")}:00`, capReached: allCapsUsed, coldStop,
+          nextSendAt: e.sendable > 0 ? senderNextSendAt(queueNext, ahead, gap) : null,
+          stuckSinceIso: since, stuckReason: since ? stuckReasonWords({ queued: e.queued, sendable: e.sendable, waitingOnAudit: waiting }) : null,
+        });
+        return { sender: k, name: k === NO_SENDER_KEY ? "Unassigned" : ((await personName(service, k)) ?? "Someone"), queued: e.queued, ...words };
+      };
+      const me = callerId ?? "";
+      const mine = await lineFor(me);
+      const senders = isAdmin ? await Promise.all([...facts.keys()].map(lineFor)) : undefined;
+      return json({ ok: true, mine, ...(senders ? { senders } : {}) });
+    }
 
     // Status-only probe (the dashboard panel).
     if (mode === "status") {
@@ -1525,6 +1656,9 @@ Deno.serve(async (req) => {
              copies of this expression were byte-identical AND both wrong: a template declaring
              `trade_plural` / `rival_*` / `audit_url` (audit_followup, competitor_hook) answered NO
              and fell to the plain branch, which resolves none of them. */
+          /* Their last message, read once: the "an <trade>" rule and the free-text swap below must agree on the same moment. */
+          const arLastInbound = await lastInboundMsFor(service, toWhatsAppNumber(String(row.phone ?? ""), null) ?? row.phone);
+          let arFreeTextOnly = false;
           if (buildsFromAudit(tmpl.vars)) {
             // audit_reply-class: needs the lead's own completed audit.
             const vars = await resolveAuditReplyVars(service, row.lead_id, { templateName });
@@ -1567,8 +1701,10 @@ Deno.serve(async (req) => {
                the row carries why it was held.
                ⚠️ NAMED SEPARATELY from flagged_error on purpose: this is our data being unusable,
                not Meta refusing us, and the two want different fixes. */
+            const arTrade = tradeForFreeText(tmpl.vars, vars.trade, arLastInbound);
+            arFreeTextOnly = arTrade.freeTextOnly;
             try {
-              payload = claimTemplatePayload(templateName, tmpl.lang, vars.business, vars.link, auditExtra);
+              payload = claimTemplatePayload(templateName, tmpl.lang, vars.business, vars.link, arTrade.freeTextOnly ? { ...auditExtra, freeTextOnly: true } : auditExtra);
             } catch (e) {
               const msg = (e as Error).message ?? "";
               if (msg.startsWith("unsafe_template_var:")) {
@@ -1579,7 +1715,7 @@ Deno.serve(async (req) => {
               }
               throw e;
             }
-            renderedBody = renderTemplateBody(templateName, vars.business, vars.link, vars.trade, vars.competitors, undefined, vars.town, vars.siteFault ?? undefined, vars.siteFindings ?? undefined);
+            renderedBody = arTrade.fixWords(renderTemplateBody(templateName, vars.business, vars.link, arTrade.bodyTrade, vars.competitors, undefined, vars.town, vars.siteFault ?? undefined, vars.siteFindings ?? undefined));
             businessName = vars.business;
             claimUrl = vars.link;
           } else if (tmpl.vars.includes("onboarding_url")) {
@@ -1638,8 +1774,14 @@ Deno.serve(async (req) => {
              template on the row (pitchEverSent, report_sent and the snapshot see it); the snapshot keeps the template payload. */
           const arTemplatePayload = payload;
           let arMessageType: "template" | "text" | "video" = "template";
-          const arSwap = freeWindowSwap(payload, renderedBody, await lastInboundMsFor(service, toWhatsAppNumber(String(row.phone ?? ""), null) ?? row.phone));
+          const arSwap = freeWindowSwap(payload, renderedBody, arLastInbound);
           if (arSwap) { payload = arSwap.payload; arMessageType = arSwap.messageType; renderedBody = arSwap.body; }
+          /* "an <trade>" was written for FREE TEXT only: if it would go as the paid template after all, it is the old hold. */
+          if (arFreeTextOnly && !arSwap) {
+            await finish("flagged_unsafe_var", "unsafe_template_var:trade_starts_with_vowel_sound:outside the 24-hour window");
+            results[row.lead_id] = "flagged_unsafe_var";
+            continue;
+          }
           if (arLive) {
             const r = await sendViaGraph(accessToken, phoneNumberId, row.phone, payload);
             if (r.ok) { sendStatus = "sent"; messageId = r.messageId; } else { sendStatus = "failed"; sendErr = r.error; sendParts = r.errorParts ?? null; }
@@ -1867,17 +2009,21 @@ Deno.serve(async (req) => {
        per round whatever its size, so a small test campaign clears the same day.
        ⚠️ THE PACING, THE CAP, THE WINDOW AND EVERY GUARD ARE UNTOUCHED. This changes WHICH lead is
        chosen, never how many or how fast. Still one send per tick. */
-    const scannedAll = (leadRows ?? []) as Array<Record<string, unknown> & { id: string; campaign_id?: string | null; queued_at?: string | null }>;
+    const scannedAll = (leadRows ?? []) as Array<Record<string, unknown> & { id: string; campaign_id?: string | null; queued_at?: string | null; queued_by_user_id?: string | null; assigned_to_user_id?: string | null; user_id?: string | null }>;
     /* ⛔ HELD, NOT DROPPED: a lead outside its own window is simply not chosen this tick (nothing is
        written) and is filtered out BEFORE the look-ahead slice, so a run of held leads at the head can never
        hide the sendable ones behind them. */
     const scanned = qaDrill ? scannedAll : scannedAll.filter(leadSendable);
     const heldForLocalWindow = scannedAll.length - scanned.length;
     if (heldForLocalWindow > 0) console.log(`[queue] ${heldForLocalWindow} queued lead(s) held: outside their own local send window`);
-    const candidates = interleaveByCampaign(scanned).slice(0, QUEUE_LOOKAHEAD) as Array<Record<string, unknown>>;
-    if (scanned.length > candidates.length || campaignsRepresented(scanned) > 1) {
-      console.log(`[queue] scanned ${scanned.length} queued lead(s) across ${campaignsRepresented(scanned)} campaign(s); examining the fairest ${candidates.length}`);
+    /* ⛔ PER-SENDER ROUND-ROBIN (2026-11-16, _shared/queue-fairness.ts): senders take turns ACROSS ticks (least recently served
+       first), campaigns take turns inside each sender. Still one send per tick; every cap, window and guard above is untouched. */
+    const lastQueueSendBySender = qaDrill ? new Map<string, string>() : await lastQueueSendsBySender(service, dayStart);
+    const candidates = fairQueueOrder(scanned, lastQueueSendBySender).slice(0, QUEUE_LOOKAHEAD) as Array<Record<string, unknown>>;
+    if (scanned.length > candidates.length || campaignsRepresented(scanned) > 1 || sendersRepresented(scanned) > 1) {
+      console.log(`[queue] scanned ${scanned.length} queued lead(s) across ${sendersRepresented(scanned)} sender(s) and ${campaignsRepresented(scanned)} campaign(s); examining the fairest ${candidates.length}`);
     }
+    const auditWaitingIds = new Set<string>();
     let lead: Record<string, unknown> | null = candidates[0] ?? null;
     let skippedForAudit = 0;
     if (candidates.length > 1) {
@@ -1895,6 +2041,7 @@ Deno.serve(async (req) => {
            lead is chosen. */
         if (states.get(String(c.id))?.completedAt) { lead = c; break; }
         skippedForAudit++;
+        auditWaitingIds.add(String(c.id));
       }
       if (skippedForAudit > 0) {
         console.log(`[queue] looked past ${skippedForAudit} lead(s) waiting on an audit; they stay queued and are re-examined next tick`);
@@ -1903,6 +2050,12 @@ Deno.serve(async (req) => {
     /* "empty_queue", "nothing left but archived leads" and "nothing left but unverifiable towns"
        are different facts, so they get different skip codes. Without this, pulling 17 leads out of
        the queue by archiving them would look identical to having genuinely finished the list. */
+    /* The stuck alert: a due tick that passed every gate is the one moment "nothing explains it" is true. Never blocks the send. */
+    if (mode === "tick" && !qaDrill && !force) {
+      try {
+        await alertStuckSenders(service, { all: scannedAll, sendable: scanned, lastSent: lastQueueSendBySender, auditWaiting: auditWaitingIds, gapMin: approxGapMin(coldLeft, pace.gapFloorMin) });
+      } catch (e) { console.error("[queue] stuck check failed (non-blocking):", e instanceof Error ? e.message : String(e)); }
+    }
     if (qaDrill && (!lead || String(lead.id) !== qaDrillLeadId)) {
       return json({ ok: true, skipped: "qa_drill_not_sendable", qa_drill_lead_id: qaDrillLeadId, ...statusPayload });
     }
@@ -2717,13 +2870,21 @@ Deno.serve(async (req) => {
     let failCode: number | undefined;
     let sendError: string | null = null;
     let sendParts: SendErrorParts | null = null;
-    const campaignPayload = claimTemplatePayload(templateName, lang, lead.business_name as string, resolvedUrl, templateExtra);
-    let campaignBody = renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, templateExtra.trade, templateExtra.competitors, undefined, templateExtra.town, templateExtra.siteFault, templateExtra.siteFindings, templateExtra.visibilityScore, templateExtra.senderName);
+    /* "an <trade>" inside their 24 hours (2026-11-16, _shared/free-window.ts tradeForFreeText). A cold opener has no window. */
+    const mainLastInbound = isColdOutreachTemplate(templateName) ? null : await lastInboundMsFor(service, toNumber);
+    const mainTrade = isColdOutreachTemplate(templateName) ? null : tradeForFreeText(tvars, templateExtra.trade, mainLastInbound);
+    const campaignPayload = claimTemplatePayload(templateName, lang, lead.business_name as string, resolvedUrl, mainTrade?.freeTextOnly ? { ...templateExtra, freeTextOnly: true } : templateExtra);
+    let campaignBody = renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, mainTrade ? mainTrade.bodyTrade : templateExtra.trade, templateExtra.competitors, undefined, templateExtra.town, templateExtra.siteFault, templateExtra.siteFindings, templateExtra.visibilityScore, templateExtra.senderName);
     const campaignSnapshot = createTemplateSnapshot({ templateName, language: lang, body: campaignBody, payload: campaignPayload });
     /* ⛔ A queued FOLLOW-UP inside their 24-hour window goes as free text (2026-11-16, _shared/free-window.ts — the same rule as
        every other door), still recorded as that template. A cold opener never has an open window, so it is never swapped. */
-    const campaignSwap = isColdOutreachTemplate(templateName) ? null : freeWindowSwap(campaignPayload, campaignBody, await lastInboundMsFor(service, toNumber));
+    if (mainTrade) campaignBody = mainTrade.fixWords(campaignBody);
+    const campaignSwap = isColdOutreachTemplate(templateName) ? null : freeWindowSwap(campaignPayload, campaignBody, mainLastInbound);
     if (campaignSwap) campaignBody = campaignSwap.body;
+    /* Written for free text only and it would go as the paid template: not sent, nothing written; the next tick judges it again. */
+    if (mainTrade?.freeTextOnly && !campaignSwap) {
+      return json({ ok: true, skipped: "trade_needs_an_outside_window", lead_id: lead.id, business: lead.business_name, ...statusPayload });
+    }
 
     /* ⛔ QA SAFETY: a fixture takes the test-mode branch for THIS send (simulated, test_mode true);
        a test-account-held real lead was already filtered out above and is re-checked here. */
