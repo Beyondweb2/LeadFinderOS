@@ -1,10 +1,12 @@
 /* Send more info (2026-11-16, docs/send-more-info.md): Paul's wording word for word, the named swap, the blocks, the link rule,
    the price line setting, and the wiring (one SMS sender, email guards, no WhatsApp, no Next Action from the send path). */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { smsGateOpen } from '../src/lib/contactRouting.ts';
 import path from 'node:path';
 import {
   cleanPriceLine, DEFAULT_MORE_INFO_PRICE_LINE, moreInfoBlock, moreInfoEmailBody, moreInfoEmailSubject, moreInfoFollowUpDay, moreInfoHistoryLine,
   moreInfoSmsBody, moreInfoTextRefusal, moreInfoTrade, moreInfoWarning, senderFirstName, type MoreInfoVars,
+  MORE_INFO_CONSENT_LABEL, moreInfoCallConsentGiven, moreInfoConsentLine, moreInfoConsentRecord, moreInfoOpensSmsGate,
 } from '../src/lib/moreInfoMessage.ts';
 import { DEFAULT_PROTECTION_LIMITS, GUARD_ACTIONS } from '../src/lib/protectionLimits.ts';
 import { ACTIVITY_LABEL } from '../src/lib/salesCrm.ts';
@@ -106,6 +108,44 @@ ok(mig.includes(`default '${DEFAULT_MORE_INFO_PRICE_LINE}'`), 'the SQL default p
 ok(/'more_info_sent'\]\)\) not valid/.test(mig) && ACTIVITY_LABEL.more_info_sent === 'More info sent', 'History kind allowed and labelled');
 ok(GUARD_ACTIONS.includes('email_send') && DEFAULT_PROTECTION_LIMITS.actions.email_send.paid === false, 'email_send guard action, unpaid');
 ok(/\[functions\.send-more-info\]\nverify_jwt = true/.test(read('supabase/config.toml')), 'config.toml verify_jwt entry');
+
+console.log('\n── call consent replaces the conversation rule (Send more info ONLY) ──');
+ok(moreInfoCallConsentGiven(true) && !moreInfoCallConsentGiven('true') && !moreInfoCallConsentGiven(1) && !moreInfoCallConsentGiven(undefined) && !moreInfoCallConsentGiven(false), 'only a real true counts as the tick');
+ok(MORE_INFO_CONSENT_LABEL === 'They asked for this info on a call', 'the tick-box wording');
+ok(moreInfoConsentLine('Valentin') === 'Asked for info on a call, confirmed by Valentin', 'the History consent line');
+const rec = moreInfoConsentRecord({ userId: 'u1', name: 'Valentin', channel: 'sms', at: new Date('2026-11-16T14:00:00Z') });
+ok(rec.confirmed_by === 'Valentin' && rec.confirmed_by_user_id === 'u1' && rec.channel === 'sms' && rec.confirmed_at === '2026-11-16T14:00:00.000Z' && rec.source === 'call', 'consent record = who, when, channel');
+/* The SMS sender's gate exactly as written there: isCold || smsGateOpen(...) || moreInfoOpensSmsGate(a). */
+const noConversation = { loggedConversation: false, inboundSms: false, inboundWhatsapp: false, isAdmin: false };
+const gateFor = (a: { moreInfo?: { callConsent?: unknown } | null }, isCold = false) => isCold || smsGateOpen(noConversation) || moreInfoOpensSmsGate(a);
+ok(gateFor({ moreInfo: { callConsent: true } }) === true, 'more info + ticked, no conversation on record: the text may go');
+ok(gateFor({ moreInfo: { callConsent: false } }) === false && gateFor({ moreInfo: {} }) === false, 'more info NOT ticked, no conversation: still closed');
+ok(gateFor({}) === false && gateFor({ moreInfo: null }) === false, 'any other text (free text, template, link) with no conversation: still closed, unchanged');
+ok(smsGateOpen({ ...noConversation, loggedConversation: true }) === true, 'the existing conversation rule itself is unchanged');
+
+const fnC = read('supabase/functions/send-more-info/index.ts');
+const consentAt = fnC.indexOf('moreInfoCallConsentGiven(body.call_consent)');
+ok(consentAt > 0 && /error: "consent_required"/.test(fnC), 'the server refuses a send without the tick');
+ok(consentAt < fnC.indexOf('sendSmsToLead(service, {') && consentAt < fnC.indexOf('api.resend.com') && consentAt > fnC.indexOf('// ── send ──'), '…for a text AND an email, before anything is sent');
+ok(/moreInfo: \{ body: text, reportLink: b\.vars\.reportLink, callConsent: true \}/.test(fnC), 'the text carries the consent into the one SMS sender');
+ok(/moreInfoConsentLine\(senderName\)/.test(fnC) && /consent, \.\.\.data/.test(fnC) && /moreInfoConsentRecord\(/.test(fnC), 'History records the consent (line + who/when/channel)');
+ok(/checkSuppressed\(service, \{ email: to/.test(fnC) && /qaEmailHold\(/.test(fnC) && /"email_send"/.test(fnC) && /outside_hours/.test(fnC), 'email still: opt-out/DNC, test-lead rule, send limit; text still: texting hours');
+
+const smsC = read('supabase/functions/_shared/twilio-sms.ts');
+ok(/const gate = isCold \|\| smsGateOpen\(\{[\s\S]*?\}\) \|\| moreInfoOpensSmsGate\(a\);/.test(smsC), 'the SMS gate: cold OR conversation OR (more info + tick)');
+const gateAt = smsC.indexOf('moreInfoOpensSmsGate(a)');
+ok(smsC.indexOf('checkSuppressed(') < gateAt && gateAt < smsC.indexOf('loadQaExclusions(service)') && gateAt < smsC.indexOf('guardAction(service, a.actor.id, "sms_send"'), 'opt-out/DNC before it; test-lead rule and send limits after it — all still run');
+ok(/if \(isCold\) \{[\s\S]*already_texted[\s\S]*in_whatsapp_conversation[\s\S]*contacted_logged/.test(smsC), 'the cold-text rule is unchanged');
+const fnDir = path.join(ROOT, 'supabase/functions');
+const otherMoreInfo = readdirSync(fnDir).filter((d) => d !== '_shared' && d !== 'send-more-info').filter((d) => {
+  try { return /moreInfo\s*:/.test(read(`supabase/functions/${d}/index.ts`)); } catch { return false; }
+});
+ok(otherMoreInfo.length === 0, `no other function sends the more-info kind (found: ${otherMoreInfo.join(', ') || 'none'})`);
+
+const uiC = read('src/components/SendMoreInfo.tsx');
+ok(/MORE_INFO_CONSENT_LABEL/.test(uiC) && /type="checkbox"/.test(uiC) && /useState\(false\)/.test(uiC), 'the dialog shows the tick-box, unticked to start');
+ok(/disabled=\{!!busy \|\| !!unavailable \|\| !callConsent\}/.test(uiC) && /callConsent \}\)/.test(uiC), 'Send stays off until ticked, and the tick is sent');
+ok(/call_consent: a\.callConsent === true/.test(read('src/lib/moreInfoClient.ts')), 'the client sends call_consent');
 
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1); }
 console.log('\nALL PASS');

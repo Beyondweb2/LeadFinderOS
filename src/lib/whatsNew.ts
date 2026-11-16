@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-16-more-info-call-consent', date: '2026-11-16', title: 'Send more info: tick "They asked for this info on a call"', audience: 'all',
+    body: 'Send more info no longer needs a logged conversation before you can text it, so it works when you called from your own phone. Instead, tick "They asked for this info on a call" in the send window (needed for email and text). The lead’s History then says "Asked for info on a call, confirmed by <you>". Opt-outs, do-not-contact, test leads, send limits and texting hours still apply. Every other text still needs a conversation first.',
+    report: {
+      added: ['A required tick-box in the Send more info window: "They asked for this info on a call".'],
+      changed: ['Send more info by text no longer needs a logged call or a message from them first; the tick replaces that, for this message only.', 'History for a more-info send now also says "Asked for info on a call, confirmed by <name>".'],
+      removed: [],
+      effect: 'You can text the info straight after a call from your own phone. Cold texts and all other texts work exactly as before.',
+    } },
   { id: '2026-11-16-onboarding-wording-sync', date: '2026-11-16', title: 'Fill in for them: shorter wording, same as the customer page', audience: 'admin',
     body: 'The "fill in onboarding for them" form now uses the same shorter wording as the customer’s own set-up page on findable.live (for example "Confirmations" / "Tick to confirm."). The questions and answers are unchanged.',
     report: {
