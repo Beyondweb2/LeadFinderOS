@@ -60,3 +60,23 @@ Tests: `scripts/prospect-recheck.test.ts`, `scripts/role-rules.test.ts` (re-chec
 3. **Queue status line fast.** process-whatsapp-queue `mode: 'my_queue'` skips the panel-only reads (six head counts, the
    audit-ready count, number health, pause history, test-held count). Everything the line uses is the same code as the
    tick; the tick and every other mode are unchanged. The answer carries `x-queue-timing: auth=…;my_queue=…`.
+
+## Release (2026-11-16)
+
+Live: SQL `20261222090000` (gate wakes for re-checks, read back), edge `create-ai-audit`, `render-audit-report`,
+`audit-watch`, `process-whatsapp-queue` (twice: light read, then early scan), then the app (main `a047472d`). Live bundle
+markers found in code chunks: `recheck-now`, `recheck-replaced`, "Re-check still running", "Last seen — updating…".
+`whatsapp-status` not touched.
+
+QA run on fixture `ZZ QA-E9` (archived, no contact, excluded) as the QA rep `test1`:
+- a search containing the business's name → 400 `recheck_own_name`, nothing spent;
+- re-check `danhq7` (audit `b248f12a`): 3 runs complete, audit-watch counted it on its own (rules 4, 18 answers,
+  Winnable 3, named 0); the report reads "Re-check: 3 searches, asked 3 times each · 16 Nov 2026 … 18 answers";
+- Opportunity score from the live rows: 56 Warm, AI part from the re-check ("AI never named them (0 of 18 answers)
+  (re-check)" 30 + "3 of 3 searches winnable" 6).
+- Status line (`my_queue`, test1): before 14.0–16.0 s; after 2.3–2.9 s end to end (server 1.7–2.2 s; first call after a
+  deploy ~6.5 s cold start). The app now draws the last line at once ("Last seen — updating…") while the fresh one loads.
+
+⛔ Found on that run, NOT applied: a rep cannot READ re-checks (the sales SELECT rule `my_sales_audit_ids` admits purpose
+'audit' only), so for reps the panel and the score stay empty; admins are fine. Fix written on this branch:
+`20261222090100_sales_see_own_rechecks.sql` (adds 'recheck', same lead scope). Applying it is an access change: Paul's OK.
