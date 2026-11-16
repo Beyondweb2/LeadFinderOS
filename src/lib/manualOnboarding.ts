@@ -45,19 +45,19 @@ import { readContractEnd, readDesignChoice, type DesignChoice } from './onboardi
 /* 🔴 2026-10-16: the customer page's FIRST screen is "Is this right?" — what we already hold, shown, with gaps to fill
    and a Fix for anything wrong (findable-site OnboardingFlow, the simple onboarding). Never asked again when held. */
 export const ONBOARDING_COPY = {
-  you: { headline: 'Is this right?', sub: "Here's what we already have. Fill any gaps, or fix anything that's wrong." },
+  you: { headline: 'Is this right?', sub: "Fix anything that's wrong." },
   fix: { action: 'Fix' },
   contactName: { label: 'Your name' },
   contactEmail: { label: 'Email', error: "That doesn't look like an email address." },
   phone: { label: 'Mobile', placeholder: '07700 900123', error: 'Start with 0 or +44 so we can dial it.' },
   website: { label: 'Website', placeholder: 'yourbusiness.co.uk', error: "That doesn't look like a web address." },
-  businessName: { label: 'Business name', helper: 'As it appears on Google, so we measure the right one.', placeholder: 'e.g. Halstead Locks' },
+  businessName: { label: 'Business name', helper: 'As it appears on Google.', placeholder: 'e.g. Halstead Locks' },
   trade: { label: 'What you do', placeholder: 'e.g. locksmith' },
   town: { label: 'Your town' },
   permission: { discuss: "I'd rather talk it through first" },
   /* ⛔ NOT "one page per town" (2026-10-04, fix/04 — Session C C-07): that promised the cloned town pages
      the method rejects. Verbatim from findable-site's OnboardingFlow (same commit pair). */
-  q2: { headline: 'What you do, and where', sub: "Each main service gets its own clear page. The towns you list tell us where to measure you and where real local pages make sense. That's the last thing we need." },
+  q2: { headline: 'What you do, and where', sub: "That's the last thing we need." },
   services: { label: 'Services you offer', chipsHint: 'Tap the ones you do. Add anything missing below.', noChips: 'One service per line, in the words a customer would use.', add: 'Add another service' },
   areas: { label: 'Priority towns or areas', optional: 'Optional', placeholder: 'e.g. March', helper: 'We judge the refund on the same questions before and after, asked about your main town and the towns you list here.' },
 } as const;
@@ -80,7 +80,7 @@ export const SIMPLE_COPY = {
   contract: { question: 'Are you tied into a contract with them?' },
   tiedIn: { stop: "Thanks for telling us. While you're tied in, it isn't the right time to build you a new website.", ends: 'When does your contract end?' },
   domain: { headline: 'Do you own your domain, and can you log in to it?', sub: 'Your domain is your web address, like yourbusiness.co.uk.' },
-  legal: { headline: 'A few quick confirmations', sub: 'So we can build your new website and connect it cleanly.' },
+  legal: { headline: 'Confirmations', sub: 'Tick to confirm.' },
 } as const;
 export type HasAgency = 'yes' | 'no';
 export const AGENCY_OPTIONS: ReadonlyArray<{ value: HasAgency; label: string }> = [{ value: 'no', label: 'No' }, { value: 'yes', label: 'Yes' }];
