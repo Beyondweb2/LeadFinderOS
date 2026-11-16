@@ -174,6 +174,11 @@ console.log("\n── (3) the queue status line is a light read; the tick is unc
   ok((q.match(/lite \? NO_COUNT : service/g) ?? []).length === 6, "the panel's six head counts are skipped for the line");
   ok(/lite \? Promise\.resolve\(null\) : \(async \(\) => \{/.test(q), "…and the audit-ready count");
   ok((q.match(/if \(!lite\) try \{/g) ?? []).length === 3, "…and the pause history, number health and test-held count");
+  ok(/const myQueueEarly = lite \? \{ scan: myQueueScan\(\), lastSent: lastQueueSendsBySender\(service, dayStart\) \} : null;/.test(q), "the line's scan and last-sends start early, only for my_queue");
+  ok(/await \(myQueueEarly\?\.scan \?\? myQueueScan\(\)\)/.test(q) && (q.match(/\.order\("queued_at", \{ ascending: true \}\)\.limit\(QUEUE_SCAN\)/g) ?? []).length === 1, "…the same scan query, written once");
+  const sql = read("src/components/SenderQueueLines.tsx");
+  ok(/placeholderData: \(\) => readCached\(userId\)/.test(sql) && /Last seen — updating…/.test(sql), "the app shows the last line at once, marked as updating");
+  ok(/catch \{ return undefined; \}/.test(sql), "…and works when browser storage is blocked");
   ok(/"x-queue-timing": `auth=\$\{authMs\};my_queue=\$\{Date\.now\(\) - tStatus\}`/.test(q), "the line reports its own timing");
   ok(!/lite/.test(q.slice(q.indexOf('if (mode === "my_queue") {'))), "nothing after the line's answer (the tick, sends) reads the flag");
 }

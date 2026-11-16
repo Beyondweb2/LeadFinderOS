@@ -736,6 +736,14 @@ Deno.serve(async (req) => {
        drift from how the queue sends; the tick and every other mode are unchanged. */
     const lite = mode === "my_queue";
     const NO_COUNT = Promise.resolve({ count: null as number | null });
+    /* The line's own two reads (the queue scan, today's last send per sender) do not depend on any status value, so for
+       my_queue they START here, beside the reads below, instead of after them. Same queries, written once. */
+    const myQueueScan = () => service.from("outreach_leads")
+      .select(`id, phone, country, campaign_id, queued_at, queued_by_user_id, assigned_to_user_id, user_id, ${AU_ZONE_COLUMNS}`)
+      .eq("status", "queued").eq("is_archived", false).not("phone", "is", null)
+      .or(`derived_town.not.is.null,town_fetch_note.is.null,town_fetch_note.not.in.(${[...SETTLED_TOWN_NOTES].join(",")})`)
+      .order("queued_at", { ascending: true }).limit(QUEUE_SCAN);
+    const myQueueEarly = lite ? { scan: myQueueScan(), lastSent: lastQueueSendsBySender(service, dayStart) } : null;
     /* ⚡ EVERY STATUS READ AT ONCE (2026-09-27). These ran one after another — ~15 round trips, several
        seconds on the Outreach and Inbox loads AND on every one-minute cron tick. None depends on
        another, so they run in parallel; the payload is built from the same values, unchanged. */
@@ -972,15 +980,11 @@ Deno.serve(async (req) => {
        "Paused: daily limit reached", or "Not moving since 13:10: <reason>". A salesperson gets ONLY their own line; the admin
        gets their own and every sender's. Same scan, same holds and same fair order as the tick; nothing is written or sent. */
     if (mode === "my_queue") {
-      const { data: rows, error: rowsErr } = await service.from("outreach_leads")
-        .select(`id, phone, country, campaign_id, queued_at, queued_by_user_id, assigned_to_user_id, user_id, ${AU_ZONE_COLUMNS}`)
-        .eq("status", "queued").eq("is_archived", false).not("phone", "is", null)
-        .or(`derived_town.not.is.null,town_fetch_note.is.null,town_fetch_note.not.in.(${[...SETTLED_TOWN_NOTES].join(",")})`)
-        .order("queued_at", { ascending: true }).limit(QUEUE_SCAN);
+      const { data: rows, error: rowsErr } = await (myQueueEarly?.scan ?? myQueueScan());
       if (rowsErr) return json({ ok: false, error: "queue_read_failed", detail: "Could not read the queue. Try again in a moment." }, 503);
       const all = (rows ?? []) as Array<SenderRow & QRow>;
       const sendableNow = all.filter(leadSendable);
-      const lastSent = await lastQueueSendsBySender(service, dayStart);
+      const lastSent = await (myQueueEarly?.lastSent ?? lastQueueSendsBySender(service, dayStart));
       const order = fairQueueOrder(sendableNow, lastSent);
       const senderOrder: string[] = [];
       for (const l of order) { const k = senderKeyOf(l); if (!senderOrder.includes(k)) senderOrder.push(k); }
