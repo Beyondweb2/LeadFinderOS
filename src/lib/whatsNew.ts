@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-16-polite-hook-templates', date: '2026-11-16', title: 'Two short follow-up templates: Polite hook and Polite hook 2', audience: 'admin',
+    body: 'Two new WhatsApp templates are in both template pickers (Outreach and Inbox): Polite hook ("Ah nice, this actually might be useful to you then, built it myself" + the LeadFinderOS link) and Polite hook 2 ("Ah nice, I’m actually a web dev myself" + what the app does + the link). No blanks to fill. They are follow-ups only: they never go to a number we have not messaged on WhatsApp before. Inside the 24-hour window they go as a normal message with the same words, and "Put in message box" puts the full wording in the box.',
+    report: {
+      added: ['Polite hook and Polite hook 2 in the Outreach and Inbox template pickers.'],
+      changed: [],
+      removed: [],
+      effect: 'You can reply to a web developer who has answered with a short, friendly follow-up and the app link, without typing it out.',
+    } },
   { id: '2026-11-16-audit-locked-spots', date: '2026-11-16', title: 'Not winnable now means "the same few firms every time"', audience: 'admin',
     body: 'New Discovery audits no longer use the 70% line. For each AI, over the asks where it named firms, a search is locked when at least 2 firms come back in every one of those asks and fewer than 2 firms appear only once. A search is Not winnable only when every AI that names firms is locked; otherwise it is Winnable. An AI that names firms in just 2 of its 3 asks is judged on those 2. The same firm written two ways ("HomeCert Ltd" and "HomeCert Ltd - Electricians & Gas Engineers London") now counts once.',
     report: {

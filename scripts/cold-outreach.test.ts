@@ -138,6 +138,9 @@ const EXPECTED_CONTINUATIONS = [
   "webdev_hook",
   /* Paul, 2026-11-15: webdev_example, set up exactly like webdev_report. */
   "webdev_example",
+  /* Paul, 2026-11-16: polite_hook + polite_hook2, set up exactly like webdev_hook. */
+  "polite_hook",
+  "polite_hook2",
 ].sort();
 const actual = [...CONTINUATION_TEMPLATES].sort();
 const added = actual.filter((t) => !EXPECTED_CONTINUATIONS.includes(t));

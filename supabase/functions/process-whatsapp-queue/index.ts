@@ -298,6 +298,9 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   webdev_hook: { lang: "en", vars: [] },
   /* webdev_example (2026-11-15) — ZERO variables (the sample link is fixed text). MIRRORS whatsapp-send.ts. */
   webdev_example: { lang: "en", vars: [] },
+  /* polite_hook / polite_hook2 (2026-11-16) — ZERO variables. MIRRORS whatsapp-send.ts. */
+  polite_hook: { lang: "en", vars: [] },
+  polite_hook2: { lang: "en", vars: [] },
   // Was MISSING while being selectable in the bulk picker, so a lead set to audit_reply silently
   // received booking_page_intro — a barber booking pitch. No lead was ever queued with it, so
   // nothing mis-sent, but the gap was live.
@@ -428,7 +431,7 @@ function reportOfferReasonFromResolver(reason: string): ReportOfferRefusal {
 /** Meta statuses that mean "do not send this template now" (UNKNOWN still tries: Meta decides, never a loop). */
 const META_NOT_SENDABLE = new Set(["PENDING", "IN_APPEAL", "REJECTED", "PAUSED", "DISABLED", "LIMIT_EXCEEDED", "NOT_FOUND"]);
 /** Templates whose live Meta status the drip reads before each send (registered while in review). */
-const META_STATUS_GATED: ReadonlySet<string> = new Set([REPORT_OFFER_TEMPLATE, "initial_contact_short", "initial_question", "webdev_report", "webdev_hook", "webdev_example"]);
+const META_STATUS_GATED: ReadonlySet<string> = new Set([REPORT_OFFER_TEMPLATE, "initial_contact_short", "initial_question", "webdev_report", "webdev_hook", "webdev_example", "polite_hook", "polite_hook2"]);
 /* NO DEFAULT_TEMPLATE.
    It used to be booking_page_intro, applied whenever a lead's whatsapp_template was unset or
    unrecognised. That turned a registration slip into a wrong message: a plumber could receive a

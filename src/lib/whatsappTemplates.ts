@@ -91,6 +91,9 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
   webdev_hook:            { needsUrl: false, needsAudit: false, group: 'opener' },
   /* webdev_example (2026-11-15) - the same pitch + the fixed sample report link: no name, no lead link, no audit needed. */
   webdev_example:         { needsUrl: false, needsAudit: false, group: 'opener' },
+  /* polite_hook / polite_hook2 (2026-11-16) - short follow-ups with NO variables: no name, no link, no audit needed. */
+  polite_hook:            { needsUrl: false, needsAudit: false, group: 'opener' },
+  polite_hook2:           { needsUrl: false, needsAudit: false, group: 'opener' },
   // audit_reply is not yet wired into the manual send path; its rule lives here so the guard is
   // ready the moment it's added to the picker + sender (no drift when that happens).
   audit_reply:            { needsUrl: false, needsAudit: true,  group: 'audit' },
