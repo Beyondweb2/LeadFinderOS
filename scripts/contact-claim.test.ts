@@ -91,7 +91,7 @@ console.log("\n── the workspace logs every method ──");
   ok(/CONTACT_METHODS\.map\(\(m\) => <DropdownMenuItem/.test(flow) && /useState\(DEFAULT_LOG_CHANNEL\)/.test(flow) && /export const DEFAULT_LOG_CHANNEL = 'call';/.test(lflow),
     "the channel defaults to Call; every method of the set is one Change away");
   ok(/offeredOutcomes\(outcomesFor\(channel\)\)/.test(lflow), "the outcome buttons are the method's");
-  ok(/recordedBy === 'send'/.test(lflow) && /recorded automatically/.test(flow) && /!recordedBySend, recordedBySend \? null : note/.test(flow), "WhatsApp explains it is recorded by the send (no second record)");
+  ok(/recordedBy === 'send'/.test(lflow) && /recorded automatically/.test(flow) && /!recordedBySend, recordedBySend \? null : logNoteFor\(key, note\)/.test(flow), "WhatsApp explains it is recorded by the send (no second record)");
   const lo = crm.slice(crm.indexOf("const logOutcome = async"), crm.indexOf("const afterWrite"));
   ok((lo.match(/'lead_log_contact'/g) ?? []).length === 1 && !/'lead_log_contact'/.test(flow), "one write per tap: lead_log_contact, once");
   ok(!/\{ value: 'call'/.test(flow + lflow), "no local method list");
