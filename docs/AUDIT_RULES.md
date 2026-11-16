@@ -1,3 +1,68 @@
+# Audit verdict rules (v3, Paul, 2026-11-16 — v2 below stays for the audits made on it)
+
+## Rules v3: the evidence rule (2026-11-16)
+
+**Why.** The 16 Nov London Domestic Maintenance Discovery (`qs44zg`) said "Winnable 39 · 0 of 25 answers". The OpenAI
+account had no credit, so the firm-reading step (`extract-competitors`) read **0 of 240** answers, and v2 scored the empty
+lists. Re-read on real answers, v2 still said Winnable 39: ChatGPT named firms in 3 of 3 asks, Gemini in 0 of 3, so "most of
+the 6 answers" never held, nothing could be Crowded, and any one stored firm made a search Winnable.
+
+Code: `decideVerdictV3` in `src/lib/auditVerdict.ts`; wired in `reportOpportunity.ts` (`ctx.rules === 3`); page in
+`reportDesign.ts`; alerts `src/lib/auditAlerts.ts` + `supabase/functions/_shared/audit-alerts.ts`. Tests:
+`scripts/audit-rules-v3.test.ts`. Per search, first rule that fits wins:
+
+| # | Rule | Client sees |
+|---|---|---|
+| 0 | **Couldn't measure** — any answer failed, or its firms were never read (no `firms_read` mark on the answer) | not shown, never counted; listed as "couldn't be measured" |
+| – | Odd phrasing / a service they don't offer / not on their site | not shown (unchanged) |
+| 1 | **Already named** — the business is named (strict match) in any answer. Beats everything below | Already named |
+| 2 | An AI **names firms** when a right-trade firm is in **2 or more of its 3 asks** (`NAMES_IN_ASKS`). Each AI is judged on its own asks | |
+| 2a | Neither AI names firms | **AI doesn't name businesses here** (never Winnable), with where AI points people instead |
+| 2b | At least one naming AI whose top 3 firms take **under 70%** of that AI's mentions (`CROWDED_AT`) | **Winnable** |
+| 2c | Every naming AI's top 3 take 70% or more | **Not winnable** (Crowded) |
+
+- **Registers and regulators** (Gas Safe Register, NICEIC, NAPIT, gov.uk, HSE, TrustMark, ICAEW, ACCA, AAT) are never a
+  firm and never a "directory gap". Directories (Checkatrade, TrustATrader, MyBuilder, Bark, Yell…) are listed as
+  "AI points people to"; registers as "tells them to check".
+- **The summary line**: "Already named X · Winnable Y · Not winnable Z · AI doesn't name businesses W".
+- **The named %** is over every ChatGPT + Gemini answer returned, never only the answers that kept a firm list
+  (`reportModel` `score.overAll`). Baselines already did this.
+- **Asks per AI stay at 3** (brief item 5). Measured on LDM 16 Nov: ~61% of the firms in asks 2 and 3 were already in ask 1,
+  and Gemini named no firm in all 3 asks for 36 of 40 searches, so 5 asks would change little for about +$1.80 per audit.
+- **`firms_read`**: `extract-competitors` sets it on every answer the model actually read. An id the model left out, a
+  failed batch or no credit leaves it off.
+- Worth knowing: ChatGPT names only 4–6 firms per search over 3 asks, so "top 3 take 70%" fires often (LDM: 20 of 40).
+
+### Audit incomplete (brief item 1)
+
+More than **10%** of an audit's answers unmeasured (`AUDIT_INCOMPLETE_AT`, `auditCompleteness`) = **Audit incomplete**:
+the Discovery / first-contact report link shows "Audit incomplete" with **no score, no groups, no searches** (Findable and
+LeadFinderOS pages alike), and the Past audits row says "Audit incomplete". The same link shows the real report once the
+answers are read. A baseline is never gated by it: its numbers come from the answers themselves (strict name match), not
+from firm lists, and it keeps its own completeness checks.
+
+### Alerts (bell + email, operator only)
+
+- **Audit incomplete** — once per audit, when its last run settles (`process-ai-audit-queue` → `checkAuditCompleteness`).
+- **Provider refused** — OpenAI ("no credits remaining", insufficient quota) or Apify (HTTP 402 / 403, our Apify reserve):
+  once per provider per UTC day, from the firm-reading step at once and from any settled audit's stored errors.
+- The bell row is the claim (dedupe key); the email (Resend, `OPERATOR_ALERT_TO`) goes only when the claim wins. Bell kinds
+  reuse `audit_finished` / `team_update` (no migration).
+
+### Which audits use v3
+
+`auditRulesFor`: created after `AUDIT_RULES_V3_FROM`, or a copy whose runs carry `report_rules = 3`. Every older link
+keeps the rule it was made on. The guarantee's strict name ruler is unchanged (v2 or later). The Create baseline dialog
+still picks targets on v2 (its source Discoveries predate `firms_read`).
+
+### Re-scoring on v3
+
+`scripts/audit-rescore-v3.ts <outDir> <code> …` (a DB tool; no AI, no Apify; reads only) writes an insert-only copy to a
+NEW short code, runs stamped `report_rules = 3`, a `verdicts_v3` snapshot, and marks `firms_read` on a copied answer only
+when its run's firm-reading receipt says complete; plus an old-vs-new table.
+
+---
+
 # Audit verdict rules (v2, Paul, 2026-11-15)
 
 The one written rule for **Winnable / Not winnable** on a V1 audit report. Code: `src/lib/auditVerdict.ts` (the rules),

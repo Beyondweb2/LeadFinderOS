@@ -55,16 +55,16 @@ export async function alreadyNamedForBaseline(service: Service, b: BaselineRef, 
   const sameSite = (found as any[]).filter((d) => b.lead_id || !bHost || !host(d.website) || host(d.website) === bHost);
   if (!sameSite.length) return null;
 
-  // Prefer a rules-v2 Discovery (a re-scored copy carries report_rules = 2 on its runs).
+  // Prefer the newest rules: a v3 Discovery (or re-scored copy, report_rules = 3), then v2, then the newest of any.
   // deno-lint-ignore no-explicit-any
-  let pick: { d: any; runs: any[]; rules: 1 | 2 } | null = null;
+  let pick: { d: any; runs: any[]; rules: 1 | 2 | 3 } | null = null;
   for (const d of sameSite) {
     const { data: runs } = await service.from("ai_audit_runs")
       .select("id, run_number, created_at, crawl:results->crawl_check, rules:results->report_rules").eq("audit_id", d.id).order("run_number", { ascending: true });
     const rs = (runs ?? []) as Array<{ rules?: unknown }>;
     const rules = auditRulesFor({ createdAt: d.created_at, runRules: rs.map((r) => r.rules) });
-    if (!pick || (rules === 2 && pick.rules !== 2)) pick = { d, runs: rs as never[], rules };
-    if (pick.rules === 2) break;
+    if (!pick || rules > pick.rules) pick = { d, runs: rs as never[], rules };
+    if (pick.rules === 3) break;
   }
   if (!pick || !pick.runs.length) return null;
   const { d, runs, rules } = pick;
@@ -72,7 +72,7 @@ export async function alreadyNamedForBaseline(service: Service, b: BaselineRef, 
   const { data: qrows } = await service.from("ai_audit_queue")
     .select("question, status, result").in("run_id", runs.map((r: { id: string }) => r.id)).order("created_at", { ascending: true });
   const rows: OppRow[] = ((qrows ?? []) as Array<{ question: string; status: string; result: Record<string, unknown> | null }>)
-    .filter((r) => r.status === "done" || r.result || (rules === 2 && r.status === "failed"))
+    .filter((r) => r.status === "done" || r.result || (rules >= 2 && r.status === "failed"))
     .map((r) => ({ question: r.question, result: r.result }));
   if (!rows.length) return null;
 
@@ -93,7 +93,7 @@ export async function alreadyNamedForBaseline(service: Service, b: BaselineRef, 
     isNamed: (c: unknown) => cellNamed(c as never, nctx),
     isRival: (n: string) => isRealCompetitor(n, town),
     rules,
-    identity: rules === 2 ? { name: bizName, domains: website ? [website] : [], placeIds: o.placeId ? [o.placeId] : [] } : undefined,
+    identity: rules >= 2 ? { name: bizName, domains: website ? [website] : [], placeIds: o.placeId ? [o.placeId] : [] } : undefined,
   };
   const m = buildReportModel(rows, ctx, { kind: "opportunity", businessName: bizName, town, dateLabel: "", website: { state: "not_checked", issues: [] }, order: questions, bestCount: 10 });
   const searches = alreadyNamedSearches(m.all, targets);

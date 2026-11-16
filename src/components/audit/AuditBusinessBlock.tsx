@@ -92,6 +92,10 @@ function PooledResult({ audit, big }: { audit: AuditLite; big?: boolean }) {
     const stored = audit.runs.find((r) => r.mention_rate !== null)?.mention_rate ?? null;
     return stored !== null ? <MentionPill rate={stored} /> : <span className="text-[11px] text-muted-foreground">No result yet</span>;
   }
+  /* Rules v3: an audit with too many unread answers is never shown as a result (its report shows no figures either). */
+  if (data.incomplete) {
+    return <span className="rounded border border-amber-500/60 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-300" title={`${data.incomplete.unmeasured} of ${data.incomplete.answers} answers could not be read. Re-run the firm reading (or the audit); the report shows no figures until then.`}>Audit incomplete</span>;
+  }
   if (data.pct === null) return <span className="text-[11px] text-muted-foreground">No answers yet</span>;
   return (
     <span className={`inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5 ${big ? '' : ''}`}>
@@ -102,6 +106,8 @@ function PooledResult({ audit, big }: { audit: AuditLite; big?: boolean }) {
           <span className="rounded border border-sky-500/50 bg-sky-500/10 px-1.5 py-0.5 text-sky-700 dark:text-sky-300">Already named {data.split.named}</span>
           <span className="rounded border border-emerald-500/50 bg-emerald-500/10 px-1.5 py-0.5 text-emerald-700 dark:text-emerald-300">Winnable {data.split.winnable}</span>
           <span className="rounded border border-border/70 px-1.5 py-0.5 text-muted-foreground">Not winnable {data.split.notWinnable}</span>
+          {data.split.noNames !== undefined && <span className="rounded border border-border/70 px-1.5 py-0.5 text-muted-foreground">AI doesn't name businesses {data.split.noNames}</span>}
+          {!!data.split.unmeasured && <span className="rounded border border-amber-500/60 px-1.5 py-0.5 text-amber-800 dark:text-amber-300" title="Searches with an answer that failed or was not read: left out of every count">Couldn't measure {data.split.unmeasured}</span>}
         </span>
       ) : data.winnable && data.winnable.n > 0 && (
         <span className="rounded border border-border/70 px-1.5 py-0.5 text-[11px] font-medium text-foreground tabular-nums" title="Searches with room to be named (the report's Winnable count)">

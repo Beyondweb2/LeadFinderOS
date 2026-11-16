@@ -306,6 +306,14 @@ export interface LfosRenderOpts {
 /** The LeadFinderOS report for one audit, from the same ReportModel the Findable pages use. */
 export function renderLeadfinderReport(m: ReportModel, opts: LfosRenderOpts = {}): string {
   const biz = shortName(m.businessName);
+  /* AUDIT INCOMPLETE (rules v3, docs/AUDIT_RULES.md): never presented as a finished report — no figures at all. */
+  if (m.incomplete) {
+    const inner = header(m.dateLabel) + `<div class="lf-body"><div class="lf-wait"><div class="lf-eyebrow">Audit incomplete</div>` +
+      `<h1>The report for ${esc(biz)} isn't finished yet</h1>` +
+      `<p class="lf-sub">We couldn't read ${m.incomplete.unmeasured} of the ${m.incomplete.answers} AI answers, so no figures are shown. We have been alerted and will check them again; this page shows the finished report when that is done.</p></div>` +
+      `${closing()}${footer(m.dateLabel, m.asks)}</div>`;
+    return page(`${biz} - AI visibility report | LeadFinderOS`, inner);
+  }
   const judgeable = opts.nameNotJudgeable !== true;
   const place = m.place || m.where;
   const sc = m.score;
@@ -315,7 +323,7 @@ export function renderLeadfinderReport(m: ReportModel, opts: LfosRenderOpts = {}
     ? `We recorded every answer, but could not tell from them whether AI meant ${esc(biz)}.`
     : sc.value === null
       ? `None of the ${sc.answers} answers named any business.`
-      : `Named in ${sc.named} of the ${sc.denominator} answers that named a business.`;
+      : sc.overAll ? `Named in ${sc.named} of ${sc.answers} answers.` : `Named in ${sc.named} of the ${sc.denominator} answers that named a business.`;
   const pills = judgeable
     ? `<div class="lf-pills">${ENGINES.map((x) => { const e = m.engines[x.key]; return `<span class="lf-pill"><span class="lf-eng lf-eng-${x.key}">${x.mark}</span>${x.label}: named in ${e.named} of ${e.answers}</span>`; }).join('')}</div>`
     : '';

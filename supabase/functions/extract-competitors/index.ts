@@ -7,6 +7,8 @@ import { isProvableJunkName } from "../../../src/lib/competitorCleaning.ts";
 import { classifyKnownEntity } from "../../../src/lib/knownEntities.ts";
 import { nameIsTextJudgeable, nameMatches } from "../../../src/lib/nameMatch.ts";
 import { AI_OVERVIEW_ENGINE, overviewReadableText } from "../../../src/lib/aiOverview.ts";
+import { refusalsIn } from "../../../src/lib/auditAlerts.ts";
+import { alertProviderRefusal } from "../_shared/audit-alerts.ts";
 
 // extract-competitors — AI-judged competitor extraction from a run's ALREADY-STORED answer
 // text (no new Apify scrape). For each engine answer on the run, an OpenAI call reads the
@@ -505,6 +507,12 @@ Return one entry per id via return_competitors.`;
          final state, not every wobble on the way to a good one. */
       if (lastError) batchErrors.push(`batch ${batchNo}: ${lastError}`);
     }
+    /* PROVIDER REFUSED (Paul, 2026-11-16): OpenAI saying "no credit" reaches Paul at once (bell + email, once a day), not
+       only the run's receipt — on 16 Nov it sat in a receipt nobody read while the report said Winnable 39. */
+    if (!dryRun) {
+      const refused = refusalsIn(batchErrors).find((r) => r.provider === "OpenAI");
+      if (refused) await alertProviderRefusal(service, refused, "the firm-reading step (extract-competitors)");
+    }
     /* ⛔ DRY-RUN VERIFY: nothing is written. Return mini's extracted names beside the STORED
        (gpt-4o) names on the same answers, so the caller diffs the two — names, self_named, junk.
        The switch is only made after this diff passes. */
@@ -555,7 +563,9 @@ Return one entry per id via return_competitors.`;
            `named` from nameMatches is left EXACTLY as it was — it is what every un-backfilled
            audit still falls back to, and overwriting it would rewrite two paying clients' frozen
            baselines. The new field sits beside it and wins where it exists. */
-        base[it.engine] = { ...er, competitors: got.names, self_named: got.selfNamed };
+        /* `firms_read: true` (rules v3, 2026-11-16): THIS answer was read by the model. An answer without it — a failed
+           batch, an id the model left out, no credit — is "Couldn't measure" on a v3 report, never "AI named nobody". */
+        base[it.engine] = { ...er, competitors: got.names, self_named: got.selfNamed, firms_read: true };
         updatedResults.set(it.rowId, base);
       }
     }

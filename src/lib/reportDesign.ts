@@ -329,7 +329,9 @@ function scoreBlock(m: ReportModel): string {
   const top = m.kind === 'hook' ? m.top : null;
   const line = s.value === null ? "AI didn't name any business in these answers."
     : m.kind === 'baseline' ? `AI named you in ${s.named} of ${s.answers} answers on ${targetWords(m)}.`
-      : `${s.named} of ${s.denominator} answers that named a business named you.${top ? ` ${esc(top.name)}: ${top.count}.` : ''}`;
+      /* Rules v3 (brief item 6): out of every answer returned, never only the ones that kept a firm list. */
+      : s.overAll ? `AI named you in ${s.named} of ${s.answers} answers.${top ? ` ${esc(top.name)}: ${top.count}.` : ''}`
+        : `${s.named} of ${s.denominator} answers that named a business named you.${top ? ` ${esc(top.name)}: ${top.count}.` : ''}`;
   const card = (e: Eng) => {
     const c = m.engines[e];
     const pct = c.answers ? Math.round((c.named / c.answers) * 100) : 0;
@@ -418,7 +420,7 @@ function whyPanel(m: ReportModel): string {
   const rivals = m.rivals.length;
   const tiles: string[] = [];
   if (m.score.value === null) tiles.push(`<div class="rp-tile"><b>0</b><span>businesses named in these answers</span></div>`);
-  else if (misses > 0) tiles.push(`<div class="rp-tile"><b>${misses}/${m.score.denominator}</b><span>answers that named a business did not name ${esc(shortName(m.businessName))}</span></div>`);
+  else if (misses > 0) tiles.push(`<div class="rp-tile"><b>${misses}/${m.score.denominator}</b><span>${m.score.overAll ? 'answers' : 'answers that named a business'} did not name ${esc(shortName(m.businessName))}</span></div>`);
   else tiles.push(`<div class="rp-tile"><b>${m.score.named}/${m.score.denominator}</b><span>answers named ${esc(shortName(m.businessName))}</span></div>`);
   if (misses > 0 && rivals > 0) tiles.push(`<div class="rp-tile"><b>${rivals}</b><span>different ${rivals === 1 ? 'business' : 'businesses'} named instead</span></div>`);
   return `<section class="rp-panel"><h2 class="rp-h">Why this matters</h2><div class="rp-tiles">${tiles.join('')}</div></section>`;
@@ -485,7 +487,8 @@ function hookBody(m: ReportModel): string {
    verdict (q.verdict) and that is the answer: named anywhere -> Winnable, one firm in 5/6 -> Not winnable, everything
    else Winnable, no big-city cap. The rule above is kept ONLY for audits made before v2, so a link already sent keeps
    the page it showed. */
-export type WinnableVerdict = 'winnable' | 'not_winnable' | null;
+/** 'no_names' (rules v3 only): AI doesn't name businesses here — its own group, never Winnable. */
+export type WinnableVerdict = 'winnable' | 'not_winnable' | 'no_names' | null;
 export function winnableOf(q: Pick<OppQuestion, 'tier' | 'repeatShare' | 'top' | 'answers'> & Partial<Pick<OppQuestion, 'question' | 'namedYou' | 'verdict'>>): WinnableVerdict {
   if (q.verdict) return q.verdict.verdict;
   const verdict = baseWinnable(q);
@@ -505,20 +508,27 @@ function baseWinnable(q: Pick<OppQuestion, 'tier' | 'repeatShare' | 'top' | 'ans
 /** THE THREE-WAY SPLIT (Paul, 2026-11-15), rules v2 only: Already named (named in at least one answer), Winnable (the
  *  rest with room), Not winnable (crowded). null when no search carries a v2 verdict (an older audit keeps its page).
  *  One function for the report summary and the Past audits row, so the two always agree. */
-export interface VerdictSplit { named: number; winnable: number; notWinnable: number }
+/* RULES v3 (Paul, 2026-11-16): four groups — Already named · Winnable · Not winnable · AI doesn't name businesses — plus
+   the searches we couldn't measure (never in a group, never counted). `noNames` / `unmeasured` are present only on v3. */
+export interface VerdictSplit { named: number; winnable: number; notWinnable: number; noNames?: number; unmeasured?: number }
 export function verdictSplitOf(qs: Pick<OppQuestion, 'verdict'>[]): VerdictSplit | null {
   if (!qs.some((q) => !!q.verdict)) return null;
-  const out: VerdictSplit = { named: 0, winnable: 0, notWinnable: 0 };
+  const v3 = qs.some((q) => q.verdict?.rules === 3);
+  const out: VerdictSplit = v3 ? { named: 0, winnable: 0, notWinnable: 0, noNames: 0, unmeasured: 0 } : { named: 0, winnable: 0, notWinnable: 0 };
   for (const q of qs) {
     const v = q.verdict;
+    if (v3 && v?.rule === 'unmeasured') { out.unmeasured!++; continue; }
     if (!v || v.verdict === null) continue;
     if (v.rule === 'visible') out.named++;
+    else if (v.verdict === 'no_names') out.noNames = (out.noNames ?? 0) + 1;
     else if (v.verdict === 'winnable') out.winnable++;
     else out.notWinnable++;
   }
   return out;
 }
-export const splitLine = (s: VerdictSplit): string => `Already named ${s.named} · Winnable ${s.winnable} · Not winnable ${s.notWinnable}`;
+export const NO_NAMES_LABEL = "AI doesn't name businesses";
+export const splitLine = (s: VerdictSplit): string =>
+  `Already named ${s.named} · Winnable ${s.winnable} · Not winnable ${s.notWinnable}${s.noNames !== undefined ? ` · ${NO_NAMES_LABEL} ${s.noNames}` : ''}`;
 
 /** The one plain line beside a winnable search: why it is open, in words, never counts (Paul, 2026-11-14). */
 export function winnableWhy(q: Pick<OppQuestion, 'tier' | 'namedYou'> & Partial<Pick<OppQuestion, 'verdict'>>): string {
@@ -536,7 +546,7 @@ function opportunityBody(m: ReportModel): string {
     ? ({ visible: 0, open: q.verdict.label === 'Names change' ? 1 : 2 } as Record<string, number>)[q.verdict.rule] ?? 3
     : (q.tier === 'lots' ? 0 : q.tier === 'some' ? 1 : 2);
   const v2 = m.all.some((q) => !!q.verdict);
-  if (v2) return opportunityBodyV2(m, live.map((x) => x.q), rank);
+  if (v2) return opportunityBodyV2(m, live.map((x) => x.q), rank, m.all.filter((q) => q.verdict?.rule === 'unmeasured'));
   const win = live.filter((x) => x.v === 'winnable').map((x) => x.q).sort((a, b) => rank(a) - rank(b) || a.question.localeCompare(b.question));
   const not = live.filter((x) => x.v === 'not_winnable').map((x) => x.q).sort((a, b) => a.question.localeCompare(b.question));
   /* No "left out" note and no answer counts on the page (Paul, 2026-11-14): one plain line per winnable search. */
@@ -553,15 +563,30 @@ function opportunityBody(m: ReportModel): string {
 }
 
 /** Rules v2: the summary line, then three groups: Already named, Winnable, Not winnable (Paul, 2026-11-15). */
-function opportunityBodyV2(m: ReportModel, live: OppQuestion[], rank: (q: OppQuestion) => number): string {
-  const split = verdictSplitOf(live) ?? { named: 0, winnable: 0, notWinnable: 0 };
+function opportunityBodyV2(m: ReportModel, live: OppQuestion[], rank: (q: OppQuestion) => number, unmeasured: OppQuestion[] = []): string {
+  const v3 = live.some((q) => q.verdict?.rules === 3) || unmeasured.length > 0;
+  const split = verdictSplitOf([...live, ...unmeasured]) ?? { named: 0, winnable: 0, notWinnable: 0 };
   const named = live.filter((q) => q.verdict!.rule === 'visible').sort((a, b) => b.namedYou - a.namedYou || a.question.localeCompare(b.question));
   const win = live.filter((q) => q.verdict!.rule !== 'visible' && q.verdict!.verdict === 'winnable').sort((a, b) => rank(a) - rank(b) || a.question.localeCompare(b.question));
   const not = live.filter((q) => q.verdict!.verdict === 'not_winnable').sort((a, b) => a.question.localeCompare(b.question));
+  const none = live.filter((q) => q.verdict!.verdict === 'no_names').sort((a, b) => a.question.localeCompare(b.question));
   const stat = (n: number, label: string, tone: string) => `<div class="rp-split-i rp-split-i--${tone}"><b>${n}</b><span>${esc(label)}</span></div>`;
-  const summary = `<section class="rp-panel rp-split" aria-label="${esc(splitLine(split))}"><p class="rp-h-sub">${esc(`Your ${plural(live.length, 'search', 'searches')}, in three groups.`)}</p>` +
-    `<div class="rp-split-row">${stat(split.named, 'Already named', 'named')}${stat(split.winnable, 'Winnable', 'win')}${stat(split.notWinnable, 'Not winnable', 'not')}</div>` +
-    `<p class="rp-split-line">${esc(splitLine(split))}</p></section>`;
+  const groups = v3 ? 'four' : 'three';
+  const summary = `<section class="rp-panel rp-split" aria-label="${esc(splitLine(split))}"><p class="rp-h-sub">${esc(`Your ${plural(live.length, 'search', 'searches')}, in ${groups} groups.`)}</p>` +
+    `<div class="rp-split-row">${stat(split.named, 'Already named', 'named')}${stat(split.winnable, 'Winnable', 'win')}${stat(split.notWinnable, 'Not winnable', 'not')}${v3 ? stat(split.noNames ?? 0, NO_NAMES_LABEL, 'not') : ''}</div>` +
+    `<p class="rp-split-line">${esc(splitLine(split))}</p>` +
+    (unmeasured.length ? `<p class="rp-h-sub">${esc(`${plural(unmeasured.length, 'search', 'searches')} couldn't be measured this time and ${unmeasured.length === 1 ? 'is' : 'are'} left out of every count.`)}</p>` : '') + `</section>`;
+  /* Where AI points people instead (brief item 3/4): listing sites, then the registers it tells people to check. Names of
+     sites only, never a competitor. */
+  const pointsTo = (q: OppQuestion) => {
+    const dirs = q.verdict?.directories ?? []; const regs = q.verdict?.registers ?? [];
+    const parts = [dirs.length ? `AI points people to ${dirs.slice(0, 3).join(', ')}` : '', regs.length ? `${dirs.length ? 'and tells them' : 'AI tells people'} to check ${regs.slice(0, 3).join(', ')}` : ''].filter(Boolean);
+    return parts.length ? `${parts.join(' ')}.` : '';
+  };
+  const nonePanel = v3 && none.length
+    ? `<section class="rp-panel"><h2 class="rp-h">${esc(NO_NAMES_LABEL)} here yet &middot; ${none.length}</h2><p class="rp-h-sub">Neither ChatGPT nor Gemini names a business for these most of the time. They send people elsewhere instead.</p>` +
+      none.map((q) => `<div class="rp-target"><h3>${esc(q.question)}</h3><p>${chip('na', NO_NAMES_LABEL)} ${esc(pointsTo(q))}</p></div>`).join('') + `</section>`
+    : '';
   const namedPanel = named.length
     ? `<section class="rp-panel"><h2 class="rp-h">Already named &middot; ${named.length}</h2><p class="rp-h-sub">AI names you in at least one answer for these. We work to make it more often.</p>` +
       named.map((q) => `<div class="rp-target"><h3>${esc(q.question)}</h3><p>${chip('b', 'Already named')} ${esc(winnableWhy(q))}</p></div>`).join('') + `</section>`
@@ -575,7 +600,7 @@ function opportunityBodyV2(m: ReportModel, live: OppQuestion[], rank: (q: OppQue
     ? `<section class="rp-panel"><h2 class="rp-h">Not winnable for now &middot; ${not.length}</h2><p class="rp-h-sub">A few businesses take nearly every spot in AI's answers for these.</p>` +
       not.map((q) => `<div class="rp-mini"><span>${esc(q.question)}</span>${chip('na', 'Not winnable')}</div>`).join('') + `</section>`
     : '';
-  return `<p class="rp-line">${headlineText(m)}</p>` + summary + namedPanel + winPanel + notPanel;
+  return `<p class="rp-line">${headlineText(m)}</p>` + summary + namedPanel + winPanel + notPanel + nonePanel;
 }
 
 /** "How easy your website is for AI to read" (aiReadability.ts): the number, the six parts, what is in the way. */
@@ -640,7 +665,23 @@ function alreadyNamedPanel(m: ReportModel): string {
 
 /* ═══ The page ═══════════════════════════════════════════════════════════════════════════════ */
 
+/* AUDIT INCOMPLETE (rules v3, brief item 1): never presented as a finished report. No score, no groups, no searches:
+   only that it isn't finished and why, in plain words. The same link shows the real report once the answers are read. */
+export const INCOMPLETE_TITLE = 'Audit incomplete';
+function incompleteBody(m: ReportModel): string {
+  const i = m.incomplete!;
+  return `<p class="rp-line"><em>This report isn't finished yet.</em></p>` +
+    `<section class="rp-panel"><h2 class="rp-h">${INCOMPLETE_TITLE}</h2>` +
+    `<p class="rp-h-sub">${esc(`We couldn't read ${i.unmeasured} of the ${plural(i.answers, 'AI answer')} in this check, so we are not showing any results from it. We have been alerted and will check them again; this page will show the finished report when that is done.`)}</p></section>`;
+}
+
 export function renderReport(m: ReportModel, opts: { print?: boolean } = {}): string {
+  if (m.incomplete) {
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
+      `<meta name="viewport" content="width=device-width, initial-scale=1">` +
+      `<meta name="robots" content="noindex, nofollow, noarchive"><title>${esc(shortName(m.businessName))} - ${INCOMPLETE_TITLE}</title>` +
+      `<style>${CSS}</style></head><body><div class="rp-sheet">${headBlock(m)}<div class="rp-body">${incompleteBody(m)}</div></div></body></html>`;
+  }
   const body = m.kind === 'hook' ? hookBody(m) : m.kind === 'baseline' ? baselineBody(m) : opportunityBody(m);
   /* "Download PDF" = the browser's own print-to-PDF of this page, laid out by the print CSS above. ?print=1 opens the
      print dialog by itself (the app's Download PDF button uses it). */

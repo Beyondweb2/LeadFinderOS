@@ -565,7 +565,7 @@ Deno.serve(async (req) => {
           .from("ai_audit_runs").select("run_number, crawl:results->crawl_check, rules:results->report_rules").eq("audit_id", audit.id).order("run_number", { ascending: true });
         const rules = auditRulesFor({ createdAt: (audit as { created_at?: string }).created_at ?? null, runRules: ((crawlRuns ?? []) as Array<{ rules?: unknown }>).map((r) => r.rules) });
         /* v2: a FAILED queue row is kept (its empty answers make the search "re-run needed", never a verdict). */
-        const oppRows: OppRow[] = queueRows.filter((r) => r.status === "done" || r.result || (rules === 2 && r.status === "failed")).map((r) => ({ question: r.question, result: r.result as unknown as Record<string, unknown> | null }));
+        const oppRows: OppRow[] = queueRows.filter((r) => r.status === "done" || r.result || (rules >= 2 && r.status === "failed")).map((r) => ({ question: r.question, result: r.result as unknown as Record<string, unknown> | null }));
         const questions = [...new Set(oppRows.map((r) => r.question.trim()))];
         /* A standalone audit (no lead) has no lead-level check: use the website check stored with its own run. */
         if (websiteSection.state === "not_checked" && runCrawl?.status === "complete") {
@@ -588,7 +588,7 @@ Deno.serve(async (req) => {
           isRival: (n: string) => isRealCompetitor(n, town),
           /* v2: the strict name match — exact name, website domain or Google profile; near-names flagged, not counted. */
           rules,
-          identity: rules === 2 ? { name: bizName, domains: ownWebsite ? [ownWebsite] : [], placeIds: leadPlaceId ? [leadPlaceId] : [] } : undefined,
+          identity: rules >= 2 ? { name: bizName, domains: ownWebsite ? [ownWebsite] : [], placeIds: leadPlaceId ? [leadPlaceId] : [] } : undefined,
         };
         /* A first-contact report is the few searches of the hook: one answer per AI per search. */
         const hookQs = questions.slice(0, 3);
@@ -615,7 +615,7 @@ Deno.serve(async (req) => {
            searches its Discovery's STORED answers already name it on. Shown once, never re-measured for the client, never part
            of the guarantee: nothing above (the 20 targets, their counts, the frozen day-0 numbers) reads it. Older baselines
            (rules 1, incl. every paid baseline sold before v2) are unchanged. A failed read shows no section. */
-        if (designKind === "baseline" && rules === 2) {
+        if (designKind === "baseline" && rules >= 2) {
           try {
             const an = await alreadyNamedForBaseline(service, { id: audit.id, business_name: audit.business_name ?? null, website: ownWebsite || null, lead_id: leadId, created_at: (audit as { created_at: string }).created_at }, questions, { placeId: leadPlaceId });
             if (an) model.alreadyNamed = { dateLabel: an.dateLabel, searches: an.searches };

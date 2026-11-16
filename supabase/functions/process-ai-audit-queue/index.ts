@@ -30,6 +30,7 @@ import { HOOK_DECIDING_ENGINE, advanceHookState, evaluateHookQuestion, isHookSta
 import { advanceSequentialHook, isSequentialHookState } from "../../../src/lib/hookScore.ts";
 import { RETRY_CLEAN_CAP, runSettlement, shouldInvokeCleaning, finaliseReadiness, markCleaningExhausted } from "../_shared/run-finalise.ts";
 import { cleaningSweepDue } from "../_shared/cleaning-sweep.ts";
+import { checkAuditCompleteness } from "../_shared/audit-alerts.ts";
 import { AUDIT_RUN_CAP_USD } from "../../../src/lib/auditLimits.ts";
 import { POOL_DAILY_CAP_USD, budgetDecision, budgetPoolForPurpose, refusalRowError, type ApifyUsage, type BudgetPool } from "../../../src/lib/auditBudget.ts";
 import { latestApifyUsage } from "../_shared/audit-budget.ts";
@@ -1604,6 +1605,12 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     }
   }
   const auditReady = (auditId: string) => processingRuns.some((p) => p.auditId === auditId && readyRuns.has(p.runId));
+  /* AUDIT INCOMPLETE / PROVIDER REFUSED (Paul, 2026-11-16; src/lib/auditAlerts.ts): once every run of an audit has settled,
+     judge the whole audit — too many unmeasured answers = one "Audit incomplete" alert (bell + email), and any OpenAI /
+     Apify credit or limit refusal in its stored errors = one alert per provider per day. Never blocks finalising. */
+  for (const auditId of new Set(processingRuns.filter((p) => readyRuns.has(p.runId)).map((p) => p.auditId))) {
+    await checkAuditCompleteness(service, auditId);
+  }
   for (let i = freeCheckJobs.length - 1; i >= 0; i--) if (!auditReady(freeCheckJobs[i].auditId)) freeCheckJobs.splice(i, 1);
   for (let i = completionSendJobs.length - 1; i >= 0; i--) if (!auditReady(completionSendJobs[i].auditId)) completionSendJobs.splice(i, 1);
   for (let i = baselineJobs.length - 1; i >= 0; i--) if (!auditReady(baselineJobs[i].auditId)) baselineJobs.splice(i, 1);
