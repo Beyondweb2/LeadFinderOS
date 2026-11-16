@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { templateGroupLabel, WA_TEMPLATE_REQS } from '../src/lib/whatsappTemplates.ts';
 import { isColdOutreachTemplate, NEEDS_PRIOR_WHATSAPP } from '../src/lib/coldOutreach.ts';
-import { invokeFailure, isInvokeWrapperText, plainRefusal } from '../src/lib/functionError.ts';
+import { invokeFailure, isInvokeWrapperText, plainRefusal, refusalSentence } from '../src/lib/functionError.ts';
 
 let failures = 0;
 const ok = (condition: boolean, label: string) => { if (!condition) failures++; console.log(`${condition ? 'PASS' : 'FAIL'} ${label}`); };
@@ -58,5 +58,13 @@ for (const p of ['src/components/dashboard/SubmissionsCard.tsx', 'src/components
   ok(/invokeFailure\(e\)/.test(s) && !/e\?\.message \?\?/.test(s), `${p}: no wrapper`);
 }
 
+console.log('\n── a 200 refusal: the sentence, never the token (live sweep 2026-11-16: explain_offer) ──');
+ok(refusalSentence({ ok: false, error: 'unsafe_template_var', reason: 'template_not_approved', detail: 'explain_offer is waiting on Meta approval — a send would fail' })?.includes('Meta has not approved') === true, 'template_not_approved -> its sentence');
+ok(refusalSentence({ ok: false, error: 'unsafe_template_var', reason: 'some_new_hold', detail: 'The lead has no town, so this cannot be built.' }) === 'The lead has no town, so this cannot be built.', 'unknown token in reason, sentence in detail -> the sentence');
+ok(refusalSentence({ ok: false, error: 'unsafe_template_var', reason: 'trade_starts_with_vowel_sound', detail: 'Agency' })?.includes('needs "an"') === true, 'vowel-sound hold -> its sentence, never the bare trade word');
+ok(refusalSentence({ ok: false, error: 'unsafe_template_var', reason: 'template_not_approved' })?.includes('Meta has not approved') === true, 'token only -> worded');
+ok(refusalSentence({ ok: false, error: 'follow_up_needs_contact', reason: 'This template is a follow-up…' }) === 'This template is a follow-up…', 'a sentence in reason is kept');
+ok(refusalSentence({ ok: false, error: 'lead_archived' }) === 'The server refused it ("lead archived").', 'error only -> worded');
+ok(/reason: refusalSentence\(data\)/.test(read('src/hooks/useInbox.ts')) && /refusalSentence\(data\)/.test(read('src/lib/whatsAppSendRequest.ts')), 'preview and send both use it');
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1); }
 console.log('\nALL PASS');

@@ -35,3 +35,15 @@ Meta does not charge undelivered messages and 131026 is not a block/report, so i
 logs the code but does not store it on the row — left alone (the hold).
 Change: `inboxStatusPill.ts` `not_on_whatsapp` ("Not on WhatsApp", muted, the stored No WhatsApp colour) when the lead is stored
 `no_whatsapp`, our send failed, and they have not replied. Every other failure is still red Send failed.
+
+## Live preview sweep (dry run, nothing sent) — 2026-11-16 ~14:00 UTC
+Paul's session in the built-in browser, `send-whatsapp-message` `mode:"dry_run"`, `via:"inbox"`:
+- Antony Cooper (open window, no audit), 30 templates (picker + dashboard): all answered 200. 22 previewed (in-window free text);
+  8 audit templates refused "run an audit first" (correct); explain_offer / explain_offer_v2 refused `template_not_approved`
+  (stale £29.99 wording, already greyed in the picker).
+- A second open-window lead WITH an audit: webdev_report, competitor_hook (video), audit_followup, audit_followup_call,
+  audit_followup_fault, ai_visibility_report_offer previewed; audit_reply / video_template / audit_reply_warm held
+  `trade_starts_with_vowel_sound` (by design: "for a {{2}}").
+- Fix (branch v1-plain-reason-detail): those holds came back with a TOKEN in `reason` (sentence or trade word in `detail`), which
+  the screen would have shown bare. `refusalSentence()` (functionError.ts) now words every 200 refusal: known token → its sentence
+  (`EDGE_ERROR_SENTENCES`, + template_not_approved, trade_starts_with_vowel_sound), else the first real sentence, else plainRefusal.

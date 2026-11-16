@@ -24,6 +24,9 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-16-template-hold-words', date: '2026-11-16', title: 'Inbox: held templates say why in plain words', audience: 'all',
+    body: 'When a WhatsApp template is held (for example Meta has not approved it, or its wording needs "an" before their trade), the preview and send now say so in a sentence instead of a code like template_not_approved.',
+    report: { added: [], changed: ['Held-template reasons are written in plain words.'], removed: ['Bare codes such as template_not_approved and trade_starts_with_vowel_sound on screen.'], effect: 'You know straight away to pick another template.' } },
   { id: '2026-11-16-not-on-whatsapp-pill', date: '2026-11-16', title: 'Inbox: "Not on WhatsApp" instead of "Send failed"', audience: 'all',
     body: 'When Meta says a number is not on WhatsApp (error 131026), the Inbox now says "Not on WhatsApp" in grey instead of a red "Send failed". Nothing went wrong on our side: Meta does not charge for it, the lead is already marked No WhatsApp, it is never messaged again on WhatsApp and it does not count against the country. Call, text or email them instead.',
     report: {

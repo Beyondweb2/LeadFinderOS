@@ -4,7 +4,7 @@
    from either screen. It was lifted out of useInbox.send unchanged; never add a field here for one caller only. */
 import type { supabase as Supabase } from '@/integrations/supabase/client';
 import { sendErrorMeaning } from './sendErrorMeaning';
-import { invokeFailure } from './functionError';
+import { invokeFailure, refusalSentence } from './functionError';
 
 export interface WhatsAppSendArgs {
   phone: string;
@@ -68,7 +68,7 @@ export async function sendWhatsAppRequest(sb: { functions: typeof Supabase.funct
   if (!data?.ok) {
     const failCode = typeof data?.failCode === 'number' ? data.failCode : undefined;
     const meta = failCode !== undefined ? sendErrorMeaning('whatsapp', failCode) : null;
-    const reason = data?.reason ?? data?.detail ?? (meta ? `Not sent: ${meta} (Meta error ${failCode})` : undefined);
+    const reason = (meta ? `Not sent: ${meta} (Meta error ${failCode})` : undefined) ?? refusalSentence(data);
     return { ok: false, error: data?.error ?? 'send_failed', reason, ...(failCode !== undefined ? { failCode } : {}) };
   }
   const shape = {
