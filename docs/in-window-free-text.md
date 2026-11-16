@@ -17,8 +17,9 @@ messages a month per number before charging the market's service rate (= utility
   `pitchEverSent`, the once-per-lead guards and `report_sent` see it as that template; `template_snapshot` is saved from the
   template payload with the words sent; `findings_shown` stays only while the words still carry the findings sentence.
   Response carries `sent_as` and, when the window was open but there was no version, `no_free_text`.
-- Origins: `via:"inbox"` (direct) and a queued Inbox/popup row when it runs (`sched`). Everything else (bulk cold-opener
-  queue, lead popup direct sends, admin dashboard buttons, welcome pack, Quick Close) sends templates exactly as before.
+- Origins: `via:"inbox"` (direct) and a queued Inbox/popup row when it runs (`sched`). ⛔ **Since 2026-11-16 (Paul) every other
+  door too** (lead popup, admin dashboard buttons, welcome pack, Quick Close = `other`, never typed): window open → free text,
+  closed → the template. See "Every template, single or bulk" below.
 - Queued: a template send outside the lead's hours is queued as `kind:"template"` with the words in `body`. When it runs:
   window open → the words as free text; closed → the approved template (never refused for the window closing first).
 - `as_free_text: true` (+ `template_name` + `body`): the composer's own (possibly edited) words for that template. Window
@@ -57,3 +58,19 @@ which the drain stores on the failed row and the Inbox shows as "Not sent — �
 WSH Electrical 2026-10-31: "3 of 3 answers didn't name you. 4 other businesses were named instead." → "… 8 other businesses …".
 
 Tests: `scripts/in-window-free-text.test.ts`.
+
+## Every template, single or bulk (2026-11-16, branch v1-window-free-text)
+
+Paul: "when sending any template (single or bulk) to someone whose 24-hour window is open, send its wording as a normal free-form
+message, never as a paid template. Only use the actual template when the window is closed."
+
+- **The rule** `inWindowShape`: origin `other` now converts like a queued send (typed words never apply there, so it never refuses).
+- **The bulk queue** (`process-whatsapp-queue`, which posts to Meta itself): the drip (openers), hook follow-up and contact follow-up
+  lanes each call `queueLanePayload(templatePayload, body, await phoneWindowOpen(service, to))` (`_shared/in-window-send.ts`, rule =
+  `queueSendShape`). The window is read per NUMBER from inbound rows (Meta measures it per business number + customer). A failed
+  read = closed = the template. The row keeps `template_name`; `message_type` is text / video when it went free.
+- **Bulk confirm** (Outreach → Queue WhatsApp): "X free (window open) · Y need a paid template (window closed, ~£0.06 each)" and
+  "Keep only the X free ones" (narrows the selection; then Queue). Read when the dialog opens; each send is decided again when it goes.
+  The price is `CHANNEL_COST_GBP.whatsapp_marketing` (`templateSendPrice.ts`), an estimate until a billed row agrees.
+- **Single send** (the lead WhatsApp popup): "Free: … goes as a normal message" / "Paid template: … (~£0.06)".
+- Tests: `scripts/in-window-free-text.test.ts` sections 2, 5, 6 (pure + source; nothing is sent).

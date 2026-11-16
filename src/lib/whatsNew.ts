@@ -31,6 +31,13 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       changed: [],
       removed: [],
       effect: 'Work Hot leads first. A lead with no website scan or no AI audit says Incomplete and what is missing; Do Not Contact and clients say Excluded.',
+  { id: '2026-11-16-window-free-text', date: '2026-11-16', title: 'Templates go free when their 24-hour window is open', audience: 'all',
+    body: 'Any WhatsApp template you send, one at a time or in a bulk queue, now goes as a normal free message when the person has written to us in the last 24 hours. Only when their window is closed does it go as the paid template. The bulk Queue WhatsApp box shows how many are free and how many need a paid template, and can keep only the free ones. The lead WhatsApp popup says Free or Paid before you send.',
+    report: {
+      added: ['Queue WhatsApp: "X free (window open) · Y need a paid template (window closed)" and "Keep only the X free ones".', 'The lead WhatsApp popup: a Free / Paid line above Send template.'],
+      changed: ['Inside the 24-hour window, every template (popup, dashboard, bulk queue and its follow-ups) goes as the same wording in a normal message, still recorded as that template.'],
+      removed: [],
+      effect: 'Replies inside the window stop costing a paid template. Nothing changes for leads who have not written to us.',
     } },
   { id: '2026-11-16-audit-locked-spots', date: '2026-11-16', title: 'Not winnable now means "the same few firms every time"', audience: 'admin',
     body: 'New Discovery audits no longer use the 70% line. For each AI, over the asks where it named firms, a search is locked when at least 2 firms come back in every one of those asks and fewer than 2 firms appear only once. A search is Not winnable only when every AI that names firms is locked; otherwise it is Winnable. An AI that names firms in just 2 of its 3 asks is judged on those 2. The same firm written two ways ("HomeCert Ltd" and "HomeCert Ltd - Electricians & Gas Engineers London") now counts once.',

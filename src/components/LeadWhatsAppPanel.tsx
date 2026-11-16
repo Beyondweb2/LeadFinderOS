@@ -13,6 +13,7 @@ import { getTemplateSendability } from '@/lib/whatsappTemplates';
 import { readableTemplateBody } from '@/lib/templateBodies';
 import { unresolvedTokens } from '@/lib/leadUtils';
 import { serviceWindowState } from '@/lib/serviceWindow';
+import { singleSendLabel } from '@/lib/templateSendPrice';
 import { resolveLeadReport, type ResolvableAudit } from '@/lib/auditReportResolver';
 import { whatsAppLinkForLead } from '@/lib/conversationState';
 import { LEAD_CHANGED_EVENT, notifyLeadChanged } from '@/lib/leadSync';
@@ -207,6 +208,8 @@ export function LeadWhatsAppPanel({ lead, height = 'max-h-[320px]', className }:
             {!chosenOk.ok && <p className="text-[11px] text-amber-700 dark:text-amber-300" data-testid="whatsapp-template-blocked">{chosenOk.reason}</p>}
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-[11px] text-muted-foreground">The server fills in the details and checks it is allowed before it goes.</p>
+              {/* Free or paid (2026-11-16, templateSendPrice.ts): window open → the wording goes as a normal message. */}
+              <p className={cn('w-full text-[11px] font-medium', win.open ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300')} data-testid="whatsapp-send-price" data-price={win.open ? 'free' : 'paid'}>{singleSendLabel(win.open)}</p>
               <Button size="sm" className="h-9 gap-1.5 bg-emerald-600 font-bold text-white hover:bg-emerald-700" disabled={!!busy || !tpl || !chosenOk.ok} onClick={() => void sendTemplate()} data-testid="whatsapp-send-template">
                 {busy === 'template' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{sendVerb(hours.open)} template
               </Button>

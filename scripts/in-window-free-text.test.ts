@@ -14,7 +14,9 @@
    ============================================================ */
 import fs from 'node:fs';
 import path from 'node:path';
-import { freeTextVersionOf, inWindowShape, NO_FREE_TEXT_WORDS, QUEUED_WORDS_UNREADABLE_REASON, VIDEO_CAPTION_MAX } from '../src/lib/inWindowFreeText.ts';
+import { freeTextVersionOf, inWindowShape, NO_FREE_TEXT_WORDS, QUEUED_WORDS_UNREADABLE_REASON, VIDEO_CAPTION_MAX, queueSendShape } from '../src/lib/inWindowFreeText.ts';
+import { bulkSendSplit, bulkSplitLine, PAID_TEMPLATE_COST_GBP, singleSendLabel } from '../src/lib/templateSendPrice.ts';
+import { CHANNEL_COST_GBP } from '../src/lib/channelCosts.ts';
 import { claimTemplatePayload, WA_TEMPLATES } from '../supabase/functions/_shared/whatsapp-send.ts';
 
 let f = 0;
@@ -73,12 +75,17 @@ const withHeader = { type: 'template', template: { name: 'video_template', langu
   ok(sv.as === 'text' && (sv as { videoUrl?: string }).videoUrl === 'https://x.test/v.mp4', 'window open + a video template → free-form, carrying the video');
   ok(shape({ version: withVideo, typed: true }).as === 'text', 'the composer\'s edited words for a video template → free-form with the video');
   ok(shape({ version: withVideo, origin: 'scheduled', windowOpen: false }).as === 'template', 'a queued video template run with the window closed → the template');
-  ok(shape({ version: withVideo, origin: 'other' }).as === 'template', 'every other door still sends the video template as the template');
+  ok(shape({ version: withVideo, origin: 'other' }).as === 'text', 'every other door, window open: the video template goes as its video + words (2026-11-16)');
+  ok(shape({ version: withVideo, origin: 'other', windowOpen: false }).as === 'template', 'every other door, window closed: the video template');
   const vidTyped = shape({ version: no, typed: true });
   ok(vidTyped.as === 'refuse' && (vidTyped as { error: string }).error === 'no_free_text_version', 'typed words for a template with no free-text version → refused with the reason');
-  for (const open of [true, false]) for (const typed of [true, false]) {
-    ok(shape({ origin: 'other', windowOpen: open, typed }).as === 'template', `any other door (bulk queue, lead popup, dashboard, welcome pack, Quick Close) → the template (open=${open}, typed=${typed})`);
+  /* Paul, 2026-11-16: ANY template, single or bulk — window open → free text; closed → the paid template. Never a refusal. */
+  for (const typed of [true, false]) {
+    ok(shape({ origin: 'other', windowOpen: true, typed }).as === 'text', `any other door (bulk queue, lead popup, dashboard, welcome pack, Quick Close), window open → free text (typed=${typed})`);
+    ok(shape({ origin: 'other', windowOpen: false, typed }).as === 'template', `any other door, window closed → the paid template, never refused (typed=${typed})`);
+    ok(shape({ origin: 'other', windowOpen: false, typed, allowClosedText: true }).as === 'template', `any other door, closed, test mode → still the template (typed=${typed})`);
   }
+  ok(shape({ origin: 'other', version: no }).as === 'template', 'any other door, open, but no faithful free-text version → the template');
 }
 
 /* ── 3. the real builder: every video-header template, as really built, goes in-window as its own video + words ── */
@@ -104,7 +111,7 @@ const withHeader = { type: 'template', template: { name: 'video_template', langu
   const builtAt = s.lastIndexOf('usedTemplate = templateName;', conv);
   ok(builtAt > 0 && conv > builtAt, 'it runs after the template is fully built (every guard and resolver first)');
   ok(conv < s.indexOf('await queueGate(') && conv < s.indexOf('if (dryRun) {'), 'and before the send-hours queue and the dry-run answer');
-  ok(/sendOrigin: SendOrigin = sched \? "scheduled" : body\.via === "inbox" \? "inbox" : "other"/.test(s), 'only the Inbox and a queued send that is now running convert; every other door is "other"');
+  ok(/sendOrigin: SendOrigin = sched \? "scheduled" : body\.via === "inbox" \? "inbox" : "other"/.test(s), 'the Inbox, a queued Inbox send, and every other door ("other", which converts too since 2026-11-16, never typed)');
   ok(/typedFreeText = !sched && sendOrigin === "inbox" && body\.as_free_text === true/.test(s), 'as_free_text is honoured only for a direct Inbox send');
   ok(/body\.body = r\.body \?\? "";/.test(s), 'a queued template row carries its stored words to the sender');
   ok(/kind: usedTemplate \? "template" : "text"/.test(s), 'a template send that would go as text is queued AS the template (judged again when it runs)');
@@ -164,6 +171,39 @@ const withHeader = { type: 'template', template: { name: 'video_template', langu
   ok(/1,000 a month PER NUMBER/.test(c) && /UTILITY TEMPLATE sent inside the window is now charged/.test(c) && /UNCONFIRMED/.test(c), 'channelCosts.ts notes: 1,000 free a month per number, utility in the window now charged, UK figure unconfirmed');
   ok(/whatsapp_service: 0,/.test(c), 'no figure changed (notes only; no usage counter)');
   ok(/1,000 a month per\s+number/.test(read('src/lib/contactRouting.ts')), 'contactRouting.ts carries the same note');
+}
+
+/* ── 5. the bulk queue (2026-11-16): every template lane asks the same rule before it posts to Meta. No send: pure + source. ── */
+{
+  const body = { type: 'template', template: { name: 'initial_contact', language: { code: 'en_GB' }, components: [{ type: 'body', parameters: [{ type: 'text', text: 'Acme' }] }] } };
+  ok(queueSendShape({ payload: body, words: 'Hi, is this Acme?', windowOpen: true }).as === 'text', 'queue, window open → free text of the same words');
+  ok(queueSendShape({ payload: body, words: 'Hi, is this Acme?', windowOpen: false }).as === 'template', 'queue, window closed → the template');
+  ok(queueSendShape({ payload: body, words: '{{1}} hello', windowOpen: true }).as === 'template', 'queue, open but words with a blank → the template');
+  const vq = queueSendShape({ payload: { template: { components: [{ type: 'header', parameters: [{ type: 'video', video: { link: 'https://x.test/v.mp4' } }] }] } }, words: 'Hi', windowOpen: true });
+  ok(vq.as === 'text' && (vq as { videoUrl?: string }).videoUrl === 'https://x.test/v.mp4', 'queue, open, video template → its video by link');
+  const q = read('supabase/functions/process-whatsapp-queue/index.ts');
+  ok(q.includes('{ phoneWindowOpen, queueLanePayload } fr' + 'om "../_shared/in-window-send.ts";'), 'the queue reads the one helper');
+  ok((q.match(/queueLanePayload\(/g) ?? []).length === 3, 'all three template lanes (drip, hook follow-up, contact follow-up) ask it');
+  ok(q.includes('...campaignShape.payload,') && !q.includes('...campaignPayload,'), 'the drip posts the shaped payload, never the raw template');
+  ok(q.includes('const payload = hShape.payload;') && q.includes('const payload = cShape.payload;'), 'both follow-up lanes post the shaped payload');
+  ok(/message_type: campaignShape\.messageType,\n\s*template_name: templateName,/.test(q), 'the row records text/video but keeps template_name');
+  ok(q.includes('message_type: hShape.messageType, template_name: "hook_followup"') && q.includes('message_type: cShape.messageType, template_name: "contact_followup"'), 'the follow-up rows keep their template name too');
+  const h = read('supabase/functions/_shared/in-window-send.ts');
+  ok(h.includes('if (error || !data?.length) return false;') && /catch \{\n\s*return false;/.test(h), 'a failed window read = closed = the template (Meta refuses free text into a closed window)');
+  ok(h.includes('queueSendShape') && !h.includes('inWindowShape('), 'the helper decides nothing itself');
+}
+
+/* ── 6. the labels: bulk split and single send (2026-11-16) ── */
+{
+  const leads = [{ id: 'a', d: '447700900001' }, { id: 'b', d: '447700900002' }, { id: 'c', d: null as string | null }];
+  const sp = bulkSendSplit(leads, (l) => l.d, new Set(['447700900001']));
+  ok(sp.free.map((l) => l.id).join() === 'a' && sp.paid.map((l) => l.id).join() === 'b,c', 'split: open window → free; closed or no number → paid');
+  ok(bulkSplitLine(1, 2) === `1 free (window open) · 2 need a paid template (window closed, ~£${PAID_TEMPLATE_COST_GBP.toFixed(2)} each)`, 'the bulk line, price from the cost table');
+  ok(PAID_TEMPLATE_COST_GBP === CHANNEL_COST_GBP.whatsapp_marketing, 'the price is the cost table one, never typed');
+  ok(/^Free:/.test(singleSendLabel(true)) && /^Paid template:/.test(singleSendLabel(false)), 'single-send label: free / paid');
+  const ot = read('src/components/OutreachTable.tsx');
+  ok(ot.includes('data-testid="queue-free-paid-split"') && ot.includes('data-testid="queue-only-free"') && ot.includes('setSelectedIds(new Set(queueSplit.free.map('), 'the bulk dialog shows the split and can keep only the free ones');
+  ok(read('src/components/LeadWhatsAppPanel.tsx').includes('data-testid="whatsapp-send-price"'), 'the single-send popup shows free / paid');
 }
 
 if (f) process.exit(1);

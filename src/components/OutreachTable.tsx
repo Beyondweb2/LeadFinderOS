@@ -96,6 +96,8 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
+import { bulkSendSplit, bulkSplitLine } from '@/lib/templateSendPrice';
+import { useOpenWindowPhones } from '@/hooks/useOpenWindowPhones';
 import { fetchSuppressedLeadIds } from '@/lib/leadSuppression';
 import { classifyLineType } from '@/lib/lineType';
 import { templateDestinationRefusal } from '@/lib/whatsAppDestination';
@@ -620,6 +622,12 @@ export function OutreachTable({
   const [removeMineBusy, setRemoveMineBusy] = useState(false);
   // Bulk WhatsApp-queue template picker (chosen at queue-time).
   const [queueDialogOpen, setQueueDialogOpen] = useState(false);
+  /* FREE OR PAID (Paul, 2026-11-16, templateSendPrice.ts): who in the batch has an open 24-hour window now (their template goes
+     as a normal message, free) and who needs the paid template. Read when the dialog opens; the sender decides again per send. */
+  const queueDigitsOf = useCallback((l: { phone?: string | null; country?: string | null }) => (l.phone ? formatPhoneForWhatsApp(l.phone, l.country) || null : null), []);
+  const queueLeads = useMemo(() => (queueDialogOpen ? leads.filter((l) => selectedIds.has(l.id)) : []), [queueDialogOpen, leads, selectedIds]);
+  const queueOpenPhones = useOpenWindowPhones(queueLeads.map((l) => queueDigitsOf(l) ?? ''), queueDialogOpen);
+  const queueSplit = useMemo(() => (queueOpenPhones && queueLeads.length ? bulkSendSplit<OutreachLead>(queueLeads, queueDigitsOf, queueOpenPhones) : null), [queueOpenPhones, queueLeads, queueDigitsOf]);
   /* Unselected by default. This pre-selected WHATSAPP_TEMPLATES[0] = booking_page_intro, the barber
      booking pitch, and line ~2428 applies the choice to EVERY selected lead — so bulk-queueing a
      batch of accountants without touching the dropdown stamped a barber template on all of them.
@@ -3792,6 +3800,18 @@ export function OutreachTable({
             <TemplatePreviewButton selected={queueTemplate} />
             <RequestTemplateButton source="queue" />
           </div>
+          {queueSplit && (
+            <div className="rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-xs" data-testid="queue-free-paid-split">
+              <p className="font-medium">{bulkSplitLine(queueSplit.free.length, queueSplit.paid.length)}</p>
+              <p className="mt-0.5 text-muted-foreground">Checked now; each send is decided again when it goes.</p>
+              {queueSplit.free.length > 0 && queueSplit.paid.length > 0 && (
+                <Button size="sm" variant="outline" className="mt-1.5 h-7 text-xs" data-testid="queue-only-free"
+                  onClick={() => setSelectedIds(new Set(queueSplit.free.map((l) => l.id)))}>
+                  Keep only the {queueSplit.free.length} free one{queueSplit.free.length === 1 ? '' : 's'}
+                </Button>
+              )}
+            </div>
+          )}
           {/* The report offer: who can get it, who cannot (and why), and the warnings — BEFORE the press. */}
           {queueTemplate === REPORT_OFFER_TEMPLATE && (
             <ReportOfferPreviewBox ids={[...selectedIds]} value={reportOfferPreview} setValue={setReportOfferPreview} nameOf={(id) => leads.find((l) => l.id === id)?.business_name || 'Unnamed lead'} />
