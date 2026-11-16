@@ -27,7 +27,7 @@ import { effectiveQuestionnaireServices } from './questionnaireComplete.ts';
 
 export type OnbKey =
   | 'contact_name' | 'contact_email' | 'confirmed_phone' | 'confirmed_location'
-  | 'services_list' | 'top_requests' | 'areas_list'
+  | 'services_list' | 'top_requests' | 'areas_list' | 'services_not_wanted' | 'coverage_area'
   | 'business_website' | 'website_platform' | 'website_manager' | 'website_manager_email'
   | 'gbp_status'
   | 'domain_status' | 'domain_owned' | 'domain_access' | 'domain_third_party'
@@ -63,6 +63,10 @@ export const ONBOARDING_QUESTIONS: readonly OnbQuestionDef[] = [
   { key: 'services_list', label: 'Which services do you offer?', help: 'One per line, or separated by commas.', kind: 'list', routes: BOTH, required: true, max: 2000 },
   { key: 'top_requests', label: 'Which jobs would you most like more of?', help: 'The work you most want new customers for.', kind: 'list', routes: BOTH, required: false, max: 1000 },
   { key: 'areas_list', label: 'Which towns or areas do you want more work from?', help: 'One per line, or separated by commas.', kind: 'list', routes: BOTH, required: true, max: 1000 },
+  /* The two optional Q2 answers, asked on the details form too (Paul, 2026-11-16; onboarding_responses, migration 20261215090000).
+     Same words as findable.live Q2. Free text, saved as typed. */
+  { key: 'services_not_wanted', label: "Anything you do but don't want more of?", help: 'Optional — e.g. emergency call-outs. We will never push these.', kind: 'textarea', routes: BOTH, required: false, max: 1000 },
+  { key: 'coverage_area', label: 'What area do you cover?', help: 'Optional — in your own words, e.g. "all London boroughs inside the M25" or "20 miles around Croydon".', kind: 'text', routes: BOTH, required: false, max: 300 },
   /* Optimise: their own website. */
   { key: 'business_website', label: "What's your website address?", kind: 'text', routes: ['optimise'], required: true, max: 200 },
   { key: 'website_platform', label: 'What is your website built on?', help: "If you're not sure, that's fine — pick Not sure.", kind: 'choice', routes: ['optimise'], required: false, max: 20,
@@ -152,6 +156,8 @@ export function onboardingQuestionsFor(k: OnboardingKnown): OnbQuestion[] {
   if (!effectiveQuestionnaireServices(row as never).length && !k.profile.services?.confirmed) ask('services_list', known(k.profile.services) ? shown(k.profile.services) : null);
   if (!s(row.top_requests) && !s(k.callJobs)) ask('top_requests');
   if (!list(row.areas_list).length && !s(row.areas_wanted) && !k.profile.service_areas?.confirmed) ask('areas_list', known(k.profile.service_areas) ? shown(k.profile.service_areas) : null);
+  if (!s(row.services_not_wanted)) ask('services_not_wanted');
+  if (!s(row.coverage_area)) ask('coverage_area');
 
   if (route === 'optimise') {
     if (!s(row.business_website) && !known(k.profile.website)) ask('business_website');
@@ -181,7 +187,8 @@ export function onboardingQuestionsFor(k: OnboardingKnown): OnbQuestion[] {
 }
 
 /** The questions that would decide "anything still missing" — the optional extras do not count. */
-export const isGapQuestion = (q: OnbQuestion): boolean => q.key !== 'must_not_say' && q.key !== 'website_manager_email';
+export const isGapQuestion = (q: OnbQuestion): boolean => q.key !== 'must_not_say' && q.key !== 'website_manager_email'
+  && q.key !== 'services_not_wanted' && q.key !== 'coverage_area';
 
 /* ══ VALIDATE + PLAN THE WRITE ═══════════════════════════════════════════════════════════════════ */
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;

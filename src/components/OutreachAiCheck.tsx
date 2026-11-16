@@ -53,7 +53,11 @@ export function AiCheckSummary({ state, score, scoreLoading = false, onCallScree
           {onRetry && <><span aria-hidden>·</span><button type="button" className="underline-offset-2 hover:underline" onClick={(e) => { e.stopPropagation(); onRetry(); }} data-testid="row-ai-retry">Retry</button></>}
         </span>
       )}
-      {state.kind === 'skipped' && <span className="text-amber-700 dark:text-amber-300" title={state.message ?? undefined}>{ROW_CHECK_WORD.skipped}</span>}
+      {state.kind === 'skipped' && (
+        <span className="text-amber-700 dark:text-amber-300" title={state.message ?? undefined} data-testid="row-ai-skipped">
+          {ROW_CHECK_WORD.skipped}{state.why ? <>: <span data-testid="row-ai-skipped-why">{state.why}</span></> : null}
+        </span>
+      )}
       {state.kind === 'not_checked' && <span className="text-muted-foreground">{ROW_CHECK_WORD.not_checked}</span>}
       {state.kind === 'ready' && onCallScreen && (
         <Button size="sm" variant="outline" className="h-6 gap-1 px-1.5 text-[11px]" onClick={(e) => { e.stopPropagation(); onCallScreen(); }} data-testid="row-call-screen">

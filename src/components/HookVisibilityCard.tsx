@@ -3,6 +3,7 @@ import { useHookVisibility } from '@/hooks/useHookVisibility';
 import { HookVisibilityView, type HookRunNewProps } from '@/components/HookVisibilityView';
 import { HookWebsiteIssues } from '@/components/HookWebsiteIssues';
 import { ProspectAuditDialog } from '@/components/ProspectAuditDialog';
+import { useLeadReportStyle, reportLinkFor } from '@/hooks/useReportStyle';
 
 export { HookVisibilityView } from '@/components/HookVisibilityView';
 
@@ -13,6 +14,9 @@ export { HookVisibilityView } from '@/components/HookVisibilityView';
 export function HookVisibilityCard({ leadId, onRunNew, runNewBusy, onReportCopied, variant, afterEngines }: { leadId: string | null | undefined; variant?: 'inline' | 'call'; afterEngines?: ReactNode } & HookRunNewProps) {
   const q = useHookVisibility(leadId);
   const [fullOpen, setFullOpen] = useState(false);
+  /* Copy link hands over the address the lead gets: app.leadfinderos.com/r/<code> for a LeadFinderOS-style (web-dev) campaign,
+     findable.live/r/<code> otherwise (Paul, 2026-11-16; the same rule as the Inbox and Past audits buttons). */
+  const style = useLeadReportStyle(leadId);
   if (!leadId || q.isLoading || !q.data) {
     if (q.isError) return <div className="border-b border-border px-3 py-1.5 text-[11px] text-muted-foreground">AI visibility: could not load the audit results.</div>;
     return null;
@@ -33,6 +37,7 @@ export function HookVisibilityCard({ leadId, onRunNew, runNewBusy, onReportCopie
         onOpenFull={() => setFullOpen(true)}
         variant={variant}
         afterEngines={afterEngines}
+        copyUrl={(l) => (l.shortCode ? reportLinkFor(l.shortCode, style) : l.url)}
       />
       <ProspectAuditDialog leadId={leadId} open={fullOpen} onOpenChange={setFullOpen} />
     </>

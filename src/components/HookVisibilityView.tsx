@@ -48,19 +48,21 @@ export interface HookRunNewProps {
 
 /* ── The report action row ───────────────────────────────────────────────────────────────────── */
 
-function CopyLink({ link, onCopied }: { link: HookReportLink; onCopied?: (link: HookReportLink) => void }) {
+function CopyLink({ link, onCopied, copyUrl }: { link: HookReportLink; onCopied?: (link: HookReportLink) => void; copyUrl?: (link: HookReportLink) => string }) {
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
+  /* The link the LEAD gets (Paul, 2026-11-16): a LeadFinderOS-style (web-dev) lead's report is app.leadfinderos.com/r/<code>. */
+  const url = copyUrl ? copyUrl(link) : link.url;
   return (
     <button
       type="button"
       className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
       onClick={() => {
-        navigator.clipboard?.writeText(link.url);
+        navigator.clipboard?.writeText(url);
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
         toast({ title: 'Report URL copied' });
-        onCopied?.(link);
+        onCopied?.({ ...link, url });
       }}
     >
       {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />} {copied ? 'Copied' : 'Copy link'}
@@ -79,7 +81,7 @@ function PreviousLink({ link }: { link: HookReportLink | null }) {
 
 /* ⛔ "Open report" here is the STAFF view: staffPreviewUrl adds preview=1 so this open is never counted
    as the prospect's (render-audit-report). "Copy link" copies the clean public URL the prospect gets. */
-function ReportAction({ report, legacy, onRefresh, refreshing, onReportCopied }: { report: HookReportState; legacy: boolean; onRefresh?: () => void; refreshing?: boolean; onReportCopied?: (link: HookReportLink) => void }) {
+function ReportAction({ report, legacy, onRefresh, refreshing, onReportCopied, copyUrl }: { report: HookReportState; legacy: boolean; onRefresh?: () => void; refreshing?: boolean; onReportCopied?: (link: HookReportLink) => void; copyUrl?: (link: HookReportLink) => string }) {
   switch (report.kind) {
     case 'ready':
       return (
@@ -94,7 +96,7 @@ function ReportAction({ report, legacy, onRefresh, refreshing, onReportCopied }:
           >
             <ExternalLink className="h-3 w-3" /> Open report
           </a>
-          <CopyLink link={report.link} onCopied={onReportCopied} />
+          <CopyLink link={report.link} onCopied={onReportCopied} copyUrl={copyUrl} />
           {!report.isCurrent && <span className="text-[11px] text-muted-foreground">(from a newer audit)</span>}
         </span>
       );
@@ -266,7 +268,9 @@ function Details({ score, rivalsWithheld, legacy, issues }: { score: HookScore; 
 /* ── The card ────────────────────────────────────────────────────────────────────────────────── */
 
 /** The presentational half: no fetching, so it renders from plain data. */
-export function HookVisibilityView({ card, inFlight, state, report, onRunNew, runNewBusy, onRefresh, refreshing, defaultExpanded = false, issues, onReportCopied, onOpenFull, variant = 'inline', afterEngines }: {
+export function HookVisibilityView({ card, inFlight, state, report, onRunNew, runNewBusy, onRefresh, refreshing, defaultExpanded = false, issues, onReportCopied, onOpenFull, variant = 'inline', afterEngines, copyUrl }: {
+  /** The address "Copy link" copies (the lead's report style). Absent = the report's own link. */
+  copyUrl?: (link: HookReportLink) => string;
   card: HookCardScore | null;
   inFlight: boolean;
   state: unknown;
@@ -295,7 +299,7 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
     return (
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-3 py-1.5" data-testid="hook-visibility-card">
         <span className={EYEBROW}>AI visibility</span>
-        <ReportAction report={report} legacy={false} onRefresh={onRefresh} refreshing={refreshing} onReportCopied={onReportCopied} />
+        <ReportAction report={report} legacy={false} onRefresh={onRefresh} refreshing={refreshing} onReportCopied={onReportCopied} copyUrl={copyUrl} />
       </div>
     );
   }
@@ -427,7 +431,7 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
           {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
           {onOpenFull ? 'View full audit' : expanded ? 'Hide details' : legacy ? 'View old details' : 'View details'}
         </button>
-        <ReportAction report={report} legacy={legacy} onRefresh={onRefresh} refreshing={refreshing} onReportCopied={onReportCopied} />
+        <ReportAction report={report} legacy={legacy} onRefresh={onRefresh} refreshing={refreshing} onReportCopied={onReportCopied} copyUrl={copyUrl} />
       </div>
 
       {/* ⛔ AN OVERLAY, NOT A GROWING BLOCK (2026-09-27): the details float over the thread, capped and

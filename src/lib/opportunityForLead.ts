@@ -6,11 +6,12 @@ import { siteScoreViewFor } from './siteScore.ts';
 import { opportunityScore, oppWebsiteFacts, type OppLeadFacts, type OppResult } from './opportunityScore.ts';
 import type { CrawlRow } from './crawlResult.ts';
 import type { LeadAuditScore } from './auditScore.ts';
+import { oppWinnableOf, type StoredVerdictCounts } from './auditVerdictCounts.ts';
 
-export function opportunityForLead(lead: OppLeadFacts, crawl: CrawlRow | null | undefined, audit: LeadAuditScore | null | undefined): OppResult {
+export function opportunityForLead(lead: OppLeadFacts, crawl: CrawlRow | null | undefined, audit: (LeadAuditScore & { verdicts?: StoredVerdictCounts | null }) | null | undefined): OppResult {
   const hasRow = !!crawl;
   const view = hasRow ? websiteCheckFor(crawl, { website: lead.website, audience: 'team' }) : null;
   const siteView = siteScoreViewFor(lead.website, crawl?.siteScore ?? null);
   const site = oppWebsiteFacts(view, siteView);
-  return opportunityScore(lead, site, audit ? { score: audit.score, updating: audit.updating, v3: null } : null);
+  return opportunityScore(lead, site, audit ? { score: audit.score, updating: audit.updating, v3: oppWinnableOf(audit.verdicts) } : null);
 }

@@ -37,6 +37,7 @@ import { hookProtection } from '@/lib/baselineRecommendation';
 import { backlogCounts } from '@/lib/opportunityBacklog';
 import { discoveryPlan } from '@/lib/discoveryProgress';
 import { ManualOnboardingDialog } from '@/components/ManualOnboardingDialog';
+import { CoverageTownsSuggest } from '@/components/CoverageTownsSuggest';
 import { onboardingStatus } from '@/lib/manualOnboarding';
 import { simpleOnboardingLines } from '@/lib/onboardingSimpleAnswers';
 import { baselineReadiness } from '@/lib/baselineReadiness';
@@ -329,7 +330,8 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged, auto = nul
           <div className="sm:col-span-2"><Label>Services they do NOT offer (comma separated)</Label><Input value={(data.services_not_offered ?? []).join(', ')} disabled={started || !!busy} placeholder="e.g. car keys, glass replacement" onChange={(e) => setData({ ...data, services_not_offered: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}/></div>
           {/* v1-onboarding-to-audit (2026-11-15): what they DO but don't want pushed — excluded like the line above. */}
           <div className="sm:col-span-2"><Label>Services they do NOT want pushed (comma separated)</Label><Input value={(data.services_not_wanted ?? []).join(', ')} disabled={started || !!busy} placeholder="e.g. emergency call-outs" onChange={(e) => setData({ ...data, services_not_wanted: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}/><p className="mt-1 text-xs text-muted-foreground">Never measured or pushed. Discovery and the 20 leave these out, like the services they don't offer.</p></div>
-          <div className="sm:col-span-2"><Label>Area they cover (their words)</Label><Input value={data.coverage_area ?? ''} disabled={started || !!busy} placeholder="e.g. all London boroughs inside the M25" onChange={(e) => setData({ ...data, coverage_area: e.target.value })}/><p className="mt-1 text-xs text-muted-foreground">Questions are written for the main town and the service areas above — add the real towns or boroughs from here that they want work in.</p></div>
+          <div className="sm:col-span-2"><Label>Area they cover (their words)</Label><Input value={data.coverage_area ?? ''} disabled={started || !!busy} placeholder="e.g. all London boroughs inside the M25" onChange={(e) => setData({ ...data, coverage_area: e.target.value })}/><p className="mt-1 text-xs text-muted-foreground">Questions are written for the main town and the service areas above — add the real towns or boroughs from here that they want work in.</p>
+            {!started && <CoverageTownsSuggest coverage={data.coverage_area ?? ''} primaryTown={data.location} trade={data.business_type} areas={data.areas_list} disabled={!!busy} onAreas={(next) => setData({ ...data, areas_list: next })}/>}</div>
           <div className="sm:col-span-2"><Label>What customers contact them for most</Label><Input value={data.top_requests ?? ''} disabled={started || !!busy} onChange={(e) => setData({ ...data, top_requests: e.target.value })}/></div>
         </div>
         {!started && <Button className="mt-3" size="sm" variant="outline" disabled={!!busy || !contextDirty} onClick={() => data && void act('save_context', 'save_context', contextOf(data))}><Save className="mr-1 h-4 w-4"/>Save client context</Button>}

@@ -410,3 +410,14 @@ verify_jwt = false
 # Website check bench (docs/WEBSITE_CHECK_ACCURACY.md): the service-review question for the laptop bench, CRON_SECRET only.
 [functions.website-check-bench]
 verify_jwt = false
+
+# audit-watch (2026-11-16): stores a finished rules v3/v4 Discovery's verdict split (ai_audits.verdict_counts) and raises the one
+# Apify-past-80% alert per billing cycle. pg_cron every 5 minutes (invoke_audit_watch) with x-cron-secret, or an admin; the handler
+# refuses anything else. verify_jwt must stay false. Never messages a prospect or a client.
+[functions.audit-watch]
+verify_jwt = false
+
+# coverage-towns (2026-11-16): Prepare baseline's "Expand into towns" (client's area in their words -> real towns, a suggestion only).
+# Admin only (requireAdmin in the handler). Writes only its spend row. Never messages anyone.
+[functions.coverage-towns]
+verify_jwt = true

@@ -74,6 +74,7 @@ console.log("\n── every paid function a person can reach asks the guard ─�
 const PAID = /api\.openai\.com|places\.googleapis\.com|maps\.googleapis\.com|api\.apify\.com|runEnrichSource\(|mapsEnrich\(|callModel\(|startAiSearch\(|runSeoScanCore\(|chat\/completions|sendVoiceNote\(|sendViaGraph\(|graph\.facebook\.com|generate-report|fetch\(`\$\{[^}]*\}\/functions\/v1\/create-ai-audit/;
 const PERSON = /resolveActor\(|userTeamRole\(|requireAdmin\(|auth\.getUser\(|auth\.getClaims\(/;
 const EXEMPT: Record<string, string> = {
+  "coverage-towns": "admin-only (requireAdmin); one small gpt-4o-mini call per press of Expand into towns, logged to api_usage_log; client setup work",
   "page-generator": "admin-only (requireAdmin), client delivery work that must keep running under the prospecting pause; mixed read/write actions",
   "mockup": "admin-only (role admin), the live mockup product; mixed read/write actions",
   "paid-baseline": "admin-only; client measurement work — it only calls create-ai-audit internally, which checks the emergency stop",

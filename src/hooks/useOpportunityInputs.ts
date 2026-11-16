@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchAllRowsParallel } from '@/lib/fetchAllRows';
 import { leadAuditScores, type LeadAuditScore, type ScoredAudit } from '@/lib/auditScore';
+import { leadVerdictCounts, type StoredVerdictCounts } from '@/lib/auditVerdictCounts';
 import { fetchSuppressedLeadIds } from '@/lib/leadSuppression';
 import { LEAD_CRAWL_LIST_SELECT, type LeadCrawlListRow } from '@/hooks/useLeadCrawls';
 import type { CrawlRow } from '@/lib/crawlResult';
@@ -16,10 +17,21 @@ import type { CrawlRow } from '@/lib/crawlResult';
      2. the opt-out / Do Not Contact list through the role-checked leads_suppressed (never contact_suppressions).
    A failed read = that input missing → the score says "Incomplete" / the suppression is unknown; never a guess. */
 
-export const OPP_AUDIT_SELECT = 'id, lead_id, created_at, is_market, audit_purpose, baseline_target_runs, is_measurement, baseline_contract, ai_audit_runs(id, status, run_number, created_at, hook_score, score_dirty_at)';
+export const OPP_AUDIT_SELECT = 'id, lead_id, created_at, verdict_counts, is_market, audit_purpose, baseline_target_runs, is_measurement, baseline_contract, ai_audit_runs(id, status, run_number, created_at, hook_score, score_dirty_at)';
 export const OPP_INPUTS_STALE_MS = 5 * 60_000;
 
-async function fetchAuditScores(leadIds?: readonly string[]): Promise<Map<string, LeadAuditScore>> {
+/** A lead's audit score plus its newest Discovery's stored verdict counts (ai_audits.verdict_counts, small jsonb). */
+export type OppLeadAudit = LeadAuditScore & { verdicts: StoredVerdictCounts | null };
+
+function withVerdicts(rows: readonly ScoredAudit[]): Map<string, OppLeadAudit> {
+  const scores = leadAuditScores(rows);
+  const counts = leadVerdictCounts(rows as unknown as Array<{ lead_id: string | null; created_at: string; audit_purpose?: string | null; verdict_counts?: unknown }>);
+  const out = new Map<string, OppLeadAudit>();
+  for (const [lead, s] of scores) out.set(lead, { ...s, verdicts: counts.get(lead) ?? null });
+  return out;
+}
+
+async function fetchAuditScores(leadIds?: readonly string[]): Promise<Map<string, OppLeadAudit>> {
   const sb = supabase as unknown as SupabaseClient;
   if (leadIds) {
     const out: ScoredAudit[] = [];
@@ -28,12 +40,12 @@ async function fetchAuditScores(leadIds?: readonly string[]): Promise<Map<string
       if (error) throw error;
       out.push(...((data ?? []) as unknown as ScoredAudit[]));
     }
-    return leadAuditScores(out);
+    return withVerdicts(out);
   }
   const { rows } = await fetchAllRowsParallel<{ id: string }>('Opportunity (audit scores)', (from, to) => sb
     .from('ai_audits').select(OPP_AUDIT_SELECT)
     .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to), (a) => a.id);
-  return leadAuditScores(rows as unknown as ScoredAudit[]);
+  return withVerdicts(rows as unknown as ScoredAudit[]);
 }
 
 /** Every lead's audit score (Outreach) — or only these leads' (Find Leads: `leadIds`). */

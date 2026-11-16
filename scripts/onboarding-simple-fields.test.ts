@@ -90,7 +90,7 @@ console.log('── 4c. THE /details/ FORM FOR A NEW-FLOW BUILD CLIENT ──');
   }
   ok(asked.includes('photos_status') && asked.includes('must_not_say') && asked.includes('site_rights'), 'Build-only gaps still asked: photos, must-not-say, rights to reuse the current site');
   ok(!asked.some((k) => ['business_website', 'website_platform', 'website_manager'].includes(k)), 'no Optimise question for a Build client');
-  const filled = keys({ ...row, photos_status: 'phone', must_not_say: 'no gas work', site_rights: 'yes', top_requests: 'boilers', gbp_status: 'done' }, true);
+  const filled = keys({ ...row, photos_status: 'phone', must_not_say: 'no gas work', site_rights: 'yes', top_requests: 'boilers', gbp_status: 'done', services_not_wanted: 'emergency call-outs', coverage_area: 'Leeds and Bradford' }, true);
   ok(filled.length === 0, 'once they are answered, nothing is asked');
   const cs = read('supabase/functions/_shared/client-onboarding.ts');
   ok(/business_address,agency_contract,design_choice,agency_contract_ends/.test(cs), 'the form reads business_address, agency_contract, design_choice and the contract end');
