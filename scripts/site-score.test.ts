@@ -181,6 +181,7 @@ ok(!/will (be|get) (named|found|visible)|predict(s|ed)? (your|their)/i.test(badg
 const ALLOWED = new Set([
   'src/components/SiteScoreBadge.tsx', 'src/lib/crawlResult.ts', 'src/hooks/useLeadCrawls.ts', 'src/pages/Inbox.tsx', 'src/components/OutreachTable.tsx',
   'src/components/LeadDetailDialog.tsx', 'supabase/functions/crawl-check/index.ts', 'supabase/functions/_shared/crawl-job.ts',
+  'src/lib/opportunityForLead.ts', // the opportunity score (team only, fenced by scripts/opportunity-score.test.ts)
 ]);
 const importers: string[] = [];
 const walk = (dir: string) => {
