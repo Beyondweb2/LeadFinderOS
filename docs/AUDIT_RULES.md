@@ -82,6 +82,14 @@ from firm lists, and it keeps its own completeness checks.
 - **Quick checks are judged like every audit.** They are firm-read (`firms_read` on both answers), so "2 of 2 could not be
   measured" only means the answers really failed (16 Nov: Apify's AI search hung 3 × 12 min, `run_age_exceeded`) or were
   really unread. Never loosen the rule to quieten an alert.
+- **Quick check, one automatic retry** (v1-quickcheck-retry, 2026-11-16; `src/lib/quickCheckRetry.ts`,
+  `_shared/quick-check-retry.ts`): a Quick check (purpose audit, one run, 1–3 asks) whose every ask failed because the
+  provider did not finish (`run_age_exceeded`, `apify_TIMED-OUT/FAILED/ABORTED`, `stuck_running_reclaimed`) is re-opened
+  ONCE 30+ minutes later by the queue tick: same run (stamped `results.late_retry`), each ask pending with one start left,
+  started by the normal start path (every budget limit). Never for budget refusals, a run already stamped, a lead with a
+  newer audit, or a failure over 6 h old. Not charged to the rep's allowance. The "incomplete" alert waits for the final
+  failure. The public link says "check back shortly" while a run is in flight or the retry is due, else "This check
+  couldn't be completed, ask your contact to run it again." The row's button is "Run again".
 - **Provider refused** — OpenAI ("no credits remaining", insufficient quota) or Apify (HTTP 402 / 403, our Apify reserve):
   at most once an hour per provider (rolling; key carries the minute), emailed at once; a repeat inside the hour only
   raises the bell row's count. From the firm-reading step and from any settled audit's stored errors.

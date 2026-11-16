@@ -50,7 +50,9 @@ export function AiCheckSummary({ state, score, scoreLoading = false, onCallScree
       {state.kind === 'failed' && (
         <span className="inline-flex items-center gap-1 text-destructive" title={state.message ?? undefined}>
           {ROW_CHECK_WORD.failed}
-          {onRetry && <><span aria-hidden>·</span><button type="button" className="underline-offset-2 hover:underline" onClick={(e) => { e.stopPropagation(); onRetry(); }} data-testid="row-ai-retry">Retry</button></>}
+          {/* "Run again" (Paul, 2026-11-16): a failed check — including a Quick check whose one automatic retry also
+              failed — starts a fresh check from the row, exactly like the toolbar press. */}
+          {onRetry && <><span aria-hidden>·</span><Button size="sm" variant="outline" className="h-6 gap-1 px-1.5 text-[11px] text-foreground" onClick={(e) => { e.stopPropagation(); onRetry(); }} data-testid="row-ai-retry"><RotateCcw className="h-3 w-3" />Run again</Button></>}
         </span>
       )}
       {state.kind === 'skipped' && (

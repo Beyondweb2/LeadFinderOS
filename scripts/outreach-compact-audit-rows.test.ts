@@ -91,7 +91,7 @@ console.log('── the row markup: compact, scores only ──');
   const st = (kind: RowCheckState['kind']) => text(renderToStaticMarkup(createElement(AiCheckSummary, { state: { kind, cached: false, message: 'x' }, onRetry: () => {}, onCallScreen: () => {} })));
   ok(st('waiting') === 'Waiting', 'waiting → "Waiting"');
   ok(st('checking') === 'Checking…', 'checking → "Checking…"');
-  ok(st('failed') === 'Check failed · Retry', 'failed → "Check failed · Retry"');
+  ok(st('failed') === 'Check failed · Run again', 'failed → "Check failed · Run again" (a button, 2026-11-16)');
   ok(st('not_checked') === 'Not checked' && st('skipped') === 'Skipped', 'not checked / skipped → one word');
   ok(!/Call screen/.test(st('waiting') + st('checking') + st('failed') + st('not_checked')), 'Call screen is offered only once a result is ready');
   /* 32 rows, mixed states: every summary stays one short line. */

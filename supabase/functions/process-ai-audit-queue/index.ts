@@ -31,6 +31,7 @@ import { advanceSequentialHook, isSequentialHookState } from "../../../src/lib/h
 import { RETRY_CLEAN_CAP, runSettlement, shouldInvokeCleaning, finaliseReadiness, markCleaningExhausted } from "../_shared/run-finalise.ts";
 import { cleaningSweepDue } from "../_shared/cleaning-sweep.ts";
 import { checkAuditCompleteness } from "../_shared/audit-alerts.ts";
+import { sweepLateRetries } from "../_shared/quick-check-retry.ts";
 import { AUDIT_RUN_CAP_USD } from "../../../src/lib/auditLimits.ts";
 import { POOL_DAILY_CAP_USD, budgetDecision, budgetPoolForPurpose, refusalRowError, type ApifyUsage, type BudgetPool } from "../../../src/lib/auditBudget.ts";
 import { latestApifyUsage } from "../_shared/audit-budget.ts";
@@ -713,6 +714,12 @@ Deno.serve(async (req) => {
     // (polling) row keeps its run open — so a run never finalises while a question is in flight.
     const finalised = await finaliseSettledRuns(service, [...touchedRuns], estCost, cappedRuns, apifyToken);
 
+    /* QUICK CHECK — ONE AUTOMATIC RETRY (Paul, 2026-11-16; src/lib/quickCheckRetry.ts). A Quick check whose run failed
+       because the provider did not finish is re-opened once, 30+ minutes later, with one start per ask; the next tick
+       starts it through the normal start path above (every budget limit applies). Every other minute; best-effort. */
+    let lateRetries = 0;
+    if (Math.floor(Date.now() / 60_000) % 2 === 0) lateRetries = await sweepLateRetries(service, MAX_ATTEMPTS);
+
     /* 🔴 RETRY THE STUCK CLEANINGS. extract-competitors fires ONCE at finalisation; when gpt-4o
        returns a malformed batch ("model omitted N of M ids") it stamps complete:false and, until
        now, nothing retried — so an audit sat uncleaned for hours and its audit_reply refused with
@@ -754,7 +761,7 @@ Deno.serve(async (req) => {
     }
 
     return json({
-      ok: true, started, polled: waiting.length, finalised, capped: [...cappedRuns],
+      ok: true, started, polled: waiting.length, finalised, capped: [...cappedRuns], lateRetries,
       seo: seoRan ? "ran" : "skipped",
       // Present only on the tick that refreshed it (every ~15 min), so the figure is visible
       // wherever the cron's response is inspected without another query.

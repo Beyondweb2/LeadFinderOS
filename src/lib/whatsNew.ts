@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-16-quick-check-retry', date: '2026-11-16', title: 'Failed Quick checks try once more by themselves, and "Run again" on the row', audience: 'all',
+    body: 'If a Quick check fails because the AI search didn’t finish, it now tries once more by itself about 30 minutes later. It doesn’t use another check from your daily allowance. If it still fails, the row says "Check failed" with a "Run again" button, and the report link says "This check couldn’t be completed, ask your contact to run it again" instead of "check back shortly".',
+    report: {
+      added: ['One automatic retry, about 30 minutes later, for a Quick check the AI search didn’t finish.', 'A "Run again" button on a failed check’s row.'],
+      changed: ['A failed check’s report link says it couldn’t be completed instead of "check back shortly".'],
+      removed: ['The small "Retry" link on a failed row (now the "Run again" button).'],
+      effect: 'A hiccup at the AI search provider usually fixes itself, and nobody waits on a link that will never fill in.',
+    } },
   { id: '2026-11-16-incomplete-summary', date: '2026-11-16', title: 'One "audits incomplete" alert per cause, not one per audit', audience: 'admin',
     body: 'When several audits come back incomplete together, you now get one bell row and one email per cause, at most once an hour: "12 audits incomplete since 12:08. Cause: the AI search on Apify did not finish in time", with the reports listed. OpenAI or Apify refusing us is also at most one email an hour per provider. The incomplete rule itself is unchanged: Quick checks are firm-read like every audit, so "incomplete" means the answers really are missing.',
     report: {

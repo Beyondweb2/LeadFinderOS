@@ -11,6 +11,7 @@
    so the bell never shows them; they only make "count once" and "email once" hold across retries.
    Best-effort: an alert that cannot be written never fails the audit. */
 import { sendOperatorAlert } from "./operator-alert.ts";
+import { readRetryVerdict } from "./quick-check-retry.ts";
 import {
   ALERT_WINDOW_MS, INCOMPLETE_CAUSES, causeOfKey, countedKey, emailedKey, incompleteCause, incompleteSummary, incompleteSummaryEmail,
   isIncomplete, namesInSummary, providerAlert, providerKeyPrefix, refusalsIn, summaryDue, summaryEntry, summaryKey, summaryKeyPrefix,
@@ -120,6 +121,9 @@ export async function checkAuditCompleteness(service: Service, auditId: string):
     const refusals = refusalsIn(texts);
     for (const r of refusals) await alertProviderRefusal(service, r, "an audit's stored answers");
     if (!isIncomplete(c)) return;
+    /* A Quick check that will get its one automatic retry is not counted yet: only its final failure is (v1-quickcheck-retry). */
+    const retry = await readRetryVerdict(service, auditId);
+    if (retry && (retry.verdict.kind === "retry_now" || retry.verdict.kind === "retry_later")) return;
     const ownerId = await bookOwner(service);
     if (!ownerId) return;
     const { data: audit } = await service.from("ai_audits").select("business_name, short_code, lead_id").eq("id", auditId).maybeSingle();
