@@ -30,6 +30,7 @@ import { SITE_SHOT_BUCKET } from "../../../src/lib/siteShot.ts";
 import { auditCodeFromSlug, isShortCode, shortReportUrl } from "../../../src/lib/reportSlug.ts";
 import { paidReportKind } from "../../../src/lib/reportKind.ts";
 import { NAMED_RECHECK_AUDIT_PURPOSE, WEEKLY_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
+import { lateRetryVerdict, unavailableWords, type RetryRow } from "../../../src/lib/quickCheckRetry.ts";
 import { buildFaultLines, CRAWL_CHECK_VERSION, CRAWL_FRESH_MS, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
 import { usableSiteEvidence, type SiteEvidence } from "../../../src/lib/siteEvidence.ts";
 import { reportContentIssues } from "../../../src/lib/contentTrust.ts";
@@ -246,7 +247,7 @@ Deno.serve(async (req) => {
     const runIds = runRows.map((r) => r.id);
     const { data: qrows } = await service
       .from("ai_audit_queue")
-      .select("id, question, status, result")
+      .select("id, question, status, result, updated_at")
       .in("run_id", runIds.length ? runIds : [run.id]).order("created_at", { ascending: true });
     const queueRows = (qrows ?? []) as QueueRow[];
 
@@ -332,7 +333,23 @@ Deno.serve(async (req) => {
         (audit as { is_measurement?: unknown }).is_measurement,
       ),
     });
-    if (!data) return no("This audit hasn’t completed yet — check back shortly.");
+    /* No result to show. Still coming (a run in flight, or a Quick check's one automatic retry is due) → "check back
+       shortly"; finished without a result → "This check couldn't be completed, ask your contact to run it again"
+       (src/lib/quickCheckRetry.ts, Paul 2026-11-16 — the 12 Quick checks whose links said "check back shortly" for ever). */
+    if (!data) {
+      const anyInFlight = runRows.some((r) => ["pending", "queued", "running", "processing"].includes(String(r.status)));
+      let newerAudit = false;
+      if (!anyInFlight && leadId) {
+        const { data: newer } = await service.from("ai_audits").select("id").eq("lead_id", leadId)
+          .gt("created_at", String((audit as { created_at?: string | null }).created_at ?? "")).limit(1);
+        newerAudit = Array.isArray(newer) && newer.length > 0;
+      }
+      const verdict = anyInFlight ? null : lateRetryVerdict({
+        audit: audit as never, runs: runRows.map((r) => ({ status: r.status, results: r.id === run.id ? (run as { results?: Record<string, unknown> | null }).results ?? null : null })),
+        rows: queueRows as unknown as RetryRow[], newerAudit, nowMs: Date.now(),
+      });
+      return no(unavailableWords({ anyInFlight, verdict }));
+    }
 
     /* ── STILL MEASURING? (2026-09-13) ─────────────────────────────────────────────────────────
        AD Locksmithing's report read "4 of 12 answers" while run 3 was going and "5 of 18" twenty
