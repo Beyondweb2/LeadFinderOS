@@ -169,6 +169,10 @@ number, copy or date of birth is stored; free text that looks like one (or a ban
 
 ## 5. TPS / CTPS — POSTPONED BY PAUL (2026-10-05). FUTURE COMPLIANCE ENHANCEMENT — NOT ACTIVE
 
+> **2026-11-16: BUILT, switched off until Paul adds the tpsmydata secrets — see `docs/tps-screening.md`.** A UK number on
+> the TPS / CTPS is refused before a call ("TPS – do not call"); cached per number for 28 days. Still not part of Ready to
+> Sell. The text below is the history of the postponement.
+
 Current implementation:
 - harmless future-ready structures kept: table `phone_tps_checks` (provider + reference required; nothing
   writes it), `src/lib/tpsCheck.ts` (provider boundary + verdict; `TPS_PROVIDERS` empty);

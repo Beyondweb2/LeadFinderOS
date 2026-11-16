@@ -103,6 +103,8 @@ import { toWhatsAppDigits } from '@/lib/waNumber';
 import { phoneLabelOf } from '@/lib/findLeadsBulkAdd';
 import { coldWhatsAppVerdict, statusWhenWhatsAppUnavailable, COLD_NOT_ELIGIBLE_LABEL, marksNoMobile, type ColdNotEligibleReason } from '@/lib/coldWhatsAppEligibility';
 import { useCountrySettings } from '@/hooks/useCountrySettings';
+import { callableVerdict, sortByCallable, type CallableVerdict } from '@/lib/callRules';
+import { CantCallLine } from '@/components/CantCallLine';
 import { marketsOn } from '@/lib/outreachMarkets';
 import { useOutreachAttempt } from '@/hooks/useOutreachAttempt';
 import { useContactAction } from '@/hooks/useContactAction';
@@ -156,10 +158,10 @@ import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, 
 import { leadStatusLabel, awaitingReplyTooltip } from '@/types/outreach';
 import { isInitialOpener } from '@/lib/openerVariant';
 import { REPORT_OFFER_TEMPLATE } from '@/lib/reportOfferTemplate';
+import { STALE_OFFER_TEMPLATES } from '@/lib/findableOffer';
 import { checkReportOffer, summariseReportOffer, type ReportOfferSummary } from '@/lib/reportOfferCheck';
 import { ReportOfferPreviewBox } from '@/components/ReportOfferPreviewBox';
 /** What a salesperson can bulk-queue: the approved openers, and the report offer (2026-10-14). */
-const salesBulkTemplate = (t: string) => isInitialOpener(t) || t === REPORT_OFFER_TEMPLATE;
 import { getTemplateSendability } from '@/lib/whatsappTemplates';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { logDataAccess } from '@/lib/dataAccessLog';
@@ -520,6 +522,18 @@ export function OutreachTable({
   // Hide leads marked NOT INTERESTED (status='not_interested') — same durable hygiene
   // preference, persisted alongside hideNoWhatsApp so dead leads stay out of the list.
   const [hideNotInterested, setHideNotInterested] = useState(false);
+  /* ⛔ LEADS WE CAN'T CALL (2026-11-16, src/lib/callRules.ts callableVerdict): hidden by default behind one grey line (never
+     deleted); Show lists them greyed with the reason. Freephone-only leads stay, sorted after mobile / landline leads. */
+  const [showCantCall, setShowCantCall] = useState(false);
+  const callVerdicts = useMemo(() => new Map<string, CallableVerdict>(), [countrySettings]); // eslint-disable-line react-hooks/exhaustive-deps
+  const callOfLead = useCallback((l: OutreachLead): CallableVerdict => {
+    const key = `${l.id}|${l.phone ?? ''}|${l.country ?? ''}`;
+    let v = callVerdicts.get(key);
+    if (!v) { v = callableVerdict(l.phone, l.country, countrySettings); callVerdicts.set(key, v); }
+    return v;
+  }, [callVerdicts, countrySettings]);
+  const cantCallHiddenRef = useRef(0);
+  const cantCallHidden = () => cantCallHiddenRef.current;
   /* The Archived view (Filters → Archived). Off = the active working list. Both roles (Paul, 2026-09-28). */
   const [showArchived, setShowArchived] = useState(false);
   /* ⛔ BOTH ROLES WORK AN ACTIVE LIST (Paul, 2026-09-28 — extends the closeout pass's Sales-only rule to
@@ -1528,10 +1542,8 @@ export function OutreachTable({
 
   const handleSalesQueue = async (template: string, confirmCallCampaign = false) => {
     if (needsFullList()) return;
-    if (!salesBulkTemplate(template)) {
-      toast({ title: 'Not queued', description: 'Bulk initial outreach sends an approved opener or the report offer. Other templates go from the Inbox conversation.', variant: 'destructive' });
-      return;
-    }
+    /* 2026-11-16 (Paul): a salesperson queues every approved template, as the admin does. sales_queue_opener decides per lead —
+       an opener only to a never-contacted lead, a follow-up only to a lead already in a conversation and never twice. */
     let ids = Array.from(selectedIds).filter((id) => !isDemoLead(id));
     /* ⛔ THE REPORT OFFER IS CHECKED BEFORE IT IS QUEUED (competitors, score, report link, not named) — the refused
        leads are listed with their reason; nothing is left to fail at send time. Fails closed. */
@@ -1576,6 +1588,7 @@ export function OutreachTable({
     /* Refuse an unset template here as well as disabling the button. Stamping '' on a batch of leads
        would queue them with no template, and the drainer would then flag every one of them. */
     if (!template) { toast({ title: 'No template chosen', description: 'Pick a template before queueing.', variant: 'destructive' }); return; }
+    if (STALE_OFFER_TEMPLATES.has(template)) { toast({ title: 'Template not queued', description: 'That template quotes the old price, so it is blocked. Pick another.', variant: 'destructive' }); return; }
     /* ⛔ A CALL CAMPAIGN'S LEADS GET WHATSAPP ONLY WHEN THE PERSON SAYS SO (2026-10-15). Fails closed. */
     if (!opts.callCampaignConfirmed) {
       const cc = await callCampaignLeads(supabase, leads.filter((l) => selectedIds.has(l.id)));
@@ -1585,7 +1598,7 @@ export function OutreachTable({
     /* The OPENER follow-up drains in its OWN lane (contact_followup_queued_at), NOT the status=queued
        opener path: that path's already_sent guard refuses any lead with prior WhatsApp — which every
        Contacted business has — and forces status→initial_contact on send. Route it separately. */
-    if (template === 'contact_followup') { await handleQueueContactFollowup(); return; }
+    if (template === 'contact_followup' && perms.queueControls) { await handleQueueContactFollowup(); return; }
     /* ⛔ THE TEMPLATE CHOSEN FOR THIS BATCH IS THE TEMPLATE QUEUED — either approved opener, exactly
        as picked (no selected opener, no split, no substitute). Only a Meta-pending opener is refused. */
     if (openerBlocked(template)) { toast({ title: 'Template not queued', description: 'This opener is waiting on Meta approval — a send would fail.', variant: 'destructive' }); return; }
@@ -2055,6 +2068,9 @@ export function OutreachTable({
     // Hide leads marked not interested (status='not_interested').
     if (hideNotInterested) result = result.filter((lead) => lead.status !== 'not_interested');
 
+    cantCallHiddenRef.current = showCantCall ? 0 : result.filter((lead) => callOfLead(lead).status === 'cannot').length;
+    if (!showCantCall) result = result.filter((lead) => callOfLead(lead).status !== 'cannot');
+
     // Listing-level signal filters (free, derived from stored website; AND).
     if (sigWebsite) result = result.filter((lead) => isOwnWebsite(lead.website));
     /* Their own site is absent OR it is a Facebook/directory listing — the same test the mockup
@@ -2116,8 +2132,11 @@ export function OutreachTable({
       return sortDirection === 'asc' ? comparison : -comparison;
     });
 
-    return result;
-  }, [leadsWithOptimistic, listComplete, isArchiveView, archiveView, preset, searchQuery, locationFilter, statusFilter, naWhen, naKind, sharedPhoneOnly, sharedPhoneIds, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, siteGroup, crawlByLeadId, oppGroup, oppCriticalOnly, oppByLeadId, sortField, sortDirection, rowSalesState]);
+    /* Mobile / landline leads first, then freephone-only, then no number, then (shown) can't-call — the chosen sort kept within each. */
+    return sortByCallable(result, callOfLead);
+  }, [leadsWithOptimistic, listComplete, isArchiveView, archiveView, preset, searchQuery, locationFilter, statusFilter, naWhen, naKind, sharedPhoneOnly, sharedPhoneIds, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, siteGroup, crawlByLeadId, oppGroup, oppCriticalOnly, oppByLeadId, sortField, sortDirection, rowSalesState, showCantCall, callOfLead]);
+  /* How many leads the "we can't call" line hides: counted on the list with every OTHER filter applied. */
+  const cantCallCount = useMemo(() => showCantCall ? filteredAndSortedLeads.filter((l) => callOfLead(l).status === 'cannot').length : cantCallHidden(), [showCantCall, filteredAndSortedLeads, callOfLead]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Bulk "Find emails" — free website crawl (extract-email) over the filtered leads
   // with a website and no email yet, persisting to outreach_leads.email via updateLead.
@@ -2241,8 +2260,10 @@ export function OutreachTable({
     );
   };
   /* "Open next ready" walks the list AS SHOWN — owner scope, filters and sort already applied. */
-  const nextReady = nextReadyLead<OutreachLead>(filteredAndSortedLeads, rowCheck, nextOpened);
-  const readyLeft = readyCount<OutreachLead>(filteredAndSortedLeads, rowCheck, nextOpened);
+  /* …and never offers a lead we can't call, even while "Show N we can't call" is on. */
+  const callQueueLeads = useMemo(() => filteredAndSortedLeads.filter((l) => callOfLead(l).status !== 'cannot'), [filteredAndSortedLeads, callOfLead]);
+  const nextReady = nextReadyLead<OutreachLead>(callQueueLeads, rowCheck, nextOpened);
+  const readyLeft = readyCount<OutreachLead>(callQueueLeads, rowCheck, nextOpened);
   const openNextReady = () => {
     if (!nextReady) return;
     const s = new Set(nextOpened); s.add(nextReady.id); saveNextOpened(s);
@@ -3059,6 +3080,7 @@ export function OutreachTable({
         </div>
       </CardHeader>
       <CardContent className="p-0">
+        <CantCallLine count={cantCallCount} shown={showCantCall} onToggle={() => setShowCantCall((v) => !v)} className="px-3 py-1.5 border-b border-border/40" />
         <SelectionModeBar className="px-3 py-2 border-b border-border/40" pageIds={pageLeadIds} allIds={allLeadIds} selected={selectedIds}
           onChange={setSelectedIds} allDisabled={!listComplete} allDisabledTitle="Unlocks when every lead has loaded" />
         {/* Mobile Card View */}
@@ -3077,6 +3099,7 @@ export function OutreachTable({
                 <OutreachMobileCard
                   key={lead.id}
                   lead={lead}
+                  cantCallReason={callOfLead(lead).status === 'cannot' ? callOfLead(lead).reason : null}
                   salesState={rowSalesState(lead)}
                   campaignName={showCampaignName && lead.campaign_id ? (campaignNameByLead?.[lead.id] ?? null) : null}
                   isSelected={selectedIds.has(lead.id)}
@@ -3157,7 +3180,9 @@ export function OutreachTable({
                       key={lead.id}
                       className={`border-border/50 cursor-pointer hover:bg-muted/30 ${
                         isStarred(lead) ? 'bg-primary/5' : ''
-                      } ${lastContactedLeadId === lead.id ? 'ring-1 ring-primary/30 ring-inset bg-primary/5' : ''}`}
+                      } ${lastContactedLeadId === lead.id ? 'ring-1 ring-primary/30 ring-inset bg-primary/5' : ''} ${callOfLead(lead).status === 'cannot' ? 'opacity-50 grayscale' : ''}`}
+                      title={callOfLead(lead).status === 'cannot' ? `We can't call this lead: ${callOfLead(lead).reason ?? ''}` : undefined}
+                      data-cant-call={callOfLead(lead).status === 'cannot' ? 'true' : undefined}
                       onClick={() => { onLeadClick(lead); setDetailLead(lead); }}
                     >
                       <TableCell onClick={(e) => e.stopPropagation()}>
@@ -3769,17 +3794,18 @@ export function OutreachTable({
             title={<>Queue {selectedIds.size} for WhatsApp</>}
             subtitle={perms.queueControls
                 ? 'Choose the approved template to send. It’s applied to all selected leads, and that exact template is sent.'
-                : 'Choose which approved opener this batch gets. Only your never-contacted leads are queued, and that exact template is sent.'}
+                : 'Choose the approved template to send. An opener goes only to your never-contacted leads, a follow-up only to leads already in a conversation (never twice), and that exact template is sent.'}
           />
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">Template</label>
             <Select value={queueTemplate} onValueChange={setQueueTemplate}>
               <SelectTrigger><SelectValue placeholder="Not set — choose a template" /></SelectTrigger>
               <SelectContent>
-                {(perms.queueControls ? WHATSAPP_TEMPLATES : WHATSAPP_TEMPLATES.filter((t) => salesBulkTemplate(t.value))).map((t) => {
+                {WHATSAPP_TEMPLATES.map((t) => {
                   const blocked = openerBlocked(t.value);
+                  const stale = STALE_OFFER_TEMPLATES.has(t.value);
                   return (
-                    <SelectItem key={t.value} value={t.value} disabled={blocked}>
+                    <SelectItem key={t.value} value={t.value} disabled={blocked || stale}>
                       <span className="flex flex-col"><span>{t.label}</span>{blocked && <span className="text-[10px] text-amber-600">Waiting on Meta approval</span>}</span>
                     </SelectItem>
                   );

@@ -14,6 +14,7 @@ import { COUNTRY_OFF, MARKET_NAME, marketsOn, mobileMarketOf } from '@/lib/outre
 import { phoneProblemWords } from '@/lib/phoneCountry';
 import { useCountrySettings } from '@/hooks/useCountrySettings';
 import { isInitialOpener } from '@/lib/openerVariant';
+import { STALE_OFFER_TEMPLATES } from '@/lib/findableOffer';
 import { queueDropWords, REPORT_OFFER_TEMPLATE } from '@/lib/reportOfferTemplate';
 import { checkReportOffer } from '@/lib/reportOfferCheck';
 import { useAuth } from '@/hooks/useAuth';
@@ -70,8 +71,8 @@ export function WhatsAppLeadControls({
   /* ⛔ THE QUEUED LINE SAYS WHETHER THE QUEUE IS ACTUALLY SENDING (2026-09-28): paused by the admin
      outranks the sending window, and an unreadable state never claims it will send. */
   const queueLine = queuedLeadLine(useQueueState(queued), lead.phone);
-  /* A salesperson's single-lead queue is the bulk opener path, so it offers the approved openers. */
-  const options = salesPath ? WHATSAPP_TEMPLATES.filter((t) => isInitialOpener(t.value) || t.value === REPORT_OFFER_TEMPLATE) : WHATSAPP_TEMPLATES;
+  /* 2026-11-16 (Paul): both roles get every approved template; sales_queue_opener applies the opener / follow-up rules. */
+  const options = WHATSAPP_TEMPLATES;
   /* A template must be CHOSEN before this lead can be queued. Only a name that is currently in the
      allowlist counts: a lead can be carrying a value from a removed or renamed template, and
      inheriting that silently is the same problem as substituting one. Removing from the queue is
@@ -230,7 +231,7 @@ export function WhatsAppLeadControls({
             <SelectContent>
               {options.map((t) => {
                 const o = getTemplateSendability(t.value, { shareToken: null }, {});
-                return <SelectItem key={t.value} value={t.value} disabled={isInitialOpener(t.value) && !o.ok}>{t.label}{isInitialOpener(t.value) && !o.ok ? ` — ${o.reason}` : ''}</SelectItem>;
+                return <SelectItem key={t.value} value={t.value} disabled={(isInitialOpener(t.value) && !o.ok) || STALE_OFFER_TEMPLATES.has(t.value)}>{t.label}{isInitialOpener(t.value) && !o.ok ? ` — ${o.reason}` : ''}</SelectItem>;
               })}
             </SelectContent>
           </Select>

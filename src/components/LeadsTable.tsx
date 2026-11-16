@@ -40,6 +40,9 @@ import { useLeadCrawlsFor, useOpportunityAuditScores } from '@/hooks/useOpportun
 import { resultSetSignature } from '@/lib/searchResultsCache';
 import { visibleResults } from '@/lib/searchResultsView';
 import { SelectionModeBar } from './SelectionModeBar';
+import { useCountrySettings } from '@/hooks/useCountrySettings';
+import { callableVerdict, sortByCallable, type CallableVerdict } from '@/lib/callRules';
+import { CantCallLine } from './CantCallLine';
 
 function initials(name: string | null): string {
   if (!name) return '?';
@@ -147,6 +150,11 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
   const [showOutside, setShowOutside] = useState(false);
   /* Show/Hide on the grey "Not a match" line (src/lib/nicheMatch.ts) — the same rule as the outside line. */
   const [showNotMatch, setShowNotMatch] = useState(false);
+  /* ⛔ LEADS WE CAN'T CALL (2026-11-16, src/lib/callRules.ts callableVerdict): a number that is only 09 premium, not valid, or in a
+     country whose calling is off is hidden behind ONE grey line, like the two above — never deleted. A result with no number yet
+     (looked up when it is added) is NOT hidden. Shown = greyed, with the reason. */
+  const [showCantCall, setShowCantCall] = useState(false);
+  const { settings: countrySettings } = useCountrySettings();
   const niche = useMemo(() => nicheProfile(searchedNiche), [searchedNiche]);
   const [addingIds, setAddingIds] = useState<ReadonlySet<string>>(() => new Set());
   const handleAddToOutreach = useCallback((lead: Lead) => {
@@ -238,7 +246,10 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
   const nicheWords = (searchedNiche ?? '').trim().toLowerCase();
   const isNotMatch = useCallback((l: Lead) => notNicheMatch(l, niche), [niche]);
   const notMatchCount = useMemo(() => leads.filter((l) => isNotMatch(l) && (showOutside || !outsideSearchedTown(l))).length, [leads, isNotMatch, showOutside]);
-  const baseLeads = useMemo(() => leads.filter((l) => (showOutside || !outsideSearchedTown(l)) && (showNotMatch || !isNotMatch(l))), [leads, showOutside, showNotMatch, isNotMatch]);
+  const callById = useMemo(() => { const m = new Map<string, CallableVerdict>(); for (const l of leads) m.set(l.id, callableVerdict(l.phone, l.searchCountry, countrySettings)); return m; }, [leads, countrySettings]);
+  const cantCall = useCallback((l: Lead) => callById.get(l.id)?.status === 'cannot', [callById]);
+  const cantCallCount = useMemo(() => leads.filter((l) => cantCall(l) && (showOutside || !outsideSearchedTown(l)) && (showNotMatch || !isNotMatch(l))).length, [leads, cantCall, showOutside, showNotMatch, isNotMatch]);
+  const baseLeads = useMemo(() => leads.filter((l) => (showOutside || !outsideSearchedTown(l)) && (showNotMatch || !isNotMatch(l)) && (showCantCall || !cantCall(l))), [leads, showOutside, showNotMatch, isNotMatch, showCantCall, cantCall]);
   const outsideTownName = useMemo(() => {
     const towns = new Set(leads.filter(outsideSearchedTown).map((l) => (l.searchTown ?? searchedTown ?? '').split(',')[0].trim()).filter(Boolean));
     return towns.size === 1 ? [...towns][0] : 'the searched towns';
@@ -263,20 +274,22 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
     });
     /* Shown out-of-town and not-a-match rows come after the rest. */
     const aside = (l: Lead) => outsideSearchedTown(l) || isNotMatch(l);
-    let shown = [...kept.filter((l) => !aside(l)), ...kept.filter((l) => aside(l))];
+    /* Leads with a mobile or landline first, freephone-only next, then no number, then (shown) can't-call — stable. */
+    const byCall = (xs: Lead[]) => sortByCallable(xs, (l) => callById.get(l.id) ?? { status: 'no_phone', reason: null });
+    let shown = [...byCall(kept.filter((l) => !aside(l))), ...byCall(kept.filter((l) => aside(l)))];
     /* Sort by opportunity: best first; ties keep the search order (a stable sort). */
     if (oppSort) {
       const k = (l: Lead) => { const o = oppById.get(l.id); return o ? oppSortKey(o) : 400; };
       shown = shown.map((l, i) => ({ l, i })).sort((a, b) => k(a.l) - k(b.l) || a.i - b.i).map((x) => x.l);
-      return shown;
+      return byCall(shown);
     }
     /* High-confidence agency sites go to the bottom (kept, never hidden) once every check has finished —
        rows never jump under the cursor while results are still arriving. The rest keep their order. */
     if (agency.pending > 0) return shown;
     const last = shown.filter((l) => highAgency(l));
     const rest = shown.filter((l) => !highAgency(l));
-    return [...rest, ...last];
-  }, [baseLeads, statusFilters, socialFilters, siteFilters, agency, hasOwnSite, highAgency, isNotMatch, oppById, oppGroup, oppCriticalOnly, oppSort]);
+    return byCall([...rest, ...last]);
+  }, [baseLeads, statusFilters, socialFilters, siteFilters, agency, hasOwnSite, highAgency, isNotMatch, oppById, oppGroup, oppCriticalOnly, oppSort, callById]);
 
   useEffect(() => { onShownChange?.(filteredLeads); }, [filteredLeads, onShownChange]);
   const visible = visibleResults(baseLeads.length, filteredLeads.length);
@@ -761,6 +774,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
             </button>
           </p>
         )}
+        <CantCallLine count={cantCallCount} shown={showCantCall} onToggle={() => setShowCantCall((v) => !v)} className="mb-2" />
         {bulkAllowed && (
           <SelectionModeBar className="mb-2" pageIds={pagePoolIds} allIds={selectAllIds} selected={new Set(selectedLeads.map((l) => l.id))} onChange={setSelectedIds} />
         )}
@@ -774,7 +788,9 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
             return (
               <div
                 key={lead.id}
-                className={`flex items-center justify-between py-2.5 px-3 rounded-md border border-border ${inOutreach ? 'bg-muted/30 opacity-70' : 'bg-background/80'}`}
+                className={`flex items-center justify-between py-2.5 px-3 rounded-md border border-border ${inOutreach ? 'bg-muted/30 opacity-70' : 'bg-background/80'} ${cantCall(lead) ? 'opacity-50 grayscale' : ''}`}
+                title={cantCall(lead) ? `We can't call this lead: ${callById.get(lead.id)?.reason ?? ''}` : undefined}
+                data-cant-call={cantCall(lead) ? 'true' : undefined}
               >
                 {bulkAllowed && (
                   <Checkbox
@@ -939,7 +955,9 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                 return (
                 <TableRow
                   key={lead.id}
-                  className={`border-border hover:bg-muted/30 ${inOutreach ? 'bg-muted/20 opacity-70' : ''}`}
+                  className={`border-border hover:bg-muted/30 ${inOutreach ? 'bg-muted/20 opacity-70' : ''} ${cantCall(lead) ? 'opacity-50 grayscale' : ''}`}
+                  title={cantCall(lead) ? `We can't call this lead: ${callById.get(lead.id)?.reason ?? ''}` : undefined}
+                  data-cant-call={cantCall(lead) ? 'true' : undefined}
                 >
                   {bulkAllowed && (
                     <TableCell className="pl-3">

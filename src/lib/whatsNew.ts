@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-16-tps-templates-callable', date: '2026-11-16', title: 'Every template in the sales queue, leads we can\'t call hidden, TPS check ready', audience: 'all',
+    body: 'Salespeople can now queue every approved WhatsApp template, the same list Paul has. A follow-up only goes to a lead you have already messaged on WhatsApp and never twice to the same lead, and inside their 24-hour window it goes free. Opt-outs and daily limits still apply. On Find leads and Outreach, leads whose only number we can\'t call (09 premium, not a real number, or a country calling isn\'t switched on for) are hidden. Press "Show N we can\'t call" to see them greyed out with the reason. Nothing is deleted. Freephone-only leads (0800, 03, 084, 087) still show, after leads with a mobile or landline. "Open next ready" skips leads we can\'t call. A TPS / CTPS check before each UK call is built but stays off until Paul connects it. Once it is on, a number on the register shows "TPS – do not call".',
+    report: {
+      added: ['Every approved template in the bulk queue and the lead popup for salespeople.', 'A "Show N we can\'t call" line on Find leads and Outreach.', 'TPS / CTPS screening before a UK call (off until Paul connects it).'],
+      changed: ['Queued follow-ups now go out (the queue used to skip any lead that had already been messaged), at most once per template per lead, free inside the 24-hour window.', 'Leads with a mobile or landline sort before freephone-only leads.', 'A lead whose other number is in a country calling is off for rings the number we can call.'],
+      removed: ['The "Bulk initial outreach sends an approved opener only" refusal for salespeople.'],
+      effect: 'Reps can run the same follow-ups as Paul, and the call list only holds leads that can be rung.',
+    } },
   { id: '2026-11-16-calling-solid', date: '2026-11-16', title: 'Calls keep going while you use the app', audience: 'all',
     body: 'A browser call now stays live while you move around the app. A call bar on the right of every page shows who you are talking to, the timer, Mute, a Keypad and End call. It warns you when the connection is poor, and if a call drops it offers Call again. Irish numbers can now be called. Freephone and other non-geographic numbers (0800, 03, 084, 087) are flagged before you dial, and 09 premium numbers are never dialled. If a lead has more than one number, the call rings the mobile first. Calls are only placed in the prospect\'s calling hours: Mon–Fri 8am–8pm, Sat 9am–5pm, never Sunday.',
     report: {

@@ -7,7 +7,8 @@ import { fmtDuration, type TwilioCall } from '@/hooks/useTwilioCall';
 import { useLiveCall, useLiveCallActions } from '@/components/LiveCall';
 import { callNumberView } from '@/lib/callNumber';
 import { REDIAL_FAILURES } from '@/lib/callManager';
-import { pickCallNumber } from '@/lib/callRules';
+import { pickCallNumber, TPS_CALL_WORDS } from '@/lib/callRules';
+import { useLeadTpsBlock } from '@/hooks/useLeadCompliance';
 
 /* THE CALL PANEL (2026-10-09) — top of the Call tab: the Call in browser button (and a small Call on WhatsApp) and, when you choose to
    call from the browser, the live call (Calling… / Ringing / Connected 02:13 / Ended / Failed), Mute and Hang up.
@@ -31,6 +32,8 @@ export function CallPanel({ leadId, businessName, phone, country, onLogCall }: {
   const otherLead = call.active && !here;
   const view = callNumberView(phone, country);
   const pick = pickCallNumber(phone, country);
+  /* TPS / CTPS (2026-11-16): a current "on the register" answer shows the block before dialling (the server refuses anyway). */
+  const tpsBlocked = useLeadTpsBlock(leadId);
   return (
     <section className="space-y-2 rounded-2xl border border-amber-500/30 bg-amber-500/[0.04] p-3 sm:p-3.5" data-testid="call-panel" data-call-state={here ? call.state : 'idle'}>
       {otherLead ? (
@@ -74,7 +77,7 @@ export function CallPanel({ leadId, businessName, phone, country, onLogCall }: {
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <Button className="h-11 gap-2 rounded-xl bg-amber-500 font-bold text-white hover:bg-amber-600" onClick={() => void call.start(leadId, businessName)} disabled={!view || pick.premiumOnly} data-testid="call-start-browser">
+            <Button className="h-11 gap-2 rounded-xl bg-amber-500 font-bold text-white hover:bg-amber-600" onClick={() => void call.start(leadId, businessName)} disabled={!view || pick.premiumOnly || tpsBlocked} data-testid="call-start-browser">
               <PhoneCall className="h-4 w-4" />{pick.kind === 'non_geographic' ? 'Call anyway' : 'Call in browser'}
             </Button>
             {view?.whatsappUrl && (
@@ -86,6 +89,7 @@ export function CallPanel({ leadId, businessName, phone, country, onLogCall }: {
           </div>
           {/* Before dialling (src/lib/callRules.ts pickCallNumber): a freephone / non-geographic number may not connect, a 09
               is never dialled, and with several numbers on the lead it says which one rings. */}
+          {tpsBlocked && <p data-testid="call-tps-block" className="rounded-lg bg-red-500/10 px-2.5 py-2 text-xs font-semibold text-red-700 dark:text-red-300">{TPS_CALL_WORDS}</p>}
           {pick.warning && (
             <p data-testid="call-number-warning" className={cn('rounded-lg px-2.5 py-2 text-xs', pick.premiumOnly ? 'bg-red-500/10 text-red-700 dark:text-red-300' : pick.kind === 'non_geographic' ? 'bg-amber-500/10 text-amber-800 dark:text-amber-200' : 'bg-muted text-muted-foreground')}>{pick.warning}</p>
           )}

@@ -148,7 +148,7 @@ console.log('8. the hook and the floating call bar');
   ok(/call-ended-redial/.test(live) && /REDIAL_FAILURES\.has\(call\.failure\)/.test(live), 'a dropped call offers Call again from any page');
   ok(/<CallBar call=\{call\} panelLead=\{panelLead\} \/>/.test(live), 'the provider above every route draws it');
   const panel = read('src/components/CallPanel.tsx');
-  ok(/pickCallNumber\(phone, country\)/.test(panel) && /call-number-warning/.test(panel) && /disabled=\{!view \|\| pick\.premiumOnly\}/.test(panel), 'the panel flags the number before dialling and never offers a 09');
+  ok(/pickCallNumber\(phone, country\)/.test(panel) && /call-number-warning/.test(panel) && /disabled=\{!view \|\| pick\.premiumOnly \|\| tpsBlocked\}/.test(panel), 'the panel flags the number before dialling and never offers a 09');
 }
 
 if (f) { console.log(`\n${f} FAILED`); process.exit(1); }

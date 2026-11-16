@@ -2648,7 +2648,38 @@ Deno.serve(async (req) => {
         .limit(1).maybeSingle();
       alreadySent = !!priorSend;
     }
-    if (alreadySent) {
+    /* ⛔ QUEUED FOLLOW-UPS (2026-11-16, Paul, v1-tps-templates-callable). The guard below was written for openers and
+       dropped EVERY lead with a prior send — so a follow-up queued in bulk (audit reply, re-engage, a hook …) was always
+       skipped, for admin and salespeople alike. A CONTINUATION (isColdOutreachTemplate false) now goes when:
+         · this lead HAS been messaged on WhatsApp before (a follow-up is never a first touch — none = follow_up_needs_contact);
+         · THIS template has never gone to this lead (template_already_sent; a failed / simulated attempt is not a send);
+       Opt-outs / Do Not Contact (checked above), the pacing gap and the person's daily limit (sales_queue_opener) still apply,
+       and an open 24-hour window sends it as free text (freeWindowSwap below). A COLD template keeps the guard exactly. */
+    if (!isColdOutreachTemplate(templateName)) {
+      const { data: sameTpl, error: sameErr } = await service.from("whatsapp_sends").select("id")
+        .eq("lead_id", lead.id).eq("template", templateName).eq("test_mode", false)
+        .or("delivery_status.is.null,delivery_status.not.in.(failed,failed_temporary,simulated)").limit(1);
+      /* "Already messaged" = a real send to this lead, or they wrote to us (an inbound message on this lead). */
+      let inConversation = alreadySent;
+      if (!inConversation) {
+        const { data: inbound } = await service.from("whatsapp_messages").select("id").eq("lead_id", lead.id).eq("direction", "inbound").limit(1);
+        inConversation = Array.isArray(inbound) && inbound.length > 0;
+      }
+      const { data: sameMsg } = await service.from("whatsapp_messages").select("id").eq("lead_id", lead.id).eq("direction", "outbound")
+        .eq("template_name", templateName).in("status", ["sent", "delivered", "read"]).eq("test_mode", false).limit(1);
+      const sentBefore = (Array.isArray(sameTpl) && sameTpl.length > 0) || (Array.isArray(sameMsg) && sameMsg.length > 0);
+      const skip = sameErr ? "contact_guard_unreadable" : !inConversation ? "follow_up_needs_contact" : sentBefore ? "template_already_sent" : null;
+      if (skip === "contact_guard_unreadable") return json({ ok: true, skipped: skip, lead_id: lead.id, business: lead.business_name, ...statusPayload }, 200);
+      if (skip) {
+        await service.from("outreach_leads").update({
+          status: statusBeforeQueue(lead.previous_status as string | null),
+          whatsapp_delivery_status: skip, contact_method: null, queued_at: null, previous_status: null,
+        }).eq("id", lead.id);
+        return json({ ok: true, skipped: skip, reason: skip === "template_already_sent" ? `${lead.business_name ?? "That lead"} already got this message — a template never goes twice to the same lead.` : NEEDS_PRIOR_WHATSAPP_REASON,
+          lead_id: lead.id, business: lead.business_name, ...statusPayload }, 200);
+      }
+    }
+    if (alreadySent && isColdOutreachTemplate(templateName)) {
       const CONTACTED = ["initial_contact", "site_sent", "replied", "interested", "closed"];
       const restore = CONTACTED.includes(lead.previous_status ?? "") ? (lead.previous_status as string) : "initial_contact";
       await service.from("outreach_leads").update({
@@ -2687,8 +2718,12 @@ Deno.serve(async (req) => {
     let sendError: string | null = null;
     let sendParts: SendErrorParts | null = null;
     const campaignPayload = claimTemplatePayload(templateName, lang, lead.business_name as string, resolvedUrl, templateExtra);
-    const campaignBody = renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, templateExtra.trade, templateExtra.competitors, undefined, templateExtra.town, templateExtra.siteFault, templateExtra.siteFindings, templateExtra.visibilityScore, templateExtra.senderName);
+    let campaignBody = renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, templateExtra.trade, templateExtra.competitors, undefined, templateExtra.town, templateExtra.siteFault, templateExtra.siteFindings, templateExtra.visibilityScore, templateExtra.senderName);
     const campaignSnapshot = createTemplateSnapshot({ templateName, language: lang, body: campaignBody, payload: campaignPayload });
+    /* ⛔ A queued FOLLOW-UP inside their 24-hour window goes as free text (2026-11-16, _shared/free-window.ts — the same rule as
+       every other door), still recorded as that template. A cold opener never has an open window, so it is never swapped. */
+    const campaignSwap = isColdOutreachTemplate(templateName) ? null : freeWindowSwap(campaignPayload, campaignBody, await lastInboundMsFor(service, toNumber));
+    if (campaignSwap) campaignBody = campaignSwap.body;
 
     /* ⛔ QA SAFETY: a fixture takes the test-mode branch for THIS send (simulated, test_mode true);
        a test-account-held real lead was already filtered out above and is re-checked here. */
@@ -2726,7 +2761,7 @@ Deno.serve(async (req) => {
                calls it; this one kept a private copy of the assembly, and a copy cannot learn about
                a field added after it was written.
                ⚠️ It supplies `type` AND `template`, so neither is spelled out here any more. */
-            ...campaignPayload,
+            ...(campaignSwap ? campaignSwap.payload : campaignPayload),
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -2774,7 +2809,8 @@ Deno.serve(async (req) => {
     if (outcome === "sent") {
       // Delivered to Meta (or simulated) → Contacted, out of the queue.
       await service.from("outreach_leads").update({
-        status: "initial_contact",
+        /* A follow-up never moves a lead backwards (a Replied / Interested lead stays there); an opener → Contacted. */
+        status: isColdOutreachTemplate(templateName) ? "initial_contact" : statusWithContactEvidence(statusBeforeQueue(lead.previous_status as string | null), true),
         whatsapp_sent_at: nowIso,
         whatsapp_template: templateName,
         whatsapp_message_id: messageId,
@@ -2801,7 +2837,7 @@ Deno.serve(async (req) => {
           // town is the 6th positional arg (see renderTemplateBody) - without it the operator
           // transcript would read "in your area" while the prospect's message named their town.
           body: campaignBody,
-          message_type: "template",
+          message_type: campaignSwap ? campaignSwap.messageType : "template",
           template_name: templateName,
           wa_message_id: messageId,                          // null on a simulated (TEST_MODE) send
           status: deliveryStatus,                            // 'sent' | 'simulated'

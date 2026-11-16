@@ -58,8 +58,12 @@ do $$ declare r jsonb; i int; begin
   for i in 1..3 loop perform public.claim_lead((select mob[i] from t_fx)); end loop;
   r := public.sales_queue_opener((select mob from t_fx), '');
   insert into t_results (name, ok, detail) values ('queue: no template chosen is refused', r ->> 'error' = 'template_required' and (select count(*) from public.lead_activity where kind = 'bulk_queued') = 0, r::text);
+  /* 2026-11-16 (20261219090000): a follow-up is allowed, but only to a lead already in a WhatsApp conversation — these
+     never-contacted leads are each skipped, nothing queued. The stale-price templates stay blocked. */
   r := public.sales_queue_opener((select mob from t_fx), 'audit_reply');
-  insert into t_results (name, ok, detail) values ('queue: a non-opener is refused', r ->> 'error' = 'not_an_initial_opener', r::text);
+  insert into t_results (name, ok, detail) values ('queue: a follow-up never goes to a never-contacted lead', (r ->> 'ok')::boolean and (r ->> 'queued')::int = 0 and (r -> 'skipped' ->> 'follow_up_needs_contact')::int = 3 and (select count(*) from public.lead_activity where kind = 'bulk_queued') = 0, r::text);
+  r := public.sales_queue_opener((select mob from t_fx), 'explain_offer');
+  insert into t_results (name, ok, detail) values ('queue: a stale-price template is refused', r ->> 'error' = 'template_blocked', r::text);
   r := public.sales_queue_opener((select mob || array[pauls] from t_fx), (select opener from t_fx));
   insert into t_results (name, ok, detail) values ('queue: 2 queued (daily limit 2)', (r ->> 'queued')::int = 2, r::text);
   insert into t_results (name, ok, detail) values ('queue: 1 over the limit', (r -> 'skipped' ->> 'daily_limit')::int = 1, r::text);
