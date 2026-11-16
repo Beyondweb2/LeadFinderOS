@@ -72,7 +72,10 @@ export type InWindowShape =
  * How a TEMPLATE send goes out.
  *  · Inbox, or a queued Inbox send now running: window open → free text of the same wording (or the person's own edit);
  *    window closed → the template (a queued send), or a refusal when the person asked for their typed words (`typed`).
- *  · Anywhere else (the bulk queue, the lead popup, the dashboard, the welcome pack, Quick Close) → the template, untouched.
+ *  · ⛔ EVERY OTHER DOOR TOO (Paul, 2026-11-16: "when sending any template, single or bulk, to someone whose 24-hour window is
+ *    open, send its wording as a normal free-form message, never as a paid template"): the bulk queue, the lead popup, the
+ *    dashboard, the welcome pack, Quick Close. Window open → the template's own wording as free text (or its video by link);
+ *    closed → the approved template. Those doors never send typed words, so they never refuse.
  * `windowOpen` is judged by the sender from the lead's own last inbound; `allowClosedText` is test mode (nothing reaches Meta).
  * A queued send passes typed:false (the sender still uses its stored words), so closed when it runs → the template (Paul's rule).
  */
@@ -84,7 +87,7 @@ export function inWindowShape(a: {
   typed: boolean;
   version: FreeTextVersion;
 }): InWindowShape {
-  if (a.origin === 'other') return { as: 'template' };
+  if (a.origin === 'other') a = { ...a, typed: false };
   /* Closed: a template stays a template. Only words the person TYPED can go as text, and only in test mode (simulated, as any
      free text is there); live, they are refused rather than silently swapped for the template's own wording. */
   if (!a.windowOpen) {
@@ -107,3 +110,24 @@ export function inWindowShape(a: {
    swapped in for the person's edit. */
 export const QUEUED_WORDS_UNREADABLE_REASON =
   'Their 24 hours had run out by the time it was due, and an edited message can only go as a normal message — the approved template can’t be rebuilt from your words. Nothing was sent. Pick the template again to send it.';
+
+/* ── THE BULK QUEUE AND THE SEND SCREENS (2026-11-16, Paul) ─────────────────────────────────────────────────────────── */
+
+/** The bulk queue's template lanes (process-whatsapp-queue): the same rule, as the queue builds the send. `payload` is the
+ *  template payload claimTemplatePayload made; `words` its rendered body. Window open + a free-text version → that version. */
+export function queueSendShape(a: { payload: unknown; words: string | null | undefined; windowOpen: boolean }):
+  { as: 'template' } | { as: 'text'; text: string; videoUrl?: string } {
+  const s = inWindowShape({ origin: 'other', windowOpen: a.windowOpen, allowClosedText: false, typed: false, version: freeTextVersionOf(a.payload, a.words) });
+  return s.as === 'text' ? s : { as: 'template' };
+}
+
+/** How one WhatsApp template send will go, for the label on a send screen. The sender decides the same way (inWindowShape). */
+export type SendPriceKind = 'free' | 'paid';
+export function sendPriceKindOf(windowOpen: boolean): SendPriceKind { return windowOpen ? 'free' : 'paid'; }
+
+/** The split the bulk-send confirm shows: who goes free (window open) and who needs a paid template (closed). */
+export function splitByWindow<T>(items: readonly T[], windowOpen: (t: T) => boolean): { free: T[]; paid: T[] } {
+  const free: T[] = []; const paid: T[] = [];
+  for (const t of items) (windowOpen(t) ? free : paid).push(t);
+  return { free, paid };
+}

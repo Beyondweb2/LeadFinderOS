@@ -42,6 +42,7 @@ import { healthVerdict, tierLimit, type StoredHealth } from "../../../src/lib/wh
 import { STRONG_STATUSES, postgrestList } from "../../../src/lib/strongStatuses.ts";
 import { qaSendVerdict } from "../../../src/lib/qaSafety.ts";
 import { loadQaExclusions, qaSendHold } from "../_shared/qa-guard.ts";
+import { phoneWindowOpen, queueLanePayload } from "../_shared/in-window-send.ts";
 import { formatVisibilityScore, REPORT_OFFER_REFUSAL_WORDS, REPORT_OFFER_TEMPLATE, REPORT_OFFER_WARNING_WORDS, reportOfferRefusal, reportOfferWarnings, ukWordedTemplateRefusal, UK_WORDED_TEMPLATES, type ReportOfferRefusal } from "../../../src/lib/reportOfferTemplate.ts";
 import { prospectOnlyTemplateRefusal } from "../../../src/lib/prospectOnly.ts";
 import { senderMessageName } from "../_shared/sender-name.ts";
@@ -1956,8 +1957,10 @@ Deno.serve(async (req) => {
         let hParts: SendErrorParts | null = null;
         const hBody = renderTemplateBody("hook_followup", (hookLead.business_name as string) ?? "", "", undefined, undefined, first);
         const hPayload = claimTemplatePayload("hook_followup", hLang, (hookLead.business_name as string) ?? "", "", { contactName: first });
+        /* ⛔ IN-WINDOW FREE TEXT (2026-11-16, _shared/in-window-send.ts): window open → the same wording as a normal message. */
+        const hShape = queueLanePayload(hPayload as Record<string, unknown>, hBody, await phoneWindowOpen(service, to));
         if (hLive) {
-          const payload = hPayload;
+          const payload = hShape.payload;
           const r = await sendViaGraph(accessToken, phoneNumberId, to, payload);
           if (r.ok) { hMessageId = r.messageId; hDelivery = "sent"; hOutcome = "sent"; }
           else {
@@ -1987,7 +1990,7 @@ Deno.serve(async (req) => {
             await service.from("whatsapp_messages").insert({
               direction: "outbound", user_id: (hookLead.user_id as string | null) ?? null, lead_id: hookLead.id,
               phone: to, body: hBody,
-              message_type: "template", template_name: "hook_followup", wa_message_id: hMessageId,
+              message_type: hShape.messageType, template_name: "hook_followup", wa_message_id: hMessageId,
               status: hDelivery, test_mode: hTestMode,
               template_snapshot: createTemplateSnapshot({ templateName: "hook_followup", language: hLang, body: hBody, payload: hPayload }),
             });
@@ -2067,8 +2070,10 @@ Deno.serve(async (req) => {
         let cParts: SendErrorParts | null = null;
         const cBody = renderTemplateBody("contact_followup", (contactLead.business_name as string) ?? "", "");
         const cPayload = claimTemplatePayload("contact_followup", cLang, (contactLead.business_name as string) ?? "", "");
+        /* ⛔ IN-WINDOW FREE TEXT (2026-11-16, _shared/in-window-send.ts): window open → the same wording as a normal message. */
+        const cShape = queueLanePayload(cPayload as Record<string, unknown>, cBody, await phoneWindowOpen(service, to));
         if (cLive) {
-          const payload = cPayload;
+          const payload = cShape.payload;
           const r = await sendViaGraph(accessToken, phoneNumberId, to, payload);
           if (r.ok) { cMessageId = r.messageId; cDelivery = "sent"; cOutcome = "sent"; }
           else {
@@ -2098,7 +2103,7 @@ Deno.serve(async (req) => {
             await service.from("whatsapp_messages").insert({
               direction: "outbound", user_id: (contactLead.user_id as string | null) ?? null, lead_id: contactLead.id,
               phone: to, body: cBody,
-              message_type: "template", template_name: "contact_followup", wa_message_id: cMessageId,
+              message_type: cShape.messageType, template_name: "contact_followup", wa_message_id: cMessageId,
               status: cDelivery, test_mode: cTestMode,
               template_snapshot: createTemplateSnapshot({ templateName: "contact_followup", language: cLang, body: cBody, payload: cPayload }),
             });
@@ -2674,6 +2679,9 @@ Deno.serve(async (req) => {
     const campaignPayload = claimTemplatePayload(templateName, lang, lead.business_name as string, resolvedUrl, templateExtra);
     const campaignBody = renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, templateExtra.trade, templateExtra.competitors, undefined, templateExtra.town, templateExtra.siteFault, templateExtra.siteFindings, templateExtra.visibilityScore, templateExtra.senderName);
     const campaignSnapshot = createTemplateSnapshot({ templateName, language: lang, body: campaignBody, payload: campaignPayload });
+    /* ⛔ IN-WINDOW FREE TEXT (Paul, 2026-11-16, _shared/in-window-send.ts): a lead who wrote to us in the last 24 hours gets the
+       same wording as a normal message (no paid template); closed → the approved template. Still recorded as that template. */
+    const campaignShape = queueLanePayload(campaignPayload as Record<string, unknown>, campaignBody, await phoneWindowOpen(service, toNumber));
 
     /* ⛔ QA SAFETY: a fixture takes the test-mode branch for THIS send (simulated, test_mode true);
        a test-account-held real lead was already filtered out above and is re-checked here. */
@@ -2711,7 +2719,7 @@ Deno.serve(async (req) => {
                calls it; this one kept a private copy of the assembly, and a copy cannot learn about
                a field added after it was written.
                ⚠️ It supplies `type` AND `template`, so neither is spelled out here any more. */
-            ...campaignPayload,
+            ...campaignShape.payload,
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -2737,7 +2745,7 @@ Deno.serve(async (req) => {
         console.error("[whatsapp] send threw (temporary):", sendError);
       }
     } else {
-      console.log(`WOULD SEND: template ${templateName} to ${toNumber} for ${lead.business_name} (claim ${claimUrl})`);
+      console.log(`WOULD SEND: ${campaignShape.freeText ? "free text of " : ""}template ${templateName} to ${toNumber} for ${lead.business_name} (claim ${claimUrl})`);
     }
 
     const nowIso = new Date().toISOString();
@@ -2786,7 +2794,7 @@ Deno.serve(async (req) => {
           // town is the 6th positional arg (see renderTemplateBody) - without it the operator
           // transcript would read "in your area" while the prospect's message named their town.
           body: campaignBody,
-          message_type: "template",
+          message_type: campaignShape.messageType,
           template_name: templateName,
           wa_message_id: messageId,                          // null on a simulated (TEST_MODE) send
           status: deliveryStatus,                            // 'sent' | 'simulated'
