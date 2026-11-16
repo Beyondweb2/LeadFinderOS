@@ -142,7 +142,7 @@ ok(leadSourceFor("admin").table === "outreach_leads" && leadSourceFor("admin").l
 // 52 since 2026-10-14: + import_batch (Outreach search finds a CSV import batch).
 // 53 since 2026-10-15: + lead_source (the audit town gate reads it — the "Needs info" tag, src/lib/leadReadiness.ts).
 // 54 since 2026-10-27: + added_by_user_id (the row's "Added by <name>" line, docs/multi-user.md §10).
-ok(OUTREACH_LIST_COLUMNS.length === 54, "admin list is 54 columns");
+ok(OUTREACH_LIST_COLUMNS.length === 56, "admin list is 56 columns (2026-11-16: review_count, rating for the opportunity score)");
 const sales = leadSourceFor("sales");
 ok(sales.table === "sales_leads", "sales: the safe sales_leads view (their own assigned prospects; the view decides)");
 const salesView = new Set<string>(SALES_VIEW_COLUMNS);
