@@ -39,6 +39,7 @@ import { WhatsAppPaceSettings, type PaceStatus } from '@/components/WhatsAppPace
 import { CountrySendingSettings } from '@/components/CountrySendingSettings';
 import { RecentSendFailures } from '@/components/RecentSendFailures';
 import { pauseChangeLine, type PauseChange } from '@/lib/queuePauseChange';
+import { SenderQueueLines, MY_QUEUE_KEY } from '@/components/SenderQueueLines';
 
 /** The admin's team-wide status (process-whatsapp-queue mode 'status' — admin-only on the server). */
 interface TeamStatus {
@@ -189,6 +190,7 @@ export function WhatsAppQueuePanel() {
       q.refetch(),
       qc.invalidateQueries({ queryKey: QUEUE_STATE_KEY }),
       qc.invalidateQueries({ queryKey: ['whatsapp-queue-sent-today'] }),
+      qc.invalidateQueries({ queryKey: MY_QUEUE_KEY }),
       refreshTeam(true),
     ]);
   };
@@ -442,6 +444,9 @@ export function WhatsAppQueuePanel() {
         <Stat label={clock.perLead ? 'Local time' : `${TAB_LABEL[tab]} time`}
           value={clock.perLead ? 'Each lead’s own' : `${clock.time}${tab === 'UK' && state ? (state.windowOpen ? ' · open' : ' · closed') : ''}`} />
       </div>
+
+      {/* 2026-11-16: your queue in one line (and, for the admin, every sender's): src/components/SenderQueueLines.tsx. */}
+      <SenderQueueLines showTeam={teamControls} />
 
       {/* 2026-10-22: this country is OFF (by hand or automatically). Its leads are HELD by the sender, not released: say so,
           with why and when (src/lib/whatsappQueueView.ts countryOffNote). */}

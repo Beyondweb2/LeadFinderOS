@@ -76,7 +76,7 @@ const NOW = Date.parse('2026-11-16T12:00:00Z');
     && (vs.payload as { video?: { caption?: string } }).video?.caption === 'Hi Acme Plumbing', 'a video template in the window → a normal video message, the words as caption');
 
   const q = read('supabase/functions/process-whatsapp-queue/index.ts');
-  ok(/import \{ freeWindowSwap, lastInboundMsFor \} from "\.\.\/_shared\/free-window\.ts";/.test(q), 'the queue reads the one shared swap');
+  ok(/import \{ freeWindowSwap, lastInboundMsFor(?:, tradeForFreeText)? \} from "\.\.\/_shared\/free-window\.ts";/.test(q), 'the queue reads the one shared swap');
   ok((q.match(/freeWindowSwap\(/g) ?? []).length === 3, 'exactly three lanes convert: the automatic audit reply, the report follow-up and (2026-11-16) a queued follow-up');
   ok(/const campaignSwap = isColdOutreachTemplate\(templateName\) \? null : freeWindowSwap\(/.test(q), '…a queued follow-up only — a cold opener is never swapped');
   const ar = q.slice(q.indexOf('const arQa = await qaSendHold('), q.indexOf('/* And the send-audit row.'));
