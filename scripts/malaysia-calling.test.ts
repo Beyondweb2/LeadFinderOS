@@ -64,7 +64,7 @@ console.log('5. the call hook uses all of it and shows no raw Twilio text');
   ok(/edge: twilioEdgesFor\(browserTimeZone\(\)\)/.test(hook) && /maxCallSignalingTimeoutMs: CALL_SIGNALING_TIMEOUT_MS/.test(hook) && /enableImprovedSignalingErrorPrecision: true/.test(hook), 'Device gets the edge list, reconnection and precise errors');
   ok((hook.match(/fail\('network', callErrorWords\(/g) ?? []).length === 3, 'device error, call error and a failed start all show plain words');
   ok(!/Call error: \$\{|Could not start the call: \$\{/.test(hook), 'Twilio\'s own message is never put on screen');
-  ok(/fail\(micFailureKey\(me\)\)/.test(hook) && /no_mic:/.test(hook) && /mic_busy:/.test(hook), 'microphone failures each have their own words');
+  ok(/fail\(micFailureKey\(me\)\)/.test(hook) && /no_mic:/.test(read('src/lib/callManager.ts')) && /mic_busy:/.test(read('src/lib/callManager.ts')), 'microphone failures each have their own words');
 }
 
 console.log('6. numbers for every country we call');

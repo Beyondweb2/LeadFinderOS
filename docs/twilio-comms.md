@@ -190,3 +190,32 @@ messaging / auth / database / payments / secrets.
 - **Not browser-callable by design:** Australia and USA (`callMarketOf` → null; refused with a plain reason).
 - **Twilio console (Paul's):** Voice → Settings → Geo permissions → Malaysia (and Singapore) ticked, including
   high-risk / mobile prefixes if Twilio lists them. Tests: `scripts/malaysia-calling.test.ts`.
+
+## Calling made solid (2026-11-16, v1-calling-solid)
+- **The +447427687854 failure.** `call_logs` row 99f62d6c (09:58 UTC) failed with **13227** (Voice geo permission: country not
+  allowed). The number was stored correctly as E.164 `447427687854`. After Paul enabled UK + Ireland in Twilio, the same number
+  connected at 10:18 (completed). The screen's words for 13227 already named the cause ("not allowed to call this country… Tell Paul").
+- **The +44 800 774 7951 failure (0800).** No `call_logs` row → it never reached Twilio. It was refused inside
+  `twilio-voice-token` by the old UK pattern `^44[1237]` (0800 is `448…`) with "Browser calling covers UK, Malaysia and
+  Singapore numbers only", which read as a country block. Now: one rule, `src/lib/callRules.ts`, asked by the token function
+  AND the webhook. 0800 / 0808 / 03 / 084 / 087 / 055 / 056 / 070 / 076 are dialled after a "Freephone / non-geographic number,
+  may not connect: try their mobile or landline" flag in the call panel (button reads "Call anyway"); a refused call to one
+  names the number type (`failureWordsForNumber`). **09 premium is never dialled** (`premium_number`).
+- **Which number.** The lead has one `phone` field; if it holds several ("01234 567890 / 07700 900123") `pickCallNumber`
+  rings a mobile, then a landline, then a non-geographic one, never a 09, and the panel says which. E.164 first:
+  `waNumber.toWhatsAppDigits` (unchanged) plus "(0)" / "+44 0…" clean-up.
+- **Ireland** is browser-callable (always, like the UK): mobiles 083-089, landlines; not 1800 / 0818.
+- **Calling hours** (prospect's own time, from their number's country): Mon–Fri 08:00–20:00, Sat 09:00–17:00, never Sunday
+  (`outside_hours`, real calls only; QA pretend calls are not held). Paul's call to change: `CALL_HOURS`.
+- **Credit.** The token function reads Twilio's Balance resource (in parallel with the QA read, 2.5 s cap). ≤ `TWILIO_BALANCE_BLOCK`
+  → `low_balance`, nothing dialled; < `TWILIO_BALANCE_ALERT` → one bell + email a day via `raiseOperatorAlert`
+  (`_shared/twilio-balance.ts`). Unreadable = not blocked (logged): Twilio is the authority.
+- **Call manager** (`useTwilioCall` in `LiveCallProvider`, rules in `src/lib/callManager.ts`): floating call bar on every page
+  (who → lead link, timer, Mute, Keypad/DTMF, End call); offline pre-check + slow-link warning; Twilio `warning` /
+  `warning-cleared` → "Poor connection"; `reconnecting` → "Reconnecting…", a disconnect during it → `dropped` with Call again;
+  `tokenWillExpire` → `twilio-voice-token {refresh:true}` (only while the rep has a live call row; writes nothing) →
+  `device.updateToken`; an unanswered call reads its own row → busy / no answer / refused-with-code. Every failure goes to
+  `client_error_reports` (function `browser-call`; reason key + Twilio code + call id, never the number or token).
+- **Edge / codec:** Twilio has no London edge; UK/Europe clocks use `dublin` → `frankfurt` → roaming. Opus first, PCMU fallback.
+- **TPS / CTPS:** NOT screened (`src/lib/tpsCheck.ts` is dormant, postponed by Paul 2026-10-05). See the report of this branch.
+- Tests: `scripts/calling-solid.test.ts` (+ updated `twilio-comms`, `malaysia-calling`).
