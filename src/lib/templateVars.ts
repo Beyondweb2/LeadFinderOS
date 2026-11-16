@@ -340,6 +340,24 @@ const PLAIN_TOWN = /^[A-Za-z][A-Za-z'’.\- ]*$/;
    "Ukfield" and "Englefield Green" are untouched — the substring trap this file must not fall into. */
 const NOT_A_TOWN_TOKEN = /\b(?:uk|gb|england|scotland|wales|ni|united|kingdom|near|me)\b/i;
 
+/* ── FREE TEXT INSIDE THE 24-HOUR WINDOW (Paul, 2026-11-16) ─────────────────────────────────────────────────────────────
+   "For audit_reply, video_template and audit_reply_warm: when the window is open (sent as free text), fix the article ("an
+   electrician") in the text instead of holding. Keep the hold only for closed-window paid template sends."
+   Free text is OUR words, not Meta's registered copy, so the hardcoded "a" no longer binds. bareTrade is the singular trade
+   with the same map and the same refusals as normaliseTrade MINUS the vowel rule; withTradeArticle rewrites "a <trade>" to
+   "an <trade>" in the words when the trade needs it. The paid template keeps normaliseTrade's hold. */
+/** The singular lowercase trade (map, singularise, the same refusals) without the article rule. */
+export function bareTrade(raw: string | null | undefined): VarCheck {
+  return singulariseTrade(raw);
+}
+/** "for a electrician" -> "for an electrician" in free-text words. Only the first "a <trade>" whose trade needs "an"; else unchanged. */
+export function withTradeArticle(words: string, raw: string | null | undefined): string {
+  const s = singulariseTrade(raw);
+  if (!s.ok || !startsWithVowelSound(s.value.split(" ")[0])) return words;
+  const escaped = s.value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return words.replace(new RegExp("\\ba (" + escaped + ")\\b"), "an $1");
+}
+
 /** Is this a plain place name we are willing to print in a customer-facing message? */
 export function normaliseTown(raw: string | null | undefined): VarCheck {
   const trimmed = (raw ?? "").replace(/\s+/g, " ").trim();

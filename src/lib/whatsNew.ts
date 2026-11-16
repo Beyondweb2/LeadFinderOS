@@ -24,6 +24,9 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-16-in-window-an-trade', date: '2026-11-16', title: 'Audit reply, video and warm audit messages: "an electrician" inside the 24 hours', audience: 'all',
+    body: 'When someone has messaged you in the last 24 hours, Audit reply, Video template and Audit reply (warm) go as a normal free message, and now say "an electrician" or "an accountant" correctly instead of being held. Outside the 24 hours they still need Meta’s approved wording ("for a …"), so those trades stay held there. The free message also reads "a plumber" rather than how the trade was typed ("a Plumbers").',
+    report: { added: [], changed: ['Inside the 24-hour window these three templates send to trades that need "an", with the right word.', 'The free message uses the tidy trade word ("plumber").'], removed: ['The hold for those trades inside the 24-hour window.'], effect: 'More of your warm conversations can get their report message without a workaround.' } },
   { id: '2026-11-16-template-hold-words', date: '2026-11-16', title: 'Inbox: held templates say why in plain words', audience: 'all',
     body: 'When a WhatsApp template is held (for example Meta has not approved it, or its wording needs "an" before their trade), the preview and send now say so in a sentence instead of a code like template_not_approved.',
     report: { added: [], changed: ['Held-template reasons are written in plain words.'], removed: ['Bare codes such as template_not_approved and trade_starts_with_vowel_sound on screen.'], effect: 'You know straight away to pick another template.' } },

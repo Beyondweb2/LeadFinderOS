@@ -47,3 +47,18 @@ Paul's session in the built-in browser, `send-whatsapp-message` `mode:"dry_run"`
 - Fix (branch v1-plain-reason-detail): those holds came back with a TOKEN in `reason` (sentence or trade word in `detail`), which
   the screen would have shown bare. `refusalSentence()` (functionError.ts) now words every 200 refusal: known token → its sentence
   (`EDGE_ERROR_SENTENCES`, + template_not_approved, trade_starts_with_vowel_sound), else the first real sentence, else plainRefusal.
+
+## In-window "an <trade>" for audit_reply / video_template / audit_reply_warm (branch v1-in-window-article)
+Paul: fix the article in free text inside the open window instead of holding; keep the hold for closed-window paid sends.
+- `templateVars.ts`: `bareTrade` (normaliseTrade minus the vowel rule) and `withTradeArticle(words, raw)` ("a electrician" →
+  "an electrician", first match, only when the trade needs "an").
+- `_shared/whatsapp-send.ts` templateBodyParams `trade`: with `extra.freeTextOnly` a vowel trade returns the bare value.
+- `send-whatsapp-message` audit branch: `vowelFreeText` only when `freeWindow`; payload built with `freeTextOnly`; the words get
+  the normalised trade (`bodyTrade`) and the fixed article; if the shape is not `text` the old hold is returned (never the paid
+  template with "a electrician"). Also fixed: the free-text words used the TYPED trade ("for a Plumbers") — now normalised.
+- The queue (process-whatsapp-queue) is unchanged: it still holds these trades (safe default; its lanes send templates).
+- Test: `scripts/in-window-trade-article.test.ts`.
+
+## Queue fairness status (asked 2026-11-16)
+Not built. process-whatsapp-queue round-robins by CAMPAIGN (`interleaveByCampaign`), not by sender; there is no per-sender
+round-robin (Valentin's leads alongside Paul's) and no 30-minute stuck-queue alert on main or any branch.

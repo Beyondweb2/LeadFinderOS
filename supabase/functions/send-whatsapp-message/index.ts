@@ -47,6 +47,7 @@ import { qaSendHold } from "../_shared/qa-guard.ts";
 import { templateAvailability } from "../_shared/template-status.ts";
 import { queueGate, replyWindowForDest, replyWindowOpenNow, scheduledSendFor } from "../_shared/inbox-schedule.ts";
 import { keepsSendHours } from "../../../src/lib/inboxSendWindow.ts";
+import { bareTrade, normaliseTrade, withTradeArticle } from "../../../src/lib/templateVars.ts";
 import { freeTextVersionOf, inWindowShape, QUEUED_WORDS_UNREADABLE_REASON, WOULD_BE_PAID_REASON, freeWindowOpen, type SendOrigin } from "../../../src/lib/inWindowFreeText.ts";
 import { formatVisibilityScore, REPORT_OFFER_REFUSAL_WORDS, REPORT_OFFER_TEMPLATE, reportOfferRefusal, UK_WORDED_TEMPLATES, ukWordedTemplateRefusal } from "../../../src/lib/reportOfferTemplate.ts";
 import { prospectOnlyTemplateRefusal } from "../../../src/lib/prospectOnly.ts";
@@ -530,6 +531,8 @@ Deno.serve(async (req) => {
     let findingsText: string | null = null;
     /* The template payload, kept when an in-window send goes as free text: the snapshot still records the template it was. */
     let templatePayload: Record<string, unknown> | null = null;
+    /* Set when a vowel trade was written "an <trade>" for in-window free text (the audit branch); such a send must go as text. */
+    let vowelArticleFixed = false;
     /* Set when the window was open but the template has no plain-text version, so it went as the template (the Inbox says why). */
     let noFreeTextReason = "";
     // What the SEND-AUDIT row records: the business name and the link actually placed in the
@@ -979,8 +982,16 @@ Deno.serve(async (req) => {
            templateBodyParams throws and this returns the reason to the UI instead of sending.
            ⚠️ 200 with ok:false, matching every other refusal on this endpoint — the operator sees
            why, and nothing is written to whatsapp_messages as though it went out. */
+        /* ⛔ THE TRADE IN FREE TEXT (Paul, 2026-11-16). audit_reply / video_template / audit_reply_warm say "for a {{trade}}". As a PAID
+           template a vowel trade stays HELD (Meta's registered "a"). Inside the open 24-hour window the words go as free text, so the
+           article is fixed instead ("an electrician") and the send is refused below if it would not go as free text after all. The
+           transcript/free-text words also get the normalised trade ("plumber", not the typed "Plumbers"). */
+        const tradeCheck = tvars.includes("trade") ? normaliseTrade(a.trade) : null;
+        const vowelFreeText = !!tradeCheck && !tradeCheck.ok && tradeCheck.reason === "trade_starts_with_vowel_sound" && freeWindow;
+        const bareCheck = vowelFreeText ? bareTrade(a.trade) : null;
+        const bodyTrade = tradeCheck?.ok ? tradeCheck.value : bareCheck?.ok ? bareCheck.value : a.trade;
         try {
-          payload = claimTemplatePayload(templateName, lang, a.business, a.link, auditExtra);
+          payload = claimTemplatePayload(templateName, lang, a.business, a.link, vowelFreeText ? { ...auditExtra, freeTextOnly: true } : auditExtra);
         } catch (e) {
           const msg = (e as Error).message ?? "";
           if (msg.startsWith("unsafe_template_var:")) {
@@ -992,7 +1003,8 @@ Deno.serve(async (req) => {
         }
         auditBusinessName = a.business;
         auditClaimUrl = a.link;
-        storedBody = renderTemplateBody(templateName, a.business, a.link, a.trade, a.competitors, undefined, a.town, a.siteFault ?? undefined, a.siteFindings ?? undefined, (auditExtra.visibilityScore as string | undefined), (auditExtra.senderName as string | undefined));
+        storedBody = renderTemplateBody(templateName, a.business, a.link, bodyTrade, a.competitors, undefined, a.town, a.siteFault ?? undefined, a.siteFindings ?? undefined, (auditExtra.visibilityScore as string | undefined), (auditExtra.senderName as string | undefined));
+        if (vowelFreeText) { storedBody = withTradeArticle(storedBody, a.trade); vowelArticleFixed = true; }
       } else {
         /* ⛔ contact_followup — a MANUAL follow-up, so ONE PER LEAD, NO OVERRIDE. It is a ["name"]
            template and would otherwise fall through this opener branch with no history guard at all
@@ -1033,6 +1045,8 @@ Deno.serve(async (req) => {
       const ownWords = (typedFreeText || sched) && text ? text : storedBody;
       const shape = inWindowShape({ origin: sendOrigin, windowOpen: freeWindow, allowClosedText: !env.live, typed: typedFreeText, version: freeTextVersionOf(payload, ownWords), freeOnly });
       if (shape.as === "refuse") return json({ ok: false, error: shape.error, reason: shape.reason, template: templateName }, 200);
+      /* The article was fixed for FREE TEXT only: if this would go as the paid template after all, it is the old hold. */
+      if (vowelArticleFixed && shape.as !== "text") return json({ ok: false, error: "unsafe_template_var", reason: "trade_starts_with_vowel_sound", detail: "outside the 24-hour window this template says \"for a\" before their trade" }, 200);
       if (shape.as === "text") {
         templatePayload = payload;
         if (findingsShown?.length && findingsText && !shape.text.includes(findingsText.trim())) findingsShown = null;
