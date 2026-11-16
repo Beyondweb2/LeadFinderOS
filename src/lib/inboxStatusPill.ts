@@ -16,7 +16,7 @@ import type { AttentionKind } from './inboxAttention.ts';
 
 export type StatusPillKey =
   | 'reply_needed' | 'approve_draft' | 'send_failed' | 'follow_up_due' | 'call_booked' | 'auditing' | 'queued' | 'waiting_on_them'
-  | 'won' | 'paid' | 'in_delivery' | 'completed' | 'refunded' | 'not_interested' | 'opted_out' | 'stage';
+  | 'won' | 'paid' | 'in_delivery' | 'completed' | 'refunded' | 'not_interested' | 'opted_out' | 'not_on_whatsapp' | 'stage';
 
 /** warm = needs me, cool = waiting on someone else, good = positive, muted = closed, neutral = a plain stage. */
 export type StatusPillTone = 'warm' | 'cool' | 'good' | 'muted' | 'neutral';
@@ -45,6 +45,8 @@ export interface StatusPillInput {
   meetingBooked: boolean;
   /** A message of ours is queued and not yet sent (a scheduled Inbox send, or the lead sits in the drip queue) AND none is held for a person. */
   queuedSend?: boolean;
+  /** The lead is stored No WhatsApp (Meta 131026 on our opener: the number is not on WhatsApp). */
+  notOnWhatsapp?: boolean;
 }
 
 /** The fixed words, one place, so the screens and the test read the same list. */
@@ -64,6 +66,7 @@ export const STATUS_PILL_LABELS: Record<Exclude<StatusPillKey, 'stage'>, string>
   refunded: 'Refunded',
   not_interested: 'Not interested',
   opted_out: 'Opted out',
+  not_on_whatsapp: 'Not on WhatsApp',
 };
 
 const STAGE_TO_KEY: Record<string, Exclude<StatusPillKey, 'stage'>> = {
@@ -74,7 +77,7 @@ const KEY_TONE: Partial<Record<StatusPillKey, StatusPillTone>> = {
   reply_needed: 'warm', approve_draft: 'warm', send_failed: 'warm', follow_up_due: 'warm',
   call_booked: 'good', won: 'good', paid: 'good', in_delivery: 'good', completed: 'good',
   auditing: 'cool', queued: 'cool', waiting_on_them: 'cool',
-  not_interested: 'muted', opted_out: 'muted', refunded: 'muted',
+  not_interested: 'muted', opted_out: 'muted', refunded: 'muted', not_on_whatsapp: 'muted',
 };
 
 const pill = (key: Exclude<StatusPillKey, 'stage'>, title: string): StatusPill => ({ key, label: STATUS_PILL_LABELS[key], tone: KEY_TONE[key] ?? 'neutral', title });
@@ -85,6 +88,13 @@ export function statusPillFor(i: StatusPillInput): StatusPill {
   const stageWords = i.stageLabel;
   /* Closed and money stages outrank whose turn it is: an opted-out or paid lead is never "Reply needed". */
   if (stageKey) return pill(stageKey, `${stageWords} (stored stage). Click to change it.`);
+  /* ⛔ NOT ON WHATSAPP (Paul, 2026-11-16: openers showing "Send failed"). Meta 131026 = the number is not a WhatsApp user. It is not a
+     fault to fix and not a quality strike: Meta does not charge it, the lead is already No WhatsApp (pulled from the queue, never
+     re-sent, never counted toward a country's auto-off). So it reads as a closed fact, not a red alarm. If they replied (they ARE on
+     WhatsApp after all) the usual pills apply. */
+  if (i.notOnWhatsapp && (i.failed || i.attentionKind === 'send_failed') && !i.waitingOnUs) {
+    return pill('not_on_whatsapp', 'Meta says this number is not on WhatsApp (error 131026), so our message was not delivered. Not charged and not sent again. Call, text or email instead.');
+  }
   if (i.failed || i.attentionKind === 'send_failed') return pill('send_failed', i.attentionTitle ?? 'Our last message failed to send.');
   /* 2026-11-05: a queued message IS the answer to a reply, so Queued outranks Reply needed / Approve draft / Follow-up due (GB Electrical showed
      Reply needed with its reply already queued). It is derived, so cancelling the queued message puts the old status straight back, and

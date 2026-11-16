@@ -52,7 +52,7 @@ const DERIVED_CLASS: Partial<Record<StatusPillKey, string>> = {
 /** The stored status each closed / money pill key stands for (its colour is that status's own). */
 const KEY_STATUS: Partial<Record<StatusPillKey, string>> = {
   won: 'won_pending_onboarding', paid: 'payment_received', in_delivery: 'in_delivery', completed: 'completed',
-  refunded: 'refunded', not_interested: 'not_interested', opted_out: 'opted_out',
+  refunded: 'refunded', not_interested: 'not_interested', opted_out: 'opted_out', not_on_whatsapp: 'no_whatsapp',
 };
 export const StatusPill = memo(function StatusPill({ pillKey, label, tone, title, stage }: { pillKey: StatusPillKey; label: string; tone: StatusPillTone; title: string; stage?: string | null; compact?: boolean }) {
   const status = KEY_STATUS[pillKey] ?? (pillKey === 'stage' ? stage : undefined);
