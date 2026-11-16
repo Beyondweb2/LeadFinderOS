@@ -20,6 +20,7 @@ import type { WhatsAppTemplateSnapshot } from '@/lib/whatsappTemplateSnapshot';
 import { serviceWindowState } from '@/lib/serviceWindow';
 import { sendMediaAttachmentRequest } from '@/lib/sendMediaAttachment';
 import { sendWhatsAppRequest } from '@/lib/whatsAppSendRequest';
+import { invokeFailure } from '@/lib/functionError';
 import { INBOX_SCHEDULED_KEY, type InboxScheduledInfo } from '@/hooks/useInboxScheduled';
 import { isRealSend } from '@/lib/realSend';
 import { smsRowToInboxMessage, smsTemplateAvailability, type InboxChannel, type SmsMessageRow } from '@/lib/inboxChannel';
@@ -994,8 +995,8 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
     });
     /* ⚠️ A NON-2XX IS THE ANSWER TOO, and saying so is the whole point of this control: before
        today that was all the operator ever saw, with no way to tell a refusal from a crash. */
-    if (error) return { ok: false, error: error.message };
-    if (!data?.ok) return { ok: false, error: data?.error ?? 'preview_failed', reason: data?.reason };
+    if (error) { const f = await invokeFailure(error); return { ok: false, error: f.error, reason: f.reason }; }
+    if (!data?.ok) return { ok: false, error: data?.error ?? 'preview_failed', reason: data?.reason ?? data?.detail };
     /* An old deploy has no dry_run mode and would SEND. It cannot echo this field, so its absence is
        the tell — §4's rule that you assert on something only the target version can produce. */
     if (data?.mode !== 'dry_run') {

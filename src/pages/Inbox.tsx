@@ -16,12 +16,13 @@ import { planBulkSend, groupSkips, applyBulkChecks, bulkSummaryText, type BulkCa
 import { bulkFreePaidLine, FREE_SEND_LABEL, PAID_SEND_LABEL, PAID_TEMPLATE_COST_WORDS } from '@/lib/freeWindowLabels';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useInbox, windowFor, normalizeWaNumber, type WaConversation, type LeadLite, type WaMessage } from '@/hooks/useInbox';
-import { getTemplateSendability, WA_TEMPLATE_REQS, canonicalTemplate } from '@/lib/whatsappTemplates';
+import { getTemplateSendability, WA_TEMPLATE_REQS, canonicalTemplate, templateGroupLabel } from '@/lib/whatsappTemplates';
 import { useToast } from '@/hooks/use-toast';
 import { unresolvedTokens } from '@/lib/leadUtils';
 import { useSubscription } from '@/hooks/useSubscription';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { supabase } from '@/integrations/supabase/client';
+import { invokeFailure, plainRefusal } from '@/lib/functionError';
 import { REPORT_PUBLIC_ORIGIN } from '@/lib/findableOffer';
 import { isAggregatorUrl } from '@/lib/aggregators';
 import { shortReportUrl } from '@/lib/reportSlug';
@@ -1299,10 +1300,15 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   const hookExistingFirst = firstNameFrom(activeLead?.contact_name);
   const hookEffectiveFirst = hookExistingFirst || firstNameFrom(hookName);
   /* The two manual follow-ups send a NAMED template through the open channel's own sender (WhatsApp: Meta; SMS: the text sender). */
-  const sendNamed = async (templateName: string): Promise<{ data: { ok?: boolean; error?: string; scheduled?: { send_at: string; tz: string } } | null; error: { message: string } | null }> => {
+  const sendNamed = async (templateName: string): Promise<{ data: { ok?: boolean; error?: string; reason?: string; scheduled?: { send_at: string; tz: string } } | null; error: { message: string } | null }> => {
     if (!active?.leadId) return { data: { ok: false, error: 'no lead' }, error: null };
     if (!sms) return supabase.functions.invoke('send-whatsapp-message', { body: { lead_id: active.leadId, phone: active.phone, country: activeLead?.country ?? undefined, template_name: templateName, via: 'inbox' } })
-      .then((r) => { if (r.data?.scheduled) void queryClient.invalidateQueries({ queryKey: INBOX_SCHEDULED_KEY }); return r; });
+      .then(async (r) => {
+        /* ⛔ Never the SDK's "non-2xx" wrapper: the server's token to branch on, its plain reason to show. */
+        if (r.error) { const f = await invokeFailure(r.error); return { data: { ok: false, error: f.error, reason: f.reason }, error: null }; }
+        if (r.data?.scheduled) void queryClient.invalidateQueries({ queryKey: INBOX_SCHEDULED_KEY });
+        return r;
+      });
     const res = await send({ phone: active.phone, leadId: active.leadId, templateName });
     return { data: { ok: res.ok, error: res.reason ?? res.error, scheduled: res.scheduled }, error: null };
   };
@@ -1776,8 +1782,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           <SelectContent>
             {WHATSAPP_TEMPLATES.map((t) => {
               const s = templateSendability(t.value);
-              const group = WA_TEMPLATE_REQS[t.value]?.group;
-              const groupLabel = group === 'site' ? 'Site / claim' : group === 'audit' ? 'Audit' : 'Opener';
+              const groupLabel = templateGroupLabel(t.value);
               return (
                 <SelectItem key={t.value} value={t.value} disabled={!s.ok} trailing={<TemplateEye label={t.label} getText={() => pickerWording(t.value)} />}>
                   <span className="flex flex-col">
@@ -1881,9 +1886,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
         ) : (
           <div className="mt-2 rounded-md border border-amber-600/30 bg-amber-50/60 p-2 dark:bg-amber-950/20">
             <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
-              This would NOT send — {previewResult.error}
+              This would NOT send — {previewResult.reason || plainRefusal(previewResult.error)}
             </p>
-            {previewResult.reason && <p className="text-[10px] text-muted-foreground">{previewResult.reason}</p>}
           </div>
         )
       )}

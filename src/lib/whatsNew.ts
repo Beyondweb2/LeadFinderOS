@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-16-inbox-followup-hooks', date: '2026-11-16', title: 'Inbox: the hook follow-ups say Follow-up, and failed previews say why', audience: 'all',
+    body: 'In the Inbox template list, Polite hook, Polite hook 2, Web dev hook, Web dev report, Web dev example and Initial question are now labelled Follow-up (they were wrongly labelled Opener). They only go to someone already messaged on WhatsApp. When a preview or send fails, you now see the real reason in plain words (for example "The sign-in service did not answer in time") instead of "Edge Function returned a non-2xx status code".',
+    report: {
+      added: [],
+      changed: ['Six follow-up templates are labelled Follow-up in the Inbox picker, not Opener.', 'A failed preview or send shows the server’s own reason in plain words.'],
+      removed: ['The message "Edge Function returned a non-2xx status code" on WhatsApp previews and sends.'],
+      effect: 'You can see which templates are follow-ups, and when something will not send you know why and what to do.',
+    } },
   { id: '2026-11-16-more-info-call-consent', date: '2026-11-16', title: 'Send more info: tick "They asked for this info on a call"', audience: 'all',
     body: 'Send more info no longer needs a logged conversation before you can text it, so it works when you called from your own phone. Instead, tick "They asked for this info on a call" in the send window (needed for email and text). The lead’s History then says "Asked for info on a call, confirmed by <you>". Opt-outs, do-not-contact, test leads, send limits and texting hours still apply. Every other text still needs a conversation first.',
     report: {

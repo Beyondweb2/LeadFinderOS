@@ -58,7 +58,7 @@ ok(sw.includes('coldRulesApply(usedTemplate, lastInboundAt != null)'), 'Inbox se
 ok(sw.indexOf('optOutBlocksTemplate(templateName') > 0 && sw.indexOf('optOutBlocksTemplate(templateName') < sw.indexOf('const coldSend'), 'opt-outs still checked first, for every template');
 ok(!isServiceTemplate(NAME), 'marketing: an opt-out blocks it');
 ok(WHATSAPP_TEMPLATES.some((t) => t.value === NAME), 'in the template picker');
-ok(WA_TEMPLATE_REQS[NAME]?.group === 'opener' && !WA_TEMPLATE_REQS[NAME].needsUrl && !WA_TEMPLATE_REQS[NAME].needsAudit, 'needs no link and no audit');
+ok(WA_TEMPLATE_REQS[NAME]?.group === 'followup' && !WA_TEMPLATE_REQS[NAME].needsUrl && !WA_TEMPLATE_REQS[NAME].needsAudit, 'needs no link and no audit');
 ok(getTemplateSendability(NAME, { shareToken: null }, {}).ok, 'sendable in the picker');
 ok(openerPurpose(NAME, '') !== '', 'campaign wording names its purpose');
 ok(read('src/pages/Inbox.tsx').includes("initial_question: 'Initial question"), 'Inbox labels past sends');
