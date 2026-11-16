@@ -272,6 +272,8 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
   webdev_report: 'Web dev report ("I ran one on …")',
   webdev_hook: 'Web dev hook (app pitch, no link)',
   webdev_example: 'Web dev example (app pitch + sample report)',
+  polite_hook: 'Polite hook ("Ah nice, … built it myself")',
+  polite_hook2: 'Polite hook 2 ("Ah nice, I’m actually a web dev myself")',
   onboarding_followup: 'Onboarding follow-up',
   book_call: 'Arrange a call',
   re_engage_49: 'Re-engage (gone quiet)',

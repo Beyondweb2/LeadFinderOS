@@ -821,6 +821,15 @@ at both senders (BUILD_ID `2026-11-15e-webdev-example`), both pickers (no link, 
 The example page is built in `src/lib/leadfinderExample.ts` from fixed made-up rows and served by `functions/r/[slug].ts` before
 any fetch: no database read, no lead, no opens. It carries "Example report · sample data" on screen and in the PDF.
 
+## `polite_hook` and `polite_hook2` — short follow-ups, no variables (2026-11-16, Paul)
+
+English, Marketing, no header/footer/buttons, **zero variables** (`vars: []`), approved in Meta (Paul). Bodies byte for byte in
+`src/lib/webdevReport.ts` (`politeHookBody`, `politeHook2Body`), used by both body tables. Set up exactly like `webdev_hook`: a
+follow-up only (`CONTINUATION_TEMPLATES` + `NEEDS_PRIOR_WHATSAPP`), Meta's LIVE status read first at both senders (BUILD_ID
+`2026-11-16b-polite-hook`), in both pickers (needs no link and no audit), Inbox labels "Polite hook" / "Polite hook 2",
+"Put in message box" and the in-window free-text send get the full wording (a property of `inWindowFreeText.ts`, no list).
+Test: `scripts/polite-hook-templates.test.ts`.
+
 ## `webdev_hook` — the same app pitch, no variables (2026-11-15, Paul)
 
 English, Marketing, no header/footer/buttons, **zero variables** (`vars: []`). Body byte for byte in `src/lib/webdevReport.ts`

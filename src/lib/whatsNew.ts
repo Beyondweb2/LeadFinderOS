@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-16-polite-hook-templates', date: '2026-11-16', title: 'Two short follow-up templates: Polite hook and Polite hook 2', audience: 'admin',
+    body: 'Two new WhatsApp templates are in both template pickers (Outreach and Inbox): Polite hook ("Ah nice, this actually might be useful to you then, built it myself" + the LeadFinderOS link) and Polite hook 2 ("Ah nice, I’m actually a web dev myself" + what the app does + the link). No blanks to fill. They are follow-ups only: they never go to a number we have not messaged on WhatsApp before. Inside the 24-hour window they go as a normal message with the same words, and "Put in message box" puts the full wording in the box.',
+    report: {
+      added: ['Polite hook and Polite hook 2 in the Outreach and Inbox template pickers.'],
+      changed: [],
+      removed: [],
+      effect: 'You can reply to a web developer who has answered with a short, friendly follow-up and the app link, without typing it out.',
+    } },
   { id: '2026-11-16-free-window-sends', date: '2026-11-16', title: 'Templates go free while their 24 hours are open, from every screen', audience: 'all',
     body: 'When someone has messaged you in the last 24 hours, any template you send now goes as a normal WhatsApp message with the same wording, which is free. Only when their 24 hours have run out does the paid template go. This now works from the Outreach WhatsApp popup, the dashboard buttons, Quick Close, the welcome pack, the Inbox bulk send and the automatic audit reply, not just the Inbox. A message that would arrive in the last few minutes of the 24 hours goes as the template, so it is never refused. The Inbox bulk confirm shows how many are free and how many need a paid template, with "Send only the free ones" or "Send all". Single sends show "Free (window open)" or "Paid template".',
     report: {

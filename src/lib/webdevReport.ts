@@ -106,3 +106,34 @@ https://leadfinderos.com
 
 Paul✌️`;
 }
+
+/* polite_hook + polite_hook2 — Paul, 2026-11-16. WhatsApp templates, English, Marketing, NO VARIABLES. Short follow-ups to a
+   web developer who has replied ("Ah nice, …"). Set up exactly like webdev_hook:
+   ⛔ NEVER A FIRST MESSAGE: continuations (coldOutreach.ts CONTINUATION_TEMPLATES) that NEEDS_PRIOR_WHATSAPP refuses at both
+      senders for a number never messaged. Meta's live status is read first at both senders. Approved in Meta (Paul).
+   ⛔ vars [] — no parameters go to Meta. */
+export const POLITE_HOOK_TEMPLATE = 'polite_hook';
+export const POLITE_HOOK2_TEMPLATE = 'polite_hook2';
+
+/** polite_hook: the registered body, byte for byte as approved in Meta (2026-11-16). No variables. */
+export function politeHookBody(): string {
+  return `Ah nice, this actually might be useful to you then, built it myself
+
+https://leadfinderos.com
+
+All the best
+Paul✌️`;
+}
+
+/** polite_hook2: the registered body, byte for byte as approved in Meta (2026-11-16). No variables. */
+export function politeHook2Body(): string {
+  return `Ah nice, I'm actually a web dev myself
+
+Thought this might be useful for you. It runs AI visibility audits on any business so you can show them they're not coming up when people search on AI.
+
+Going in with that angle has worked really well for me
+
+https://leadfinderos.com
+
+Paul✌️`;
+}
