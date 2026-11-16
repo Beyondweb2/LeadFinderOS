@@ -4,7 +4,7 @@
 // shape. process-whatsapp-queue itself is intentionally NOT modified in this build;
 // it can adopt this helper in a later cleanup.
 
-import { articleTrade, normaliseTrade, normaliseTown, pluraliseTrade } from "../../../src/lib/templateVars.ts";
+import { articleTrade, bareTrade, normaliseTrade, normaliseTown, pluraliseTrade } from "../../../src/lib/templateVars.ts";
 import { RIVAL_VARS, RIVALS_REQUIRED } from "../../../src/lib/rivalHook.ts";
 import { displayBusinessName, nameStyleFor } from "../../../src/lib/displayName.ts";
 import { AI_SITE_FINDINGS_V2, AI_SITE_FINDINGS_V2_APPROVED } from "../../../src/lib/siteFindings.ts";
@@ -917,7 +917,7 @@ export function templateBodyParams(
   vars: TemplateVar[],
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; templateName?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string; neededItem?: string; welcomePackUrl?: string },
+  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; templateName?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string; neededItem?: string; welcomePackUrl?: string; freeTextOnly?: boolean },
 ) {
   /* Last line of defence for a template whose copy needs a real name. Callers check first and
      return a readable refusal; this throws so a new caller that forgets cannot quietly send
@@ -937,6 +937,12 @@ export function templateBodyParams(
          blocked lead is visible rather than silently unsent. See src/lib/templateVars.ts. */
       case "trade": {
         const t = normaliseTrade(extra?.trade);
+        /* freeTextOnly (2026-11-16): the caller will send these words as FREE TEXT inside the 24-hour window (and refuses if it
+           cannot), so the registered "a" does not bind: the bare trade is used and the words get "an" (withTradeArticle). */
+        if (!t.ok && t.reason === "trade_starts_with_vowel_sound" && extra?.freeTextOnly) {
+          const b = bareTrade(extra?.trade);
+          if (b.ok) return b.value;
+        }
         if (!t.ok) throw new Error(`unsafe_template_var:${t.reason}:${t.detail}`);
         return t.value;
       }
@@ -1177,7 +1183,7 @@ export function claimTemplatePayload(
   lang: string,
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string; neededItem?: string; welcomePackUrl?: string },
+  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string; neededItem?: string; welcomePackUrl?: string; freeTextOnly?: boolean },
 ) {
   /* THROWS on an unrecognised template rather than assuming ["name","url"].
      That assumption was a quieter version of the queue's template fallback: an unregistered name got
