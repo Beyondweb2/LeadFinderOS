@@ -121,7 +121,7 @@ export function buildReportModel(rows: OppRow[], ctx0: OppContext, o: ReportMode
      answers — the same count the welcome pack and the guarantee use — never only the answers that named a business.
      ⛔ RULES v3 (Paul, 2026-11-16, brief item 6): every report on v3 does the same. "0 of 25" on the 16 Nov London
      Discovery was 0 of the 25 answers that happened to keep a firm list, out of 240 returned. Older links keep theirs. */
-  const allAnswers = o.kind === 'baseline' || ctx0.rules === 3;
+  const allAnswers = o.kind === 'baseline' || (ctx0.rules ?? 1) >= 3;
   const sc = allAnswers ? { ...sc0, denominator: sc0.answers } : sc0;
   const value = sc.denominator > 0 ? (sc.named > 0 ? Math.max(1, Math.round((100 * sc.named) / sc.denominator)) : 0) : null;
   const band: ReportModel['band'] = !sc.named ? 'none' : value !== null && value >= 50 ? 'high' : 'some';
@@ -162,7 +162,7 @@ export function buildReportModel(rows: OppRow[], ctx0: OppContext, o: ReportMode
   const all = o.kind === 'hook' ? exampleQs : o.kind === 'baseline' ? targets : [...live].sort((a, b) => a.question.localeCompare(b.question));
   /* The baseline's numbers come from the answers themselves (the strict name match), never from the firm lists, so a
      firm-reading gap cannot make it wrong; it keeps its own completeness checks (measurementHealth). */
-  const comp = ctx0.rules === 3 && o.kind !== 'baseline' ? auditCompleteness(s.questions.map((q) => q.verdict)) : null;
+  const comp = (ctx0.rules ?? 1) >= 3 && o.kind !== 'baseline' ? auditCompleteness(s.questions.map((q) => q.verdict)) : null;
   return {
     incomplete: comp && comp.incomplete ? { unmeasured: comp.unmeasured, answers: comp.answers } : null,
     engines: { chatgpt: eng('chatgpt'), gemini: eng('gemini') }, overview, asks, featured, all,

@@ -25,9 +25,10 @@
    Pure; no I/O; relative imports carry .ts (reached by the render-audit-report edge function).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-/** The newest verdict rules. v2 (2026-11-15) stays for the audits made on it; v3 (2026-11-16) is the evidence rule below. */
-export const AUDIT_RULES_VERSION = 3 as const;
-export type AuditRules = 1 | 2 | 3;
+/** The newest verdict rules. v2 (2026-11-15) and v3 (2026-11-16 morning) stay for the audits made on them; v4 (2026-11-16)
+ *  is the evidence rule below with "locked spots" in place of the 70% line. */
+export const AUDIT_RULES_VERSION = 4 as const;
+export type AuditRules = 1 | 2 | 3 | 4;
 
 /* WHICH RULES A REPORT USES. An audit made before v2 shipped keeps the old rule, so a link already sent keeps the page it
    showed; an audit made after, or a re-scored copy (a run carrying results.report_rules = 2), uses v2. The same for v3. */
@@ -35,6 +36,9 @@ export const AUDIT_RULES_V2_FROM = '2026-11-15T06:00:00Z';
 /** Rules v3 (Paul, 2026-11-16, docs/AUDIT_RULES.md): set to just after extract-competitors began marking each answer it read
  *  (`firms_read`), so every v3 audit's answers can carry that mark. */
 export const AUDIT_RULES_V3_FROM = '2026-11-16T10:30:00Z';
+/** Rules v4 (Paul, 2026-11-16, docs/AUDIT_RULES.md): "locked spots" (B′) + one firm's spellings merged. Deployed before v3's own
+ *  start time, so it takes v3's slot: new audits go from v2 straight to v4, and v3 is read only by copies stamped 3. */
+export const AUDIT_RULES_V4_FROM = AUDIT_RULES_V3_FROM;
 /** THE GUARANTEE'S NAME RULER (Paul, 2026-11-15): a baseline created on rules v2 (or later) counts "named" by the strict
  *  match, on both sides of its day-28 comparison and in its frozen day-0 snapshot. Name + website only (the same identity
  *  everywhere, so the two sides can never differ). Older and paid baselines: undefined = the ruler they were sold on. */
@@ -46,11 +50,12 @@ export function guaranteeIdentityFor(baselineCreatedAt: string | null | undefine
 }
 export function auditRulesFor(o: { createdAt: string | null | undefined; runRules?: unknown[] }): AuditRules {
   const stamped = (o.runRules ?? []).map((r) => Number(r));
+  if (stamped.includes(4)) return 4;
   if (stamped.includes(3)) return 3;
   if (stamped.includes(2)) return 2;
   const t = o.createdAt ? Date.parse(o.createdAt) : NaN;
   if (!Number.isFinite(t)) return 1;
-  return t >= Date.parse(AUDIT_RULES_V3_FROM) ? 3 : t >= Date.parse(AUDIT_RULES_V2_FROM) ? 2 : 1;
+  return t >= Date.parse(AUDIT_RULES_V4_FROM) ? 4 : t >= Date.parse(AUDIT_RULES_V3_FROM) ? 3 : t >= Date.parse(AUDIT_RULES_V2_FROM) ? 2 : 1;
 }
 
 /** RULE 2's line: the top 3 firms' share of every firm mention at which a search is crowded (Not winnable). Chosen from
@@ -115,7 +120,7 @@ export interface Crowding {
 export interface EngineCount { answers: number; named: number; near: number; top: FirmCount | null }
 
 export interface AuditVerdict {
-  rules: 2 | 3;
+  rules: 2 | 3 | 4;
   /** What the client sees. null = not shown (re-run, couldn't measure, unnatural, left out). 'no_names' (rules v3) = AI
    *  doesn't name businesses here: its own group, never Winnable. */
   verdict: 'winnable' | 'not_winnable' | 'no_names' | null;
@@ -346,9 +351,20 @@ export function registersInAnswer(text: string, hosts: string[]): string[] {
   return REGISTERS.filter((r) => r.text.test(text) || hosts.some((h) => !!r.host && r.host.test(h.toLowerCase().replace(/^www\./, '')))).map((r) => r.name);
 }
 
-export interface EngineCrowding { answers: number; withFirms: number; distinct: number; mentions: number; top: FirmCount[]; topShare: number; names: boolean }
+export interface EngineCrowding { answers: number; withFirms: number; distinct: number; mentions: number; top: FirmCount[]; topShare: number; names: boolean;
+  /** Rules v4: firms in EVERY ask that named firms, and firms named in only one of those asks. */
+  inEvery: FirmCount[]; once: number; locked: boolean }
 
-export function decideVerdictV3(s: SearchFacts): AuditVerdict {
+/* RULES v4 — LOCKED SPOTS (Paul, 2026-11-16, "B′"). Over the asks in which an AI named firms (3 of 3, or 2 of 3): it is
+   LOCKED when at least LOCKED_MIN_EVERY firms are in every one of those asks AND fewer than LOCKED_MAX_ONCE firms are named in
+   only one of them. Winnable = at least one naming AI is not locked; Not winnable = every naming AI is locked. Chosen over
+   the 70% line on the stored LDM / Moments answers: a share of mentions punished small rotating lists (4–6 firms) and the
+   80% line opened lists where the same 4 firms came back every time. */
+export const LOCKED_MIN_EVERY = 2;
+export const LOCKED_MAX_ONCE = 2;
+
+export function decideVerdictV3(s: SearchFacts, opts: { lockedSpots?: boolean } = {}): AuditVerdict {
+  const v4 = opts.lockedSpots === true;
   const total = s.answers.length;
   const ok = s.answers.filter((a) => !a.failed);
   const failed = total - ok.length;
@@ -362,7 +378,7 @@ export function decideVerdictV3(s: SearchFacts): AuditVerdict {
   const nearNames = [...new Set(ok.flatMap((a) => a.near))];
   const registers = countFirms(ok, (x) => x.toLowerCase(), (a) => a.registers ?? []).map((d) => d.name);
   const directories = countFirms(ok, (x) => x.toLowerCase(), (a) => a.dirs.filter((d) => !isRegisterName(d))).map((d) => d.name);
-  const base = { rules: 3 as const, namedYou, answers: ok.length, nearNames, perEngine, crowding: null as Crowding | null, lockedBy: [] as FirmCount[], toBeat: [] as FirmCount[], directories: [] as string[], emptyWhy: null, unmeasured: failed, registers };
+  const base = { rules: (v4 ? 4 : 3) as 3 | 4, namedYou, answers: ok.length, nearNames, perEngine, crowding: null as Crowding | null, lockedBy: [] as FirmCount[], toBeat: [] as FirmCount[], directories: [] as string[], emptyWhy: null, unmeasured: failed, registers };
   const out = (verdict: AuditVerdict['verdict'], rule: VerdictRule, label: string, reason: string, extra: Partial<AuditVerdict> = {}): AuditVerdict =>
     ({ ...base, verdict, rule, label, reason, ...extra });
   const nearNote = nearNames.length ? ` Near-name flagged, not counted: ${list(nearNames)}.` : '';
@@ -382,7 +398,12 @@ export function decideVerdictV3(s: SearchFacts): AuditVerdict {
     const mentions = right.reduce((n, f) => n + f.count, 0);
     const top = right.slice(0, CROWD_TOP);
     const withFirms = xs.filter((a) => rightOf(a).length > 0).length;
-    return { answers, withFirms, distinct: right.length, mentions, top, topShare: mentions ? top.reduce((n, f) => n + f.count, 0) / mentions : 0, names: withFirms >= NAMES_IN_ASKS };
+    /* Locked spots: over the asks that named firms, counted with the match key (one firm, one count per ask). */
+    const inEvery = withFirms ? right.filter((f) => f.count === withFirms) : [];
+    const once = withFirms ? right.filter((f) => f.count === 1).length : 0;
+    const names = withFirms >= NAMES_IN_ASKS;
+    return { answers, withFirms, distinct: right.length, mentions, top, topShare: mentions ? top.reduce((n, f) => n + f.count, 0) / mentions : 0, names,
+      inEvery, once, locked: names && inEvery.length >= LOCKED_MIN_EVERY && once < LOCKED_MAX_ONCE };
   };
   const by = {
     chatgpt: crowdOf(local.filter((a) => a.engine === 'chatgpt'), perEngine.chatgpt.answers),
@@ -412,12 +433,16 @@ export function decideVerdictV3(s: SearchFacts): AuditVerdict {
     return out('no_names', 'no_names', "AI doesn't name businesses here",
       `${evidence}${where ? ` ${where.charAt(0).toUpperCase()}${where.slice(1)}.` : ' No listing sites either.'}${nearNote}`, { directories });
   }
-  const shareText = (e: 'chatgpt' | 'gemini') => `${label(e)}: ${by[e].withFirms} of ${by[e].answers} answers named ${by[e].distinct} firm${by[e].distinct === 1 ? '' : 's'}, top 3 take ${Math.round(by[e].topShare * 100)}%`;
-  const open = naming.filter((e) => by[e].topShare < CROWDED_AT);
-  // 2b. Every naming AI crowded -> Not winnable.
+  const shareText = (e: 'chatgpt' | 'gemini') => v4
+    ? `${label(e)}: ${by[e].withFirms} of ${by[e].answers} answers named ${by[e].distinct} firm${by[e].distinct === 1 ? '' : 's'}; ${by[e].inEvery.length} in every one${by[e].inEvery.length ? ` (${list(by[e].inEvery.map((f) => f.name), 4)})` : ''}, ${by[e].once} named only once`
+    : `${label(e)}: ${by[e].withFirms} of ${by[e].answers} answers named ${by[e].distinct} firm${by[e].distinct === 1 ? '' : 's'}, top 3 take ${Math.round(by[e].topShare * 100)}%`;
+  const open = naming.filter((e) => (v4 ? !by[e].locked : by[e].topShare < CROWDED_AT));
+  // 2b. Every naming AI crowded (v3: top 3 at 70%+; v4: locked spots) -> Not winnable.
   if (!open.length) {
-    const worst = [...naming].sort((a, b) => by[b].topShare - by[a].topShare)[0];
-    return out('not_winnable', 'crowded', 'Crowded', `${naming.map(shareText).join('; ')}.${nearNote}`, { lockedBy: by[worst].top, directories });
+    const worst = v4
+      ? [...naming].sort((a, b) => by[b].inEvery.length - by[a].inEvery.length || by[a].once - by[b].once)[0]
+      : [...naming].sort((a, b) => by[b].topShare - by[a].topShare)[0];
+    return out('not_winnable', 'crowded', v4 ? 'Locked spots' : 'Crowded', `${naming.map(shareText).join('; ')}.${nearNote}`, { lockedBy: v4 ? by[worst].inEvery : by[worst].top, directories });
   }
   // 2c. At least one naming AI with room -> Winnable; repeat firms stored as the ones to beat.
   const always = all.filter((f) => f.count * 6 >= ok.length * 5);

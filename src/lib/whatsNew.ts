@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-16-audit-locked-spots', date: '2026-11-16', title: 'Not winnable now means "the same few firms every time"', audience: 'admin',
+    body: 'New Discovery audits no longer use the 70% line. For each AI, over the asks where it named firms, a search is locked when at least 2 firms come back in every one of those asks and fewer than 2 firms appear only once. A search is Not winnable only when every AI that names firms is locked; otherwise it is Winnable. An AI that names firms in just 2 of its 3 asks is judged on those 2. The same firm written two ways ("HomeCert Ltd" and "HomeCert Ltd - Electricians & Gas Engineers London") now counts once.',
+    report: {
+      added: ['"Locked spots" as the Not winnable reason, with the firms that come back every time.', 'One firm written several ways is counted once.'],
+      changed: ['Not winnable = the same few firms in every ask and fewer than 2 newcomers (was: the top 3 firms take 70% of mentions).', 'An AI naming firms in 2 of its 3 asks is judged on those 2 (was always Winnable).'],
+      removed: ['The 70% line for new audits (older report links keep the rule they were made on).'],
+      effect: 'Small lists that rotate are no longer marked Not winnable, and lists where the same names come back every time are. LDM and Moments were re-scored to new links.',
+    } },
   { id: '2026-11-16-audit-evidence-rules', date: '2026-11-16', title: 'Audit verdicts now need real evidence; broken audits say "Audit incomplete"', audience: 'admin',
     body: 'New Discovery audits judge ChatGPT and Gemini separately. A search is Winnable only when an AI names firms in at least 2 of its 3 asks and no 3 firms take 70% or more of them. If neither AI names firms, the search says "AI doesn\'t name businesses here" and shows where AI sends people instead (Checkatrade, Gas Safe Register…). An answer we could not read counts as "Couldn\'t measure", never as "AI named nobody". If too many answers could not be read, the report says "Audit incomplete" with no figures, and you get one bell alert and one email. You also get an alert the day OpenAI or Apify refuses us for credit or limits.',
     report: {

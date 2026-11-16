@@ -12,6 +12,8 @@
    Apply a .sql with `npx supabase db query --remote=<ref> -f <file>` (an insert; nothing deleted or changed).
 
    Usage: npx tsx scripts/audit-rescore-v3.ts <outDir> <code> ...
+   Targets the NEWEST rules (AUDIT_RULES_VERSION: v4 since 2026-11-16, locked spots); the copy is stamped with that number
+   and its snapshot key is verdicts_v<N>.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { execSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -20,7 +22,8 @@ import { randomInt } from 'node:crypto';
 import { theirAreas, type OppContext, type OppQuestion, type OppRow } from '../src/lib/reportOpportunity.ts';
 import { buildReportModel, type ReportModel } from '../src/lib/reportModel.ts';
 import { chooseReportDesign, splitLine, verdictSplitOf, winnableOf } from '../src/lib/reportDesign.ts';
-import { auditRulesFor, type AuditRules } from '../src/lib/auditVerdict.ts';
+import { AUDIT_RULES_VERSION, auditRulesFor, type AuditRules } from '../src/lib/auditVerdict.ts';
+const TARGET: AuditRules = AUDIT_RULES_VERSION;
 import { cellNamed } from '../src/lib/namedSignal.ts';
 import { isRealCompetitor } from '../src/lib/auditReport.ts';
 import { isAggregatorUrl } from '../src/lib/aggregators.ts';
@@ -98,7 +101,7 @@ for (const code of codes) {
     return buildReportModel(rows, ctx, { kind, businessName: bizName, town, dateLabel: '', website: { state: 'not_checked', issues: [] }, order: questions, bestCount: 10 });
   };
   const oldRules = auditRulesFor({ createdAt: a.created_at, runRules: runs.map((r) => r.rules) });
-  const mOld = build(oldRules, q), mNew = build(3, marked);
+  const mOld = build(oldRules, q), mNew = build(TARGET, marked);
   const allOld = new Map(mOld.all.map((x) => [x.question, x]));
   const allNew = new Map(mNew.all.map((x) => [x.question, x]));
   const snapshot = [...allNew.values()].map((x) => ({ question: x.question, ...x.verdict }));
@@ -106,7 +109,7 @@ for (const code of codes) {
   const latest = Math.max(...runs.map((r) => r.run_number));
   const tag = `$v3snap${randomInt(1e9)}$`;
   const code2 = newCode();
-  const sql = `-- Re-score of ${code} on rules v3 -> new short code ${code2}. Inserts only; nothing is changed or deleted.
+  const sql = `-- Re-score of ${code} on rules v${TARGET} -> new short code ${code2}. Inserts only; nothing is changed or deleted.
 -- firms_read is set on a copied answer only when its run's firm-reading receipt says complete.
 with src_runs as materialized (
   select r.*, gen_random_uuid() as new_id, coalesce((r.results->'competitor_cleaning'->>'complete')::boolean, false) as read_all
@@ -118,8 +121,8 @@ with src_runs as materialized (
 ), ins_runs as (
   insert into ai_audit_runs (id, audit_id, results, ${RUN_COPY_COLS.join(', ')})
   select sr.new_id, (select id from new_a),
-    sr.results || jsonb_build_object('report_rules', 3, 'rescored_from', ${lit(a.id)}, 'rescored_at', now())
-      || case when sr.run_number = ${latest} then jsonb_build_object('verdicts_v3', ${tag}${JSON.stringify(snapshot)}${tag}::jsonb) else '{}'::jsonb end,
+    sr.results || jsonb_build_object('report_rules', ${TARGET}, 'rescored_from', ${lit(a.id)}, 'rescored_at', now())
+      || case when sr.run_number = ${latest} then jsonb_build_object('verdicts_v${TARGET}',${tag}${JSON.stringify(snapshot)}${tag}::jsonb) else '{}'::jsonb end,
     ${RUN_COPY_COLS.map((c) => `sr.${c}`).join(', ')}
   from src_runs sr
   returning id
@@ -142,7 +145,7 @@ select (select id from new_a) as new_audit_id, ${lit(code2)} as short_code, (sel
   const groups = ['Already named', 'Winnable', 'Not winnable', "AI doesn't name businesses", "Couldn't measure", 'not shown', 'left out'];
   const pct = (m: ReportModel) => m.score.value === null ? '—' : `${m.score.value}% (${m.score.named} of ${m.score.denominator})`;
   const splitNew = verdictSplitOf([...allNew.values()]);
-  table.push(`\n### ${bizName} — ${a.audit_purpose} \`${code}\` (rules v${oldRules}) → new \`${code2}\` (rules v3)\n`,
+  table.push(`\n### ${bizName} — ${a.audit_purpose} \`${code}\` (rules v${oldRules}) → new \`${code2}\` (rules v${TARGET})\n`,
     `Named: old ${pct(mOld)} → new ${pct(mNew)}. Runs fully read: ${readRuns.size} of ${runs.length}.${mNew.incomplete ? ` **Audit incomplete** (${mNew.incomplete.unmeasured} of ${mNew.incomplete.answers} answers unmeasured).` : ''}\n`,
     splitNew ? `Report line: ${splitLine(splitNew)}\n` : '',
     '| Verdict | Old | New |', '|---|---|---|',

@@ -57,14 +57,14 @@ export async function alreadyNamedForBaseline(service: Service, b: BaselineRef, 
 
   // Prefer the newest rules: a v3 Discovery (or re-scored copy, report_rules = 3), then v2, then the newest of any.
   // deno-lint-ignore no-explicit-any
-  let pick: { d: any; runs: any[]; rules: 1 | 2 | 3 } | null = null;
+  let pick: { d: any; runs: any[]; rules: 1 | 2 | 3 | 4 } | null = null;
   for (const d of sameSite) {
     const { data: runs } = await service.from("ai_audit_runs")
       .select("id, run_number, created_at, crawl:results->crawl_check, rules:results->report_rules").eq("audit_id", d.id).order("run_number", { ascending: true });
     const rs = (runs ?? []) as Array<{ rules?: unknown }>;
     const rules = auditRulesFor({ createdAt: d.created_at, runRules: rs.map((r) => r.rules) });
     if (!pick || rules > pick.rules) pick = { d, runs: rs as never[], rules };
-    if (pick.rules === 3) break;
+    if (pick.rules >= 4) break;
   }
   if (!pick || !pick.runs.length) return null;
   const { d, runs, rules } = pick;
