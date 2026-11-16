@@ -125,3 +125,17 @@ export function plainRefusal(code: string | null | undefined): string {
   if (EDGE_ERROR_SENTENCES[c]) return EDGE_ERROR_SENTENCES[c];
   return looksLikeErrorToken(c) ? `The server refused it ("${c.replace(/_/g, ' ')}").` : c;
 }
+
+/** The sentence in a 200 refusal body ({ ok:false, error, reason, detail }). The server sometimes puts a TOKEN in `reason` and the
+ *  sentence in `detail` (send-whatsapp-message unsafe_template_var: reason "template_not_approved", detail "… waiting on Meta
+ *  approval"), so the first real sentence wins; a token alone is worded by plainRefusal. Never the wrapper, never a bare token. */
+export function refusalSentence(d: { error?: unknown; reason?: unknown; detail?: unknown; message?: unknown } | null | undefined): string | undefined {
+  if (!d) return undefined;
+  /* A known token outranks a short detail (unsafe_template_var: reason "trade_starts_with_vowel_sound", detail = the bare trade word). */
+  const known = [d.reason, d.error].find((v) => typeof v === 'string' && EDGE_ERROR_SENTENCES[v.trim()]) as string | undefined;
+  if (known) return EDGE_ERROR_SENTENCES[known.trim()];
+  const sentence = [d.reason, d.detail, d.message].find((v) => typeof v === 'string' && v.trim() && !looksLikeErrorToken(v) && !isInvokeWrapperText(v)) as string | undefined;
+  if (sentence) return sentence.trim();
+  const token = [d.reason, d.error].find((v) => typeof v === 'string' && v.trim()) as string | undefined;
+  return token ? plainRefusal(token) : undefined;
+}

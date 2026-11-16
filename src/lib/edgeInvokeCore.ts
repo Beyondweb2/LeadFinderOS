@@ -133,6 +133,8 @@ export const EDGE_ERROR_SENTENCES: Record<string, string> = {
   // The usage guard (2026-09-29): the same words whatever the reason — never a cost (docs/abuse-cost-protection.md).
   usage_paused: 'Usage temporarily paused — contact Paul',
   all_stop: 'The emergency stop is on — every paid action is paused. Release it on the API Usage page.',
+  template_not_approved: 'Meta has not approved this template yet, so nothing was sent. Pick another one.',
+  trade_starts_with_vowel_sound: 'This template says "for a <trade>", and their trade needs "an", so it is held. Nothing was sent. Pick another template.',
 };
 
 /** Does this read as a raw machine token (`server_error`, `client_not_found`) rather than a sentence? */
