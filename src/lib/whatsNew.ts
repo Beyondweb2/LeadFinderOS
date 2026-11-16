@@ -24,6 +24,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-16-leftovers-skip-reasons', date: '2026-11-16', title: 'Skipped AI checks say why on the row', audience: 'all',
+    body: 'When an AI check is skipped, the Outreach row now says why next to "Skipped", in words for the real cause: "Monthly search limit reached, ask Paul to raise it" (that one does not clear by itself) or "Daily budget used, try tomorrow". Hover for the full sentence.',
+    report: {
+      added: ['The cause after "Skipped" on each Outreach row.'],
+      changed: ['The monthly search limit and the daily budget are now two different reasons, each worded for what to do.'],
+      removed: [],
+      effect: 'Reps can tell a skip that clears tomorrow from one that needs Paul.',
+    } },
+  { id: '2026-11-16-leftovers-admin', date: '2026-11-16', title: 'Winnable searches in the Opportunity score, Apify 80% alert, LeadFinderOS Copy link, towns from "area covered"', audience: 'admin',
+    body: 'The Opportunity score now counts winnable searches (+2 each, up to +6) from the lead\'s newest Discovery on the new audit rules. A finished Discovery\'s counts (Already named, Winnable, Not winnable, AI doesn\'t name businesses, Couldn\'t measure) are now stored within about 5 minutes of it finishing. You get one bell + email when Apify passes 80% of its monthly limit (once per billing cycle). The lead panel\'s Copy link gives the LeadFinderOS app address for LeadFinderOS-style (web-dev) leads. In Prepare baseline, "Expand into towns (AI)" turns the client\'s "area they cover" into real towns or boroughs that you click into Service areas, edit, then save. The findable.live/details form now also asks "Anything you do but don\'t want more of?" and "What area do you cover?".',
+    report: {
+      added: ['Stored verdict counts per Discovery (rules v3/v4), including the ones already made.', 'Winnable searches in the Opportunity score.', 'One Apify-past-80% alert per billing cycle (bell + email).', '"Expand into towns (AI)" in Prepare baseline → Client context.', 'Two optional questions on the details form.'],
+      changed: ['Copy link in the lead panel follows the lead\'s report style (LeadFinderOS address for web-dev campaigns).'],
+      removed: [],
+      effect: 'Hot leads with open searches rank higher; you hear about Apify before prospecting stops at 85%; web-dev leads get the right link; area-wide clients get questions for real towns without typing them all.',
+    } },
   { id: '2026-11-16-polite-hook-templates', date: '2026-11-16', title: 'Two short follow-up templates: Polite hook and Polite hook 2', audience: 'admin',
     body: 'Two new WhatsApp templates are in both template pickers (Outreach and Inbox): Polite hook ("Ah nice, this actually might be useful to you then, built it myself" + the LeadFinderOS link) and Polite hook 2 ("Ah nice, I’m actually a web dev myself" + what the app does + the link). No blanks to fill. They are follow-ups only: they never go to a number we have not messaged on WhatsApp before. Inside the 24-hour window they go as a normal message with the same words, and "Put in message box" puts the full wording in the box.',
     report: {

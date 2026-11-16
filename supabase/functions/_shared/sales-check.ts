@@ -41,6 +41,8 @@ export interface StartAuditResult {
   error?: string;
   detail?: string;
   message?: string;
+  /** create-ai-audit's budget refusal cause (auditBudget BudgetRefusal), when it refused. */
+  reason?: string;
 }
 
 export interface SalesCheckDeps {
@@ -270,7 +272,8 @@ async function gateFreshCheck(deps: SalesCheckDeps, ctx: AdvanceCtx, item: ItemR
   const pool = owner ? await deps.prospecting(owner).catch(() => null) : null;
   if (!pool) return { ok: false, reason: "budget_unknown" };
   const decision = budgetDecision({ pool: "prospecting", poolSpentUsd: pool.poolSpentUsd, estCostUsd: deps.estUsd, apify: pool.apify });
-  if (!decision.allowed) return { ok: false, reason: "budget_used" };
+  /* The monthly search limit (the Apify reserve) is its own reason: it does not free up tomorrow, Paul raises it. */
+  if (!decision.allowed) return { ok: false, reason: decision.reason === "apify_reserve" ? "monthly_limit" : "budget_used" };
   const g = await deps.guard(ctx.actor.id, lead.id).catch(() => ({ ok: false, reason: "guard_unavailable" }));
   if (!g.ok) return { ok: false, reason: guardRefusalReason(g.reason) };
   await patchItem(deps, item.id, { audit_source: "new", est_cost_usd: deps.estUsd, started_at: iso(deps.now()) });

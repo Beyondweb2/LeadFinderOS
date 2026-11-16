@@ -66,6 +66,8 @@ export interface RowCheckState {
   cached: boolean;
   /** The server's plain-words reason for a failed / skipped item (REASON_TEXT), else null. */
   message: string | null;
+  /** Skipped only: the cause in a few words, shown on the row (skippedWhy). */
+  why?: string | null;
 }
 
 const ITEM_WAITING: ReadonlySet<string> = new Set(['queued', 'starting']);
@@ -87,7 +89,7 @@ export function rowCheckState(map: LeadAuditState | null | undefined, item: RowB
   if (m === 'running') return { kind: 'checking', cached: false, message: null };
   if (m === 'done') return { kind: 'ready', cached: st === 'reused' || item?.audit_source === 'reused', message: null };
   if (st === 'failed') return { kind: 'failed', cached: false, message: item?.message ?? null };
-  if (st === 'skipped') return { kind: 'skipped', cached: false, message: item?.message ?? null };
+  if (st === 'skipped') return { kind: 'skipped', cached: false, message: item?.message ?? null, why: skippedWhy(item) };
   if (map && (map.status === 'failed' || map.status === 'cancelled')) return { kind: 'failed', cached: false, message: null };
   return { kind: 'not_checked', cached: false, message: null };
 }
@@ -96,6 +98,30 @@ export function rowCheckState(map: LeadAuditState | null | undefined, item: RowB
 export const ROW_CHECK_WORD: Record<RowCheckKind, string> = {
   not_checked: 'Not checked', waiting: 'Waiting', checking: 'Checking…', ready: 'Ready', failed: 'Check failed', skipped: 'Skipped',
 };
+
+/** A skipped row says WHY on the row itself (Paul, 2026-11-16), worded for the actual cause. The full sentence
+ *  (REASON_TEXT) stays the hover. Reasons not listed show the full sentence. */
+export const ROW_SKIP_SHORT: Readonly<Record<string, string>> = {
+  monthly_limit: 'Monthly search limit reached, ask Paul to raise it',
+  budget_used: 'Daily budget used, try tomorrow',
+  allowance_used: 'Daily check limit reached, try tomorrow',
+  budget_unknown: 'Couldn’t confirm the allowance, try again',
+  paused: 'Checks paused by Paul',
+  not_allowed: 'Account can’t start checks, ask Paul',
+  not_ready: 'Sales access not active, ask Paul',
+  town_unverified: 'Town not confirmed',
+  missing_name: 'No business name', missing_trade: 'No trade', missing_town: 'No town',
+  suppressed: 'Asked not to be contacted',
+  pitch_waiting: 'Automatic WhatsApp waiting, ask Paul',
+  auto_message_on: 'New checks off while auto-WhatsApp is on',
+  cancelled: 'Stopped before it started',
+};
+
+/** What a skipped row shows after "Skipped". null = nothing known. */
+export function skippedWhy(item: Pick<RowBatchItem, 'reason' | 'message'> | null | undefined): string | null {
+  const r = String(item?.reason ?? '');
+  return (r && ROW_SKIP_SHORT[r]) || (item?.message ?? null);
+}
 
 /* ── OPEN NEXT READY ─────────────────────────────────────────────────────────────────────────────
    Walks the list the person is LOOKING AT — the page's owner scope and every filter and sort already

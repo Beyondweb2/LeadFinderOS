@@ -117,7 +117,7 @@ ok(HANDOFF_GBP_CHECKLIST_KEY === GBP_ACCESS_CHECKLIST_KEY, "the handoff's GBP ti
   ok(/if \(url\.searchParams\.get\("preview"\) !== "1"\) \{\s*await recordAuditOpen/.test(render), "render-audit-report skips the open count for preview=1");
   const view = read("src/components/HookVisibilityView.tsx");
   ok(/href=\{staffPreviewUrl\(report\.link\.url\)\}/.test(view) && /href=\{staffPreviewUrl\(link\.url\)\}/.test(view), "every in-app Open report / Previous report link is a staff preview");
-  ok(/navigator\.clipboard\?\.writeText\(link\.url\)/.test(view), "Copy link copies the CLEAN public URL (no preview flag) for the prospect");
+  ok(/navigator\.clipboard\?\.writeText\(url\)/.test(view) && /const url = copyUrl \? copyUrl\(link\) : link\.url;/.test(view) && !/writeText\(staffPreviewUrl/.test(view), "Copy link copies the CLEAN public URL (no preview flag) for the prospect — the report link, or its LeadFinderOS-style address (2026-11-16)");
   ok(/preview=1/.test(read("src/components/ClientHandoffCard.tsx")), "the paid-client handoff's report link is a staff preview too");
   const SITE = findableSiteDir(root);
   for (const p of ["functions/r/[code].ts", "functions/report/[id].ts"]) {

@@ -24,8 +24,8 @@ Paul: "Make onboarding → payment → audits fully self-serve inside V1. I shou
 
 ## Not done / known limits
 
-- `coverage_area` is context only: questions are written per approved town (`areas_list`). For "all London boroughs inside the M25", Paul adds the boroughs he wants measured in Prepare baseline.
-- The `findable.live/details/<token>` form (client-onboarding) does not ask the two new questions yet.
+- `coverage_area` is still context only: questions are written per approved town (`areas_list`). **Since 2026-11-16** Prepare baseline → Client context has **Expand into towns (AI)** (`coverage-towns` edge function, admin only, gpt-4o-mini, rule `src/lib/coverageTowns.ts`): the area in their words → up to 40 real towns / boroughs as clickable suggestions into Service areas, editable, saved only by Save client context. Nothing is written or measured from the suggestion.
+- **Since 2026-11-16** the `findable.live/details/<token>` form (client-onboarding; links made by paid-client-hub) asks both optional questions (`services_not_wanted`, `coverage_area`, same words as Q2), only when blank, never counted as "still missing".
 - Quick-close form untouched (Paul, 2026-11-15).
 
 Tests: `scripts/onboarding-answers.test.ts`; `scripts/onboarding-simple-fields.test.ts` (q2_prefill columns).

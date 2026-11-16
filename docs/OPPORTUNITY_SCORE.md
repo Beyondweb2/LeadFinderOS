@@ -54,9 +54,12 @@ From the stored audit score (`ai_audit_runs.hook_score`, the one ruler in `audit
 | up to two thirds | 6 |
 | more than two thirds = **already named widely** | 0, and the lead is capped at 30 (Cold), said first |
 
-- **Winnable searches (rules v3):** +2 per winnable search, max +6 — **only when the audit stores its v3 counts**. Today **no audit
-  is on v3 yet (0 rows)**, and the v3 verdict is worked out only when a report renders; reading it out of `results` for every lead
-  is forbidden (engineering rules). So this input is wired but off until the audit pipeline stores the v3 split on the run.
+- **Winnable searches (rules v3/v4) — ON since 2026-11-16 (leftovers):** +2 per winnable search, max +6, from the lead's NEWEST
+  Discovery's stored split `ai_audits.verdict_counts` (`src/lib/auditVerdictCounts.ts`; written by the `audit-watch` job within ~5
+  minutes of a Discovery finishing, from the report's own `pooledSummary` split; re-counted when a run is re-scored). Judged = Already
+  named + Winnable + Not winnable + AI doesn't name businesses (Couldn't measure left out); "AI doesn't name" gets no weight. A newest
+  Discovery that is "Audit incomplete" gives nothing (an older one never stands in). Only Discoveries have verdicts (hook audits keep
+  the classic page), so a lead with no Discovery gets no winnable points. Only applies when the AI part is scored and not "named widely".
 - An audit still running, unfinished or "updating" = **Incomplete**, never "0 named".
 
 ### Worth it (max 14) — §10 corroboration, §11 reviews
@@ -96,5 +99,4 @@ The weights are a first judgement from the Master Standard, not measured. Plan:
    signals whose fix never moved naming. Same for the bands: Hot should be the leads that moved most.
 3. Never on one client or one favourable run (§18: no causal claims from small uncontrolled before/after changes). Record each
    change here with date, evidence and old → new weight; bump `OPPORTUNITY_SCORE_VERSION`.
-4. Turn on winnable searches when the audit stores v3 counts; check v3 "AI doesn't name businesses here" separately before giving
-   it any weight.
+4. Winnable searches are on (stored counts, 2026-11-16). Check "AI doesn't name businesses here" separately before giving it any weight.

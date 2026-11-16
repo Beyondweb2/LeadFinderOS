@@ -316,7 +316,7 @@ console.log('── budget: per-rep allowance, prospecting pool, guarantee untou
   wr.cfg.pool = { poolSpentUsd: 0, apify: { usedUsd: APIFY_RESERVE_PCT.prospecting + 1, capUsd: 100 } };
   const lr = addLead(wr);
   await run(wr, A, [lr.id]);
-  ok(itemFor(wr, lr.id).reason === 'budget_used' && wr.calls.start.length === 0, 'Apify above the prospecting reserve → refused (headroom kept for baselines and re-measures)');
+  ok(itemFor(wr, lr.id).reason === 'monthly_limit' && wr.calls.start.length === 0, 'Apify above the prospecting reserve → refused as the MONTHLY limit (headroom kept for baselines and re-measures; 2026-11-16 its own reason)');
   const wu = world();
   wu.cfg.pool = null;
   const lu = addLead(wu);

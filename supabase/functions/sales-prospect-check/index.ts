@@ -152,7 +152,7 @@ function depsFor(service: any, actorId: string): SalesCheckDeps {
         method: "POST", headers: await internalHeaders(service), body: JSON.stringify(auditBody),
       });
       const data = await res.json().catch(() => ({}));
-      return { ok: res.ok && data?.ok === true, status: res.status, audit_id: data?.audit_id, run_id: data?.run_id, error: data?.error, detail: data?.detail, message: data?.message };
+      return { ok: res.ok && data?.ok === true, status: res.status, audit_id: data?.audit_id, run_id: data?.run_id, error: data?.error, detail: data?.detail, message: data?.message, reason: data?.reason };
     },
     runCrawl: async (leadId, url) => {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/crawl-check`, {

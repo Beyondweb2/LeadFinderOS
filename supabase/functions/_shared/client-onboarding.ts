@@ -37,6 +37,8 @@ const ROW_COLUMNS =
   "top_requests,contact_name,contact_email,confirmed_phone,website_platform,website_manager,website_manager_email,gbp_status,gbp_exists,domain_status," +
   "domain_owned,domain_access,domain_third_party,authority_confirmed,dns_permission,materials_confirmed,site_rights,photos_status,must_not_say," +
   "plan_tier,website_addon,quick_close," +
+  /* The two optional Q2 answers (migration 20261215090000), asked on the details form since 2026-11-16. */
+  "services_not_wanted,coverage_area," +
   /* The simple findable.live onboarding's answers (migration 20261103090000): read so "what we hold" sees them. */
   "business_address,agency_contract,design_choice,agency_contract_ends";
 export const LINK_COLUMNS = "id,lead_id,onboarding_id,route,questions,created_by,created_at,revoked_at,revoked_by,first_opened_at,last_opened_at,open_count,submitted_at,answers,conflicts,shared";

@@ -84,7 +84,7 @@ export type SkipReason =
   | 'not_yours' | 'client' | 'archived' | 'suppressed' | 'not_interested' | 'already_won'
   | 'missing_name' | 'missing_trade' | 'missing_town' | 'town_unverified'
   | 'pitch_waiting' | 'auto_message_on'
-  | 'allowance_used' | 'budget_used' | 'budget_unknown' | 'paused' | 'not_allowed' | 'not_ready'
+  | 'allowance_used' | 'budget_used' | 'monthly_limit' | 'budget_unknown' | 'paused' | 'not_allowed' | 'not_ready'
   | 'cancelled' | 'no_longer_yours';
 export type FailReason = 'audit_failed' | 'audit_not_run' | 'audit_timeout' | 'start_failed' | 'not_in_town';
 export type ItemReason = SkipReason | FailReason;
@@ -104,7 +104,10 @@ export const REASON_TEXT: Record<ItemReason, string> = {
   pitch_waiting: 'An automatic WhatsApp is waiting on this lead\'s AI check, so no new check was started here. Ask Paul.',
   auto_message_on: 'New checks are off while a finished check sends an automatic WhatsApp. Ask Paul.',
   allowance_used: 'Daily check limit reached — try again tomorrow or ask Paul.',
-  budget_used: 'Today\'s checking budget is used — your leads are still here, try tomorrow or ask Paul.',
+  /* Two causes, said as themselves (Paul, 2026-11-16): the day's checking budget frees up tomorrow; the monthly search
+     limit only frees up when Paul raises it. */
+  budget_used: 'Daily budget used — try tomorrow. Your leads are still here.',
+  monthly_limit: 'Monthly search limit reached — ask Paul to raise it. Your leads are still here.',
   budget_unknown: 'Couldn\'t confirm today\'s allowance, so nothing was started. Try again in a minute.',
   paused: 'Checks are paused by Paul right now — nothing was started.',
   not_allowed: 'Your account can\'t start checks right now — ask Paul.',
@@ -356,11 +359,11 @@ export function runOutcome(run: Pick<CheckRunRow, 'status' | 'answered'> | null 
 }
 
 /** create-ai-audit's refusal → the item's reason. Positive matches; anything else failed to start. */
-export function startRefusalReason(res: { status?: number; error?: unknown }): { status: 'skipped' | 'failed'; reason: ItemReason } {
+export function startRefusalReason(res: { status?: number; error?: unknown; reason?: unknown }): { status: 'skipped' | 'failed'; reason: ItemReason } {
   const e = String(res.error ?? '');
   if (e.startsWith('town_unverified')) return { status: 'skipped', reason: 'town_unverified' };
   if (e === 'business_not_in_town') return { status: 'failed', reason: 'not_in_town' };
-  if (e === 'prospecting_budget_used') return { status: 'skipped', reason: 'budget_used' };
+  if (e === 'prospecting_budget_used') return { status: 'skipped', reason: res.reason === 'apify_reserve' ? 'monthly_limit' : 'budget_used' };
   if (e === 'usage_paused' || e === 'all_stop') return { status: 'skipped', reason: 'paused' };
   if (e === 'not_ready_to_sell') return { status: 'skipped', reason: 'not_ready' };
   return { status: 'failed', reason: 'start_failed' };
