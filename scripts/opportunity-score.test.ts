@@ -55,6 +55,7 @@ ok(strongButCritical.kind === 'scored' && strongButCritical.parts.website > 0, '
 /* ── excluded ── */
 for (const s of ['opted_out', 'do_not_contact', 'wrong_number']) ok(opportunityScore(lead({ status: s }), site(['no_service_pages']), audit(0)).kind === 'excluded', `${s} → excluded`);
 ok(opportunityScore(lead({ suppressed: true }), site([]), audit(0)).kind === 'excluded', 'suppressed number → excluded');
+ok(opportunityScore(lead({ status: 'opted_out' }), site(['no_service_pages']), audit(0)).critical === false && opportunityScore(lead({ status: 'payment_received' }), site(['robots_blocks_all']), audit(0)).critical === false, 'an excluded lead is never critical (the critical filter never surfaces it)');
 ok(opportunityScore(lead({ findLeadsStatus: 'do_not_contact' }), null, null).kind === 'excluded', 'Find Leads DNC → excluded');
 ok(opportunityScore(lead({ status: 'payment_received' }), site([]), audit(0)).kind === 'excluded', 'client → excluded');
 
