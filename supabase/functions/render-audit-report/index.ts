@@ -30,6 +30,7 @@ import { SITE_SHOT_BUCKET } from "../../../src/lib/siteShot.ts";
 import { auditCodeFromSlug, isShortCode, shortReportUrl } from "../../../src/lib/reportSlug.ts";
 import { paidReportKind } from "../../../src/lib/reportKind.ts";
 import { NAMED_RECHECK_AUDIT_PURPOSE, WEEKLY_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
+import { isRecheckPurpose, recheckLabel, RECHECK_RUNS } from "../../../src/lib/prospectRecheck.ts";
 import { lateRetryVerdict, unavailableWords, type RetryRow } from "../../../src/lib/quickCheckRetry.ts";
 import { buildFaultLines, CRAWL_CHECK_VERSION, CRAWL_FRESH_MS, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
 import { usableSiteEvidence, type SiteEvidence } from "../../../src/lib/siteEvidence.ts";
@@ -561,7 +562,9 @@ Deno.serve(async (req) => {
     if (lfos && data.measuring) {
       return htmlResponse(renderLeadfinderMeasuring(audit.business_name ?? "", data.generatedAtLabel, data.measuring.runsDone, data.measuring.runsTarget), 200, { noStore: true });
     }
-    const lfosKind = new Set(queueRows.map((r) => r.question.trim())).size > 3 ? "opportunity" as const : "hook" as const;
+    /* A prospect re-check (3 searches, asked 3 times each) is judged per search like a Discovery, never as a hook. */
+    const isRecheckAudit = isRecheckPurpose((audit as { audit_purpose?: string | null }).audit_purpose);
+    const lfosKind = isRecheckAudit || new Set(queueRows.map((r) => r.question.trim())).size > 3 ? "opportunity" as const : "hook" as const;
     const designKind = lfos ? lfosKind : chooseReportDesign({
       auditPurpose: (audit as { audit_purpose?: string | null }).audit_purpose ?? null,
       paidKind: kind,
@@ -624,6 +627,8 @@ Deno.serve(async (req) => {
            (nationwide) the country. Never the commonest place in the search list: that put "Clare" on Moments' baseline. */
         const au = audit as { business_address?: string | null; business_scope?: string | null; country?: string | null };
         model.place = reportPlaceLabel({ town, address: au.business_address ?? null, scope: au.business_scope ?? null, country: au.country ?? null, fromSearches: model.where });
+        /* "Re-check: 3 searches, asked 3 times each" beside the date (src/lib/prospectRecheck.ts). */
+        if (isRecheckAudit) model.recheckLabel = recheckLabel(questions.length, Number((audit as { baseline_target_runs?: number | null }).baseline_target_runs ?? RECHECK_RUNS) || RECHECK_RUNS);
         if (lfos) {
           model.signupUrl = null;
           return htmlResponse(renderLeadfinderReport(model, { print: url.searchParams.get("print") === "1", nameNotJudgeable: data.nameNotJudgeable === true }), 200);

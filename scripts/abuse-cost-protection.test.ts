@@ -129,7 +129,8 @@ console.log("\n── the guard's placement ──");
   ok(ca.indexOf("already_running: true") < ca.indexOf('const action = !isSales ? "audit_manual"'), "create-ai-audit: the in-flight dedupe answers BEFORE the guard (a double-click is free and uncounted)");
   ok(ca.indexOf('const action = !isSales ? "audit_manual"') < ca.indexOf("if (preview) {") && ca.indexOf('const action = !isSales ? "audit_manual"') < ca.indexOf("resolveDerivedTown(service, leadId)"),
     "…and the guard runs before any question is generated or town looked up");
-  ok(/estCostUsd: isSales && !preview \? OUTREACH_AUDIT_EST_USD : 0/.test(ca), "a salesperson's hook carries its estimate (its Apify rows are billed to the book)");
+  /* 2026-11-16: a prospect re-check carries RECHECK_RUNS times the hook's estimate (src/lib/prospectRecheck.ts). */
+  ok(/estCostUsd: isSales && !preview \? \(isRecheck \? OUTREACH_AUDIT_EST_USD \* RECHECK_RUNS : OUTREACH_AUDIT_EST_USD\) : 0/.test(ca), "a salesperson's hook (and re-check) carries its estimate (its Apify rows are billed to the book)");
   ok(/SALES_HOOKS_PER_LEAD_PER_DAY = 3;/.test(ca), "at most three hooks on one lead a day for a salesperson");
   ok(/else if \(\(await paidMode\(service\)\) === "all_stop"\)/.test(ca), "internal audit creation (baselines, re-measures, free checks) stops only for the emergency stop");
   const ns = read("supabase/functions/niche-sample/index.ts");

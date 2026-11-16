@@ -67,3 +67,4 @@ Moved verbatim from CLAUDE.md §10 on 2026-10-15. Add a row here when you write 
 | The deep clean: what is done, what is next, Paul's standing decisions | `docs/deep-clean-phase3-plan.md` (+ `INVENTORY_DEEP_CLEAN.md`, untracked, the Phase 1 evidence) |
 | The Client Service Agreement: its words (v1, pinned), the checkout tick, the agree page, the evidence tables (write-once), the signed PDF | `docs/client-agreement.md` |
 | TPS / CTPS screening, tpsmydata secrets, cost per check; salespeople queueing every template; hiding leads we can't call | `docs/tps-screening.md` — rules in `src/lib/tpsCheck.ts`, `src/lib/callRules.ts` (`callableVerdict`), `sales_queue_opener` (20261219090000) |
+| Prospect re-check: fixing a lead's trade / areas / services on a call and re-asking AI (3 searches × 3 asks), "Replaced: details were wrong" | `docs/prospect-recheck.md` — rules in `src/lib/prospectRecheck.ts`; purpose `recheck` in create-ai-audit |

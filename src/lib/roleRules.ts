@@ -40,6 +40,13 @@ export function canWorkLead(actor: Actor, lead: { assigned_to_user_id?: string |
  *  and a repeat of an existing audit are all admin work. */
 export function salesAuditRefusal(req: { purpose?: unknown; hookAudit: boolean; leadId: string | null; reuseAuditId: string | null }): string | null {
   const purpose = typeof req.purpose === 'string' ? req.purpose.trim() : '';
+  /* THE PROSPECT RE-CHECK (2026-11-16, src/lib/prospectRecheck.ts RECHECK_AUDIT_PURPOSE — inlined: this file has no
+     imports): the one other audit a rep may start — on a lead, never a repeat of an existing audit, never a hook. */
+  if (purpose === 'recheck') {
+    if (!req.leadId) return 'audit_needs_lead';
+    if (req.reuseAuditId || req.hookAudit === true) return 'audit_mode_admin_only';
+    return null;
+  }
   if (purpose) return 'audit_mode_admin_only';
   if (!req.leadId) return 'audit_needs_lead';
   if (req.reuseAuditId) return 'audit_mode_admin_only';

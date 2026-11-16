@@ -43,6 +43,9 @@ export interface HookCardAudit extends AuditKindRow {
  *  are different instruments and never shown as the outreach score. */
 export function isOutreachAudit(a: Pick<HookCardAudit, 'is_market'> & AuditKindRow): boolean {
   if (a.is_market === true) return false;
+  /* A prospect re-check (purpose 'recheck', 3 searches × 3 asks, judged by the audit rules) is not a hook: the call
+     card scores one run of a hook and would misread it. It has its own panel (ProspectRecheckPanel). */
+  if (typeof a.audit_purpose === 'string' && a.audit_purpose.trim().toLowerCase() === 'recheck') return false;
   const k = auditKind(a);
   return k === 'ordinary' || k === 'single_run';
 }

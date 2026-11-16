@@ -28,7 +28,7 @@ console.log('── separate from the guarantee ──');
   ok(!freeCheckSendGate(WEEKLY_CHECK_AUDIT_PURPOSE).send && !freeCheckSendGate(WEEKLY_CHECK_AUDIT_PURPOSE, { forced: true }).send, 'nothing is ever sent for it, even forced');
   const create = read('supabase/functions/create-ai-audit/index.ts');
   ok(/const isWeeklyCheck: boolean = isInternal && body\.purpose === WEEKLY_CHECK_AUDIT_PURPOSE/.test(create), 'create-ai-audit accepts it from internal callers only');
-  ok(/!isRemeasure && !isWeeklyCheck && !isNamedRecheck && !freshAudit/.test(create), '…and never bolts it onto an old audit');
+  ok(/!isRemeasure && !isWeeklyCheck && !isNamedRecheck && (!isRecheck && )?!freshAudit/.test(create), '…and never bolts it onto an old audit');
   ok(/isWeeklyCheck \? WEEKLY_CHECK_AUDIT_PURPOSE/.test(create), '…and stores it as its purpose');
   const queue = read('supabase/functions/process-ai-audit-queue/index.ts');
   ok(!/functions\/v1\/generate-report/.test(queue), 'the queue never publishes a public report for it (it publishes none at all since 2026-10-01)');

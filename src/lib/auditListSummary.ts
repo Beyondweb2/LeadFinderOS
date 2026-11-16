@@ -20,7 +20,7 @@ import { cellNamed } from './namedSignal.ts';
 import { isRealCompetitor, SCORED_ENGINES } from './auditReport.ts';
 import { isAggregatorUrl } from './aggregators.ts';
 
-export type AuditTypeKey = 'discovery' | 'baseline' | 'quick' | 'website' | 'measurement' | 'weekly';
+export type AuditTypeKey = 'discovery' | 'baseline' | 'quick' | 'website' | 'measurement' | 'weekly' | 'recheck';
 export interface AuditType { key: AuditTypeKey; label: string; /** What the badge says it is, for the hover. */ hint: string }
 
 export interface AuditTypeInput {
@@ -39,6 +39,7 @@ export function auditTypeOf(a: AuditTypeInput): AuditType {
   if (p === 'measurement' || p === 'remeasure') return { key: 'measurement', label: 'Measurement', hint: 'Full measurement or day-28 re-measure (internal).' };
   if (p === 'weekly_check') return { key: 'weekly', label: 'Weekly check', hint: 'Weekly visibility check (internal).' };
   if (p === 'named_recheck') return { key: 'weekly', label: 'Named re-check', hint: 'Quarterly re-check of the searches the Discovery already named them on (internal, never shown to the client).' };
+  if (p === 'recheck') return { key: 'recheck', label: 'Re-check', hint: 'Prospect re-check: the lead\'s details were corrected on a call, then 3 searches were asked 3 times each.' };
   if (!p && Number(a.baseline_target_runs ?? 0) > 1) {
     return a.is_measurement === true
       ? { key: 'measurement', label: 'Measurement', hint: 'Full measurement (internal).' }

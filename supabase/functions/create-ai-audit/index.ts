@@ -59,6 +59,7 @@ import { HOOK_SCORE_QUESTIONS, initialHookStateV2, initialSequentialHookStateV2,
 import { budgetDecision, budgetPoolForPurpose } from "../../../src/lib/auditBudget.ts";
 import { rollingSpendUsd } from "../_shared/enrichment/runner.ts";
 import { latestApifyUsage } from "../_shared/audit-budget.ts";
+import { checkRecheckQuestions, recheckEstimateUsd, RECHECK_AUDIT_PURPOSE, RECHECK_PER_LEAD_PER_DAY, RECHECK_QUESTIONS, RECHECK_RUNS } from "../../../src/lib/prospectRecheck.ts";
 
 // create-ai-audit — fast, NO Apify. Generates the audit's search questions with
 // OpenAI (gpt-4o-mini, tool-calling), creates the audit +
@@ -550,6 +551,11 @@ Deno.serve(async (req) => {
     const isWeeklyCheck: boolean = isInternal && body.purpose === WEEKLY_CHECK_AUDIT_PURPOSE;
     /* THE QUARTERLY NAMED RE-CHECK (2026-11-15, fn weekly-visibility): internal only, the same way. */
     const isNamedRecheck: boolean = isInternal && body.purpose === NAMED_RECHECK_AUDIT_PURPOSE;
+    /* THE PROSPECT RE-CHECK (2026-11-16, src/lib/prospectRecheck.ts): a person (admin, or a rep on a lead they work —
+       salesAuditRefusal above) fixed the lead's details and asks RECHECK_QUESTIONS searches of their own, each asked
+       RECHECK_RUNS times on both AIs. Its OWN audit (never reused, never a hook), prospecting pool, no SEO scan. Runs 2
+       and 3 arrive as internal repeats from advanceBaseline carrying this purpose and the audit_id, like a Discovery's. */
+    const isRecheck: boolean = body.purpose === RECHECK_AUDIT_PURPOSE;
     /* ⛔ DISCOVERY'S TWO DIALS ARE VALIDATED, NOT CLAMPED — INDEPENDENTLY OF THE SCREEN (2026-09-21).
        A stated value outside the bounds is a request we cannot honour, and honouring three
        quarters of it silently is the fault that produced a 40-question discovery re-run of five
@@ -686,6 +692,7 @@ Deno.serve(async (req) => {
       ? Math.min(5, Math.max(1, typeof body.baseline_target_runs === "number" ? Math.round(body.baseline_target_runs) : 1))
       : (isMeasurement || isRemeasure) ? MEASUREMENT_RUNS
       : isDiscovery ? discoveryRuns
+      : isRecheck ? RECHECK_RUNS
       : internalTargetRuns;
     /* SILENT TRUNCATION WAS THE REAL BUG, not the number. The cap is a cost ceiling and stays, but
        quietly returning fewer questions than were asked for is how a before/after ends up built on a
@@ -764,6 +771,7 @@ Deno.serve(async (req) => {
       : isDiscovery ? DISCOVERY_AUDIT_PURPOSE
       : isWeeklyCheck ? WEEKLY_CHECK_AUDIT_PURPOSE
       : isNamedRecheck ? NAMED_RECHECK_AUDIT_PURPOSE
+      : isRecheck ? RECHECK_AUDIT_PURPOSE
       : ORDINARY_AUDIT_PURPOSE;
     const skipSeo: boolean = body.skip_seo === true || !seoScanAllowed(auditPurpose);
     /* ⛔ 2026-09-25: A HOOK IS NO LONGER ADAPTIVE. It plans three questions and queues ALL of them, each
@@ -802,6 +810,35 @@ Deno.serve(async (req) => {
         return json({ ok: true, already_running: true, audit_id: running.audit_id });
       }
     }
+    /* ⛔ THE PROSPECT RE-CHECK, STARTED BY A PERSON (2026-11-16). Checked before anything is spent or written:
+       · it is always a NEW audit on a lead (a repeat of it is only advanceBaseline's internal run 2 / 3);
+       · exactly RECHECK_QUESTIONS searches, none blank, none repeated, NONE CONTAINING THE BUSINESS'S OWN NAME
+         (checkRecheckQuestions — the same rule the panel shows; the server is the rule);
+       · one check in flight per lead (the hook's dedupe, same window), and at most RECHECK_PER_LEAD_PER_DAY a day. */
+    if (isRecheck && !isInternal) {
+      if (reuseAuditId) return json({ ok: false, error: "recheck_is_a_new_audit", detail: "A re-check is always a new audit; it never adds runs to an existing one." }, 400);
+      if (!leadId) return json({ ok: false, error: "audit_needs_lead" }, 400);
+      if (preview) return json({ ok: false, error: "recheck_no_preview", detail: "The re-check's searches are drafted on the lead page." }, 400);
+      const checked = checkRecheckQuestions(suppliedQuestions ?? [], { businessName, trade: businessType || null, town: locationText || null });
+      if (!checked.ok) return json({ ok: false, error: `recheck_${checked.code}`, detail: checked.reason, index: checked.index }, 400);
+      const since = new Date(Date.now() - HOOK_IN_FLIGHT_WINDOW_MS).toISOString();
+      const { data: live, error: liveErr } = await service.from("ai_audit_runs")
+        .select("audit_id, status, created_at, ai_audits!inner(lead_id)")
+        .eq("ai_audits.lead_id", leadId)
+        .in("status", ["pending", "queued", "running", "processing"])
+        .gte("created_at", since)
+        .order("created_at", { ascending: false }).limit(1);
+      if (liveErr) return json({ ok: false, error: "in_flight_check_failed" }, 503);
+      const running = (live ?? [])[0] as { audit_id?: string } | undefined;
+      if (running?.audit_id) return json({ ok: true, already_running: true, audit_id: running.audit_id });
+      const day = new Date(Date.now() - 86_400_000).toISOString();
+      const { count, error: cErr } = await service.from("ai_audits").select("id", { count: "exact", head: true })
+        .eq("lead_id", leadId).eq("audit_purpose", RECHECK_AUDIT_PURPOSE).gte("created_at", day);
+      if (cErr) return json({ ok: false, error: "recheck_count_failed" }, 503);
+      if ((count ?? 0) >= RECHECK_PER_LEAD_PER_DAY) {
+        return json({ ok: false, error: "recheck_limit_for_lead", detail: `This lead already had ${RECHECK_PER_LEAD_PER_DAY} re-checks today. Open the latest one on the lead.` }, 429);
+      }
+    }
     /* ⛔ ABUSE / COST PROTECTION (2026-09-29, docs/abuse-cost-protection.md). AFTER the in-flight dedupe
        above (a double-click that answers "already running" spends nothing and is not counted), BEFORE
        any question is generated or row created.
@@ -824,10 +861,12 @@ Deno.serve(async (req) => {
           return json({ ok: false, error: "hook_limit_for_lead", detail: "This lead already has several hook audits today — open the latest one from the lead." }, 429);
         }
       }
+      /* A rep's re-check meets the same per-person limits as a hook (one action, counted alike), carrying its own estimate:
+         RECHECK_RUNS asks of what a hook asks once. */
       const action = !isSales ? "audit_manual" : preview ? "hook_preview" : "hook_audit";
       const guard = await guardAction(service, actor.id, action, {
         fn: "create-ai-audit", leadId, role: actor.role,
-        estCostUsd: isSales && !preview ? OUTREACH_AUDIT_EST_USD : 0,
+        estCostUsd: isSales && !preview ? (isRecheck ? OUTREACH_AUDIT_EST_USD * RECHECK_RUNS : OUTREACH_AUDIT_EST_USD) : 0,
       });
       if (!guard.ok) return json(guard.body, guard.status);
       /* ⛔ THE PROSPECTING POOL, SAID UP FRONT (2026-10-04, src/lib/auditBudget.ts). A person starting a
@@ -843,7 +882,8 @@ Deno.serve(async (req) => {
         if (spend) {
           /* ⚠️ Priced inline: `estimate` is declared further down, and reading a const before its
              declaration throws (CLAUDE.md §4, TDZ). */
-          const decision = budgetDecision({ pool: "prospecting", poolSpentUsd: spend.spent, estCostUsd: questionCount * SOURCES.ai_search.estCostUsd, apify: apifyNow });
+          const est = isRecheck ? recheckEstimateUsd(SOURCES.ai_search.estCostUsd, RECHECK_QUESTIONS, RECHECK_RUNS) : questionCount * SOURCES.ai_search.estCostUsd;
+          const decision = budgetDecision({ pool: "prospecting", poolSpentUsd: spend.spent, estCostUsd: est, apify: apifyNow });
           if (!decision.allowed) return json({ ok: false, error: "prospecting_budget_used", detail: decision.message, reason: decision.reason }, 429);
         }
       }
@@ -904,7 +944,8 @@ Deno.serve(async (req) => {
        a discovery scan, and the run it would join is already spent. Same reason as !isMeasurement. */
     /* !isWeeklyCheck (release 4): each week's check is its OWN audit — bolted onto an old outreach
        audit it would be neither comparable week to week nor internal. */
-    if (!effectiveReuseId && leadId && !isBaseline && !isMeasurement && !isDiscovery && !isRemeasure && !isWeeklyCheck && !isNamedRecheck && !freshAudit && !isHookAudit) {
+    /* !isRecheck (2026-11-16): a re-check is the new audit that replaces a wrong-details check — never runs added to it. */
+    if (!effectiveReuseId && leadId && !isBaseline && !isMeasurement && !isDiscovery && !isRemeasure && !isWeeklyCheck && !isNamedRecheck && !isRecheck && !freshAudit && !isHookAudit) {
       const { data: candidates } = await service
         .from("ai_audits")
         .select("id, baseline_target_runs, created_at")
@@ -1715,6 +1756,14 @@ Deno.serve(async (req) => {
     }
     /* Same schema-free mechanism (results is jsonb). A diagnostic carries counts:false so the
        comparison can refuse to COUNT it without refusing to run it. */
+    /* THE RE-CHECK'S RECORD, on its run 1 (results is jsonb — no migration): who started it and the details it was asked
+       with, so the lead page can say what changed. Runs 2 and 3 (internal repeats) carry none. */
+    if (isRecheck && !reuseAuditId && actor) {
+      runResults.recheck = {
+        by: actor.id, at: new Date().toISOString(), searches: questions.length, runs: RECHECK_RUNS,
+        details: { trade: businessType || null, town: locationText || null, areas: serviceAreas, services: specialisms || null },
+      };
+    }
     if (remeasureNote) runResults.remeasure = remeasureNote;
     if (fullMeasureNote) runResults.full_measure = fullMeasureNote;
     /* Same schema-free mechanism as `measurement` above (results is jsonb — no migration). Inert
@@ -1761,10 +1810,10 @@ Deno.serve(async (req) => {
        now does, as the service role (lead_activity has no write policy). Best-effort: a failed log
        never fails the audit that was just queued. Internal callers (the drip, the reply chain) are not
        a person and write nothing. */
-    if (actor && leadId && isHookAudit) {
+    if (actor && leadId && (isHookAudit || (isRecheck && !reuseAuditId))) {
       const { error: actErr } = await service.from("lead_activity").insert({
         lead_id: leadId, actor_user_id: actor.id, kind: "audit_run",
-        data: { audit_id: auditId, run_id: runId, questions: questions.length, engines: AUDIT_ENGINES.length },
+        data: { audit_id: auditId, run_id: runId, questions: questions.length, engines: AUDIT_ENGINES.length, ...(isRecheck ? { recheck: true, runs: RECHECK_RUNS } : {}) },
       });
       if (actErr) console.warn(`[create-ai-audit] audit_run activity not recorded: ${actErr.message}`);
     }
