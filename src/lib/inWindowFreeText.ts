@@ -15,19 +15,42 @@
       an ordinary VIDEO message with the same wording as its caption (2026-10-31b, Paul) — WhatsApp shows the
       caption under the video, so "the video above" still reads true. Any other header, a caption over
       Meta's limit, no real rendered wording, or wording that still carries a {{marker}} → the template.
+   ⛔ EVERY DOOR (2026-11-16, Paul: "never pay for a template when it doesn't have to"). It used to be the Inbox and queued
+      Inbox sends only; now the lead popup, the dashboard buttons, Quick Close, the welcome pack, the Inbox bulk send and the
+      automatic audit reply / report follow-up (process-whatsapp-queue) all send the free version while the window is open.
+      The window is judged with the landing margin (serviceWindow.ts freeWindowOpen): a send that could land after it shuts
+      goes as the template. `freeOnly` (the bulk "send only the free ones"): anything that would go as the paid template is
+      refused instead, never sent.
    Pure; no imports (edge + browser).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ⛔ A FREE SEND MUST LAND BEFORE THE WINDOW SHUTS (2026-11-16, Paul: "if a message would land after the window closes, treat
+   it as closed"). Turning a template into a FREE message is judged with this margin: a message sent in the last few minutes
+   could reach Meta after the 24 hours are up, fail, and need the template anyway — inside the margin the template goes.
+   A typed free-text reply's own gate is unchanged (the sender's WINDOW_MS). The 24 hours are serviceWindow.ts's
+   WHATSAPP_SERVICE_WINDOW_MS (this file has no imports; scripts/free-window-sends.test.ts pins the two equal). */
+export const FREE_WINDOW_MS = 24 * 60 * 60 * 1000;
+export const WINDOW_LANDING_MARGIN_MS = 5 * 60 * 1000;
+
+/** True only when a message sent at `sendAtMs` lands inside the 24 hours after the newest INBOUND message, with the landing
+ *  margin to spare. No inbound, an unreadable time, or an inbound "from the future" (clock skew) → closed: absent is never open. */
+export function freeWindowOpen(lastInboundMs: number | null | undefined, sendAtMs: number = Date.now()): boolean {
+  if (lastInboundMs == null || !Number.isFinite(lastInboundMs) || !Number.isFinite(sendAtMs)) return false;
+  if (lastInboundMs > sendAtMs + WINDOW_LANDING_MARGIN_MS) return false;
+  return sendAtMs + WINDOW_LANDING_MARGIN_MS < lastInboundMs + FREE_WINDOW_MS;
+}
 
 export type FreeTextVersion =
   /** videoUrl: the template's own header video, sent as a normal video message with `text` as its caption. */
   | { ok: true; text: string; videoUrl?: string }
-  | { ok: false; why: 'has_header' | 'no_wording' | 'unfilled_marker' | 'caption_too_long' };
+  | { ok: false; why: 'has_header' | 'has_buttons' | 'no_wording' | 'unfilled_marker' | 'caption_too_long' };
 
 /** Meta's limit on a media message's caption. Longer words cannot ride under the video, so the send stays the template. */
 export const VIDEO_CAPTION_MAX = 1024;
 
 export const NO_FREE_TEXT_WORDS: Record<Extract<FreeTextVersion, { ok: false }>['why'], string> = {
   has_header: 'it has a header a normal message cannot carry',
+  has_buttons: 'it has buttons a normal message cannot carry',
   caption_too_long: `its wording is longer than a video caption can be (${VIDEO_CAPTION_MAX} characters)`,
   no_wording: 'there is no plain wording for it',
   unfilled_marker: 'its wording still has a blank to fill',
@@ -43,6 +66,8 @@ const PLACEHOLDER = /^(?:\[[a-z0-9_]+\]|[a-z0-9]+(?:_[a-z0-9]+)+)$/;
 export function freeTextVersionOf(payload: unknown, words: string | null | undefined): FreeTextVersion {
   type Param = { type?: string; video?: { link?: unknown } };
   const components = (payload as { template?: { components?: Array<{ type?: string; parameters?: Param[] }> } } | null)?.template?.components ?? [];
+  /* Anything but a header and a body (a button, a footer parameter) cannot ride on a normal message. */
+  if (components.some((c) => c?.type !== 'header' && c?.type !== 'body')) return { ok: false, why: 'has_buttons' };
   const headers = components.filter((c) => c?.type === 'header');
   let videoUrl: string | undefined;
   if (headers.length) {
@@ -59,20 +84,23 @@ export function freeTextVersionOf(payload: unknown, words: string | null | undef
   return videoUrl ? { ok: true, text, videoUrl } : { ok: true, text };
 }
 
-/** Where a template send came from decides whether it may be turned into free text. */
+/** Where a template send came from. Every origin converts inside the window (2026-11-16); only the Inbox can send typed words. */
 export type SendOrigin = 'inbox' | 'scheduled' | 'other';
 
 export type InWindowShape =
   | { as: 'template' }
   | { as: 'template'; noFreeText: string }
   | { as: 'text'; text: string; videoUrl?: string }
-  | { as: 'refuse'; error: 'window_closed' | 'no_free_text_version'; reason: string };
+  | { as: 'refuse'; error: 'window_closed' | 'no_free_text_version' | 'would_be_paid'; reason: string };
+
+/** The refusal a "free only" send gets when it could only go as the paid template. */
+export const WOULD_BE_PAID_REASON = 'Not sent: it would need a paid template (their 24 hours have run out, or this template has no free version), and you chose to send only the free ones.';
 
 /**
  * How a TEMPLATE send goes out.
- *  · Inbox, or a queued Inbox send now running: window open → free text of the same wording (or the person's own edit);
- *    window closed → the template (a queued send), or a refusal when the person asked for their typed words (`typed`).
- *  · Anywhere else (the bulk queue, the lead popup, the dashboard, the welcome pack, Quick Close) → the template, untouched.
+ *  · Every door (2026-11-16): window open → free text of the same wording (or the Inbox person's own edit);
+ *    window closed → the template, or a refusal when the person asked for their typed words (`typed`).
+ *  · `freeOnly`: whatever would go as the paid template is refused (would_be_paid) instead.
  * `windowOpen` is judged by the sender from the lead's own last inbound; `allowClosedText` is test mode (nothing reaches Meta).
  * A queued send passes typed:false (the sender still uses its stored words), so closed when it runs → the template (Paul's rule).
  */
@@ -83,8 +111,15 @@ export function inWindowShape(a: {
   /** The Inbox composer sent its own text for this template (as_free_text). */
   typed: boolean;
   version: FreeTextVersion;
+  /** The bulk "send only the free ones": never let it go as the paid template. */
+  freeOnly?: boolean;
 }): InWindowShape {
-  if (a.origin === 'other') return { as: 'template' };
+  const shape = shapeOf(a);
+  if (a.freeOnly === true && shape.as === 'template') return { as: 'refuse', error: 'would_be_paid', reason: WOULD_BE_PAID_REASON };
+  return shape;
+}
+
+function shapeOf(a: { windowOpen: boolean; allowClosedText: boolean; typed: boolean; version: FreeTextVersion }): InWindowShape {
   /* Closed: a template stays a template. Only words the person TYPED can go as text, and only in test mode (simulated, as any
      free text is there); live, they are refused rather than silently swapped for the template's own wording. */
   if (!a.windowOpen) {

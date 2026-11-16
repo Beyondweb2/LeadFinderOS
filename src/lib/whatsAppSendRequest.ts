@@ -21,6 +21,9 @@ export interface WhatsAppSendArgs {
   /** With templateName + body: send THESE words as free text, recorded as that template (a composer filled from a saved template
    *  inside the 24-hour window — src/lib/inWindowFreeText.ts). The server honours it only for via:'inbox'. */
   asFreeText?: boolean;
+  /** A template send that must go FREE (inside their 24 hours) or not at all: the server refuses would_be_paid rather than send
+   *  the paid template (the Inbox bulk "Send only the free ones", src/lib/freeWindowLabels.ts). */
+  freeOnly?: boolean;
 }
 
 export interface WhatsAppSendResult {
@@ -54,6 +57,7 @@ export async function sendWhatsAppRequest(sb: { functions: typeof Supabase.funct
       ...(args.via ? { via: args.via } : {}),
       ...(args.templateVars ? { template_vars: args.templateVars } : {}),
       ...(args.asFreeText ? { as_free_text: true } : {}),
+      ...(args.freeOnly ? { free_only: true } : {}),
     },
   });
   if (error) return { ok: false, error: error.message };

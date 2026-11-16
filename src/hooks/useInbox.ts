@@ -877,6 +877,8 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
     templateVars?: Record<string, string>;
     /** body + templateName: these words as free text, recorded as that template (WhatsApp, inside the 24-hour window). */
     asFreeText?: boolean;
+    /** Template only: go free (window open) or be refused would_be_paid — never the paid template. */
+    freeOnly?: boolean;
   }): Promise<{ ok: boolean; simulated?: boolean; error?: string; reason?: string; messageId?: string; scheduled?: InboxScheduledInfo; sentAs?: 'text' | 'template'; noFreeText?: string }> => {
     if (sms) {
       /* A TEXT: through the SMS sender (every guard lives there — mobile check, opt-outs, the conversation gate, QA safety, the abuse guard).

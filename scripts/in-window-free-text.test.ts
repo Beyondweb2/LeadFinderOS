@@ -8,7 +8,7 @@
        (2026-10-31b: in the window it goes as a normal video message, the words as its caption);
      · a queued send whose edited words cannot be read back failing with no reason (or the template's wording sent instead);
      · a closed window turning a typed edit into the template's own wording, silently;
-     · the bulk cold-opener queue, the lead popup, the dashboard, the welcome pack or Quick Close changing behaviour;
+     · (2026-11-16, scripts/free-window-sends.test.ts) every other door now converts too — pinned there;
      · a quick reply that disappears when the window is closed instead of saying why.
    Pure rules + source sweeps + the real template builder. Nothing sends.
    ============================================================ */
@@ -73,12 +73,11 @@ const withHeader = { type: 'template', template: { name: 'video_template', langu
   ok(sv.as === 'text' && (sv as { videoUrl?: string }).videoUrl === 'https://x.test/v.mp4', 'window open + a video template → free-form, carrying the video');
   ok(shape({ version: withVideo, typed: true }).as === 'text', 'the composer\'s edited words for a video template → free-form with the video');
   ok(shape({ version: withVideo, origin: 'scheduled', windowOpen: false }).as === 'template', 'a queued video template run with the window closed → the template');
-  ok(shape({ version: withVideo, origin: 'other' }).as === 'template', 'every other door still sends the video template as the template');
+  ok(shape({ version: withVideo, origin: 'other' }).as === 'text', 'every other door sends a video template in the window as its video + words too (2026-11-16)');
   const vidTyped = shape({ version: no, typed: true });
   ok(vidTyped.as === 'refuse' && (vidTyped as { error: string }).error === 'no_free_text_version', 'typed words for a template with no free-text version → refused with the reason');
-  for (const open of [true, false]) for (const typed of [true, false]) {
-    ok(shape({ origin: 'other', windowOpen: open, typed }).as === 'template', `any other door (bulk queue, lead popup, dashboard, welcome pack, Quick Close) → the template (open=${open}, typed=${typed})`);
-  }
+  ok(shape({ origin: 'other' }).as === 'text', 'any other door with the window open → free text (2026-11-16)');
+  ok(shape({ origin: 'other', windowOpen: false }).as === 'template', 'any other door with the window closed → the template');
 }
 
 /* ── 3. the real builder: every video-header template, as really built, goes in-window as its own video + words ── */
@@ -104,7 +103,7 @@ const withHeader = { type: 'template', template: { name: 'video_template', langu
   const builtAt = s.lastIndexOf('usedTemplate = templateName;', conv);
   ok(builtAt > 0 && conv > builtAt, 'it runs after the template is fully built (every guard and resolver first)');
   ok(conv < s.indexOf('await queueGate(') && conv < s.indexOf('if (dryRun) {'), 'and before the send-hours queue and the dry-run answer');
-  ok(/sendOrigin: SendOrigin = sched \? "scheduled" : body\.via === "inbox" \? "inbox" : "other"/.test(s), 'only the Inbox and a queued send that is now running convert; every other door is "other"');
+  ok(/sendOrigin: SendOrigin = sched \? "scheduled" : body\.via === "inbox" \? "inbox" : "other"/.test(s), 'the origin names the Inbox, a queued send, or any other door (all convert since 2026-11-16)');
   ok(/typedFreeText = !sched && sendOrigin === "inbox" && body\.as_free_text === true/.test(s), 'as_free_text is honoured only for a direct Inbox send');
   ok(/body\.body = r\.body \?\? "";/.test(s), 'a queued template row carries its stored words to the sender');
   ok(/kind: usedTemplate \? "template" : "text"/.test(s), 'a template send that would go as text is queued AS the template (judged again when it runs)');
@@ -134,9 +133,10 @@ const withHeader = { type: 'template', template: { name: 'video_template', langu
 
 /* ── 5. the doors that must NOT change ── */
 {
+  /* Since 2026-11-16 these doors convert too (scripts/free-window-sends.test.ts); they still never send TYPED words as a template. */
   for (const p of ['supabase/functions/process-whatsapp-queue/index.ts', 'src/components/LeadWhatsAppPanel.tsx', 'src/components/admin/NeedsMeList.tsx']) {
     const t = read(p);
-    ok(!t.includes('inWindowFreeText') && !t.includes('as_free_text') && !t.includes('asFreeText'), `${p} is untouched by the conversion`);
+    ok(!t.includes('as_free_text') && !t.includes('asFreeText'), `${p} never sends typed words as a template`);
   }
   const req = read('src/lib/whatsAppSendRequest.ts');
   ok(/\.\.\.\(args\.asFreeText \? \{ as_free_text: true \} : \{\}\)/.test(req), 'the one send request carries as_free_text only when asked');

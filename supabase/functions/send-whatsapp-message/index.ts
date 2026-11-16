@@ -47,7 +47,7 @@ import { qaSendHold } from "../_shared/qa-guard.ts";
 import { templateAvailability } from "../_shared/template-status.ts";
 import { queueGate, replyWindowForDest, replyWindowOpenNow, scheduledSendFor } from "../_shared/inbox-schedule.ts";
 import { keepsSendHours } from "../../../src/lib/inboxSendWindow.ts";
-import { freeTextVersionOf, inWindowShape, QUEUED_WORDS_UNREADABLE_REASON, type SendOrigin } from "../../../src/lib/inWindowFreeText.ts";
+import { freeTextVersionOf, inWindowShape, QUEUED_WORDS_UNREADABLE_REASON, WOULD_BE_PAID_REASON, freeWindowOpen, type SendOrigin } from "../../../src/lib/inWindowFreeText.ts";
 import { formatVisibilityScore, REPORT_OFFER_REFUSAL_WORDS, REPORT_OFFER_TEMPLATE, reportOfferRefusal, UK_WORDED_TEMPLATES, ukWordedTemplateRefusal } from "../../../src/lib/reportOfferTemplate.ts";
 import { prospectOnlyTemplateRefusal } from "../../../src/lib/prospectOnly.ts";
 import { senderMessageName } from "../_shared/sender-name.ts";
@@ -131,7 +131,9 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
 /* 2026-11-15c: webdev_report follow-up ({{1}} name, {{2}} the latest report link, link-only audit resolve; needs prior WhatsApp). */
 /* 2026-11-15d: webdev_hook follow-up (no variables; needs prior WhatsApp; Meta live status first). */
 /* 2026-11-15e: webdev_example follow-up (no variables, fixed sample report link; needs prior WhatsApp; Meta live status first). */
-const BUILD_ID = "2026-11-15f-website-check-accuracy";
+/* 2026-11-16a: in-window free text from EVERY door (lead popup, dashboard, Quick Close, welcome pack, bulk), judged with the landing
+   margin (inWindowFreeText.ts freeWindowOpen); free_only:true refuses anything that would go as the paid template (would_be_paid). */
+const BUILD_ID = "2026-11-16a-free-window-sends";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -220,9 +222,11 @@ Deno.serve(async (req) => {
     /* ⛔ THE SCREEN SAYS WHERE IT IS SENDING FROM. The Inbox (via:"inbox") and the Outreach WhatsApp popup (via:"lead_panel") — the
        SEND_WINDOW_SURFACES list, scripts/inbox-send-window.test.ts sweeps them — are queued below outside the lead's send hours. */
     const viaInbox = !sched && keepsSendHours(body.via);
-    /* ⛔ IN-WINDOW FREE TEXT (2026-10-31, src/lib/inWindowFreeText.ts) applies to the Inbox and to a queued send when it runs.
-       The bulk queue, the lead popup, the dashboard, the welcome pack and Quick Close keep sending templates exactly as before. */
+    /* ⛔ IN-WINDOW FREE TEXT (2026-10-31, src/lib/inWindowFreeText.ts) — from EVERY door since 2026-11-16 (Paul: never pay for a
+       template when it doesn't have to). The origin now only decides who may send typed words (the Inbox). */
     const sendOrigin: SendOrigin = sched ? "scheduled" : body.via === "inbox" ? "inbox" : "other";
+    /* The bulk "send only the free ones": a send that would go as the paid template is refused, never sent (or queued). */
+    const freeOnly = !sched && body.free_only === true;
     /* The composer's own words for a saved template (the Inbox filled it, the person may have edited it). */
     const typedFreeText = !sched && sendOrigin === "inbox" && body.as_free_text === true;
     const rawPhone: string = typeof body.phone === "string" ? body.phone : "";
@@ -476,6 +480,8 @@ Deno.serve(async (req) => {
       .limit(1);
     const lastInboundAt = lastIn && lastIn.length ? new Date((lastIn[0] as { created_at: string }).created_at).getTime() : null;
     const windowOpen = lastInboundAt != null && Date.now() - lastInboundAt < WINDOW_MS;
+    /* For turning a template into a FREE message: open only if it lands inside the 24 hours with the margin to spare. */
+    const freeWindow = freeWindowOpen(lastInboundAt);
 
     /* ⛔ QA SAFETY (2026-10-04, src/lib/qaSafety.ts). A QA fixture gets the TEST-MODE env for this one
        request — every branch below (window, payload, simulated record, response) then behaves exactly
@@ -1024,7 +1030,7 @@ Deno.serve(async (req) => {
          every guard, every resolver, the real payload — has run for the template, so only the payload changes: the row keeps
          template_name (pitchEverSent, report_sent, the snapshot all see it), and a queued send is judged again when it runs. */
       const ownWords = (typedFreeText || sched) && text ? text : storedBody;
-      const shape = inWindowShape({ origin: sendOrigin, windowOpen, allowClosedText: !env.live, typed: typedFreeText, version: freeTextVersionOf(payload, ownWords) });
+      const shape = inWindowShape({ origin: sendOrigin, windowOpen: freeWindow, allowClosedText: !env.live, typed: typedFreeText, version: freeTextVersionOf(payload, ownWords), freeOnly });
       if (shape.as === "refuse") return json({ ok: false, error: shape.error, reason: shape.reason, template: templateName }, 200);
       if (shape.as === "text") {
         templatePayload = payload;
@@ -1035,6 +1041,7 @@ Deno.serve(async (req) => {
         storedBody = shape.text;
       } else if ("noFreeText" in shape) noFreeTextReason = shape.noFreeText;
     } else {
+      /* free_only names a template send; plain words are free by construction (refused below when the window is shut). */
       // Free-form text — only deliverable inside the 24h window when LIVE. In test
       // mode we allow it (simulated) so the UI can be exercised before the webhook.
       if (env.live && !windowOpen) return json({ ok: false, error: "window_closed" }, 200);
@@ -1053,7 +1060,10 @@ Deno.serve(async (req) => {
            sends the words, a closed one the approved template (it is never refused for the window closing first). */
         bookUserId, leadId: resolvedLeadId, phone: to, channel: "whatsapp", kind: usedTemplate ? "template" : "text",
         body: storedBody, templateName: usedTemplate, allowResend, linkVariant: usedTemplate ? signupLinkVariant : null, queuedBy: operatorId,
-      }, lastInboundAt);
+      }, lastInboundAt,
+      /* free_only: a queued template send is judged again when it runs and goes as the paid template if the window has shut by
+         then — so a "free only" send outside their hours is refused here, nothing queued. */
+      freeOnly && usedTemplate ? async () => ({ ok: false as const, error: "would_be_paid", reason: `${WOULD_BE_PAID_REASON} It is outside their send hours, and by the time it went it could need the paid template.` }) : undefined);
       if (gate) return json({ ...gate, ...(gate.ok && fellBackReason ? { template: usedTemplate, fell_back: fellBackReason } : {}), ...(gate.ok && usedTemplate ? { sent_as: messageType } : {}) }, 200);
     }
     /* ⛔ THE COLD GUARD (2026-11-02, src/lib/whatsappColdGuard.ts). A person's cold template was the one send that skipped the rating,

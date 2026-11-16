@@ -169,7 +169,8 @@ await (async () => {
 {
   const INBOX = read('src/pages/Inbox.tsx');
   const run = INBOX.slice(INBOX.indexOf('const runBulkSend = async'), INBOX.indexOf('const queueHookFollowups'));
-  ok(/const targets = bulkChecked\.ready;/.test(run) && /for \(const target of targets\)/.test(run), 'the send loops over the CHECKED-ready leads only');
+  /* 2026-11-16: "Send only the free ones" loops over bulkChecked.free — a subset of ready (scripts/free-window-sends.test.ts). */
+  ok(/const targets = freeOnly \? bulkChecked\.free : bulkChecked\.ready;/.test(run) && /for \(const target of targets\)/.test(run), 'the send loops over the CHECKED-ready leads only (or their free subset)');
   ok(/bulkChecking \|\| bulkChecked\.pending\.length \|\| !bulkChecked\.ready\.length\) return/.test(run), 'no send while any check is pending');
   ok(!/allowResend/.test(run), 'no resend override in the batch — the server refuses a template a lead already had');
   const checks = INBOX.slice(INBOX.indexOf('const runBulkChecks = async'), INBOX.indexOf('const openBulkConfirm'));
