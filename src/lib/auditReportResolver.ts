@@ -26,8 +26,8 @@
        free check, a paid baseline, a Discovery scan and a hook are all reportable — the existing
        purpose taxonomy already decided that, this file only imports the one predicate that says so.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { auditKind, type AuditKindRow } from './auditKind';
-import { RUN_USABLE } from './queueAuditStatus';
+import { auditKind, type AuditKindRow } from './auditKind.ts';
+import { RUN_USABLE } from './queueAuditStatus.ts';
 
 export interface ResolvableRun {
   status: string | null;

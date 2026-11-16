@@ -421,3 +421,8 @@ verify_jwt = false
 # Admin only (requireAdmin in the handler). Writes only its spend row. Never messages anyone.
 [functions.coverage-towns]
 verify_jwt = true
+
+# send-more-info: "Send more info" on the prospect page (2026-11-16, docs/send-more-info.md). SPA-only, signed-in callers;
+# role + lead access checked in the handler.
+[functions.send-more-info]
+verify_jwt = true
