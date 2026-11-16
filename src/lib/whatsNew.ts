@@ -31,6 +31,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       changed: [],
       removed: [],
       effect: 'Work Hot leads first. A lead with no website scan or no AI audit says Incomplete and what is missing; Do Not Contact and clients say Excluded.',
+    } },
   { id: '2026-11-16-window-free-text', date: '2026-11-16', title: 'Templates go free when their 24-hour window is open', audience: 'all',
     body: 'Any WhatsApp template you send, one at a time or in a bulk queue, now goes as a normal free message when the person has written to us in the last 24 hours. Only when their window is closed does it go as the paid template. The bulk Queue WhatsApp box shows how many are free and how many need a paid template, and can keep only the free ones. The lead WhatsApp popup says Free or Paid before you send.',
     report: {
