@@ -1,4 +1,31 @@
-# Audit verdict rules (v3, Paul, 2026-11-16 — v2 below stays for the audits made on it)
+# Audit verdict rules (v4, Paul, 2026-11-16 — v3 and v2 below stay for the audits made on them)
+
+## Rules v4: locked spots, one firm per spelling (2026-11-16, Paul's "B′")
+
+v4 is v3 below with ONE change to step 2b/2c and ONE to how firms are counted. Everything else (Couldn't measure,
+Already named, AI doesn't name businesses, registers, named % over every answer, Audit incomplete, alerts) is v3's.
+Code: `decideVerdictV3(…, { lockedSpots: true })` and `makeFirmMatchKey` (`reportOpportunity.ts`). Tests:
+`scripts/audit-rules-v4.test.ts`. From `AUDIT_RULES_V4_FROM`, or a copy whose runs carry `report_rules = 4`.
+
+**Locked spots** replace the 70% line. For each AI, over the asks in which it named firms (3 of 3, or 2 of 3):
+- it is **locked** when at least **2 firms are in every one of those asks** (`LOCKED_MIN_EVERY`) AND **fewer than 2 firms
+  are named in only one of them** (`LOCKED_MAX_ONCE`);
+- **Winnable** = at least one naming AI is not locked; **Not winnable** = every naming AI is locked.
+- An AI that names firms in only 2 of its 3 asks is judged on those 2 (it used to be always Winnable).
+
+Why (compared on the stored LDM `tge2ue` and Moments `rfussx` answers, Paul 2026-11-16): with 4–6 firms per search a share
+of mentions punishes small lists that rotate (the 70% line made "gas safety certificate London" — one regular plus a new
+firm each ask — Not winnable), and the 80% line opened Lewisham, where the same 4 firms came back every time. Plain
+"locked spots" (B) counted a firm in 2 of 3 asks, or a second spelling, as a newcomer; B′ counts only firms named once.
+
+**One firm, many spellings** (`makeFirmMatchKey`, on top of `firmKey`): drops a strapline after a spaced " - " / " – " /
+" | " and a trailing "(…)", drops Ltd / Limited / LLP / PLC / Inc / Co, case and punctuation, and trailing place words (the
+audit's town, its searches' places and areas, compass / country words) while more than two words remain. Merges found on
+the LDM and Moments answers (all one firm each): HomeCert Ltd / HomeCert Ltd - Electricians & Gas Engineers London ·
+Keystone London / Keystone London - Plumbing & Heating · Landlords Gas Inspections / … (JF Gas Ltd) · RCD Electrical Ltd /
+RCD Electrical LTD Fulham · Aoife Lyons (4 spellings) · D|N Wedding Stories / … – Dace Nolan · Irish Content Creator /
+… – Aoife · JMB Videos / … (ReelMemories) · Sociabelle (3) · Socially Wed / … (SocialWeds). Different words stay different
+firms ("EICR Pro" ≠ "EICR Pro Electricians"; "Electricians Greenwich" is never cut to "electricians").
 
 ## Rules v3: the evidence rule (2026-11-16)
 

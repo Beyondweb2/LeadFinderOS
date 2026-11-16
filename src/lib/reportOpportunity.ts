@@ -160,6 +160,35 @@ const ENGINES = ['chatgpt', 'gemini'] as const;
 const FILLER = /\b(ltd|limited|london|services|service|the|and|&)\b/g;
 export const firmKey = (s: string): string => s.toLowerCase().replace(FILLER, '').replace(/[^a-z0-9]/g, '');
 
+/* ── ONE FIRM, MANY SPELLINGS (rules v4, Paul, 2026-11-16) ─────────────────────────────────────────────
+   AI writes the same firm several ways across asks: "HomeCert Ltd" / "HomeCert Ltd - Electricians & Gas Engineers London",
+   "Sociabelle" / "Sociabelle – Kerry Foy" / "Sociabelle (Kerry Foy)", "RCD Electrical Ltd" / "RCD Electrical LTD Fulham".
+   Counted apart, one firm looks like a newcomer and a closed list looks open. The match key, ON TOP OF firmKey (case,
+   punctuation, Ltd/Limited, "London", "Services"):
+     • drops everything after a spaced " - ", " – ", " — " or " | " (a strapline; never a bare "|" inside a name such as
+       "D|N Wedding Stories"), and a trailing "(…)";
+     • drops LLP / PLC / Inc / Co as well as Ltd / Limited;
+     • drops trailing PLACE words (the audit's town, the places its searches name, its areas, compass and country words) —
+       only while more than two words remain, so "Electricians Greenwich" stays a firm and is never cut to "electricians".
+   Nothing else is merged: a different first word, or different trade words, stay different firms. */
+const LEGAL_WORDS = /\b(ltd|limited|llp|plc|inc|co)\b\.?/gi;
+const GENERIC_PLACE_WORDS = ['london', 'uk', 'england', 'ireland', 'scotland', 'wales', 'greater', 'central', 'north', 'south', 'east', 'west'];
+export function makeFirmMatchKey(places: (string | null | undefined)[]): (name: string) => string {
+  const placeWords = new Set<string>(GENERIC_PLACE_WORDS);
+  for (const p of places) for (const w of String(p ?? '').toLowerCase().split(/[^a-z0-9]+/)) if (w.length > 2) placeWords.add(w);
+  return (name: string): string => {
+    const full = String(name ?? '').trim();
+    /* Only a SPACED separator starts a strapline ("D|N Wedding Stories" keeps its "|"), and the part kept must still be a
+       name (4+ letters), or the whole name is used. */
+    let n = full.split(/\s+[-–—|]\s+/)[0];
+    if (firmKey(n).length < 4) n = full;
+    n = n.replace(/\s*\([^)]*\)\s*$/, '');
+    const words = n.toLowerCase().replace(/&/g, ' and ').replace(LEGAL_WORDS, ' ').replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+    while (words.length > 2 && placeWords.has(words[words.length - 1])) words.pop();
+    return firmKey(words.join(' ')) || firmKey(name);
+  };
+}
+
 /* ── Directories and review sites ───────────────────────────────────────────────────────────
    A directory is where a customer FINDS or CHECKS a business, not a business competing for the job.
    Matched by the host of a cited source, or by name in the answer text. gov.uk / HSE guidance pages
@@ -485,7 +514,8 @@ export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): 
      v3 also counts an answer whose firms were never read (no `firms_read` mark) as failed: an unread list is not
      "AI named nobody" (the 16 Nov London Discovery), and registers are kept apart from firms and directories. */
   const facts: AnswerFacts[] = [];
-  const v3 = ctx.rules === 3;
+  /* v3 and later (v4 = the same evidence rule with locked spots and one firm's spellings merged). */
+  const v3 = (ctx.rules ?? 1) >= 3;
   if ((ctx.rules ?? 1) >= 2) {
     const selfKey = firmKey(coreName(ctx.identity?.name ?? ctx.businessName));
     for (const row of own) for (const e of ENGINES) {
@@ -587,8 +617,11 @@ export function oppQuestion(question: string, rows: OppRow[], ctx: OppContext): 
 
   let verdict: AuditVerdict | undefined;
   if ((ctx.rules ?? 1) >= 2) {
-    const sf = { question, answers: facts, head: headOf(question), leftOut: clientSaidNo ? 'not_offered' as const : !serviceOnSite ? 'not_on_site' as const : null, area, key: firmKey };
-    verdict = v3 ? decideVerdictV3(sf) : decideVerdict(sf);
+    /* v4: one firm's spellings count as one (makeFirmMatchKey), with the audit's town, its areas and this search's place. */
+    const v4 = (ctx.rules ?? 1) >= 4;
+    const key = v4 ? makeFirmMatchKey([ctx.town, area, ...(ctx.areas ?? [])]) : firmKey;
+    const sf = { question, answers: facts, head: headOf(question), leftOut: clientSaidNo ? 'not_offered' as const : !serviceOnSite ? 'not_on_site' as const : null, area, key };
+    verdict = v3 ? decideVerdictV3(sf, { lockedSpots: v4 }) : decideVerdict(sf);
     why = verdict.reason;
   }
 

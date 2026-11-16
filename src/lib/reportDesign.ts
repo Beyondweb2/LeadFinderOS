@@ -513,7 +513,7 @@ function baseWinnable(q: Pick<OppQuestion, 'tier' | 'repeatShare' | 'top' | 'ans
 export interface VerdictSplit { named: number; winnable: number; notWinnable: number; noNames?: number; unmeasured?: number }
 export function verdictSplitOf(qs: Pick<OppQuestion, 'verdict'>[]): VerdictSplit | null {
   if (!qs.some((q) => !!q.verdict)) return null;
-  const v3 = qs.some((q) => q.verdict?.rules === 3);
+  const v3 = qs.some((q) => (q.verdict?.rules ?? 0) >= 3);
   const out: VerdictSplit = v3 ? { named: 0, winnable: 0, notWinnable: 0, noNames: 0, unmeasured: 0 } : { named: 0, winnable: 0, notWinnable: 0 };
   for (const q of qs) {
     const v = q.verdict;
@@ -564,7 +564,7 @@ function opportunityBody(m: ReportModel): string {
 
 /** Rules v2: the summary line, then three groups: Already named, Winnable, Not winnable (Paul, 2026-11-15). */
 function opportunityBodyV2(m: ReportModel, live: OppQuestion[], rank: (q: OppQuestion) => number, unmeasured: OppQuestion[] = []): string {
-  const v3 = live.some((q) => q.verdict?.rules === 3) || unmeasured.length > 0;
+  const v3 = live.some((q) => (q.verdict?.rules ?? 0) >= 3) || unmeasured.length > 0;
   const split = verdictSplitOf([...live, ...unmeasured]) ?? { named: 0, winnable: 0, notWinnable: 0 };
   const named = live.filter((q) => q.verdict!.rule === 'visible').sort((a, b) => b.namedYou - a.namedYou || a.question.localeCompare(b.question));
   const win = live.filter((q) => q.verdict!.rule !== 'visible' && q.verdict!.verdict === 'winnable').sort((a, b) => rank(a) - rank(b) || a.question.localeCompare(b.question));
