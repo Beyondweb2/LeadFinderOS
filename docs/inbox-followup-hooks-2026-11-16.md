@@ -24,3 +24,14 @@ v255). The screen showed the SDK wrapper because `useInbox.preview` used `error.
 ## send-whatsapp-message on main
 Live was v255 (09:40 UTC); `src/lib/clientOnboardingForm.ts` and `src/lib/protectionLimits.ts` (both reached by it) changed on main
 after that, so it was redeployed from main with this release.
+
+## "Send failed" on openers → "Not on WhatsApp" (same day, branch v1-not-on-whatsapp-label)
+Paul's screenshot: Uglow Digital, Fram3, Britnett Tyne & Wear… openers ("Hi, is this …? Cheers") showing red Send failed.
+Read-only check: in the last 24h 25 `initial_contact` sends came back `failed`; every one is Meta **131026** (whatsapp-status log
+"failed (code 131026) … hasPriorSuccess=false"), i.e. the number is not on WhatsApp. All 25 leads are already `no_whatsapp`
+(`_shared/whatsapp-failure.ts` leadFailurePatch): out of the queue, never re-sent, not counted toward country auto-off.
+Meta does not charge undelivered messages and 131026 is not a block/report, so it is not what lowers the quality rating
+(blocks, reports and low read rates do). The message row's `error_code` is empty because the live whatsapp-status (held, v138)
+logs the code but does not store it on the row — left alone (the hold).
+Change: `inboxStatusPill.ts` `not_on_whatsapp` ("Not on WhatsApp", muted, the stored No WhatsApp colour) when the lead is stored
+`no_whatsapp`, our send failed, and they have not replied. Every other failure is still red Send failed.

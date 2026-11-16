@@ -39,5 +39,13 @@ const comp = readFileSync(new URL('../src/components/InboxAttention.tsx', import
 ok(/<PipelineStatusBadge/.test(comp) && !/rounded-md/.test(comp) && !/h-[18px]/.test(comp), 'the pill IS the Outreach PipelineStatusBadge, not a restyled copy');
 const sel = readFileSync(new URL('../src/pages/Inbox.tsx', import.meta.url), 'utf8');
 ok(/queuedSend/.test(sel) && /status:s*'held'|r.status === 'held'/.test(sel), 'the Inbox passes queuedSend and never counts a held message as queued');
+// Not on WhatsApp (2026-11-16): Meta 131026 on our opener reads as a closed fact, not a red Send failed.
+const now = p({ notOnWhatsapp: true, failed: true });
+ok(now.label === 'Not on WhatsApp' && now.tone === 'muted' && /131026/.test(now.title) && /Not charged and not sent again/.test(now.title), 'No WhatsApp lead + failed send -> Not on WhatsApp (muted, says why)');
+ok(p({ notOnWhatsapp: true, attentionKind: 'send_failed' }).label === 'Not on WhatsApp', '...also from the send_failed attention');
+ok(p({ failed: true }).label === 'Send failed', 'any other failure is still Send failed (red)');
+ok(p({ notOnWhatsapp: true, failed: true, waitingOnUs: true }).label !== 'Not on WhatsApp', 'if they replied, the usual pills apply');
+ok(p({ notOnWhatsapp: true }).label === 'Contacted', 'No WhatsApp with nothing failed -> the stored stage');
+ok(/notOnWhatsapp: channel === 'whatsapp' && c.leadStatus === 'no_whatsapp'/.test(sel), 'the Inbox passes notOnWhatsapp from the stored lead status (WhatsApp only)');
 if (f) { console.log(`${f} FAILURE(S)`); process.exit(1); }
 console.log('inbox-status-pill: all passed');

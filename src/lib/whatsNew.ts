@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-16-not-on-whatsapp-pill', date: '2026-11-16', title: 'Inbox: "Not on WhatsApp" instead of "Send failed"', audience: 'all',
+    body: 'When Meta says a number is not on WhatsApp (error 131026), the Inbox now says "Not on WhatsApp" in grey instead of a red "Send failed". Nothing went wrong on our side: Meta does not charge for it, the lead is already marked No WhatsApp, it is never messaged again on WhatsApp and it does not count against the country. Call, text or email them instead.',
+    report: {
+      added: [],
+      changed: ['A message to a number that is not on WhatsApp shows the grey "Not on WhatsApp" pill, with the reason on hover.'],
+      removed: ['The red "Send failed" on those conversations.'],
+      effect: 'Send failed now only means a real problem worth looking at.',
+    } },
   { id: '2026-11-16-inbox-followup-hooks', date: '2026-11-16', title: 'Inbox: the hook follow-ups say Follow-up, and failed previews say why', audience: 'all',
     body: 'In the Inbox template list, Polite hook, Polite hook 2, Web dev hook, Web dev report, Web dev example and Initial question are now labelled Follow-up (they were wrongly labelled Opener). They only go to someone already messaged on WhatsApp. When a preview or send fails, you now see the real reason in plain words (for example "The sign-in service did not answer in time") instead of "Edge Function returned a non-2xx status code".',
     report: {

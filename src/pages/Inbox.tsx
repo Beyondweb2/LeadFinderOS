@@ -1957,6 +1957,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       followUpDue: !!stateByKey.get(c.key)?.followUpDue,
       meetingBooked: stage?.state === 'meeting_booked',
       queuedSend,
+      notOnWhatsapp: channel === 'whatsapp' && c.leadStatus === 'no_whatsapp',
     });
     return { statusKey: sp.key, statusLabel: sp.label, statusTone: sp.tone, statusTitle: sp.title, statusStage: (stageStatus as string | null) ?? null, inboundTitle: label ? INBOUND_LABEL_TITLES[label] : null };
   };
