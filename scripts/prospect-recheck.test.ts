@@ -183,5 +183,14 @@ console.log("\n── (3) the queue status line is a light read; the tick is unc
   ok(!/lite/.test(q.slice(q.indexOf('if (mode === "my_queue") {'))), "nothing after the line's answer (the tick, sends) reads the flag");
 }
 
+console.log("\n── a rep can READ the re-checks of their own leads (and nothing more) ──");
+{
+  const m = read("supabase/migrations/20261222090100_sales_see_own_rechecks.sql");
+  ok(/coalesce\(a\.audit_purpose, 'audit'\) in \('audit', 'recheck'\) and a\.is_measurement is not true/.test(m), "the sales audit list admits 'audit' and 'recheck' only, never a measurement");
+  ok(/where a\.lead_id in \(select public\.my_sales_lead_ids\(\)\)/.test(m), "…still only on the rep's own, non-client leads");
+  ok(/if public\.my_role\(\) is distinct from 'sales' then return; end if;/.test(m), "…and returns nothing for anyone but a rep");
+  ok(/revoke execute on function public\.my_sales_audit_ids\(\) from public, anon;/.test(m) && !/grant[^;]*anon/.test(m), "anon can never run it");
+}
+
 if (f) { console.log(`\n${f} FAILED`); process.exit(1); }
 console.log("\nALL PASS");
