@@ -50,6 +50,8 @@ export const OUTREACH_LIST_COLUMNS = [
   // 2026-10-15: the audit town gate lets a hand-added lead through on its typed town (auditTownGated reads it), so the
   // "Needs info" tag and the bulk audit's skip list (src/lib/leadReadiness.ts) need it. Already in the sales view.
   'lead_source',
+  // 2026-11-16: the opportunity score's 'worth it' part (opportunityScore.ts) — Google reviews and rating. Already in the sales view.
+  'review_count', 'rating',
 ] as const;
 
 export type OutreachListColumn = (typeof OUTREACH_LIST_COLUMNS)[number];
