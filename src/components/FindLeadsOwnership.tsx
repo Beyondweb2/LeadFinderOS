@@ -4,6 +4,7 @@ import { Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AlreadyAddedBadge, OwnerAvatar } from '@/components/OwnerBadge';
 import type { IdentityState } from '@/lib/salesCrm';
+import { findLeadsStatusLabel, isStopStatus } from '@/lib/findLeadsLeadStatus';
 
 /* FIND LEADS OWNERSHIP (multi-user, 2026-09-27) — what a search result's action cell shows once the
  * server has said whether the business is already in LeadFinderOS (lead_identity_lookup).
@@ -20,6 +21,8 @@ export interface OwnershipInfo {
   addedAt: string | null;
   /** Who ADDED it (outreach_leads.added_by_user_id), which can differ from who works it now. Null = not recorded. */
   addedByName?: string | null;
+  /** The lead's status as the server reads it (lead_identity_lookup.lead_status, src/lib/findLeadsLeadStatus.ts). Null = not sent. */
+  leadStatus?: string | null;
 }
 
 /** Sales: the cell for a non-new business, or null to let the normal Add button render. */
@@ -46,7 +49,7 @@ export function salesOwnershipCell(own: OwnershipInfo | null | undefined, onClai
       </Button>
     );
   }
-  return <AlreadyAddedBadge ownerName={own.ownerName} addedByName={own.addedByName} avatarUrl={own.avatarUrl} addedAt={own.addedAt} compact={compact} />;
+  return <AlreadyAddedBadge ownerName={own.ownerName} addedByName={own.addedByName} avatarUrl={own.avatarUrl} addedAt={own.addedAt} leadStatus={own.leadStatus} compact={compact} />;
 }
 
 /** The server says this business is already in LeadFinderOS (any owner). 'paused' is a refusal, not an answer. */
@@ -79,11 +82,15 @@ export function adminOwnerMarker(own: OwnershipInfo | null | undefined): ReactNo
  * owner on record, a neutral "In CRM" tick.
  */
 export function AlreadyAddedMarker({ own, compact = false }: { own: OwnershipInfo; compact?: boolean }) {
+  /* 2026-11-16: the status rides in the tooltip ("Added by Paul · Opted out"); a stop status turns the marker red and says it. */
+  const status = findLeadsStatusLabel(own.leadStatus);
+  const tip = status ? `${addedByText(own.addedByName, own.ownerName)} · ${status}` : addedByText(own.addedByName, own.ownerName);
+  const stop = isStopStatus(own.leadStatus);
   return (
-    <span className={`inline-flex cursor-default select-none items-center gap-1.5 rounded-md bg-green-500/10 text-green-600 dark:text-green-400 font-medium whitespace-nowrap ${compact ? 'h-8 px-2 text-[11px]' : 'h-8 px-2.5 text-xs'}`}
-      title={addedByText(own.addedByName, own.ownerName)} aria-label={addedByText(own.addedByName, own.ownerName)} aria-disabled="true" data-testid="find-leads-already-added">
+    <span className={`inline-flex cursor-default select-none items-center gap-1.5 rounded-md font-medium whitespace-nowrap ${stop ? 'bg-destructive/10 text-destructive' : 'bg-green-500/10 text-green-600 dark:text-green-400'} ${compact ? 'h-8 px-2 text-[11px]' : 'h-8 px-2.5 text-xs'}`}
+      title={tip} aria-label={tip} aria-disabled="true" data-testid="find-leads-already-added">
       {own.ownerName ? <OwnerAvatar name={own.ownerName} avatarUrl={own.avatarUrl} /> : <Check className="h-3.5 w-3.5" />}
-      In CRM
+      {stop && status ? status : 'In CRM'}
     </span>
   );
 }

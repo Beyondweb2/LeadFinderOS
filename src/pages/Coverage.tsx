@@ -18,6 +18,7 @@ import {
 } from '@/lib/coverageState';
 import { CoverageWorkers } from '@/components/CoverageWorkers';
 import { CoverageFoundAdded } from '@/components/CoverageFoundAdded';
+import { CoverageSearchedBy } from '@/components/CoverageSearchedBy';
 import { manyTownsHref } from '@/lib/manyTowns';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CollapsibleBlock } from '@/components/CollapsibleSection';
@@ -52,6 +53,7 @@ import { SearchDepthToggle } from '@/components/SearchDepthToggle';
 const STATE_TONE: Record<CoverageState, Tone> = {
   worked: 'green',
   leads: 'amber',
+  searched: 'blue',
   untouched: 'grey',
 };
 
@@ -442,6 +444,8 @@ export default function Coverage() {
                         the CRM, each with / without a website. "Contacted" (and who) stays, as a plain marker. */}
                     <span className="flex flex-col gap-1">
                       <CoverageFoundAdded fa={t.foundAdded} trade={trade} town={t.name} />
+                      {/* 2026-11-16: WHO searched it and WHEN — any teammate, so nobody runs the same town twice. */}
+                      <CoverageSearchedBy searchers={t.searchers} trade={trade} town={t.name} />
                       {t.state === 'worked' && (
                         <span className="flex flex-wrap items-center gap-1.5 text-xs">
                           <ToneChip tone={STATE_TONE.worked} dot>{COVERAGE_LABEL.worked}</ToneChip>

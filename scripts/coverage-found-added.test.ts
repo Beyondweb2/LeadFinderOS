@@ -63,7 +63,8 @@ const out = code('src/hooks/useOutreach.ts');
 ok((out.match(/recordSearchAddition\(lead\);/g) ?? []).length === 2, 'Added is recorded after BOTH successful insert paths (admin insert, Sales add)');
 ok(out.indexOf('recordSearchAddition(lead);') > out.indexOf("('sales_add_lead'") && out.lastIndexOf('recordSearchAddition(lead);') > out.indexOf(".from('outreach_leads')\n      .insert("), '…and only after the insert returned');
 const cov = code('supabase/functions/coverage/index.ts');
-ok(/from\("search_history"\)\.select\("keyword, location, found_keys, added_keys"\)/.test(cov) && !/from\("search_history"\)\.select\("keyword, location, found_keys, added_keys"\)\s*\.eq\("user_id"/.test(cov), 'Coverage reads every run in the book (anyone who searched), keys only');
+// 2026-11-16 (v1-team-visibility): each run also carries WHO searched (user_id) and WHEN (searched_at) — still every run in the book.
+ok(/from\("search_history"\)\.select\("keyword, location, found_keys, added_keys, user_id, searched_at"\)/.test(cov) && !/from\("search_history"\)\.select\("keyword, location, found_keys, added_keys, user_id, searched_at"\)\s*\.eq\("user_id"/.test(cov), 'Coverage reads every run in the book (anyone who searched), keys + who + when');
 ok(!/outreach_leads[\s\S]{0,200}found_/.test(cov), 'Found is never computed from the CRM');
 const mig = read('supabase/migrations/20260929190000_coverage_found_added.sql');
 ok(!/update public\.search_history set (found|added)/i.test(mig.replace(/--.*$/gm, '').split('create or replace function')[0]), 'the migration back-fills nothing (history stays "not recorded")');

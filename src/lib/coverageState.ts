@@ -24,21 +24,24 @@ export type CoverageState =
   | 'worked'
   /** Leads are in the CRM for this trade+town, but nobody has been contacted. */
   | 'leads'
+  /** Someone on the team searched this trade+town, and nothing from it is in the CRM (2026-11-16). */
+  | 'searched'
   /** Nothing at all. */
   | 'untouched';
 
-export const COVERAGE_STATES: CoverageState[] = ['worked', 'leads', 'untouched'];
+export const COVERAGE_STATES: CoverageState[] = ['worked', 'leads', 'searched', 'untouched'];
 
 export const COVERAGE_LABEL: Record<CoverageState, string> = {
   /* 2026-09-29: "Worked" / "Leads found" read as counts next to Coverage's Found / Added numbers. */
   worked: 'Contacted',
   leads: 'Added, not contacted',
+  searched: 'Searched, none added',
   untouched: 'Untouched',
 };
 
 /** Ordered by effort spent, so a summary reads left-to-right as a funnel. */
 export const COVERAGE_ORDER: Record<CoverageState, number> = {
-  worked: 0, leads: 1, untouched: 2,
+  worked: 0, leads: 1, searched: 2, untouched: 3,
 };
 
 export interface CoverageTown {
@@ -61,6 +64,11 @@ export interface CoverageFacts {
   pooledPairs?: Set<string>;
   /** Pairs where at least one lead has actually been contacted. */
   workedPairs: Set<string>;
+  /**
+   * Pairs ANY team member has searched (a search_history run, 2026-11-16). Optional: an older endpoint sends no runs,
+   * and absence then means "not known", so the town falls to `untouched` exactly as before.
+   */
+  searchedPairs?: Set<string>;
 }
 
 /**
@@ -180,6 +188,7 @@ export function coverageStateFor(trade: string, town: CoverageTown, facts: Cover
   const key = coverageKey(trade, town.name);
   if (facts.workedPairs.has(key)) return 'worked';
   if (facts.leadPairs.has(key)) return 'leads';
+  if (facts.searchedPairs?.has(key)) return 'searched';
   return 'untouched';
 }
 
@@ -234,7 +243,7 @@ export interface CoverageSummary {
 /* Generic over the row so callers keep their own extra fields — the page carries suppression
    state alongside, and a signature fixed to CoverageRow would silently drop it. */
 export function summarise(rows: readonly CoverageRow[]): CoverageSummary {
-  const counts: Record<CoverageState, number> = { worked: 0, leads: 0, untouched: 0 };
+  const counts: Record<CoverageState, number> = { worked: 0, leads: 0, searched: 0, untouched: 0 };
   for (const r of rows) counts[r.state]++;
   return { total: rows.length, counts, started: rows.length - counts.untouched };
 }
@@ -330,7 +339,61 @@ export function hasLeadPool(trade: string, town: CoverageTown, facts: CoverageFa
      the insert, with the verdict it had when it was added.
    - A trade+town whose runs all predate the recording is NOT RECORDED — never estimated. One with no
      run at all was never searched. Folded on coverageKey, like every other Coverage fact. */
-export interface SearchRunRecord { trade: string; town: string; found: Record<string, boolean> | null; added: Record<string, boolean> | null }
+export interface SearchRunRecord {
+  trade: string; town: string; found: Record<string, boolean> | null; added: Record<string, boolean> | null;
+  /** Who ran it (search_history.user_id) and when (searched_at) — 2026-11-16. Absent from an older endpoint. */
+  by?: string | null; at?: string | null;
+}
+
+/* ══ WHO SEARCHED IT, AND WHEN (Paul, 2026-11-16: new salespeople must never double up) ══════════════════════════════
+   Per trade+town, folded on coverageKey like every other fact: each person who ran a search there, how many times,
+   and their latest. Latest first. A run with no searcher recorded is counted under id null — never given a name. */
+export interface CoverageSearcher { id: string | null; count: number; lastAt: string | null }
+
+export function searchersByPair(runs: ReadonlyArray<SearchRunRecord> | null | undefined): Map<string, CoverageSearcher[]> {
+  const acc = new Map<string, Map<string, CoverageSearcher>>();
+  for (const r of runs ?? []) {
+    if (!r || typeof r.trade !== 'string' || typeof r.town !== 'string') continue;
+    const key = coverageKey(r.trade, r.town);
+    const m = acc.get(key) ?? new Map<string, CoverageSearcher>();
+    const id = typeof r.by === 'string' && r.by ? r.by : null;
+    const at = typeof r.at === 'string' && r.at && !Number.isNaN(Date.parse(r.at)) ? r.at : null;
+    const e = m.get(id ?? '') ?? { id, count: 0, lastAt: null };
+    e.count += 1;
+    if (at && (!e.lastAt || Date.parse(at) > Date.parse(e.lastAt))) e.lastAt = at;
+    m.set(id ?? '', e);
+    acc.set(key, m);
+  }
+  const out = new Map<string, CoverageSearcher[]>();
+  for (const [key, m] of acc) {
+    out.set(key, [...m.values()].sort((a, b) => (b.lastAt ? Date.parse(b.lastAt) : 0) - (a.lastAt ? Date.parse(a.lastAt) : 0)
+      || (a.id ?? '').localeCompare(b.id ?? '')));
+  }
+  return out;
+}
+
+const shortDate = (iso: string | null) => (iso
+  ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' })
+  : null);
+
+/** "Searched by Paul · 14 Nov" (latest searcher first). More people → "Searched by Paul · 14 Nov, +2 more"; the full list
+ *  ("Paul 14 Nov (3×), Chris 2 Nov") is the tooltip. Someone the directory cannot name is "a teammate", never a guess. */
+export function describeSearchers(
+  searchers: ReadonlyArray<CoverageSearcher>,
+  nameOf: (id: string) => string | null | undefined,
+): { text: string; detail: string } {
+  if (!searchers.length) return { text: '', detail: '' };
+  const label = (s: CoverageSearcher) => (s.id ? (nameOf(s.id) ?? '').trim() : '') || 'a teammate';
+  const first = searchers[0];
+  const d = shortDate(first.lastAt);
+  const more = searchers.length - 1;
+  const text = 'Searched by ' + label(first) + (d ? ' · ' + d : '') + (more > 0 ? ', +' + more + ' more' : '');
+  const detail = searchers.map((s) => {
+    const sd = shortDate(s.lastAt);
+    return label(s) + (sd ? ' ' + sd : '') + (s.count > 1 ? ' (' + s.count + '×)' : '');
+  }).join(', ');
+  return { text, detail: 'Searched by ' + detail };
+}
 export interface FoundAdded {
   /** 'recorded' = at least one run recorded its result; 'not_recorded' = searched, but only before recording. */
   status: 'recorded' | 'not_recorded';
