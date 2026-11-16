@@ -21,6 +21,7 @@ import {
   cleanPriceLine, DEFAULT_MORE_INFO_PRICE_LINE, isMoreInfoChannel, MORE_INFO_EMAIL_MAX, MORE_INFO_SMS_MAX, MORE_INFO_SUBJECT_MAX,
   moreInfoBlock, moreInfoEmailBody, moreInfoEmailSubject, moreInfoHistoryLine, moreInfoSmsBody, moreInfoTextRefusal, moreInfoTrade,
   moreInfoWarning, senderFirstName, type MoreInfoVars, type NamedFacts,
+  MORE_INFO_CONSENT_REQUIRED, moreInfoCallConsentGiven, moreInfoConsentLine, moreInfoConsentRecord,
 } from "../../../src/lib/moreInfoMessage.ts";
 
 // send-more-info — "Send more info" on the prospect page (Paul, 2026-11-16, docs/send-more-info.md).
@@ -29,7 +30,7 @@ import {
 // ⛔ The LEAD decides everything that matters: the browser sends a lead id, a channel and the (edited) words — never an address,
 //    a number or a link. The report link is resolved HERE, and an edited message may carry only that link and findable.live.
 // ⛔ SMS goes through the ONE text sender (_shared/twilio-sms.ts sendSmsToLead): access, UK mobile, opt-out / do-not-contact,
-//    the conversation gate, QA, the usage guard. Outside the lead's texting hours it is REFUSED here (never queued).
+//    QA, the usage guard. The conversation gate is replaced (this message only) by the required call-consent tick. Outside the lead's texting hours it is REFUSED here (never queued).
 // ⛔ Email: Resend from the Findable sending domain (the alerts' domain), reply-to = the salesperson's own email, plain text.
 //    Suppression (opt-out / do-not-contact) and the QA sink are checked first; the usage guard (email_send) counts it.
 // ⛔ No WhatsApp. Nothing here writes a Next Action: the salesperson's screen saves the 2-day follow-up through the one human
@@ -133,9 +134,13 @@ async function build(service: Service, actorId: string, leadId: string): Promise
   };
 }
 
+/** The History row: "More info sent by Valentin via SMS. Asked for info on a call, confirmed by Valentin", with the consent
+ *  (who, when, channel) in data.consent. */
 async function logSent(service: Service, leadId: string, actorId: string, senderName: string, channel: "email" | "sms", data: Obj) {
+  const consent = moreInfoConsentRecord({ userId: actorId, name: senderName, channel, at: new Date() });
   await service.from("lead_activity").insert({
-    lead_id: leadId, actor_user_id: actorId, kind: "more_info_sent", body: moreInfoHistoryLine(senderName, channel), data: { channel, ...data },
+    lead_id: leadId, actor_user_id: actorId, kind: "more_info_sent",
+    body: `${moreInfoHistoryLine(senderName, channel)}. ${moreInfoConsentLine(senderName)}`, data: { channel, consent, ...data },
   }).then(() => undefined, (e: unknown) => console.error("[send-more-info] history write failed:", e instanceof Error ? e.message : e));
 }
 
@@ -181,6 +186,9 @@ Deno.serve(async (req) => {
     const key = String(body.idempotency_key ?? "");
     if (key.length < 8 || key.length > 120) return json({ ok: false, error: "bad_request", detail: "Missing send key." }, 400);
     const text = String(body.text ?? "").replace(/\r\n/g, "\n").trim();
+    /* ⛔ THE CALL CONSENT (2026-11-16): "They asked for this info on a call" must be ticked, for a text AND an email. It replaces the
+       text's conversation gate for this message only; it is recorded on History with the send. */
+    if (!moreInfoCallConsentGiven(body.call_consent)) return json({ ok: false, error: "consent_required", detail: MORE_INFO_CONSENT_REQUIRED }, 400);
 
     if (channel === "sms") {
       if (b.sms.refusal) return json({ ok: false, error: "no_uk_mobile", detail: b.sms.refusal });
@@ -188,7 +196,7 @@ Deno.serve(async (req) => {
       const why = moreInfoTextRefusal(text, b.vars.reportLink);
       if (why) return json({ ok: false, error: "link_not_allowed", detail: why }, 400);
       const r = await sendSmsToLead(service, {
-        actor, leadId, moreInfo: { body: text, reportLink: b.vars.reportLink }, idempotencyKey: key,
+        actor, leadId, moreInfo: { body: text, reportLink: b.vars.reportLink, callConsent: true }, idempotencyKey: key,
         /* ⛔ THE LEAD'S TEXTING HOURS: outside them nothing is sent (and nothing is queued — the salesperson can email instead). */
         queueOutsideWindow: async ({ digits }) => {
           const w = await replyWindowForDest(service, "sms", digits, { leadId });

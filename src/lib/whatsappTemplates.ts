@@ -12,6 +12,7 @@
 import { AI_SITE_FINDINGS_V2, AI_SITE_FINDINGS_V2_APPROVED } from './siteFindings.ts';
 import { STALE_OFFER_TEMPLATES } from './findableOffer.ts';
 import { isInitialOpener, openerApproved } from './openerVariant.ts';
+import { isColdOutreachTemplate } from './coldOutreach.ts';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    🔴 TEMPLATES THAT WERE RE-REGISTERED AT META UNDER A NEW NAME, AND THE HISTORY THAT CARRIES THE
@@ -49,7 +50,7 @@ export function canonicalTemplate(name: string | null | undefined): string {
   return TEMPLATE_RENAMES[n] ?? n;
 }
 
-export type TemplateGroup = 'site' | 'opener' | 'audit';
+export type TemplateGroup = 'site' | 'opener' | 'followup' | 'audit';
 
 export interface TemplateReq {
   /** Needs the lead's /s/<share_token> claim link (template has a "url" var). */
@@ -68,6 +69,17 @@ export interface TemplateReq {
   group: TemplateGroup;
 }
 
+/** The picker's group label (Paul, 2026-11-16: polite_hook2 showed "Opener"). 'followup' = the six follow-ups that only go to a
+ *  number already messaged (NEEDS_PRIOR_WHATSAPP); any other template that is a CONTINUATION (coldOutreach.ts) reads Follow-up
+ *  too. Only a real cold opener reads Opener. A label only: sending is decided by coldOutreach.ts, never by this. */
+export function templateGroupLabel(name: string): 'Site / claim' | 'Audit' | 'Follow-up' | 'Opener' {
+  const g = WA_TEMPLATE_REQS[name]?.group;
+  if (g === 'site') return 'Site / claim';
+  if (g === 'followup') return 'Follow-up';
+  if (g === 'audit') return 'Audit';
+  return isColdOutreachTemplate(name) ? 'Opener' : 'Follow-up';
+}
+
 export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
   booking_page_intro:     { needsUrl: true,  needsAudit: false, group: 'site' },
   no_website_barbers:     { needsUrl: true,  needsAudit: false, group: 'site' },
@@ -81,19 +93,19 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
   initial_opener_v2:      { needsUrl: false, needsAudit: false, group: 'opener' },
   /* initial_contact_short (2026-10-15) - the short opener. Same shape as initial_contact: one variable (the cleaned name), no link, no audit. */
   initial_contact_short:  { needsUrl: false, needsAudit: false, group: 'opener' },
-  /* initial_question (2026-11-15) - a FOLLOW-UP with NO variables: no name, no link, no audit. Group 'opener' is the label only
-     (as contact_followup's); it is a continuation (coldOutreach.ts) and only goes to a number already messaged. */
-  initial_question:       { needsUrl: false, needsAudit: false, group: 'opener' },
+  /* initial_question (2026-11-15) - a FOLLOW-UP with NO variables: no name, no link, no audit. Group 'followup' (2026-11-16, was
+     'opener'); it is a continuation (coldOutreach.ts) and only goes to a number already messaged. */
+  initial_question:       { needsUrl: false, needsAudit: false, group: 'followup' },
   /* webdev_report (2026-11-15) - a FOLLOW-UP whose {{2}} IS the lead's latest report link, so needsAudit: the picker greys it with
      "Run an audit for this lead first." until a report exists, and the server refuses the same way (src/lib/webdevReport.ts). */
-  webdev_report:          { needsUrl: false, needsAudit: true,  group: 'audit' },
+  webdev_report:          { needsUrl: false, needsAudit: true,  group: 'followup' },
   /* webdev_hook (2026-11-15) - the same follow-up pitch with NO variables: no name, no link, no audit needed. */
-  webdev_hook:            { needsUrl: false, needsAudit: false, group: 'opener' },
+  webdev_hook:            { needsUrl: false, needsAudit: false, group: 'followup' },
   /* webdev_example (2026-11-15) - the same pitch + the fixed sample report link: no name, no lead link, no audit needed. */
-  webdev_example:         { needsUrl: false, needsAudit: false, group: 'opener' },
+  webdev_example:         { needsUrl: false, needsAudit: false, group: 'followup' },
   /* polite_hook / polite_hook2 (2026-11-16) - short follow-ups with NO variables: no name, no link, no audit needed. */
-  polite_hook:            { needsUrl: false, needsAudit: false, group: 'opener' },
-  polite_hook2:           { needsUrl: false, needsAudit: false, group: 'opener' },
+  polite_hook:            { needsUrl: false, needsAudit: false, group: 'followup' },
+  polite_hook2:           { needsUrl: false, needsAudit: false, group: 'followup' },
   // audit_reply is not yet wired into the manual send path; its rule lives here so the guard is
   // ready the moment it's added to the picker + sender (no drift when that happens).
   audit_reply:            { needsUrl: false, needsAudit: true,  group: 'audit' },

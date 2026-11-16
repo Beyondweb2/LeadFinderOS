@@ -35,7 +35,7 @@ import { loadQaExclusions } from "./qa-guard.ts";
 import { qaSendVerdict } from "../../../src/lib/qaSafety.ts";
 import { resolveTwilioEnv, twilioSendSms } from "./twilio.ts";
 import { markLeadNoSms, markLeadSmsRefused } from "./sms-lead-sync.ts";
-import { MORE_INFO_SMS_MAX, moreInfoTextRefusal } from "../../../src/lib/moreInfoMessage.ts";
+import { MORE_INFO_SMS_MAX, moreInfoOpensSmsGate, moreInfoTextRefusal } from "../../../src/lib/moreInfoMessage.ts";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -56,8 +56,9 @@ export interface SendSmsArgs {
   text?: string | null;
   /** SEND MORE INFO (2026-11-16, fn send-more-info, src/lib/moreInfoMessage.ts): the salesperson's (possibly edited) text and the
    *  lead's report link the SERVER resolved. The only links it may carry are that report link and findable.live. A conversation text
-   *  (never cold): every guard below applies unchanged. */
-  moreInfo?: { body: string; reportLink: string } | null;
+   *  (never cold). callConsent (2026-11-16): the salesperson ticked "They asked for this info on a call" — that tick, and only for
+   *  this kind, stands in for the conversation gate. Every other guard below (opt-out/DNC, QA, hours, usage) applies unchanged. */
+  moreInfo?: { body: string; reportLink: string; callConsent?: boolean } | null;
   idempotencyKey: string;
   allowResend?: boolean;
   /** 'queue' = the SMS drip (process-sms-queue) sending as the person who queued it. Changes nothing about the guards. */
@@ -187,7 +188,10 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
     inboundSms: Array.isArray(inSms) && inSms.length > 0,
     inboundWhatsapp: Array.isArray(inWa) && inWa.length > 0,
     isAdmin: a.actor.role === "admin",
-  });
+  /* ⛔ SEND MORE INFO ONLY (2026-11-16): the salesperson's "They asked for this info on a call" tick opens the gate (reps call
+     from their own phones, so no call is on record). Only the moreInfo kind carries it, and only fn send-more-info passes that
+     kind; cold texts, templates and free text are untouched. Opt-out/DNC ran above; QA, hours and the usage guard run below. */
+  }) || moreInfoOpensSmsGate(a);
   if (!gate) return fail("sms_gate_closed", "Texts follow a conversation. Log the call (spoke to them / interested) first, or wait for them to message you.");
 
   // 6. QA safety

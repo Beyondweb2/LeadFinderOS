@@ -152,6 +152,30 @@ export function moreInfoHistoryLine(senderName: string, channel: MoreInfoChannel
   return `More info sent by ${senderName.trim() || 'someone'} via ${channel === 'sms' ? 'SMS' : 'email'}`;
 }
 
+/* ── Consent from the call (Paul, 2026-11-16) ─────────────────────────────────────────────────────────────────────────────
+   Reps often call from their own phones, so no answered call is on record and the text's conversation gate stayed shut. For
+   SEND MORE INFO ONLY the salesperson instead ticks "They asked for this info on a call" (required for a text AND an email); the
+   tick is the consent and it is written on the lead's History (who, when, channel). Every other check stays: opt-out /
+   do-not-contact, the test-lead rule, the send limits, texting hours. Cold texts and every other text keep the conversation gate. */
+export const MORE_INFO_CONSENT_LABEL = 'They asked for this info on a call';
+export const MORE_INFO_CONSENT_REQUIRED = 'Tick "They asked for this info on a call" first. Send more info only goes to someone who asked for it.';
+/** Only a real `true` counts (never "true", 1 or a missing field). */
+export function moreInfoCallConsentGiven(v: unknown): boolean {
+  return v === true;
+}
+/** The SMS sender's gate: a more-info text whose call consent was ticked opens the conversation gate. Nothing else does. */
+export function moreInfoOpensSmsGate(a: { moreInfo?: { callConsent?: unknown } | null }): boolean {
+  return !!a.moreInfo && moreInfoCallConsentGiven(a.moreInfo.callConsent);
+}
+/** The consent line on History: "Asked for info on a call, confirmed by Valentin". */
+export function moreInfoConsentLine(confirmedBy: string): string {
+  return `Asked for info on a call, confirmed by ${confirmedBy.trim() || 'someone'}`;
+}
+/** What the History row stores about the consent: who, when, channel. */
+export function moreInfoConsentRecord(a: { userId: string; name: string; channel: MoreInfoChannel; at: Date }) {
+  return { source: 'call', confirmed_by_user_id: a.userId, confirmed_by: a.name.trim() || 'someone', channel: a.channel, confirmed_at: a.at.toISOString(), label: MORE_INFO_CONSENT_LABEL };
+}
+
 /** The follow-up the salesperson's send sets: a Follow up two UK days from now. */
 export const MORE_INFO_FOLLOW_UP_DAYS = 2;
 export const MORE_INFO_NEXT_ACTION = 'follow_up';

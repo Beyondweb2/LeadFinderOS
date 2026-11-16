@@ -16,6 +16,7 @@
    ⚠️ IT NEVER THROWS AND NEVER RETURNS EMPTY. A failure to read the body must not replace a poor
    message with no message — the wrapper string is the floor, not the goal.
    ════════════════════════════════════════════════════════════════════════════════════════════ */
+import { EDGE_ERROR_SENTENCES, looksLikeErrorToken } from './edgeInvokeCore';
 
 /** What supabase-js hands back on a non-2xx: a message, and the raw Response as `context`. */
 interface FunctionsError {
@@ -85,4 +86,42 @@ export function functionErrorSentence(body: FunctionErrorBody | null, wrapper: s
 export async function readFunctionError(err: unknown): Promise<string> {
   const wrapper = functionErrorWrapper(err);
   return functionErrorSentence(await readFunctionErrorBody(err), wrapper);
+}
+
+/* ── A SEND OR PREVIEW THAT FAILED: a token to branch on and a PLAIN reason to show (Paul, 2026-11-16) ──────────────────────────
+   "Never show 'Edge Function returned a non-2xx status code' to a rep: always show the plain reason the server gave." The Inbox
+   preview of polite_hook2 on a live conversation showed exactly that wrapper: the real answer was 503 auth_unavailable (the
+   sign-in service timed out). invokeFailure reads the body ONCE and never returns the wrapper — as the token or as the reason. */
+
+/** supabase-js's own wrapper strings, which mean nothing to a person. */
+export function isInvokeWrapperText(s: unknown): boolean {
+  return typeof s === 'string' && /non-2xx status code|Failed to send a request to the Edge Function|Relay Error invoking the Edge Function|FunctionsHttpError|FunctionsFetchError/i.test(s);
+}
+
+export interface InvokeFailure { error: string; reason: string; status: number | null }
+
+export async function invokeFailure(err: unknown): Promise<InvokeFailure> {
+  const e = (err ?? {}) as FunctionsError;
+  const status = typeof (e.context as { status?: unknown } | undefined)?.status === 'number' ? (e.context as { status: number }).status : null;
+  const body = await readFunctionErrorBody(err);
+  const rawToken = typeof body?.error === 'string' ? body.error.trim() : '';
+  const unreachable = !body && /Failed to send a request|Relay Error|FunctionsFetchError|Failed to fetch|NetworkError/i.test(String(e.message ?? ''));
+  const error = rawToken && looksLikeErrorToken(rawToken) ? rawToken : unreachable ? 'server_unreachable' : status && status >= 500 ? 'server_error' : 'request_failed';
+  const sentence = [body?.reason, body?.detail, body?.message, rawToken && !looksLikeErrorToken(rawToken) ? rawToken : null]
+    .find((v) => typeof v === 'string' && v.trim() && !looksLikeErrorToken(v) && !isInvokeWrapperText(v)) as string | undefined;
+  const reason = sentence?.trim()
+    || (rawToken ? EDGE_ERROR_SENTENCES[rawToken] : undefined)
+    || (unreachable ? 'Could not reach the server, so nothing was sent. Check your connection and try again.'
+      : status && status >= 500 ? `The server had a problem (error ${status}), so nothing was sent. Try again in a moment.`
+      : rawToken ? `The server refused this ("${rawToken}"), so nothing was sent.`
+      : `The server refused this${status ? ` (error ${status})` : ''} without saying why, so nothing was sent.`);
+  return { error, reason, status };
+}
+
+/** A refusal token (or a stray wrapper string) in words a rep can act on. Never the wrapper, never a bare token. */
+export function plainRefusal(code: string | null | undefined): string {
+  const c = String(code ?? '').trim();
+  if (!c || isInvokeWrapperText(c)) return 'The server did not say why, so nothing was sent. Try again in a moment.';
+  if (EDGE_ERROR_SENTENCES[c]) return EDGE_ERROR_SENTENCES[c];
+  return looksLikeErrorToken(c) ? `The server refused it ("${c.replace(/_/g, ' ')}").` : c;
 }

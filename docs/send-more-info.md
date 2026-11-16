@@ -23,6 +23,13 @@ Email or Text (no WhatsApp), previewed and editable, then sent.
   surface names the monthly figure without the up-front one.
 - An edit may change words but never add a link: only the lead's report link (unchanged) and findable.live (`moreInfoTextRefusal`,
   checked by the function and again by the SMS sender).
+- **Call consent (2026-11-16, branch v1-more-info-consent):** the send window has a required tick "They asked for this info on a
+  call" (`MORE_INFO_CONSENT_LABEL`), for email AND text; the function refuses `consent_required` without `call_consent: true`. For
+  this message only it REPLACES the text's conversation gate (reps call from their own phones, so no call is on record):
+  `sendSmsToLead` gate = `isCold || smsGateOpen(...) || moreInfoOpensSmsGate(a)` — only the `moreInfo` kind with `callConsent: true`
+  opens it, and only fn send-more-info passes that kind. History row (`more_info_sent`) body adds "Asked for info on a call, confirmed
+  by Valentin"; `data.consent` = who (user id + name), when, channel. Opt-out/DNC, QA test-lead rule, send limits and texting hours
+  are unchanged; cold texts and every other text keep the conversation gate. No migration.
 - Text: through `_shared/twilio-sms.ts` `sendSmsToLead` (`moreInfo` kind): access, UK mobile, opt-out / do-not-contact, the
   conversation gate (an answered call counts), QA, the `sms_send` guard. Outside the lead's texting hours it is refused, not queued.
 - Email: Resend from `<First> at Findable <hello@findable.live>` (the alerts' verified domain), `reply_to` = the salesperson's login

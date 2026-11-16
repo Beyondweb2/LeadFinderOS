@@ -11,7 +11,7 @@ import { saveNextAction } from '@/lib/nextActionWrite';
 import { newSendKey } from '@/lib/smsClient';
 import { smsSize } from '@/lib/channelCosts';
 import { isRefused, previewMoreInfo, savePriceLine, sendMoreInfo, type MoreInfoPreview } from '@/lib/moreInfoClient';
-import { MORE_INFO_NEXT_ACTION, moreInfoFollowUpDay, moreInfoFollowUpNote, type MoreInfoChannel } from '@/lib/moreInfoMessage';
+import { MORE_INFO_CONSENT_LABEL, MORE_INFO_NEXT_ACTION, moreInfoFollowUpDay, moreInfoFollowUpNote, type MoreInfoChannel } from '@/lib/moreInfoMessage';
 import { cn } from '@/lib/utils';
 
 /* ══ SEND MORE INFO (Paul, 2026-11-16, docs/send-more-info.md) ═════════════════════════════════════════════════════════════
@@ -46,6 +46,8 @@ function SendMoreInfoDialog({ leadId, onClose }: { leadId: string; onClose: () =
   const [busy, setBusy] = useState<null | 'send' | 'price'>(null);
   const [error, setError] = useState<string | null>(null);
   const [key, setKey] = useState(newSendKey);
+  /* "They asked for this info on a call" — required to send (text or email); it is the consent recorded on History. */
+  const [callConsent, setCallConsent] = useState(false);
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -66,9 +68,9 @@ function SendMoreInfoDialog({ leadId, onClose }: { leadId: string; onClose: () =
   const unavailable = !p ? 'Loading…' : channel === 'email' ? (p.email.to ? null : 'There is no email address on this lead. Add it on the lead first, or send a text.') : p.sms.refusal;
 
   const send = async () => {
-    if (!p || busy) return;
+    if (!p || busy || !callConsent) return;
     setBusy('send'); setError(null);
-    const r = await sendMoreInfo({ leadId, channel, subject: channel === 'email' ? subject : undefined, text: channel === 'email' ? emailBody : smsBody, key });
+    const r = await sendMoreInfo({ leadId, channel, subject: channel === 'email' ? subject : undefined, text: channel === 'email' ? emailBody : smsBody, key, callConsent });
     if (isRefused(r)) { setError(r.detail); setBusy(null); setKey(newSendKey()); return; }
     /* The follow-up: a person's send sets it, through the one Next Action write. A refusal here does not undo the send. */
     const na = await saveNextAction(leadId, { nextAction: MORE_INFO_NEXT_ACTION, date: followDay, time: null, note: moreInfoFollowUpNote(channel) });
@@ -142,8 +144,12 @@ function SendMoreInfoDialog({ leadId, onClose }: { leadId: string; onClose: () =
                 <p className="mt-1 text-xs text-muted-foreground">Saving rebuilds this preview (your edits above are replaced).</p>
               </details>
             )}
+            <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-border/60 px-3 py-2.5 text-sm" data-testid="send-more-info-consent">
+              <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-primary" checked={callConsent} onChange={(e) => setCallConsent(e.target.checked)} data-testid="send-more-info-consent-box" />
+              <span><span className="font-medium">{MORE_INFO_CONSENT_LABEL}</span><span className="block text-xs text-muted-foreground">Required to send. It is saved on the lead's History with your name.</span></span>
+            </label>
             {error && <p className="text-sm text-destructive" data-testid="send-more-info-error">{error}</p>}
-            <Button className="h-12 w-full gap-2" onClick={() => void send()} disabled={!!busy || !!unavailable} data-testid="send-more-info-send">
+            <Button className="h-12 w-full gap-2" onClick={() => void send()} disabled={!!busy || !!unavailable || !callConsent} data-testid="send-more-info-send">
               {busy === 'send' ? <><Loader2 className="h-4 w-4 animate-spin" />Sending…</> : <><Send className="h-4 w-4" />{channel === 'email' ? 'Send email' : 'Send text'}</>}
             </Button>
           </div>

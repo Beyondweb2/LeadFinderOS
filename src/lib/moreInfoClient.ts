@@ -32,7 +32,8 @@ async function call<T>(body: Record<string, unknown>): Promise<T | MoreInfoRefus
 
 export const previewMoreInfo = (leadId: string) => call<MoreInfoPreview>({ mode: 'preview', lead_id: leadId });
 
-export const sendMoreInfo = (a: { leadId: string; channel: MoreInfoChannel; subject?: string; text: string; key: string }) =>
-  call<MoreInfoSent>({ mode: 'send', lead_id: a.leadId, channel: a.channel, subject: a.subject ?? null, text: a.text, idempotency_key: a.key });
+/** callConsent = the "They asked for this info on a call" tick (the server refuses a send without it). */
+export const sendMoreInfo = (a: { leadId: string; channel: MoreInfoChannel; subject?: string; text: string; key: string; callConsent: boolean }) =>
+  call<MoreInfoSent>({ mode: 'send', lead_id: a.leadId, channel: a.channel, subject: a.subject ?? null, text: a.text, idempotency_key: a.key, call_consent: a.callConsent === true });
 
 export const savePriceLine = (priceLine: string) => call<{ ok: true; price_line: string }>({ mode: 'save_settings', price_line: priceLine });

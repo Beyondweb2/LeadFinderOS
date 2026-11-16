@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { outreachLeadLink } from '@/lib/salesLinks';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { invokeFailure, plainRefusal } from '@/lib/functionError';
 import { firstNameFrom, questionnaireFollowupBody } from '@/lib/questionnaireFollowup';
 import {
   useSubmissions, notifyStateFor, isPaidSubmission, isLeadPaid, needsQ2, daysSince,
@@ -123,13 +124,14 @@ export function SubmissionsCard() {
         body: { lead_id: r.lead_id, phone: r.lead_phone ?? '', country: r.lead_country ?? undefined, template_name: 'questionnaire_followup' },
       });
       if (e || !data?.ok) {
-        const code = e?.message ?? data?.error ?? 'send failed';
+        const f = e ? await invokeFailure(e) : null;
+        const code = f?.error ?? data?.error ?? 'send failed';
         toast({
           title: 'Not sent',
           description: code === 'pitch_already_sent' ? 'This nudge has already gone to this lead — one per lead, no repeats.'
             : code === 'no_contact_name' ? 'The lead has no contact name saved — add their first name and try again.'
             : code === 'unknown_template' ? 'The send path is not deployed yet (waiting on Meta approval).'
-            : String(code),
+            : f?.reason ?? data?.reason ?? plainRefusal(code),
           variant: 'destructive',
         });
         if (code === 'pitch_already_sent') { setNudgeId(null); void refetch(); }

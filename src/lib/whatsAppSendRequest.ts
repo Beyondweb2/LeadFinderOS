@@ -4,6 +4,7 @@
    from either screen. It was lifted out of useInbox.send unchanged; never add a field here for one caller only. */
 import type { supabase as Supabase } from '@/integrations/supabase/client';
 import { sendErrorMeaning } from './sendErrorMeaning';
+import { invokeFailure } from './functionError';
 
 export interface WhatsAppSendArgs {
   phone: string;
@@ -60,13 +61,14 @@ export async function sendWhatsAppRequest(sb: { functions: typeof Supabase.funct
       ...(args.freeOnly ? { free_only: true } : {}),
     },
   });
-  if (error) return { ok: false, error: error.message };
+  /* ⛔ NEVER the SDK's "non-2xx" wrapper: the server's own reason (invokeFailure reads the body). */
+  if (error) { const f = await invokeFailure(error); return { ok: false, error: f.error, reason: f.reason }; }
   /* A Meta refusal (e.g. 132001: a template Meta has not approved yet) came back with Meta's raw error text only, and every screen
      showed that text. Meta's code is now worded here (sendErrorMeaning), once, for every caller. */
   if (!data?.ok) {
     const failCode = typeof data?.failCode === 'number' ? data.failCode : undefined;
     const meta = failCode !== undefined ? sendErrorMeaning('whatsapp', failCode) : null;
-    const reason = data?.reason ?? (meta ? `Not sent: ${meta} (Meta error ${failCode})` : undefined);
+    const reason = data?.reason ?? data?.detail ?? (meta ? `Not sent: ${meta} (Meta error ${failCode})` : undefined);
     return { ok: false, error: data?.error ?? 'send_failed', reason, ...(failCode !== undefined ? { failCode } : {}) };
   }
   const shape = {
