@@ -4,9 +4,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import {
   coverageKey, coverageStateFor,
-  hasLeadPool, summarise, applyFilters, applySuppressionPatch, countLeadsByPair, workersByPair, foundAddedByPair,
+  hasLeadPool, summarise, applyFilters, applySuppressionPatch, countLeadsByPair, workersByPair, foundAddedByPair, searchersByPair,
   type CoverageFacts, type CoverageRow, type CoverageTown, type CoverageSummary,
-  type SuppressionPatch, type CoverageWorker, type WorkedByEntry, type FoundAdded, type SearchRunRecord,
+  type SuppressionPatch, type CoverageWorker, type WorkedByEntry, type FoundAdded, type SearchRunRecord, type CoverageSearcher,
 } from '@/lib/coverageState';
 import { coverageQueryKey, coverageTownsQueryKey } from '@/lib/coverageFreshness';
 import { ABROAD_TOWNS, abroadTownKey, type CoverageCountry } from '@/lib/coverageCountries';
@@ -36,7 +36,7 @@ export interface CoverageTownRow extends CoverageTown {
    answers "how far has this gone", the count answers "have I pulled leads from here". */
 /* `workers` = who owns a contacted lead in this trade+town (2026-09-28); empty when nobody can be named. */
 /* `foundAdded` = Found vs Added, with / without a website, from the search runs (2026-09-29); null = never searched. */
-export type GradedTown = CoverageTownRow & { state: CoverageRow['state']; leadCount: number; hasPool: boolean; workers: CoverageWorker[]; foundAdded: FoundAdded | null };
+export type GradedTown = CoverageTownRow & { state: CoverageRow['state']; leadCount: number; hasPool: boolean; workers: CoverageWorker[]; foundAdded: FoundAdded | null; searchers: CoverageSearcher[] };
 
 interface Pair { trade: string; town: string; country?: string | null }
 
@@ -145,6 +145,11 @@ export function useCoverage(country: CoverageCountry = 'UK') {
     pooledPairs: pairs?.pooled
       ? new Set(pairs.pooled.map((p) => coverageKey(p.trade, p.town)))
       : undefined,
+    /* 2026-11-16: a trade+town ANY teammate searched (any run, recorded or not). Undefined when the endpoint sends no
+       runs, so an older deploy grades exactly as before. */
+    searchedPairs: pairs?.runs
+      ? new Set(pairs.runs.map((r) => coverageKey(r.trade, r.town)))
+      : undefined,
   }), [pairs]);
 
   /* ⛔ COUNTED FROM THE SAME `pairs.leads` THE `leads` RUNG IS DERIVED FROM — one fetch, one truth.
@@ -159,6 +164,8 @@ export function useCoverage(country: CoverageCountry = 'UK') {
   const workers = useMemo(() => workersByPair(pairs?.workedBy), [pairs]);
   /* Found vs Added per pair, from the search runs. An older deploy sends no runs: no breakdown (null). */
   const foundAdded = useMemo(() => foundAddedByPair(pairs?.runs), [pairs]);
+  /* Who searched each pair and when (2026-11-16). An older deploy sends no searcher: the line is simply not shown. */
+  const searchers = useMemo(() => searchersByPair(pairs?.runs), [pairs]);
 
   const gradeFor = useCallback((trade: string, includeSuppressed: boolean): GradedTown[] => {
     return towns
@@ -174,8 +181,9 @@ export function useCoverage(country: CoverageCountry = 'UK') {
         hasPool: hasLeadPool(trade, t, facts),
         workers: workers.get(coverageKey(trade, t.name)) ?? [],
         foundAdded: foundAdded.get(coverageKey(trade, t.name)) ?? null,
+        searchers: searchers.get(coverageKey(trade, t.name)) ?? [],
       }));
-  }, [towns, facts, leadCounts, workers, foundAdded]);
+  }, [towns, facts, leadCounts, workers, foundAdded, searchers]);
 
   const setSuppressed = useCallback(async (townId: string, suppress: boolean, reason?: string) => {
     const { data: res, error: e } = await supabase.functions.invoke('coverage', {

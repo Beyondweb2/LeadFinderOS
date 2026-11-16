@@ -300,3 +300,38 @@ cap are book-wide (one WhatsApp number), `team_members.daily_send_limit` is per 
 **Tests:** `scripts/multi-user-safety.test.ts` (34 checks); `supabase/tests/multi-user-safety.sql` (13 checks, two fake reps,
 same lead / name / website, cross-user read, claim, direct write, anon, a leaver's notifications; always rolled back) — 13/13
 against the live schema with the migration applied inside the rolled-back transaction, 2026-10-27.
+
+## 11. Team visibility — nobody doubles up (2026-11-16, branch `v1-team-visibility`, migration 20261217090000)
+
+Paul's brief (new salespeople start today): towns searched by anyone show as searched for everyone, with who and when, per
+trade; a business already in the CRM shows "Already added by <name> · <status>" whatever its status; a salesperson cannot add
+it again or work someone else's lead; opt-outs and Do Not Contact always block. Tested as a new salesperson.
+
+**Audit (before):** already working — Coverage reads ONE book for every role (a brand-new rep sees the same map, the
+`coverage` function swaps a salesperson to `book_owner_id`); Found / Added came from everyone's search runs; the Find Leads
+lookup matches any lead incl. archived / opted out, any owner, and names who added it; `sales_add_lead` / `coverage_add_leads`
+refuse an existing business, `claim_lead` refuses someone else's, `sales_queue_opener` skips `not_yours`. Missing — who
+searched and when; a searched-but-nothing-added town read "Untouched"; no status on the Find Leads badge; a phone on
+`contact_suppressions` with NO lead read as new (sending to it was already refused).
+
+**Changed:**
+- `coverage` (edge): each search run also carries `by` (user id) and `at` (`searched_at`). Names come from the team directory.
+  `src/lib/coverageState.ts`: new rung `searched` ("Searched, none added", between `leads` and `untouched`; absent runs → old
+  grading), `searchersByPair` / `describeSearchers`. Row line: `CoverageSearchedBy` ("Searched by Paul · 14 Nov, +2 more",
+  everyone on hover; an unnamed searcher is "a teammate").
+- `lead_identity_lookup` gains `lead_status` (opted_out · do_not_contact · wrong_number · client · archived · not_interested ·
+  contacted · not_contacted; opt-out / suppression first). An unmatched result whose phone is on `contact_suppressions` is
+  `protected` + do_not_contact / wrong_number, so Find Leads shows no Add and Select all leaves it out. Ids stay masked for Sales;
+  `_lead_identity_rows`, `sales_add_lead`, `coverage_add_leads`, `lead_claim_block` unchanged. Words: `src/lib/findLeadsLeadStatus.ts`
+  (one leaf), shown by `AlreadyAddedBadge` (Sales) and `AlreadyAddedMarker` (admin), red for a stop status.
+
+**Not changed (say so):** the server add paths still accept a suppressed phone that no lead holds (only Find Leads stops it; the
+senders refuse it). A rep reads a peer lead's coarse status (e.g. "Client", "Opted out") — the brief asked for it; no money,
+no conversation.
+
+**Tests:** `scripts/team-visibility.test.ts`; `supabase/tests/team-visibility.sql` (a brand-new sales user, role and team row
+created inside ONE DO block that ends by raising its results, so everything rolls back) — 2026-11-16 live after the migration:
+someone else's lead owned/contacted (also matched by phone alone), an opted-out lead opted_out, an archived lead archived, a
+suppressed phone with no lead protected/do_not_contact, a new business new; ids masked; claim `already_owned`; add `exists`;
+queue `not_yours` (0 queued); 0 rows of `sales_leads` / `outreach_leads` / `search_history` readable directly. Read back after:
+no temp user, team row or suppression row left.

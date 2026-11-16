@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-16-team-visibility', date: '2026-11-16', title: 'Coverage shows who searched each town; Find Leads shows each lead\'s status', audience: 'all',
+    body: 'So nobody on the team doubles up. Coverage now says who searched a town for a trade and when ("Searched by Paul · 14 Nov"; hover for everyone), for every team member, and a town someone searched but added nothing from is marked "Searched, none added" instead of Untouched. In Find Leads a business already in the CRM shows who added it and its status, for example "Added by Paul · Opted out" or "Added by Chris · Archived". Opted out, Do Not Contact and wrong numbers are shown in red. A Find Leads result whose number is on the opt-out / Do Not Contact list can no longer be added from there, even if no lead holds it (sending to it was already blocked).',
+    report: {
+      added: ['"Searched by <name> · <date>" on every Coverage row anyone searched (the full list on hover).', 'A "Searched, none added" stage in the Coverage headline and rows.', 'The lead\'s status after "Added by <name>" in Find Leads (Opted out, Do Not Contact, Wrong number, Client, Archived, Not interested, Contacted, Not contacted yet).'],
+      changed: ['A Find Leads result whose phone is on the opt-out / Do Not Contact list shows "Do Not Contact" with no Add button, and is left out of Select all.', 'The admin\'s In CRM marker turns red and says the status for an opted-out, Do Not Contact or wrong-number lead.'],
+      removed: [],
+      effect: 'New salespeople see which towns and businesses the team already has before they search or add, so nobody works the same town or business twice.',
+    } },
   { id: '2026-11-15-website-check-accuracy', date: '2026-11-15', title: 'Website check: measured on 27 real sites, now 99% of findings true', audience: 'all',
     body: 'Every finding the website check makes was checked by hand against what a real browser shows, on 27 real lead websites. 82% were true; after the fixes 99% are. The check now finds testimonials it used to miss, no longer calls a cookie banner\'s button a dead link, no longer lists things like "VW Scirocco GT" as a place, reads badly written headings and the sitemap of a Wix site in a folder, and gives a slow homepage a longer second try. Two kinds of point still under 90% (dead links, missing accreditations) are no longer said in client reports, replies or voice notes; they stay on the team\'s screens.',
     report: {
