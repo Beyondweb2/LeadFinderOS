@@ -3381,9 +3381,9 @@ export function OutreachTable({
                         {!isDemoLead(lead.id) && <SiteScorePill score={crawlByLeadId.get(lead.id)?.siteScore} website={lead.website} leadId={lead.id} issues={siteIssuesByLeadId.get(lead.id)} />}
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        {/* Action icons on ONE line (2026-11-17, compact rows): every icon is its own flex item (the enrich group and
+                        {/* Action icons in a fixed 5-per-row grid (kept on 2 rows, Paul 2026-11-17: 11 icons do not fit one line): every icon is its own item (the enrich group and
                             the SMS/WhatsApp pair are flattened); the table scrolls sideways on a narrow window. */}
-                        <div className="mx-auto flex w-fit flex-nowrap items-center gap-0.5">
+                        <div className="mx-auto grid w-fit [grid-template-columns:repeat(5,auto)] place-items-center gap-1">
                           {(lead.google_maps_url || ((lead as any).place_id ? `https://www.google.com/maps/place/?q=place_id:${(lead as any).place_id}` : null)) && (
                             <a
                               href={lead.google_maps_url || `https://www.google.com/maps/place/?q=place_id:${(lead as any).place_id}`}
