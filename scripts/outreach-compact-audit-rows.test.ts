@@ -182,7 +182,7 @@ console.log('── ownership unchanged ──');
   ok(/const scopedLeads = useMemo\(\(\) => scopeLeads\(allLeads, ownerScope, role, user\?\.id\)/.test(outreach) && /leads=\{scopedLeads\}/.test(outreach), 'the table still receives only the scoped list (My leads / Unassigned / a rep / All team for Paul; own for a rep)');
   ok(/onOwnerScopeChange=\{role === 'admin' \? setOwnerScopeChoice : undefined\}/.test(outreach), 'only the admin can change whose leads are shown');
   ok(!/salesCheckView\?\.items[\s\S]{0,200}business_name/.test(table), 'batch items are matched to rows by lead id only — an item for a lead not in the list draws nothing');
-  ok(/aiCheck=\{isDemoLead\(lead\.id\) \? undefined : aiCheckFor\(lead\)\}/.test(table) && /aiCheckFor\(lead, 'mt-1/.test(table), 'the phone card and the desktop row draw the same summary');
+  ok((table.match(/aiSlot=\{aiCheckFor\(lead, 'font-normal'\)\}/g) ?? []).length === 2 && !/aiCheckFor\(lead, 'mt-1/.test(table), 'the phone card and the desktop row draw the same summary, now inside the Opportunity hover (2026-11-17)');
 }
 
 console.log('── filters and select all untouched ──');

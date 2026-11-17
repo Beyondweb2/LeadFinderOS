@@ -41,7 +41,11 @@ const STATE_WORDS: Partial<Record<string, string>> = {
   profile_only: 'The website on file is a social or directory page, not the business’s own site.',
 };
 
-function Reasons({ view, onBreakdown }: { view: SiteScoreView; onBreakdown?: () => void }) {
+/** One issue the website check found, for the row's hover list (2026-11-17). Only checks a client may read; `critical` = the check's own
+ *  "high" grade; critical lines come first. */
+export interface SiteIssueLine { title: string; critical: boolean }
+
+function Reasons({ view, onBreakdown, issues }: { view: SiteScoreView; onBreakdown?: () => void; issues?: readonly SiteIssueLine[] }) {
   const day = dayOf(view.checkedAt);
   if (view.kind === 'state') {
     return (
@@ -61,7 +65,18 @@ function Reasons({ view, onBreakdown }: { view: SiteScoreView; onBreakdown?: () 
         <span className={BAND_TEXT[view.band]}>{SITE_SCORE_BAND_LABELS[view.band]}</span>
         <span className={BAND_TEXT[view.band]}>{view.score}/100</span>
       </div>
-      {view.reasons.length ? (
+      {issues ? (
+        issues.length ? (
+          <ul className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2" data-testid="site-score-issues">
+            {issues.map((r, i) => (
+              <li key={i} className="flex gap-1.5">
+                <span className={cn('mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full', r.critical ? 'bg-red-500' : 'bg-muted-foreground/50')} aria-hidden />
+                <span className={r.critical ? 'font-medium' : undefined}>{r.title}</span>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="text-muted-foreground">No issues found.</p>
+      ) : view.reasons.length ? (
         <ul className="space-y-1">
           {view.reasons.map((r, i) => (
             <li key={i} className="flex gap-1.5">
@@ -176,7 +191,7 @@ function BreakdownDialog({ open, onOpenChange, leadId, website }: { open: boolea
 
 /** Hover opens it on a desktop, a tap toggles it on a phone; the click never reaches the row underneath (the Inbox row opens
  *  the conversation on click). */
-function WithReasons({ view, label, leadId, website, children }: { view: SiteScoreView; label: string; leadId: string | null; website: string | null | undefined; children: ReactNode }) {
+function WithReasons({ view, label, leadId, website, issues, children }: { view: SiteScoreView; label: string; leadId: string | null; website: string | null | undefined; issues?: readonly SiteIssueLine[]; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [full, setFull] = useState(false);
   const stop = (e: MouseEvent | KeyboardEvent) => e.stopPropagation();
@@ -188,7 +203,7 @@ function WithReasons({ view, label, leadId, website, children }: { view: SiteSco
             type="button"
             aria-label={label}
             data-testid="site-score"
-            onClick={(e) => { stop(e); setOpen((o) => !o); }}
+            onClick={(e) => { stop(e); setOpen(true); }}
             onKeyDown={stop}
             onMouseEnter={() => setOpen(true)}
             onMouseLeave={() => setOpen(false)}
@@ -196,9 +211,9 @@ function WithReasons({ view, label, leadId, website, children }: { view: SiteSco
             {children}
           </button>
         </PopoverTrigger>
-        <PopoverContent side="bottom" align="end" className="w-72 p-3" onClick={stop} onOpenAutoFocus={(e) => e.preventDefault()}
+        <PopoverContent side="bottom" align="end" className={cn('p-3', issues?.length ? 'w-[32rem] max-w-[92vw]' : 'w-72')} onClick={stop} onOpenAutoFocus={(e) => e.preventDefault()}
           onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-          <Reasons view={view} onBreakdown={leadId ? () => { setOpen(false); setFull(true); } : undefined} />
+          <Reasons view={view} issues={issues} onBreakdown={leadId ? () => { setOpen(false); setFull(true); } : undefined} />
         </PopoverContent>
       </Popover>
       {leadId && <BreakdownDialog open={full} onOpenChange={setFull} leadId={leadId} website={website} />}
@@ -208,12 +223,12 @@ function WithReasons({ view, label, leadId, website, children }: { view: SiteSco
 
 /** THE pill — the Inbox's AI line, the Outreach row and the lead detail all draw this one. Number + band word, or the state's
  *  own words; "Not checked" is faint; no website says so. */
-export function SiteScorePill({ score, website, leadId = null }: { score: StoredSiteScore | null | undefined; website: string | null | undefined; leadId?: string | null }) {
+export function SiteScorePill({ score, website, leadId = null, issues }: { score: StoredSiteScore | null | undefined; website: string | null | undefined; leadId?: string | null; issues?: readonly SiteIssueLine[] }) {
   const view = siteScoreViewFor(website, score);
   if (view.kind === 'state') {
     const faint = view.state === 'not_checked';
     return (
-      <WithReasons view={view} label={`${ROOM_TO_IMPROVE}: ${SITE_SCORE_STATE_LABELS[view.state]}`} leadId={leadId} website={website}>
+      <WithReasons view={view} label={`${ROOM_TO_IMPROVE}: ${SITE_SCORE_STATE_LABELS[view.state]}`} leadId={leadId} website={website} issues={issues}>
         <span className={cn('whitespace-nowrap rounded-full border border-dashed px-1.5 py-px text-[10px]',
           faint ? 'border-border/60 text-muted-foreground/60' : 'border-muted-foreground/50 text-muted-foreground')} data-state={view.state}>
           {SITE_SCORE_STATE_LABELS[view.state]}
@@ -222,7 +237,7 @@ export function SiteScorePill({ score, website, leadId = null }: { score: Stored
     );
   }
   return (
-    <WithReasons view={view} label={`${ROOM_TO_IMPROVE}: ${view.score} out of 100, ${SITE_SCORE_BAND_LABELS[view.band]}`} leadId={leadId} website={website}>
+    <WithReasons view={view} label={`${ROOM_TO_IMPROVE}: ${view.score} out of 100, ${SITE_SCORE_BAND_LABELS[view.band]}`} leadId={leadId} website={website} issues={issues}>
       <span className={cn('whitespace-nowrap rounded-full border px-1.5 py-px text-[10px] font-semibold tabular-nums', BAND_PILL[view.band], BAND_TEXT[view.band])} data-state="scored" data-band={view.band}>
         {view.score} · {SITE_SCORE_BAND_LABELS[view.band]}
       </span>

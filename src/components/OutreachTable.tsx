@@ -131,7 +131,8 @@ import { OutreachMobileCard } from './OutreachMobileCard';
 import { LeadEnrichButtons } from './LeadEnrichButtons';
 import { SocialLinks, findSocialsForLeads, SOCIAL_BULK_MAX } from './SocialLinks';
 import { CrawlCheckButton } from './CrawlCheckButton';
-import { SiteScoreBar } from './SiteScoreBadge';
+import { SiteScorePill, type SiteIssueLine } from './SiteScoreBadge';
+import { websiteCheckFor } from '@/lib/websiteCheck';
 import { OpportunityCell, OPPORTUNITY_TITLE } from './OpportunityCell';
 import { OPP_GROUPS, OPP_GROUP_LABELS, oppGroupOf, oppSortKey, type OppGroup, type OppResult } from '@/lib/opportunityScore';
 import { opportunityForLead } from '@/lib/opportunityForLead';
@@ -438,6 +439,19 @@ export function OutreachTable({
     }
     return m;
   }, [leads, crawlByLeadId, oppAudits, oppSuppressed]);
+  /* The Website hover's issue list (2026-11-17): every issue the lead's ONE website check found, critical (the check's own "high"
+     grade) first, ONLY the checks a client may read (audience 'client' leaves out CLIENT_HIDDEN_KINDS). null = no list to show. */
+  const siteIssuesByLeadId = useMemo(() => {
+    const m = new Map<string, SiteIssueLine[]>();
+    for (const l of leads) {
+      const crawl = crawlByLeadId.get(l.id);
+      if (!crawl) continue;
+      const v = websiteCheckFor(crawl, { website: l.website, audience: 'client' });
+      if (!v.summary || v.state === 'unreadable') continue;
+      m.set(l.id, [...v.serious, ...v.minor].map((i) => ({ title: i.title, critical: i.severity === 'high' })));
+    }
+    return m;
+  }, [leads, crawlByLeadId]);
   const [playbookLeadId, setPlaybookLeadId] = useState<string | null>(null);
   // Bulk AI-audit question-count + cost-confirm dialog. Count range mirrors the server's
   // HARD 3..5 clamp (default 3) — unified across wizard/bulk/auto-chain.
@@ -3128,7 +3142,8 @@ export function OutreachTable({
                   onUpdateLead={onUpdateLead && !isDemoLead(lead.id) ? onUpdateLead : undefined}
                   auditState={auditRowState(auditsByLead[lead.id])}
                   onOpenAudit={isDemoLead(lead.id) ? undefined : () => setAuditLead(lead)}
-                  aiCheck={isDemoLead(lead.id) ? undefined : aiCheckFor(lead)}
+                  oppCell={isDemoLead(lead.id) || !oppByLeadId.get(lead.id) ? undefined : <OpportunityCell result={oppByLeadId.get(lead.id)!} aiSlot={aiCheckFor(lead, 'font-normal')} />}
+                  siteCell={isDemoLead(lead.id) ? undefined : <SiteScorePill score={crawlByLeadId.get(lead.id)?.siteScore} website={lead.website} leadId={lead.id} issues={siteIssuesByLeadId.get(lead.id)} />}
 
                 />
               ))
@@ -3246,8 +3261,7 @@ export function OutreachTable({
                             Added by {team.byId.get(lead.added_by_user_id)!.display_name}
                           </div>
                         )}
-                        {/* The AI check, compact: a state word, or ChatGPT x · Gemini y and Call screen. Scores only. */}
-                        {!isDemoLead(lead.id) && aiCheckFor(lead, 'mt-1 max-w-[260px] font-normal')}
+                        {/* The AI check chips (ChatGPT / Gemini / Google AI, Call screen) now live in the Opportunity hover. */}
                       </TableCell>
                       <TableCell>
                         {lead.phone ? (
@@ -3260,7 +3274,7 @@ export function OutreachTable({
                               title={`Call ${lead.business_name}`}
                             >
                               <Phone className="h-3.5 w-3.5 flex-shrink-0" />
-                              <span className="font-mono">{lead.phone}</span>
+                              <span className="font-mono whitespace-nowrap">{lead.phone}</span>
                             </button>
                             {/* A quiet grey label for a number WhatsApp cannot reach (2026-10-19) — it is still callable. */}
                             {phoneLabelOf(lead.phone, lead.country) && (
@@ -3359,18 +3373,17 @@ export function OutreachTable({
                         </>
                       )}
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        {!isDemoLead(lead.id) && oppByLeadId.get(lead.id) && <OpportunityCell result={oppByLeadId.get(lead.id)!} />}
+                        {!isDemoLead(lead.id) && oppByLeadId.get(lead.id) && <OpportunityCell result={oppByLeadId.get(lead.id)!} aiSlot={aiCheckFor(lead, 'font-normal')} />}
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        {/* Room to improve the website — its own column (2026-10-30, Paul chose "B": number, band word, bar);
-                            team only, both roles (siteScore.ts). */}
-                        {!isDemoLead(lead.id) && <SiteScoreBar score={crawlByLeadId.get(lead.id)?.siteScore} website={lead.website} leadId={lead.id} />}
+                        {/* Room to improve the website — its own column: the score pill only (2026-11-17); the hover lists the issues
+                            found (2 columns, critical first, client-visible checks only). Team only, both roles (siteScore.ts). */}
+                        {!isDemoLead(lead.id) && <SiteScorePill score={crawlByLeadId.get(lead.id)?.siteScore} website={lead.website} leadId={lead.id} issues={siteIssuesByLeadId.get(lead.id)} />}
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        {/* Action icons in a fixed 5-per-row grid: every icon is an
-                            individual grid item (the enrich group and the SMS/WhatsApp
-                            pair are flattened), so 9 icons wrap as 5 + 4, not uneven rows. */}
-                        <div className="mx-auto grid w-fit [grid-template-columns:repeat(5,auto)] place-items-center gap-1">
+                        {/* Action icons on ONE line (2026-11-17, compact rows): every icon is its own flex item (the enrich group and
+                            the SMS/WhatsApp pair are flattened); the table scrolls sideways on a narrow window. */}
+                        <div className="mx-auto flex w-fit flex-nowrap items-center gap-0.5">
                           {(lead.google_maps_url || ((lead as any).place_id ? `https://www.google.com/maps/place/?q=place_id:${(lead as any).place_id}` : null)) && (
                             <a
                               href={lead.google_maps_url || `https://www.google.com/maps/place/?q=place_id:${(lead as any).place_id}`}
