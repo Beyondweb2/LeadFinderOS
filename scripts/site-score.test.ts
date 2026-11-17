@@ -170,7 +170,7 @@ ok(/afterEngines=\{<LeadSiteScore /.test(inbox), 'Inbox detail: the pill is besi
 const outreach = read('src/components/OutreachTable.tsx');
 ok(/>Website<\/TableHead>\n\s+<TableHead className="w-\[160px\] text-center">Actions<\/TableHead>/.test(outreach), 'Outreach: a Website column just before Actions');
 ok(/colSpan=\{readOnly \? 5 : 8\}/.test(outreach), 'Outreach: the empty row spans the extra column');
-ok(/<SiteScoreBar score=/.test(outreach) && !/<SiteScorePill /.test(outreach), 'Outreach: the bar in its column, no pill among the action icons');
+ok(/<SiteScorePill score=/.test(outreach) && !/<SiteScoreBar /.test(outreach), 'Outreach: the score pill only in its column (2026-11-17: no bar); its hover lists the issues');
 
 /* ── words: room to improve, never a prediction ── */
 const badge = read('src/components/SiteScoreBadge.tsx');

@@ -173,9 +173,13 @@ export interface OppAuditFacts {
 
 export interface OppReason { text: string; points: number; kind: 'website' | 'ai' | 'worth' | 'lowered' }
 
+/** Which of the two inputs a lead still lacks: the deep website scan, the finished AI audit, or both (2026-11-17). */
+export type OppNeeds = 'scan' | 'audit' | 'both';
+export const OPP_NEEDS_LABELS: Record<OppNeeds, string> = { scan: 'Needs scan', audit: 'Needs audit', both: 'Needs both' };
+
 export type OppResult =
   | { kind: 'excluded'; why: string; critical: boolean; reasons: OppReason[] }
-  | { kind: 'incomplete'; missing: string[]; critical: boolean; reasons: OppReason[]; partial: number }
+  | { kind: 'incomplete'; missing: string[]; needs: OppNeeds; critical: boolean; reasons: OppReason[]; partial: number }
   | { kind: 'scored'; score: number; band: OppBand; critical: boolean; reasons: OppReason[]; parts: { website: number; ai: number; worth: number }; lowered: string | null };
 
 const kindUsable = (id: string) => !CLIENT_HIDDEN_KINDS.has(id) && (id in OPP_BENCH || OPP_EXACT_READS.has(id));
@@ -239,17 +243,20 @@ export function opportunityScore(lead: OppLeadFacts, site: OppWebsiteFacts | nul
 
   // AI audit part.
   const missing: string[] = [];
+  const needScan = !web.known;
+  let needAudit = false;
   if (!web.known) missing.push(site?.depth === 'quick' ? 'only a quick website check (deep check not run yet)' : site?.depth === 'failed' ? 'website could not be read' : 'no website scan yet');
   const fromRecheck = !!audit && audit.recheckShare !== undefined;
   const share = fromRecheck ? audit!.recheckShare ?? null : audit?.score ? namedShare(audit.score) : null;
   if (!share) {
+    needAudit = true;
     missing.push(fromRecheck
       ? (audit!.updating ? 'Re-check still running' : 'Re-check incomplete')
       : audit?.updating && audit.score ? 'AI audit still updating' : audit?.score ? 'AI audit incomplete' : 'no AI audit yet');
   }
 
   const partial = website + worth;
-  if (missing.length) return { kind: 'incomplete', missing, critical, reasons: topReasons(reasons), partial };
+  if (missing.length) return { kind: 'incomplete', missing, needs: needScan && needAudit ? 'both' : needScan ? 'scan' : 'audit', critical, reasons: topReasons(reasons), partial };
 
   let ai = 0;
   let lowered: string | null = null;

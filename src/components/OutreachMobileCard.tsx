@@ -71,6 +71,9 @@ interface OutreachMobileCardProps {
   onOpenAudit?: () => void;
   /** The row's compact AI check (OutreachAiCheck AiCheckSummary) — the same element as the desktop row. */
   aiCheck?: React.ReactNode;
+  /** The Opportunity pill (its tap holds the AI chips) and the Website score pill — one line, as the desktop row (2026-11-17). */
+  oppCell?: React.ReactNode;
+  siteCell?: React.ReactNode;
   onUpdateLead?: (leadId: string, data: Partial<OutreachLead>) => Promise<any>;
 }
 
@@ -104,6 +107,8 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
   auditState = 'none',
   onOpenAudit,
   aiCheck,
+  oppCell,
+  siteCell,
   onUpdateLead,
 }: OutreachMobileCardProps) {
   const team = useTeamDirectory();
@@ -177,6 +182,9 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
           )}
           {/* The AI check, compact: a state word, or ChatGPT x · Gemini y and Call screen. Scores only. */}
           {aiCheck}
+          {(oppCell || siteCell) && (
+            <div className="flex items-center gap-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>{oppCell}{siteCell}</div>
+          )}
 
           {/* Per-type contact enrichment (email / facebook / instagram) */}
           {/* Enrichment is admin work (perms.enrichLeads), as on the desktop row. */}

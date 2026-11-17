@@ -68,6 +68,12 @@ const noAudit = opportunityScore(lead(), site(['no_service_pages']), null);
 ok(noAudit.kind === 'incomplete' && noAudit.critical && noAudit.missing.includes('no AI audit yet'), 'no audit → incomplete, critical still flagged');
 ok(opportunityScore(lead(), site([]), { score: score(0, 6, false), updating: false }).kind === 'incomplete', 'an unfinished audit is not 0 named');
 ok(opportunityScore(lead(), site([]), { score: null, updating: true }).kind === 'incomplete', 'audit updating → incomplete');
+/* The row pill says WHICH input is missing (2026-11-17): Needs scan / Needs audit / Needs both; a score only when both ran. */
+const needsOf = (r: ReturnType<typeof opportunityScore>) => (r.kind === 'incomplete' ? r.needs : null);
+ok(needsOf(noScan) === 'scan' && needsOf(quick) === 'scan', 'scan missing, audit done → "Needs scan"');
+ok(needsOf(noAudit) === 'audit', 'scan done, audit missing → "Needs audit"');
+ok(needsOf(opportunityScore(lead(), null, null)) === 'both', 'neither → "Needs both"');
+ok(needsOf(opportunityScore(lead(), site([]), audit(0))) === null, 'both done → scored, no "needs"');
 const noSite = opportunityScore(lead({ website: null }), null, audit(0));
 ok(noSite.kind === 'scored' && noSite.critical && noSite.reasons.some((r) => r.text.startsWith('No website')), 'no website needs no scan: critical, scored');
 ok(opportunityScore(lead({ website: 'https://www.facebook.com/acme' }), null, audit(0)).critical, 'a Facebook page is not a website of their own');
