@@ -24,6 +24,9 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-17-find-leads-rows-cleaner', date: '2026-11-17', title: 'Find Leads results: cleaner rows', audience: 'all',
+    body: 'Search results no longer show the blue town label under the business name or the "Needs audit" label. Each row is just the name, website status, and the buttons.',
+    report: { added: [], changed: [], removed: ['The blue town label on Find Leads results.', 'The "Needs audit / Needs scan" label on Find Leads results.'], effect: 'Result rows are shorter and easier to scan. The town is still saved with the lead when you add it.' } },
   { id: '2026-11-17-email-bounced', date: '2026-11-17', title: 'A bounced email is marked on the lead', audience: 'all',
     body: 'When an email we send to a lead bounces (the address does not exist), the lead\'s History now says "Email bounced", and Send more info shows "Email bounced" instead of letting anyone send to that address again. Change the email on the lead and you can email the new one. Also fixed: the "messages not moving" queue alert no longer fires at 07:00 because of leads queued the day before.',
     report: { added: ['"Email bounced" in the lead\'s History.', '"Email bounced" in Send more info, with the send turned off for that address.'], changed: ['A bounced address can no longer be emailed again from Send more info or Quick Close until it is changed.', 'The queue "not moving" alert only counts time since send hours opened today.'], removed: [], effect: 'Nobody wastes a send on a dead address, and Paul no longer gets a false "stuck" email first thing in the morning.' } },

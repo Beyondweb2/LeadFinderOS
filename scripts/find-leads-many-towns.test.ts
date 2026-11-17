@@ -93,7 +93,7 @@ function ok(cond: boolean, msg: string) { console.log(`${cond ? 'PASS' : 'FAIL'}
     ok(/lead\.searchTown \?\? lastSearchLocation/.test(page), '…and a one-town result exactly as before');
     ok(/onSearchMany\(\{ keyword: keyword\.trim\(\), radius: radius \* 1000, country: selectedCountry, townOnly: true, depth \}\)/.test(form), 'the form sends the one-town filters, each town only (with the Standard / Thorough choice)');
     ok((form.match(/onSearch\(\{/g) ?? []).length === 1, 'the one-town search still has ONE place that builds its filters');
-    ok((table.match(/data-testid="result-town"/g) ?? []).length === 2, 'the same table, each row naming its town (desktop and phone)');
+    ok((table.match(/data-testid="result-town"/g) ?? []).length === 0, 'rows no longer show a town chip (Paul 2026-11-17); the town still travels with each lead when added');
     ok(/<LeadsTable/.test(page) && !/ManyTownsResults|MultiTownTable/.test(page), 'results are the ordinary Find Leads table — no second results list');
   }
 

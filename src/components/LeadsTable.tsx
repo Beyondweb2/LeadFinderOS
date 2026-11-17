@@ -33,7 +33,6 @@ import type { OutreachLead } from '@/types/outreach';
 import { SearchLeadContact } from './SearchLeadContact';
 import { useAuth } from '@/hooks/useAuth';
 import { readSearchResultsView, writeSearchResultsView, readSiteFilters, writeSiteFilters } from '@/lib/searchResultsPrefs';
-import { OpportunityCell } from '@/components/OpportunityCell';
 import { OPP_GROUPS, OPP_GROUP_LABELS, oppGroupOf, oppSortKey, type OppGroup, type OppResult } from '@/lib/opportunityScore';
 import { opportunityForLead } from '@/lib/opportunityForLead';
 import { useLeadCrawlsFor, useOpportunityAuditScores } from '@/hooks/useOpportunityInputs';
@@ -807,16 +806,11 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                     {lead.isExpanded && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium shrink-0">Nearby</span>
                     )}
-                    {/* MANY TOWNS (2026-10-16): which ticked town this result was searched in. */}
-                    {lead.searchTown && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-600 dark:text-blue-300 font-medium shrink-0" data-testid="result-town">{lead.searchTown}</span>
-                    )}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     <WebsiteStatusToggle lead={lead} onSet={onSetWebsiteStatus} compact />
                     {hasOwnSite(lead) && <SiteManagementCell row={agency.rowFor(lead.websiteUrl)} checking={agency.isChecking(lead.websiteUrl)} hasWebsite compact />}
                   </div>
-                  {oppById.get(lead.id) && <div className="mt-1"><OpportunityCell result={oppById.get(lead.id)!} compact /></div>}
                   {onEnrichPatch && (
                     <div className="mt-1.5">
                       <SearchLeadContact
@@ -977,12 +971,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                       {lead.isExpanded && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium shrink-0">Nearby</span>
                       )}
-                      {/* MANY TOWNS (2026-10-16): which ticked town this result was searched in. */}
-                      {lead.searchTown && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-600 dark:text-blue-300 font-medium shrink-0" data-testid="result-town">{lead.searchTown}</span>
-                      )}
                     </div>
-                    {oppById.get(lead.id) && <div className="mt-1"><OpportunityCell result={oppById.get(lead.id)!} compact /></div>}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
