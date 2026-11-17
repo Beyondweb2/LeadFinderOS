@@ -112,7 +112,9 @@ class ErrorBoundary extends Component<{ children: ReactNode; resetKey?: string }
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'system-ui', gap: 12 }}>
           <p style={{ fontSize: 16, color: '#888' }}>Something went wrong.</p>
           {this.state.reason && <p data-testid="error-reason" style={{ fontSize: 13, color: '#aaa', maxWidth: 480, textAlign: 'center' }}>{this.state.reason}</p>}
-          <button onClick={() => { this.setState({ hasError: false, reason: '' }); }} style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #ccc', cursor: 'pointer' }}>
+          {/* Try again = a FULL reload (2026-11-17): re-rendering the same broken tree only shows this screen again.
+              ⛔ Not while a call is live — a reload hangs up on the prospect — so then it only clears the screen. */}
+          <button data-testid="error-try-again" onClick={() => { if (callIsLive()) this.setState({ hasError: false, reason: '' }); else window.location.reload(); }} style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #ccc', cursor: 'pointer' }}>
             Try again
           </button>
         </div>

@@ -49,5 +49,14 @@ const headers = read('public/_headers');
 ok(/\/\*\s*\n\s+X-Robots-Tag: noindex, nofollow\s*\n\s+Cache-Control: no-cache/.test(headers), 'H1. every page (index.html) is no-cache, robots rule kept');
 ok(/\/assets\/\*\s*\n\s+! Cache-Control\s*\n\s+Cache-Control: public, max-age=31536000, immutable/.test(headers), 'H2. hashed assets keep a long cache');
 
+/* A missing chunk is a 404, never index.html (2026-11-17, iPad Safari) */
+ok(isStaleChunkError(new TypeError("'text/html' is not a valid JavaScript MIME type.")), 'W6. Safari MIME wording (what the iPad showed)');
+ok(isStaleChunkError(new TypeError('Failed to load module script: Expected a JavaScript module script but the server responded with a MIME type of "text/html".')), 'W7. Chrome MIME wording');
+const redirects = read('public/_redirects').split(/\r?\n/).filter((l) => l.trim() && !l.trim().startsWith('#'));
+ok(/^\/assets\/\*\s+\/missing-asset\s+200$/.test(redirects[0] ?? '') && /^\/\*\s+\/index\.html\s+200$/.test(redirects[1] ?? ''), 'M1. missing /assets files go to the 404 function BEFORE the SPA fallback (first match wins)');
+const fn = read('functions/missing-asset.ts');
+ok(/status: 404/.test(fn) && /'Cache-Control': 'no-store'/.test(fn) && !/text\/html/.test(fn.replace(/^\/\/.*$/gm, '')), 'M2. the function answers 404, no-store, never HTML');
+ok(/data-testid="error-try-again" onClick=\{\(\) => \{ if \(callIsLive\(\)\) this\.setState\(\{ hasError: false, reason: '' \}\); else window\.location\.reload\(\); \}\}/.test(app), 'T1. Try again is a full reload (only clears the screen while a call is live)');
+
 console.log(f ? `\n${f} FAILURE(S)` : '\nALL PASS');
 process.exit(f ? 1 : 0);
