@@ -90,12 +90,17 @@ export interface StuckInput {
   oldestSendableQueuedAt: string | null;
   activeSenders: number;
   gapMin: number;
+  /** When send hours opened TODAY (ISO, 07:00 London). ⛔ The clock never starts before this: overnight nothing is meant to
+   *  move. 2026-11-17: without it, the 07:00:21 tick saw "nothing sent today" + a lead queued yesterday 11:21 and emailed
+   *  "Valentin's messages not moving since 11:21" — his first send went 2 seconds later. */
+  windowOpenedAt: string;
 }
 
-/** Stuck since when (ISO) — the later of the last send and the oldest waiting lead — or null when not stuck. */
+/** Stuck since when (ISO) — the latest of the last send, the oldest waiting lead and today's opening — or null when not stuck. */
 export function stuckSince(i: StuckInput): string | null {
   if (!i.shouldBeMoving || !i.oldestSendableQueuedAt) return null;
-  const since = i.lastSentAt && i.lastSentAt > i.oldestSendableQueuedAt ? i.lastSentAt : i.oldestSendableQueuedAt;
+  const latest = (a: string, b: string | null) => (b && Date.parse(b) > Date.parse(a) ? b : a);
+  const since = latest(latest(i.oldestSendableQueuedAt, i.lastSentAt), i.windowOpenedAt);
   const waitedMin = (i.nowMs - Date.parse(since)) / 60000;
   return waitedMin >= stuckThresholdMin(i.activeSenders, i.gapMin) ? since : null;
 }

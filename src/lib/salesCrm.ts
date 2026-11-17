@@ -368,6 +368,8 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   work_closed: 'Closed on the dashboard',
   /* fn send-more-info (2026-11-16): body = "More info sent by Valentin via SMS". */
   more_info_sent: 'More info sent',
+  /* resend-webhook (2026-11-17): a hard bounce — that address is never emailed again until it is changed. */
+  email_bounced: 'Email bounced',
   onboarding_submitted: 'Client submitted onboarding',
   delivery_submitted: 'Ready for delivery',
   discovery_run: 'Discovery run',
@@ -472,6 +474,8 @@ export function activityDetail(
       return `${why}${cleared}`;
     }
     case 'more_info_sent': return `${a.body ?? 'More info sent'}${d.simulated ? ' (test mode - not sent)' : ''}`;
+    /* resend-webhook (2026-11-17, _shared/email-bounce.ts): a hard bounce. body = "Email bounced: x did not accept our email…". */
+    case 'email_bounced': return a.body ?? 'This email address did not accept our email.';
     case 'sms_sent': return d.simulated ? 'Test mode - not sent' : d.link_kind ? 'With a link (sent from Close)' : 'A text message';
     case 'call_made': {
       const secs = Number(d.duration_s);

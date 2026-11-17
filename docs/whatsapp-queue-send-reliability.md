@@ -53,3 +53,12 @@ Test: `scripts/queue-send-reliability.test.ts`.
   from a later Place Details lookup. The drip's phone-history seatbelt catches them. Fixing it means a post-lookup merge/flag — not done.
 - `whatsapp-status` writes `failed` without the Meta error text. That function was deliberately not deployed in this pass.
 - No live Meta send was made: no number in the system is verifiably Paul's. Needs his own number.
+
+## Stuck alert false alarm at 07:00 (2026-11-17, branch v1-queue-stuck-fix)
+
+Paul got "WhatsApp queue: Valentin's messages not moving since 11:21" at 07:00:21 London. Read-only check: Valentin's last
+send yesterday was 15:27; his oldest queued lead was queued YESTERDAY 11:21; the first tick today (07:00:21) raised the alert and
+his first send went at 07:00:22, then every ~3 min. Not Apify, not audits, not caps. Cause: `stuckSince` took the later of
+"last send TODAY" (none yet) and the oldest queued lead, so overnight counted. Fix: `StuckInput.windowOpenedAt` (today's 07:00
+London, `windowOpenedTodayIso()` in process-whatsapp-queue) — the episode never starts before send hours opened today. Both the
+alert and the rep's queue line use it. Test cases in `scripts/queue-fairness.test.ts` (the real 07:00:21 case).
