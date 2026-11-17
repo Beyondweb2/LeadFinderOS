@@ -22,6 +22,11 @@ const PATTERNS = [
   /unable to preload css/i,
   /ChunkLoadError/i,
   /Loading (CSS )?chunk [\w-]+ failed/i,
+  /* The host answered an old chunk name with index.html (2026-11-17, iPad Safari): "'text/html' is not a valid
+     JavaScript MIME type"; Chrome: "Failed to load module script: ... MIME type of "text/html"". A missing /assets file
+     now gets a 404 (public/assets/404.html, Cloudflare Pages serves the nearest 404.html); these stay as a backstop. */
+  /is not a valid JavaScript MIME type/i,
+  /Failed to load module script/i,
 ];
 
 /** Is this error a lazy page / chunk that could not be loaded? Positive match on the known wordings only. */

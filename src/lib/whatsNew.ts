@@ -24,6 +24,9 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-17-stale-app-reloads', date: '2026-11-17', title: 'App left open during an update now fixes itself', audience: 'all',
+    body: 'If the app was open (for example on an iPad) while we put out an update, opening a page could show "Something went wrong ... not a valid JavaScript MIME type". Now the app reloads itself once, on the same page, and carries on. If an error screen does show, Try again now reloads the page properly.',
+    report: { added: [], changed: ['After an update, an open app reloads itself once instead of showing an error.', 'Try again on the error screen now reloads the page (during a live call it only clears the screen, so the call is not cut off).'], removed: [], effect: 'No more error screen after an update on a device that was left open. Nothing you saved is lost.' } },
   { id: '2026-11-17-find-leads-rows-cleaner', date: '2026-11-17', title: 'Find Leads results: cleaner rows', audience: 'all',
     body: 'Search results no longer show the blue town label under the business name or the "Needs audit" label. Each row is just the name, website status, and the buttons.',
     report: { added: [], changed: [], removed: ['The blue town label on Find Leads results.', 'The "Needs audit / Needs scan" label on Find Leads results.'], effect: 'Result rows are shorter and easier to scan. The town is still saved with the lead when you add it.' } },

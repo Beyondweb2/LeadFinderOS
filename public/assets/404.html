@@ -1,0 +1,9 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<title>Not found</title>
+<!-- A MISSING /assets FILE IS A 404, NEVER index.html (2026-11-17). An open tab from before a deploy asks for old
+     chunk names; serving index.html for them made iPad Safari show "'text/html' is not a valid JavaScript MIME type".
+     Cloudflare Pages serves the nearest 404.html, with status 404, for a file it does not have. src/lib/staleChunk.ts
+     then sees a plain failed import and reloads once. Not placed at the top level: that would turn off the SPA fallback. -->
+<p>This file is from an older version of the app. Reload the page.</p>
