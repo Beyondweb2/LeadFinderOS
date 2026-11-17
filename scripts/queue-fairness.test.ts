@@ -68,7 +68,12 @@ ok(inner.map((l) => l.campaign_id).join(',') === 'p1,p2,p1,p2', "inside one send
 
 console.log('\n── stuck: 30 minutes, once per episode, never while paused ──');
 const now = Date.parse('2026-11-16T12:00:00Z');
-const base = { nowMs: now, shouldBeMoving: true, lastSentAt: null, oldestSendableQueuedAt: '2026-11-16T11:20:00Z', activeSenders: 2, gapMin: 8 };
+const base = { nowMs: now, shouldBeMoving: true, lastSentAt: null, oldestSendableQueuedAt: '2026-11-16T11:20:00Z', activeSenders: 2, gapMin: 8, windowOpenedAt: '2026-11-16T07:00:00Z' };
+/* 2026-11-17, the real false alarm: 07:00:21 London, nothing sent yet today, oldest lead queued YESTERDAY 11:21. */
+const morning = { ...base, nowMs: Date.parse('2026-11-17T07:00:21Z'), oldestSendableQueuedAt: '2026-11-16T11:21:36.452864+00:00', windowOpenedAt: '2026-11-17T07:00:00.000Z' };
+ok(stuckSince(morning) === null, 'first tick of the day, lead queued yesterday -> NOT stuck (overnight never counts)');
+ok(stuckSince({ ...morning, nowMs: Date.parse('2026-11-17T07:40:00Z') }) === '2026-11-17T07:00:00.000Z', 'nothing for 40 min after opening -> stuck since 07:00, not since yesterday');
+ok(stuckSince({ ...morning, nowMs: Date.parse('2026-11-17T07:40:00Z'), lastSentAt: '2026-11-17T07:30:00Z' }) === null, 'a send after opening restarts the clock');
 ok(stuckSince(base) === '2026-11-16T11:20:00Z', '40 min with nothing sent while sending is on -> stuck since 11:20');
 ok(stuckSince({ ...base, oldestSendableQueuedAt: '2026-11-16T11:45:00Z' }) === null, '15 min -> not stuck');
 ok(stuckSince({ ...base, lastSentAt: '2026-11-16T11:50:00Z' }) === null, 'sent 10 min ago -> not stuck');

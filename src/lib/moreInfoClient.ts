@@ -12,7 +12,8 @@ export interface MoreInfoPreview {
   sender_name: string;
   price_line: string;
   can_edit_price: boolean;
-  email: { to: string | null; subject: string; body: string };
+  /** bounced: this address bounced (resend-webhook) — shown as "Email bounced", never sent to. refusal: why email is off. */
+  email: { to: string | null; subject: string; body: string; bounced?: boolean; refusal?: string | null };
   sms: { to: string | null; body: string; segments: number; refusal: string | null };
 }
 export interface MoreInfoRefused { ok: false; error: string; detail: string }

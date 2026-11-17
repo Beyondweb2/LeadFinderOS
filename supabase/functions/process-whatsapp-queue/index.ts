@@ -514,7 +514,7 @@ async function alertStuckSenders(service: any, a: { all: readonly SenderRow[]; s
   const facts = senderFacts(a.all, a.sendable, a.auditWaiting);
   const active = [...facts.values()].filter((e) => e.sendable > 0).length;
   for (const [k, e] of facts) {
-    const since = stuckSince({ nowMs: Date.now(), shouldBeMoving: true, lastSentAt: a.lastSent.get(k) ?? null, oldestSendableQueuedAt: e.oldest, activeSenders: active, gapMin: a.gapMin });
+    const since = stuckSince({ nowMs: Date.now(), shouldBeMoving: true, lastSentAt: a.lastSent.get(k) ?? null, oldestSendableQueuedAt: e.oldest, activeSenders: active, gapMin: a.gapMin, windowOpenedAt: windowOpenedTodayIso() });
     if (!since) continue;
     const name = k === NO_SENDER_KEY ? "Unassigned leads" : ((await personName(service, k)) ?? "Someone");
     const reason = stuckReasonWords({ queued: e.queued, sendable: e.sendable, waitingOnAudit: e.waiting });
@@ -583,6 +583,11 @@ function londonNow(): { y: number; mo: number; da: number; hour: number; minute:
 function londonDayStartUtcIso(): string {
   const n = londonNow();
   return londonInstant(n.y, n.mo, n.da, 0, 0).toISOString();
+}
+/** Today's send-hours opening (07:00 London) as ISO — the earliest a stuck episode may start (queue-fairness stuckSince). */
+function windowOpenedTodayIso(): string {
+  const n = londonNow();
+  return londonInstant(n.y, n.mo, n.da, WINDOW_START, 0).toISOString();
 }
 function minutesUntilWindowEnd(): number {
   const n = londonNow();
@@ -995,7 +1000,7 @@ Deno.serve(async (req) => {
       const active = [...facts.values()].filter((e) => e.sendable > 0).length;
       const lineFor = async (k: string) => {
         const e = facts.get(k) ?? { queued: 0, sendable: 0, oldest: null, waiting: 0 };
-        const since = stuckSince({ nowMs: Date.now(), shouldBeMoving: !paused && anyWindowOpen && !allCapsUsed && !coldStop, lastSentAt: lastSent.get(k) ?? null, oldestSendableQueuedAt: e.oldest, activeSenders: active, gapMin: gap });
+        const since = stuckSince({ nowMs: Date.now(), shouldBeMoving: !paused && anyWindowOpen && !allCapsUsed && !coldStop, lastSentAt: lastSent.get(k) ?? null, oldestSendableQueuedAt: e.oldest, activeSenders: active, gapMin: gap, windowOpenedAt: windowOpenedTodayIso() });
         let waiting = 0;
         if (since) {
           const ids = sendableNow.filter((l) => senderKeyOf(l) === k).slice(0, 60).map((l) => l.id);

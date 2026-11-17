@@ -58,7 +58,7 @@ export function SendMoreInfoDialog({ leadId, onClose, initialChannel, askedOnCal
     else {
       setRefusal(null); setP(r);
       setSubject(r.email.subject); setEmailBody(r.email.body); setSmsBody(r.sms.body); setPriceLine(r.price_line);
-      setChannel(initialChannel ?? (r.email.to ? 'email' : !r.sms.refusal ? 'sms' : 'email'));
+      setChannel(initialChannel ?? (r.email.to && !r.email.refusal ? 'email' : !r.sms.refusal ? 'sms' : 'email'));
     }
     setLoading(false);
   };
@@ -67,7 +67,7 @@ export function SendMoreInfoDialog({ leadId, onClose, initialChannel, askedOnCal
   useEffect(() => { void load(); }, [leadId]);
 
   const followDay = moreInfoFollowUpDay();
-  const unavailable = !p ? 'Loading…' : channel === 'email' ? (p.email.to ? null : 'There is no email address on this lead. Add it on the lead first, or send a text.') : p.sms.refusal;
+  const unavailable = !p ? 'Loading…' : channel === 'email' ? (!p.email.to ? 'There is no email address on this lead. Add it on the lead first, or send a text.' : p.email.refusal ?? null) : p.sms.refusal;
 
   const send = async () => {
     if (!p || busy || !callConsent) return;
@@ -122,7 +122,7 @@ export function SendMoreInfoDialog({ leadId, onClose, initialChannel, askedOnCal
             </div>
             {p.warning && <Callout tone="amber" icon={AlertTriangle} title="Check the wording" testId="send-more-info-warning"><span className="text-muted-foreground">{p.warning}</span></Callout>}
             {unavailable ? (
-              <Callout tone="amber" icon={AlertTriangle} title={channel === 'email' ? 'No email address' : 'Text not available'}><span className="text-muted-foreground">{unavailable}</span></Callout>
+              <Callout tone="amber" icon={AlertTriangle} title={channel === 'email' ? (p?.email.bounced ? 'Email bounced' : p?.email.to ? 'Email not available' : 'No email address') : 'Text not available'} testId={channel === 'email' && p?.email.bounced ? 'send-more-info-email-bounced' : undefined}><span className="text-muted-foreground">{unavailable}</span></Callout>
             ) : channel === 'email' ? (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">To <span className="font-medium text-foreground">{p.email.to}</span> · replies come to your own email</p>

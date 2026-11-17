@@ -27,6 +27,7 @@ import { isPaidLead } from "../../../src/lib/leadPayment.ts";
 import { loadClientSetup, recordLeadEvent, submitForDelivery } from "../_shared/client-setup.ts";
 import { sendOperatorAlert } from "../_shared/operator-alert.ts";
 import { checkSuppressed } from "../_shared/suppression.ts";
+import { EMAIL_BOUNCED_DETAIL, emailBounced } from "../_shared/email-bounce.ts";
 import { sendSmsToLead } from "../_shared/twilio-sms.ts";
 import { qaEmailHold } from "../_shared/qa-guard.ts";
 import { answerClientInfoRequest, openRequestFor, CLIENT_INFO_REQUEST_COLUMNS } from "../_shared/client-info-request.ts";
@@ -322,6 +323,10 @@ Deno.serve(async (req) => {
       if (sup.suppressed) {
         return { ok: false, response: json({ ok: false, error: sup.matchedOn === "lookup_failed" ? "suppression_unreadable" : "suppressed", detail: sup.matchedOn === "lookup_failed" ? "Could not check the do-not-contact list, so nothing was sent. Try again in a moment." : "They are on the do-not-contact list, so nothing was sent. Ask Paul." }, sup.matchedOn === "lookup_failed" ? 503 : 409) };
       }
+      /* ⛔ A BOUNCED ADDRESS (_shared/email-bounce.ts) is never emailed again until it is changed. Fails closed. */
+      let bounced: boolean;
+      try { bounced = await emailBounced(service, leadId, to); } catch { return { ok: false, response: json({ ok: false, error: "bounce_check_failed", detail: "Could not check whether this address has bounced, so nothing was sent. Try again in a moment, or copy the link." }, 503) }; }
+      if (bounced) return { ok: false, response: json({ ok: false, error: "email_bounced", detail: EMAIL_BOUNCED_DETAIL.replace("send a text", "copy the link") }, 409) };
       /* ⛔ QA (src/lib/qaSafety.ts): a test lead's email goes ONLY to the QA sink. Fails closed. */
       let qaRefusal: string | null;
       try { qaRefusal = await qaEmailHold(service, leadId, to); } catch { return { ok: false, response: json({ ok: false, error: "qa_guard_unavailable", detail: "Could not run the safety check, so nothing was sent. Try again in a moment." }, 503) }; }

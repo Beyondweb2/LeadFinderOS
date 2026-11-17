@@ -40,6 +40,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { verifySvix } from "../_shared/svix-verify.ts";
+import { bounceAddresses, isHardBounce, recordEmailBounce } from "../_shared/email-bounce.ts";
 
 const ADMIN_EMAIL = "paul@findable.live";
 const FROM_OPERATOR = "Findable <alerts@findable.live>";
@@ -137,6 +138,13 @@ Deno.serve(async (req) => {
   /* A bounce or a complaint is recorded whether or not we could match it to a send — an unmatched
      bounce is still a bounce, and losing it because the id belonged to an email we do not stamp
      would recreate the blind spot this function exists to close. */
+  /* ⛔ A HARD BOUNCE MARKS THE ADDRESS BAD ON THE LEAD (_shared/email-bounce.ts): History says "Email bounced" and no send
+     path emails it again until the address is changed. A soft (Transient) bounce is not recorded. */
+  let leadsMarked = 0;
+  if (status === "bounced" && isHardBounce(detail)) {
+    leadsMarked = await recordEmailBounce(service, { messageId, addresses: bounceAddresses(data.to), detail });
+  }
+
   if (status === "bounced" || status === "complained") {
     await service.from("client_error_reports").insert({
       error_id: status === "bounced" ? "email_bounced" : "email_complained",
@@ -162,6 +170,10 @@ Deno.serve(async (req) => {
             matched
               ? `This was a free-check result. The audit's own record has been updated, so the Free checks card will show it.`
               : `No send on file carries this id, so it was one of the emails that do not stamp one (operator notifications, payment, four-week results).`,
+            status !== "bounced" ? ``
+              : leadsMarked > 0 ? `Marked as bounced on ${leadsMarked} lead(s): their History says "Email bounced" and nobody can email that address again until it is changed.`
+              : isHardBounce(detail) ? `No lead carries this address now, so no lead was marked.`
+              : `A soft bounce (mailbox full or server busy): the address was NOT marked bad.`,
             detail ? `\nProvider detail:\n${JSON.stringify(detail, null, 2).slice(0, 1200)}` : ``,
             ``,
             status === "bounced"
@@ -176,5 +188,5 @@ Deno.serve(async (req) => {
   /* ⛔ 2xx ONCE THE SIGNATURE PASSED, whatever happened downstream. A non-2xx makes Resend retry for
      hours, and a retry storm over a column we failed to write is a second incident on top of the
      first. What went wrong is in client_error_reports, which is readable. */
-  return json({ ok: true, type, status, matched });
+  return json({ ok: true, type, status, matched, leads_marked: leadsMarked });
 });

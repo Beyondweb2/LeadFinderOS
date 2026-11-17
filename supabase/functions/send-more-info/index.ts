@@ -23,6 +23,7 @@ import {
   moreInfoWarning, senderFirstName, type MoreInfoVars, type NamedFacts,
   MORE_INFO_CONSENT_REQUIRED, moreInfoCallConsentGiven, moreInfoConsentLine, moreInfoConsentRecord,
 } from "../../../src/lib/moreInfoMessage.ts";
+import { EMAIL_BOUNCED_DETAIL, emailBounced } from "../_shared/email-bounce.ts";
 
 // send-more-info — "Send more info" on the prospect page (Paul, 2026-11-16, docs/send-more-info.md).
 //
@@ -80,7 +81,7 @@ async function namedFactsFor(service: Service, audit: Obj, run: Obj): Promise<Na
 }
 
 type Built =
-  | { ok: true; lead: Obj; vars: MoreInfoVars; email: { to: string | null; subject: string; body: string }; sms: { to: string | null; body: string; segments: number; refusal: string | null }; warning: string | null }
+  | { ok: true; lead: Obj; vars: MoreInfoVars; email: { to: string | null; subject: string; body: string; bounced: boolean; refusal: string | null }; sms: { to: string | null; body: string; segments: number; refusal: string | null }; warning: string | null }
   | { ok: false; error: string; detail: string; status?: number };
 
 async function build(service: Service, actorId: string, leadId: string): Promise<Built> {
@@ -126,9 +127,17 @@ async function build(service: Service, actorId: string, leadId: string): Promise
   const smsBody = moreInfoSmsBody(vars);
   const digits = toWhatsAppDigits(String(lead.phone ?? ""), (lead.country as string | null) ?? null);
   const email = String(lead.email ?? "").trim();
+  const emailTo = EMAIL_RE.test(email) ? email : null;
+  /* ⛔ A BOUNCED ADDRESS (_shared/email-bounce.ts): shown as "Email bounced" and never sent to. Unreadable = refused (fail closed). */
+  let bounced = false;
+  let emailRefusal: string | null = null;
+  if (emailTo) {
+    try { bounced = await emailBounced(service, leadId, emailTo); } catch { emailRefusal = "Could not check whether this address has bounced, so email is off for now. Try again in a moment, or send a text."; }
+    if (bounced) emailRefusal = EMAIL_BOUNCED_DETAIL;
+  }
   return {
     ok: true, lead, vars,
-    email: { to: EMAIL_RE.test(email) ? email : null, subject: moreInfoEmailSubject(vars), body: moreInfoEmailBody(vars) },
+    email: { to: emailTo, subject: moreInfoEmailSubject(vars), body: moreInfoEmailBody(vars), bounced, refusal: emailRefusal },
     sms: { to: digits ? `+${digits}` : null, body: smsBody, segments: smsSize(smsBody).segments, refusal: digits && isUkColdDestination(digits) ? null : "Texts go to UK mobiles only, and this lead has no UK mobile. Use email." },
     warning: moreInfoWarning(named),
   };
@@ -212,6 +221,7 @@ Deno.serve(async (req) => {
     // email
     const to = b.email.to;
     if (!to) return json({ ok: false, error: "no_email", detail: "There is no email address for them. Add it on the lead first, or send a text." });
+    if (b.email.refusal) return json({ ok: false, error: b.email.bounced ? "email_bounced" : "bounce_check_failed", detail: b.email.refusal }, b.email.bounced ? 200 : 503);
     const subject = String(body.subject ?? "").replace(/\s+/g, " ").trim();
     if (!subject || subject.length > MORE_INFO_SUBJECT_MAX) return json({ ok: false, error: "bad_request", detail: `The subject must be 1 to ${MORE_INFO_SUBJECT_MAX} characters.` }, 400);
     if (text.length > MORE_INFO_EMAIL_MAX) return json({ ok: false, error: "too_long", detail: `The email must be at most ${MORE_INFO_EMAIL_MAX} characters.` }, 400);

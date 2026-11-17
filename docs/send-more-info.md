@@ -36,3 +36,11 @@ Email or Text (no WhatsApp), previewed and editable, then sent.
   email, plain text, Resend `Idempotency-Key` per press. Suppression, the QA sink (`qaEmailHold`) and the `email_send` guard first.
 - After a send: History `more_info_sent` ("More info sent by Valentin via SMS"); the salesperson's screen then saves Next Action
   Follow up in two UK days through `saveNextAction` (the one human Next Action write). The send path itself writes no Next Action.
+- **Bounced address (2026-11-17, branch v1-queue-stuck-fix, `_shared/email-bounce.ts`):** resend-webhook, on a HARD bounce (Resend
+  `bounce.type` not `Transient`), finds every lead whose CURRENT email is the bounced address (plus the lead a `more_info_sent` row
+  with that `resend_id` sits on), writes History `email_bounced` ("Email bounced: x did not accept our email…", `data.to` =
+  address lower-case) and sets `outreach_leads.email_status = 'bounced'`. Send more info (preview shows "Email bounced", send
+  refuses `email_bounced`) and Quick Close's email both ask `emailBounced(lead, address)` from those History rows — so it survives
+  enrichment re-writing `email_status`, and lets go once the email on the lead is changed. Unreadable = refused. A soft bounce is
+  not recorded. Migration `20261223090000_email_bounced_activity.sql` adds the kind. Test: `scripts/email-bounce.test.ts`.
+  Not covered: a sign-up's `contact_email` that differs from the lead's email is blocked only if it is also on a lead.
