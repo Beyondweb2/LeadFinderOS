@@ -50,3 +50,14 @@
   no-run-yet audits still count). Inbox and AiAudit start audits through `invokeCreateAudit` (`src/lib/createAuditCall.ts`,
   `invokeEdge` + `edgeErrorMessage`), so a refusal shows its reason.
 - `src/lib/reAudit.ts` still calls `supabase.functions.invoke` (it takes an injected client); admin-only path, left.
+
+## Result (18 Nov, read back 14:30 UTC)
+
+- Before (09:00–12:59 UTC): 46 questions ended, 46 failed (`run_age_exceeded`), 0 done.
+- After the fix (13:00–14:30 UTC): 17 questions ended, 17 done, 0 failed. Each one: normal run hung
+  ("Nothing extracted yet"), then ChatGPT + Gemini lanes answered, Google AI lane hung again
+  (`_missing_engines: ["ai_overview"]`). Google AI is display-only, so every score was complete.
+- The 10 re-opened audits (newest failed audit per lead today, re-run free via `late_retry.kind = manual`) all
+  finished `complete`. No question left running or pending.
+- Still to watch: the Google AI Mode add-on of `apify~google-search-scraper`. Until it comes back, every question
+  pays one hung 12-minute normal run before the lanes start (~15–20 min per audit instead of ~5).
