@@ -135,7 +135,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
 /* 2026-11-16a: in-window free text from EVERY door (lead popup, dashboard, Quick Close, welcome pack, bulk), judged with the landing
    margin (inWindowFreeText.ts freeWindowOpen); free_only:true refuses anything that would go as the paid template (would_be_paid). */
 /* 2026-11-16b: polite_hook + polite_hook2 follow-ups (no variables; needs prior WhatsApp; Meta live status first). */
-const BUILD_ID = "2026-11-18-audits-always-finish";
+const BUILD_ID = "2026-11-18a-audits-always-finish";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

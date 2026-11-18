@@ -38,3 +38,15 @@
 
 - Apify memory (1 GB per question run) and plan concurrency (32): the outage was not a capacity problem.
 - Budgets, caps and keys.
+
+## "Couldn't start the audit — Edge Function returned a non-2xx status code" (same day)
+
+- A rep pressing Audit on a Reading driving school got this. Cause: create-ai-audit allows a salesperson
+  `SALES_HOOKS_PER_LEAD_PER_DAY` (3) hook audits per lead per 24 h and counted EVERY audit on the lead — including the
+  automatic reply-chain audits that had all failed (HSM had 6). Refused with 429 `hook_limit_for_lead`.
+- The screen hid the server's sentence because Inbox / AiAudit called `supabase.functions.invoke` directly (a non-2xx
+  gives only the SDK's generic message).
+- Fixed: `src/lib/hookLeadLimit.ts` — an audit whose every run failed or was cancelled does not count (in-flight and
+  no-run-yet audits still count). Inbox and AiAudit start audits through `invokeCreateAudit` (`src/lib/createAuditCall.ts`,
+  `invokeEdge` + `edgeErrorMessage`), so a refusal shows its reason.
+- `src/lib/reAudit.ts` still calls `supabase.functions.invoke` (it takes an injected client); admin-only path, left.

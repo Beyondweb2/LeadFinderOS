@@ -99,5 +99,19 @@ ok(q.includes('MAX_RUN_AGE_MS = 12 * 60 * 1000'), 'G: the 12-minute age guard is
 ok(PROVIDER_FAILURE_ERRORS.has('deadline_exceeded'), 'H: a deadline gets the Quick check retry like a timeout');
 ok(incompleteCause([{ status: 'failed', result: { error: 'deadline_exceeded' } }], []) === 'search_timeout', 'H: a deadline alerts as "did not finish in time"');
 
+// I — a rep's per-lead limit ignores failed audits; refusals reach the screen in words
+const { countsTowardLeadLimit, hooksCountingToday } = await import('../src/lib/hookLeadLimit.ts');
+ok(!countsTowardLeadLimit({ ai_audit_runs: [{ status: 'failed' }] }) && !countsTowardLeadLimit({ ai_audit_runs: [{ status: 'cancelled' }, { status: 'failed' }] }), 'I: a failed audit does not use the rep\'s allowance');
+ok(countsTowardLeadLimit({ ai_audit_runs: [{ status: 'running' }] }) && countsTowardLeadLimit({ ai_audit_runs: [] }) && countsTowardLeadLimit({}), 'I: a running audit, or one with no run yet, counts');
+ok(countsTowardLeadLimit({ ai_audit_runs: [{ status: 'failed' }, { status: 'complete' }] }), 'I: an audit with any good run counts');
+ok(hooksCountingToday([...Array(6)].map(() => ({ ai_audit_runs: [{ status: 'failed' }] }))) === 0, 'I: six failed automatic audits (HSM, 18 Nov) leave the rep\'s allowance untouched');
+const cai = readFileSync('supabase/functions/create-ai-audit/index.ts', 'utf8');
+ok(cai.includes('hooksCountingToday((todays ?? []) as LimitAudit[]) >= SALES_HOOKS_PER_LEAD_PER_DAY') && cai.includes('"../../../src/lib/hookLeadLimit.ts"'), 'I: create-ai-audit counts with the rule');
+for (const p of ['src/pages/Inbox.tsx', 'src/pages/AiAudit.tsx']) {
+  const s = readFileSync(p, 'utf8');
+  ok(!s.includes("supabase.functions.invoke('create-ai-audit'") && s.includes('invokeCreateAudit({'), `I: ${p} starts audits through invokeEdge (the server's reason, never "non-2xx")`);
+}
+ok(/invokeEdge<CreateAuditData>\('create-ai-audit'/.test(readFileSync('src/lib/createAuditCall.ts', 'utf8')) && /edgeErrorMessage\(e/.test(readFileSync('src/lib/createAuditCall.ts', 'utf8')), 'I: the helper turns a refusal into its sentence');
+
 console.log(f ? `\n${f} FAILED` : '\nALL PASS');
 process.exit(f ? 1 : 0);

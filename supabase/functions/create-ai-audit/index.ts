@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { hooksCountingToday, type LimitAudit } from "../../../src/lib/hookLeadLimit.ts";
 import { askPlace } from "../../../src/lib/placeAsk.ts";
 import { townGated, TOWN_GATE_REASON } from "../../../src/lib/townVerdict.ts";
 import { cleanTypedTown } from "../../../src/lib/typedTown.ts";
@@ -859,10 +860,11 @@ Deno.serve(async (req) => {
       const isSales = actor.role !== "admin";
       if (isSales && isHookAudit && leadId) {
         const since = new Date(Date.now() - 86_400_000).toISOString();
-        const { count, error: cErr } = await service.from("ai_audits").select("id", { count: "exact", head: true })
-          .eq("lead_id", leadId).eq("audit_purpose", ORDINARY_AUDIT_PURPOSE).gte("created_at", since);
+        /* Failed audits (every run failed or cancelled) do not use the rep's allowance — src/lib/hookLeadLimit.ts. */
+        const { data: todays, error: cErr } = await service.from("ai_audits").select("id, ai_audit_runs(status)")
+          .eq("lead_id", leadId).eq("audit_purpose", ORDINARY_AUDIT_PURPOSE).gte("created_at", since).limit(200);
         if (cErr) return json({ ok: false, error: "hook_count_failed" }, 503);
-        if ((count ?? 0) >= SALES_HOOKS_PER_LEAD_PER_DAY) {
+        if (hooksCountingToday((todays ?? []) as LimitAudit[]) >= SALES_HOOKS_PER_LEAD_PER_DAY) {
           return json({ ok: false, error: "hook_limit_for_lead", detail: "This lead already has several hook audits today — open the latest one from the lead." }, 429);
         }
       }

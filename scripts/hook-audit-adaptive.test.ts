@@ -331,7 +331,7 @@ ok(helper.includes('audit_status: "starting"') && helper.includes('.eq("id", row
 
 // H. Inbox re-run sends no audit_id, so it goes through the (now non-reusing) hook path.
 const startAudit = inbox.slice(inbox.indexOf('const startAudit = async'), inbox.indexOf('const startAudit = async') + 1400);
-ok(startAudit.includes("invoke('create-ai-audit'") && !startAudit.includes('audit_id:') && !startAudit.includes('questions:'), 'H: the Inbox button creates a fresh generated audit (adaptive), never a re-run of the old one');
+ok(startAudit.includes('invokeCreateAudit({') && !startAudit.includes('audit_id:') && !startAudit.includes('questions:'), 'H: the Inbox button creates a fresh generated audit (adaptive), never a re-run of the old one');
 
 // Pre-send drip hook: generated, no questions[], no target_runs → adaptive, one run.
 ok(outreachAudit.includes('question_count: OUTREACH_AUDIT_QUESTIONS') && !outreachAudit.includes('target_runs:') && !outreachAudit.includes('questions:'), 'the drip pre-send hook is adaptive by construction and single-run');

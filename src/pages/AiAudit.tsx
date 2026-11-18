@@ -1,3 +1,4 @@
+import { invokeCreateAudit } from '@/lib/createAuditCall';
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { fetchAllRows, fetchAllRowsParallel } from '@/lib/fetchAllRows';
@@ -1425,7 +1426,7 @@ const AiAudit = () => {
   const runPreview = useCallback(async () => {
     setPreviewing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('create-ai-audit', {
+      const { data, error } = await invokeCreateAudit({
         body: buildAuditPreviewRequest(auditContext, {
           questionCount,
           businessScope: businessScope || undefined,
@@ -1484,7 +1485,7 @@ const AiAudit = () => {
     }
     setRunning(true);
     try {
-      const { data, error } = await supabase.functions.invoke('create-ai-audit', {
+      const { data, error } = await invokeCreateAudit({
         /* Same builder as the preview — see auditContext. `questions` travels verbatim, so
            confirming spends nothing on generation: the reviewed set IS the set that runs.
            Full measurement: the server clamps to the measurement ceiling, forces SEO off (the
