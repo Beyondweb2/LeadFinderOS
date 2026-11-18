@@ -552,13 +552,13 @@ Deno.serve(async (req) => {
             if (p.usageTotalUsd != null) { costUsd += p.usageTotalUsd; await reconcileCost(row, p.usageTotalUsd); }
             if (item) { lanes[lane] = { ...l, state: "done", item, error: null }; continue; }
             failures = addFailure(failures, failureNote({ atIso: nowIso, kind: `lane_${lane}`, reason: "no_items", statusMessage: p.statusMessage }));
-            lanes[lane] = afterLaneFailure(l, "no_items");
+            lanes[lane] = afterLaneFailure(l, "no_items", lane);
             continue;
           }
           if (p.status === "FAILED" || p.status === "ABORTED" || p.status === "TIMED-OUT") {
             const logTail = await getApifyRunLogTail(l.runId, apifyToken);
             failures = addFailure(failures, failureNote({ atIso: nowIso, kind: `lane_${lane}`, reason: `apify_${p.status}`, statusMessage: p.statusMessage, logTail }));
-            lanes[lane] = afterLaneFailure(l, `apify_${p.status}`);
+            lanes[lane] = afterLaneFailure(l, `apify_${p.status}`, lane);
             continue;
           }
           const ageMs = l.startedAtTick ? nowMs - new Date(l.startedAtTick).getTime() : 0;
@@ -567,13 +567,13 @@ Deno.serve(async (req) => {
             await abortApifyRun(l.runId, apifyToken);
             const reason = deadline ? "deadline_exceeded" : "run_age_exceeded";
             failures = addFailure(failures, failureNote({ atIso: nowIso, kind: `lane_${lane}`, reason, statusMessage: p.statusMessage, logTail }));
-            lanes[lane] = deadline ? { ...afterLaneFailure(l, reason), state: "failed" } : afterLaneFailure(l, reason);
+            lanes[lane] = deadline ? { ...afterLaneFailure(l, reason, lane), state: "failed" } : afterLaneFailure(l, reason, lane);
           }
         } catch (e) {
           console.error(`[process-ai-audit-queue] lane poll error ${lane} run=${l.runId}:`, e instanceof Error ? e.message : e);
           if (deadline) {
             await abortApifyRun(l.runId, apifyToken);
-            lanes[lane] = { ...afterLaneFailure(l, "deadline_exceeded"), state: "failed" };
+            lanes[lane] = { ...afterLaneFailure(l, "deadline_exceeded", lane), state: "failed" };
           }
         }
       }
