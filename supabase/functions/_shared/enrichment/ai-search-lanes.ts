@@ -103,10 +103,17 @@ export function readLanes(result: unknown): Lanes | null {
   return Object.keys(out).length ? out : null;
 }
 
+/** Tries per lane. ⛔ Google AI is DISPLAY ONLY (never scored — src/lib/aiOverview.ts), so it gets ONE try: on 18 Nov it
+ *  was the engine that hung (ChatGPT and Gemini came back on their own runs within minutes, AI Mode never did), and a
+ *  second 12-minute try would only hold a finished question open for an answer no score uses. */
+export function laneMaxTries(lane: AiSearchLane | undefined): number {
+  return lane === "ai_overview" ? 1 : LANE_MAX_TRIES;
+}
+
 /** A lane that failed: one more try while it has tries left, else it stays failed. */
-export function afterLaneFailure(l: LaneState, reason: string): LaneState {
+export function afterLaneFailure(l: LaneState, reason: string, lane?: AiSearchLane): LaneState {
   const next: LaneState = { ...l, runId: null, datasetId: null, startedAtTick: null, error: reason };
-  next.state = l.tries < LANE_MAX_TRIES ? "pending" : "failed";
+  next.state = l.tries < laneMaxTries(lane) ? "pending" : "failed";
   return next;
 }
 

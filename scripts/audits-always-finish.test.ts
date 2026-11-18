@@ -50,6 +50,9 @@ const once = afterLaneFailure({ state: 'running', tries: 1, runId: 'r1' }, 'run_
 ok(once.state === 'pending' && once.runId === null && once.error === 'run_age_exceeded', 'C: first lane failure → one more try');
 const twice = afterLaneFailure({ state: 'running', tries: LANE_MAX_TRIES, runId: 'r2' }, 'run_age_exceeded');
 ok(twice.state === 'failed', 'C: lane failure after its last try → failed');
+ok(afterLaneFailure({ state: 'running', tries: 1, runId: 'r3' }, 'run_age_exceeded', 'ai_overview').state === 'failed'
+  && afterLaneFailure({ state: 'running', tries: 1, runId: 'r4' }, 'run_age_exceeded', 'gemini').state === 'pending', 'C: Google AI (display only) gets one try; scored engines get two');
+ok(!/afterLaneFailure\(l, [^)]*\)(?<!, lane\))/.test(readFileSync('supabase/functions/process-ai-audit-queue/index.ts', 'utf8').replace(/afterLaneFailure\(l, [^)]*, lane\)/g, '')), 'C: the queue passes the lane on every lane failure');
 const mixed: Lanes = { chatgpt: { state: 'done', tries: 0, item: partial }, gemini: { state: 'running', tries: 1, runId: 'x' }, ai_overview: { state: 'failed', tries: 2 } };
 ok(!lanesSettled(mixed) && liveLaneCount(mixed) === 1, 'C: a running lane keeps the question open');
 ok(lanesSettled({ ...mixed, gemini: { state: 'failed', tries: 2 } }), 'C: all done/failed = settled');
