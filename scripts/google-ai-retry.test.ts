@@ -75,8 +75,8 @@ ok(/Deno\.env\.get\(GOOGLE_AI_RETRY_SECRET\)/.test(q) && /parseAioRetryMode/.tes
 ok(/result\[SCRAPE_META_KEY\] = scrapeEvidence\(/.test(q), 'E: the queue records the scrape evidence on every question');
 const failAt = q.indexOf('const failAttempt');
 const guard = q.indexOf('AIO_FIRST_META_KEY', failAt);
-const giveUp = q.indexOf('const giveUp', failAt);
-ok(failAt > 0 && guard > failAt && guard < giveUp, 'E: a failed/aged-out retry run restores the first result before the give-up logic');
+const giveUp = q.indexOf('initialLanes(partial)', failAt); // v1-audits-always-finish: a failed normal run splits into lanes
+ok(failAt > 0 && guard > failAt && guard < giveUp, 'E: a failed/aged-out retry run restores the first result before the lane split');
 
 console.log(f ? `\n${f} FAILED` : '\nall passed');
 process.exit(f ? 1 : 0);

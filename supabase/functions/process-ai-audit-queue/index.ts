@@ -3,8 +3,12 @@ import { paidMode } from "../_shared/protection.ts";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource, recordCostCorrection } from "../_shared/enrichment/runner.ts";
 import { googleAiModeApplies } from "../../../src/lib/aiOverview.ts";
-import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, captureGoogleSerp, toCountryCode, aiOverviewStamp, AI_OVERVIEW_META_KEY, type AiSearchResult } from "../_shared/enrichment/ai-search.ts";
-import { abortApifyRun } from "../_shared/enrichment/apify.ts";
+import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, captureGoogleSerp, toCountryCode, aiOverviewStamp, AI_OVERVIEW_META_KEY, AI_SEARCH_LANES, type AiSearchLane, type AiSearchResult } from "../_shared/enrichment/ai-search.ts";
+import { abortApifyRun, getApifyRunLogTail } from "../_shared/enrichment/apify.ts";
+import {
+  APIFY_RUN_TIMEOUT_SECS, FAILURES_META_KEY, LANES_META_KEY, MISSING_META_KEY, addFailure, afterLaneFailure, failureNote, firstItem,
+  initialLanes, LANE_MAX_TRIES, lanesSettled, liveLaneCount, mergeLaneItems, missingLanes, pastDeadline, readLanes, type Lanes,
+} from "../_shared/enrichment/ai-search-lanes.ts";
 import {
   AIO_FIRST_META_KEY, AIO_REASON_META_KEY, AIO_RETRY_META_KEY, GOOGLE_AI_RETRY_SECRET, aioReasonFor, aioRetryAppliesTo, SCRAPE_META_KEY,
   keepFirstAfterRetry, mergeAioRetry, parseAioRetryMode, scrapeEvidence, shouldRetryAio,
@@ -104,7 +108,9 @@ const CAP_USD = AUDIT_RUN_CAP_USD; // per-RUN Apify cost ceiling (this audit run
    History kept short: $8 → $12 on 2026-07-30 (a tripped cap leaves a part-drained audit, which is worse than the
    spend), then split into pools on 2026-10-04. A hook / bulk prospecting audit runs no SEO scan and, since
    2026-10-15, asks one question at a time and stops at the first answer that does not name the lead. */
-const MAX_ATTEMPTS = 3;          // per queue row (= actor runs STARTED) before it's marked failed
+const MAX_ATTEMPTS = 3;          // per queue row: START failures / stranded-claim reclaims before it's marked failed.
+                                 // A run that STARTED and then failed or hung no longer retries the same way: the
+                                 // question splits into per-engine lanes (ai-search-lanes.ts, v1-audits-always-finish).
 // Async guards (RUN_TIMEOUT_MS is gone — nothing blocks on the scrape any more):
 const MAX_RUN_AGE_MS = 12 * 60 * 1000;  // a started run must reach terminal within 12 min, else the
                                         // poll treats it as a failed attempt (and aborts it on Apify).
@@ -177,6 +183,8 @@ Deno.serve(async (req) => {
     const tickMode = await paidMode(service);
 
     const estCost = SOURCES.ai_search.estCostUsd;
+    /** Runs whose rows this tick ended before the poll (the pending deadline sweep) — finalised with the rest. */
+    const touchedRunsEarly = new Set<string>();
 
     // 0) Reclaim rows stranded in 'running' WITHOUT an Apify runId — i.e. a tick died between the
     //    pending→running claim and the start call, so the row never got a runId and would otherwise
@@ -190,7 +198,8 @@ Deno.serve(async (req) => {
       const { data: stale } = await service
         .from("ai_audit_queue").select("id, attempts, run_id, result")
         .eq("status", "running").lt("updated_at", staleBefore);
-      const staleRows = ((stale ?? []) as Row[]).filter((r) => !r.result?._apify?.runId); // skip live async runs
+      // skip live async runs — a normal run (result._apify) or a question split into per-engine lanes (result._lanes)
+      const staleRows = ((stale ?? []) as Row[]).filter((r) => !r.result?._apify?.runId && !readLanes(r.result));
       // Don't reclaim rows that belong to a cancelled run — re-queueing them would resurrect a
       // run the user stopped. Leave them; the cancelled path (finalise) cleans them up.
       const cancelledStaleRuns = new Set<string>();
@@ -212,6 +221,26 @@ Deno.serve(async (req) => {
       }
     } catch (e) {
       console.error("[process-ai-audit-queue] reclaim skipped (updated_at column missing?):", e instanceof Error ? e.message : e);
+    }
+
+    /* 0b) NOTHING WAITS FOR EVER (v1-audits-always-finish). A question that was started at least once and is back in
+       'pending' (a start that failed, a deferral) past ROW_DEADLINE_MS is ended, so its audit can finish as
+       "Audit incomplete" instead of spinning. 'running' rows past the deadline are ended in the poll (pollRow), which can
+       still keep what they brought back. Rows never started (attempts 0) are a backlog, not stuck: left alone. */
+    try {
+      const { data: oldPending } = await service
+        .from("ai_audit_queue").select("id, run_id, attempts, created_at")
+        .eq("status", "pending").gt("attempts", 0)
+        .lt("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString()).limit(100);
+      for (const r of (oldPending ?? []) as Row[]) {
+        if (!pastDeadline({ createdAt: r.created_at, attempts: Number(r.attempts) || 0, nowMs: Date.now() })) continue;
+        await service.from("ai_audit_queue")
+          .update({ status: "failed", result: { error: "deadline_exceeded" } })
+          .eq("id", r.id).eq("status", "pending");
+        touchedRunsEarly.add(r.run_id);
+      }
+    } catch (e) {
+      console.error("[process-ai-audit-queue] pending deadline sweep failed:", e instanceof Error ? e.message : e);
     }
 
     // 0a2) PAID BASELINE safety net. MUST stay above the SEO step: that step returns early on
@@ -336,7 +365,7 @@ Deno.serve(async (req) => {
       return spent;
     }
     const cappedRuns = new Set<string>();
-    const touchedRuns = new Set<string>();
+    const touchedRuns = new Set<string>(touchedRunsEarly);
 
     // ── PHASE A: POLL in-flight Apify runs ────────────────────────────────────────
     // Every 'running' row carrying result._apify.runId is a scrape in progress. Poll them ALL
@@ -344,11 +373,15 @@ Deno.serve(async (req) => {
     // SHORT HTTP call — it never blocks on the scrape, so many can run inside one tick.
     const { data: inflight } = await service
       .from("ai_audit_queue")
-      .select("id, run_id, audit_id, user_id, question, attempts, result")
+      .select("id, run_id, audit_id, user_id, question, attempts, result, created_at, updated_at")
       .eq("status", "running")
       .limit(POLL_BATCH);
-    const waiting = ((inflight ?? []) as Row[]).filter((r) => r.result?._apify?.runId);
+    const waiting = ((inflight ?? []) as Row[]).filter((r) => r.result?._apify?.runId || readLanes(r.result));
     for (const r of waiting) touchedRuns.add(r.run_id);
+    /* Apify slots held by per-engine lanes BEYOND the one slot their row already counts as (PHASE B's headroom counts
+       'running' rows). Recomputed as lanes start and settle this tick. */
+    const extraLaneSlots = new Map<string, number>();
+    for (const r of waiting) extraLaneSlots.set(r.id, Math.max(0, liveLaneCount(readLanes(r.result)) - 1));
 
     /* ══ GOOGLE AI ONE-TIME RETRY — OFF UNLESS THE SECRET SAYS OTHERWISE (2026-10-27) ═════════════
        See _shared/enrichment/google-ai-retry.ts. A question whose first run came back "not shown" may be
@@ -382,7 +415,7 @@ Deno.serve(async (req) => {
           budgetPool: audit.pool,
           noCacheWrite: () => true,
           run: async () => {
-            const { runId, datasetId } = await startAiSearch(String(row.question), audit.countryCode, apifyToken, { aiMode: audit.aiMode });
+            const { runId, datasetId } = await startAiSearch(String(row.question), audit.countryCode, apifyToken, { aiMode: audit.aiMode, runTimeoutSecs: APIFY_RUN_TIMEOUT_SECS });
             return { result: { runId, datasetId }, costUsd: estCost };
           },
         });
@@ -404,13 +437,208 @@ Deno.serve(async (req) => {
       }
     }
 
+    /** A finished question's dataset items as the stored result (shared by the normal run and the per-engine lanes). */
+    async function resultFromItems(row: Row, items: unknown[]): Promise<{ result: Record<string, unknown>; aio: ReturnType<typeof aiOverviewStamp> }> {
+      const audit = await getAudit(row.audit_id);
+      const result = normalizeAiSearch(items, audit.businessName, {
+        trade: audit.businessType, town: audit.locationText,
+      }) as Record<string, unknown>;
+      /* The Google organic results the actor returned for this same question. Stored beside the
+         other meta keys, NOT as an engine — see the long note at captureGoogleSerp.
+         ⛔ COSTS NOTHING EXTRA: the actor scrapes the SERP as its base output on every question
+         whether we keep it or not, and these items are already in memory. No extra run, no extra
+         Apify request, no change to the actor input.
+         ⚠️ Attached only when the actor actually returned an organic block, so "no capture" and
+         "Google returned nothing" stay distinguishable in the stored row. */
+      const serp = captureGoogleSerp(items);
+      if (serp) result._google_serp = serp;
+      /* Google AI Overview, shown or not shown (display only — see aiOverviewStamp). Only new
+         questions carry the stamp, so an old audit is never re-read as "no overview shown". */
+      const aio = aiOverviewStamp(items, result as AiSearchResult);
+      if (aio) result[AI_OVERVIEW_META_KEY] = aio;
+      /* A question with no Google AI stamp (the dash) always says why. */
+      const aioReason = aioReasonFor(items, aio);
+      if (aioReason) result[AIO_REASON_META_KEY] = aioReason;
+      /* What the scraper RETURNED for this question (results page? AI Overview block? text?) so "Google
+         showed none" can be told from "the scraper missed it". Recording only — nothing reads it for a score. */
+      result[SCRAPE_META_KEY] = scrapeEvidence(items, result as AiSearchResult);
+      return { result, aio };
+    }
+
+    /** The cap counted estCost when a run STARTED; book the difference once Apify has told us the real figure. */
+    async function reconcileCost(row: Row, usageTotalUsd: number | null): Promise<void> {
+      if (usageTotalUsd == null) return;
+      const audit = await getAudit(row.audit_id);
+      await recordCostCorrection(service, {
+        userId: audit.userId || row.user_id || null,
+        type: "ai_search",
+        estimatedUsd: estCost,
+        actualUsd: usageTotalUsd,
+        note: "ai_search_poll_reconcile",
+        budgetPool: audit.pool,
+      });
+    }
+
+    /* ══ PER-ENGINE LANES (v1-audits-always-finish, _shared/enrichment/ai-search-lanes.ts) ═══════════════════════
+       After a question's normal run fails, each engine still missing is asked in its own Apify run. Same doors as
+       every other start: the run's own cost cap, the budget pool's daily cap, the Apify reserve, the paid-action mode. */
+    async function startLaneRun(row: Row, lane: AiSearchLane, tries: number): Promise<{ runId: string; datasetId: string | null } | { refused: string } | null> {
+      const audit = await getAudit(row.audit_id);
+      const reserve = budgetDecision({ pool: audit.pool, poolSpentUsd: 0, estCostUsd: 0, apify: apifyNow, capUsd: Number.POSITIVE_INFINITY });
+      if (!reserve.allowed && reserve.reason === "apify_reserve") return { refused: refusalRowError("apify_reserve") };
+      const spent = await accumulatedCost(row.run_id);
+      if (spent + estCost > CAP_USD) return { refused: "cost_cap" };
+      try {
+        const outcome = await runEnrichSource<{ runId: string; datasetId: string | null }>({
+          service,
+          userId: audit.userId || row.user_id,
+          type: "ai_search",
+          cacheKey: `aiaudit:${row.id}:lane:${lane}:${tries}`,
+          estCostUsd: estCost,
+          capUsd: POOL_DAILY_CAP_USD[audit.pool],
+          budgetPool: audit.pool,
+          noCacheWrite: () => true,
+          run: async () => {
+            const { runId, datasetId } = await startAiSearch(String(row.question), audit.countryCode, apifyToken, { aiMode: audit.aiMode, lane, runTimeoutSecs: APIFY_RUN_TIMEOUT_SECS });
+            return { result: { runId, datasetId }, costUsd: estCost };
+          },
+        });
+        if (outcome.capReached) return { refused: refusalRowError("pool_cap") };
+        if (!outcome.result?.runId) return null;
+        runCost.set(row.run_id, spent + estCost);
+        return { runId: outcome.result.runId, datasetId: outcome.result.datasetId ?? null };
+      } catch (e) {
+        console.error(`[process-ai-audit-queue] lane ${lane} not started:`, e instanceof Error ? e.message : e);
+        return null;
+      }
+    }
+
+    /** The lanes as stored on a settled row: their outcome, not their (large) items. */
+    function laneSummary(lanes: Lanes): Record<string, unknown> {
+      const out: Record<string, unknown> = {};
+      for (const k of AI_SEARCH_LANES) {
+        const l = lanes[k];
+        if (l) out[k] = { state: l.state, tries: l.tries, ...(l.error ? { error: l.error } : {}) };
+      }
+      return out;
+    }
+
+    async function pollLanes(row: Row, lanes: Lanes): Promise<void> {
+      /* ⛔ ONE TICK AT A TIME. Starting a lane spends money, and ticks can overlap: claim the row by its updated_at (a
+         conditional write only one tick can win; the BEFORE-UPDATE trigger moves updated_at on every write). */
+      const { data: claim } = await service.from("ai_audit_queue")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", row.id).eq("status", "running").eq("updated_at", row.updated_at).select("id");
+      if (!Array.isArray(claim) || !claim.length) return;
+
+      const audit = await getAudit(row.audit_id);
+      const nowMs = Date.now();
+      const nowIso = new Date(nowMs).toISOString();
+      let attempts = Number(row.attempts) || 0;
+      let failures: unknown = row.result?.[FAILURES_META_KEY];
+      let costUsd = Number(row.result?._cost_usd) || 0;
+      const deadline = pastDeadline({ createdAt: row.created_at, attempts, nowMs });
+
+      // 1) Poll the lanes in flight.
+      for (const lane of AI_SEARCH_LANES) {
+        const l = lanes[lane];
+        if (!l || l.state !== "running" || !l.runId) continue;
+        try {
+          const p = await pollAiSearchRun(l.runId, apifyToken);
+          if (p.status === "SUCCEEDED") {
+            const item = firstItem(await fetchAiSearchItems(l.runId, apifyToken));
+            if (p.usageTotalUsd != null) { costUsd += p.usageTotalUsd; await reconcileCost(row, p.usageTotalUsd); }
+            if (item) { lanes[lane] = { ...l, state: "done", item, error: null }; continue; }
+            failures = addFailure(failures, failureNote({ atIso: nowIso, kind: `lane_${lane}`, reason: "no_items", statusMessage: p.statusMessage }));
+            lanes[lane] = afterLaneFailure(l, "no_items");
+            continue;
+          }
+          if (p.status === "FAILED" || p.status === "ABORTED" || p.status === "TIMED-OUT") {
+            const logTail = await getApifyRunLogTail(l.runId, apifyToken);
+            failures = addFailure(failures, failureNote({ atIso: nowIso, kind: `lane_${lane}`, reason: `apify_${p.status}`, statusMessage: p.statusMessage, logTail }));
+            lanes[lane] = afterLaneFailure(l, `apify_${p.status}`);
+            continue;
+          }
+          const ageMs = l.startedAtTick ? nowMs - new Date(l.startedAtTick).getTime() : 0;
+          if (ageMs > MAX_RUN_AGE_MS || deadline) {
+            const logTail = await getApifyRunLogTail(l.runId, apifyToken);
+            await abortApifyRun(l.runId, apifyToken);
+            const reason = deadline ? "deadline_exceeded" : "run_age_exceeded";
+            failures = addFailure(failures, failureNote({ atIso: nowIso, kind: `lane_${lane}`, reason, statusMessage: p.statusMessage, logTail }));
+            lanes[lane] = deadline ? { ...afterLaneFailure(l, reason), state: "failed" } : afterLaneFailure(l, reason);
+          }
+        } catch (e) {
+          console.error(`[process-ai-audit-queue] lane poll error ${lane} run=${l.runId}:`, e instanceof Error ? e.message : e);
+          if (deadline) {
+            await abortApifyRun(l.runId, apifyToken);
+            lanes[lane] = { ...afterLaneFailure(l, "deadline_exceeded"), state: "failed" };
+          }
+        }
+      }
+
+      // 2) Start the lanes waiting to go (only the engines still missing ever get here).
+      const mayStart = tickMode === "running" || (tickMode === "prospecting_paused" && audit.pool !== "prospecting");
+      for (const lane of AI_SEARCH_LANES) {
+        const l = lanes[lane];
+        if (!l || l.state !== "pending") continue;
+        if (deadline) { lanes[lane] = { ...l, state: "failed", error: "deadline_exceeded" }; continue; }
+        if (!mayStart) continue; // the paid-action mode holds new starts; the deadline still ends the row
+        const s = await startLaneRun(row, lane, l.tries);
+        if (s && "refused" in s) { lanes[lane] = { ...l, state: "failed", error: s.refused }; continue; }
+        if (!s) {
+          const tries = l.tries + 1;
+          lanes[lane] = { ...l, tries, state: tries >= LANE_MAX_TRIES ? "failed" : "pending", error: "start_failed" };
+          continue;
+        }
+        attempts += 1;
+        lanes[lane] = { ...l, state: "running", tries: l.tries + 1, runId: s.runId, datasetId: s.datasetId, startedAtTick: new Date().toISOString(), error: null };
+        console.log(`[ai-audit] lane ${lane} started q="${String(row.question).slice(0, 60)}" run=${s.runId}`);
+      }
+      extraLaneSlots.set(row.id, Math.max(0, liveLaneCount(lanes) - 1));
+
+      // 3) Not settled yet: keep the lanes (and anything already back) on the row.
+      if (!lanesSettled(lanes)) {
+        await service.from("ai_audit_queue").update({
+          attempts,
+          result: { [LANES_META_KEY]: lanes, [FAILURES_META_KEY]: failures ?? [], ...(costUsd ? { _cost_usd: costUsd } : {}) },
+        }).eq("id", row.id);
+        return;
+      }
+
+      // 4) Settled: done with what came back, or failed if nothing did.
+      extraLaneSlots.set(row.id, 0);
+      const merged = mergeLaneItems(lanes);
+      if (merged) {
+        const { result } = await resultFromItems(row, [merged]);
+        if (costUsd) result._cost_usd = costUsd;
+        result[LANES_META_KEY] = laneSummary(lanes);
+        result[FAILURES_META_KEY] = failures ?? [];
+        const missing = missingLanes(lanes);
+        if (missing.length) result[MISSING_META_KEY] = missing;
+        await service.from("ai_audit_queue").update({ status: "done", attempts, result }).eq("id", row.id);
+        console.log(`[ai-audit] question finished from lanes q="${String(row.question).slice(0, 60)}" missing=${missing.join(",") || "none"}`);
+        return;
+      }
+      const errors = AI_SEARCH_LANES.map((k) => String(lanes[k]?.error ?? ""));
+      const error = errors.includes("deadline_exceeded") ? "deadline_exceeded"
+        : errors.every((e) => e === "run_age_exceeded" || e === "apify_TIMED-OUT") ? "run_age_exceeded"
+        : errors.find((e) => e && e !== "run_age_exceeded") ?? "run_age_exceeded";
+      await service.from("ai_audit_queue").update({
+        status: "failed",
+        attempts,
+        result: { error, [AIO_REASON_META_KEY]: `run_${error}`, [LANES_META_KEY]: laneSummary(lanes), [FAILURES_META_KEY]: failures ?? [] },
+      }).eq("id", row.id);
+    }
+
     async function pollRow(row: Row): Promise<void> {
+      const lanes = readLanes(row.result);
+      if (lanes) { await pollLanes(row, lanes); return; }
       const runId: string = row.result._apify.runId;
       const startedAtTick: string | undefined = row.result._apify.startedAtTick;
-      const attempts = Number(row.attempts) || 0;
-      // A failed actor run → retry (back to 'pending', clear _apify so the next tick starts a FRESH
-      // run) or give up ('failed') once we've started MAX_ATTEMPTS runs.
-      const failAttempt = async (reason: string) => {
+      /* A failed or hung NORMAL run. ⛔ It is never re-asked the same way (that is what hung three times in a row on
+         18 Nov): the question splits into per-engine lanes, keeping anything the failed run brought back. Apify's own
+         words for the failure are kept on the row. */
+      const failAttempt = async (reason: string, statusMessage: string | null = null) => {
         /* A Google AI RETRY run that failed or hung: the first run's result is good, so it stands (never
            re-queued, never failed). */
         const firstRun = row.result?.[AIO_FIRST_META_KEY];
@@ -418,56 +646,28 @@ Deno.serve(async (req) => {
           await service.from("ai_audit_queue").update({ status: "done", result: keepFirstAfterRetry(firstRun as Record<string, unknown>, "failed") }).eq("id", row.id);
           return;
         }
-        const giveUp = attempts >= MAX_ATTEMPTS;
+        const logTail = await getApifyRunLogTail(runId, apifyToken);
+        const failures = addFailure(row.result?.[FAILURES_META_KEY], failureNote({ atIso: new Date().toISOString(), kind: "normal_run", reason, statusMessage, logTail }));
+        let partial: Record<string, unknown> | null = null;
+        try { partial = firstItem(await fetchAiSearchItems(runId, apifyToken)); } catch { /* nothing came back */ }
+        const next = initialLanes(partial);
         await service.from("ai_audit_queue").update({
-          status: giveUp ? "failed" : "pending",
-          result: giveUp ? { error: reason, [AIO_REASON_META_KEY]: `run_${reason}` } : null, // null clears _apify → re-claimable + re-started
-        }).eq("id", row.id);
+          status: "running",
+          result: { [LANES_META_KEY]: next, [FAILURES_META_KEY]: failures },
+        }).eq("id", row.id).eq("status", "running");
+        console.log(`[ai-audit] normal run ${reason} q="${String(row.question).slice(0, 60)}" — split into lanes (already back: ${AI_SEARCH_LANES.filter((k) => next[k]?.state === "done").join(",") || "none"}); apify said: ${statusMessage ?? "-"}`);
       };
       try {
-        const { status, usageTotalUsd, computeUnits } = await pollAiSearchRun(runId, apifyToken);
+        const { status, usageTotalUsd, computeUnits, statusMessage } = await pollAiSearchRun(runId, apifyToken);
         if (status === "SUCCEEDED") {
           const items = await fetchAiSearchItems(runId, apifyToken);
           const audit = await getAudit(row.audit_id);
-          const result = normalizeAiSearch(items, audit.businessName, {
-            trade: audit.businessType, town: audit.locationText,
-          }) as Record<string, unknown>;
-          /* The Google organic results the actor returned for this same question. Stored beside the
-             other meta keys, NOT as an engine — see the long note at captureGoogleSerp.
-             ⛔ COSTS NOTHING EXTRA: the actor scrapes the SERP as its base output on every question
-             whether we keep it or not, and these items are already in memory. No extra run, no extra
-             Apify request, no change to the actor input.
-             ⚠️ Attached only when the actor actually returned an organic block, so "no capture" and
-             "Google returned nothing" stay distinguishable in the stored row. */
-          const serp = captureGoogleSerp(items);
-          if (serp) result._google_serp = serp;
-          /* Google AI Overview, shown or not shown (display only — see aiOverviewStamp). Only new
-             questions carry the stamp, so an old audit is never re-read as "no overview shown". */
-          const aio = aiOverviewStamp(items, result as AiSearchResult);
-          if (aio) result[AI_OVERVIEW_META_KEY] = aio;
-          /* A question with no Google AI stamp (the dash) always says why. */
-          const aioReason = aioReasonFor(items, aio);
-          if (aioReason) result[AIO_REASON_META_KEY] = aioReason;
-          /* What the scraper RETURNED for this question (results page? AI Overview block? text?) so "Google
-             showed none" can be told from "the scraper missed it". Recording only — nothing reads it for a score. */
-          result[SCRAPE_META_KEY] = scrapeEvidence(items, result as AiSearchResult);
+          const { result, aio } = await resultFromItems(row, items);
           // What Apify says this question actually cost. Stored under a leading-underscore meta
           // key (same convention as _apify) so nothing that walks the engine keys trips on it.
           if (usageTotalUsd != null || computeUnits != null) {
             result._cost_usd = usageTotalUsd;
-            // The cap counted estCost when this row STARTED; book the difference now that Apify has
-            // told us the real figure, so the rolling 24h sum reflects money actually spent.
-            if (usageTotalUsd != null) {
-              const audit = await getAudit(row.audit_id);
-              await recordCostCorrection(service, {
-                userId: audit.userId || row.user_id || null,
-                type: "ai_search",
-                estimatedUsd: estCost,
-                actualUsd: usageTotalUsd,
-                note: "ai_search_poll_reconcile",
-                budgetPool: audit.pool,
-              });
-            }
+            await reconcileCost(row, usageTotalUsd);
             result._compute_units = computeUnits;
           }
           /* The Google AI retry's own run just finished: fold it into the first run's result. */
@@ -485,7 +685,7 @@ Deno.serve(async (req) => {
           return;
         }
         if (status === "FAILED" || status === "ABORTED" || status === "TIMED-OUT") {
-          await failAttempt(`apify_${status}`);
+          await failAttempt(`apify_${status}`, statusMessage);
           return;
         }
         // Still READY/RUNNING. MAX_RUN_AGE guard: a run that won't finish in time is treated as a
@@ -494,7 +694,7 @@ Deno.serve(async (req) => {
         const ageMs = startedAtTick ? Date.now() - new Date(startedAtTick).getTime() : 0;
         if (ageMs > MAX_RUN_AGE_MS) {
           await abortApifyRun(runId, apifyToken); // best-effort — stop billing on the stuck run
-          await failAttempt("run_age_exceeded");
+          await failAttempt("run_age_exceeded", statusMessage);
         }
       } catch (e) {
         // A transient poll/fetch HTTP error must NOT fail the row — leave it 'running' and re-poll
@@ -606,7 +806,9 @@ Deno.serve(async (req) => {
         .from("ai_audit_queue")
         .select("id", { count: "exact", head: true })
         .eq("status", "running");
-      let headroomLeft = Math.max(0, AUDIT_IN_FLIGHT_CEILING - ((liveNow ?? 0) - claimed.length));
+      /* Lanes hold one Apify slot each: a row split into three running lanes holds two more than its one row counts. */
+      const laneExtra = [...extraLaneSlots.values()].reduce((a, b) => a + b, 0);
+      let headroomLeft = Math.max(0, AUDIT_IN_FLIGHT_CEILING - ((liveNow ?? 0) - claimed.length) - laneExtra);
 
       for (const row of claimed) {
         let costLeft = perRunCostBudget.get(row.run_id);
@@ -675,7 +877,7 @@ Deno.serve(async (req) => {
             budgetPool: audit.pool,
             noCacheWrite: () => true, // never cache the start marker (would poison retries)
             run: async () => {
-              const { runId, datasetId } = await startAiSearch(String(row.question), audit.countryCode, apifyToken, { aiMode: audit.aiMode });
+              const { runId, datasetId } = await startAiSearch(String(row.question), audit.countryCode, apifyToken, { aiMode: audit.aiMode, runTimeoutSecs: APIFY_RUN_TIMEOUT_SECS });
               return { result: { runId, datasetId }, costUsd: estCost };
             },
           });

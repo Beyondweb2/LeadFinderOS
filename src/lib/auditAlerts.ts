@@ -78,13 +78,13 @@ export const INCOMPLETE_CAUSES: readonly IncompleteCause[] = ['openai_refused', 
 export const CAUSE_WORDS: Record<IncompleteCause, string> = {
   openai_refused: 'OpenAI refused (no credit), so the answers could not be read',
   apify_refused: 'Apify refused (credit or account limit), so the AI search did not run',
-  search_timeout: 'the AI search on Apify did not finish in time (12 minutes, 3 tries)',
+  search_timeout: 'the AI search on Apify did not finish in time (12 minutes, then each AI asked on its own, twice)',
   search_failed: 'the AI search failed or came back empty',
   firms_unread: 'the firm-reading step did not read the answers',
 };
 
 /** A failed row's error that means "the Apify run never finished". */
-const TIMEOUT_RE = /^(run_age_exceeded|apify_TIMED-OUT)$/;
+const TIMEOUT_RE = /^(run_age_exceeded|apify_TIMED-OUT|deadline_exceeded)$/;
 
 /** The one cause of an incomplete audit: a provider refusal wins (it is the thing to fix); otherwise whichever of
  *  "search timed out" / "search failed" / "firms not read" covers the most answers (ties: that order). */
