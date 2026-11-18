@@ -6,7 +6,7 @@ import { googleAiModeApplies } from "../../../src/lib/aiOverview.ts";
 import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, captureGoogleSerp, toCountryCode, aiOverviewStamp, AI_OVERVIEW_META_KEY, AI_SEARCH_LANES, type AiSearchLane, type AiSearchResult } from "../_shared/enrichment/ai-search.ts";
 import { abortApifyRun, getApifyRunLogTail } from "../_shared/enrichment/apify.ts";
 import {
-  APIFY_RUN_TIMEOUT_SECS, FAILURES_META_KEY, LANES_META_KEY, MISSING_META_KEY, addFailure, afterLaneFailure, failureNote, firstItem,
+  APIFY_RUN_TIMEOUT_SECS, CYCLE_META_KEY, FAILURES_META_KEY, LANES_META_KEY, MISSING_META_KEY, addFailure, afterLaneFailure, failureNote, firstItem,
   initialLanes, LANE_MAX_TRIES, lanesSettled, liveLaneCount, mergeLaneItems, missingLanes, pastDeadline, readLanes, type Lanes,
 } from "../_shared/enrichment/ai-search-lanes.ts";
 import {
@@ -229,11 +229,12 @@ Deno.serve(async (req) => {
        still keep what they brought back. Rows never started (attempts 0) are a backlog, not stuck: left alone. */
     try {
       const { data: oldPending } = await service
-        .from("ai_audit_queue").select("id, run_id, attempts, created_at")
+        .from("ai_audit_queue").select("id, run_id, attempts, updated_at")
         .eq("status", "pending").gt("attempts", 0)
-        .lt("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString()).limit(100);
+        .lt("updated_at", new Date(Date.now() - 60 * 60 * 1000).toISOString()).limit(100);
       for (const r of (oldPending ?? []) as Row[]) {
-        if (!pastDeadline({ createdAt: r.created_at, attempts: Number(r.attempts) || 0, nowMs: Date.now() })) continue;
+        // Untouched in 'pending' for the whole deadline (a re-opened retry or a deferral moves updated_at).
+        if (!pastDeadline({ startedAt: r.updated_at, attempts: Number(r.attempts) || 0, nowMs: Date.now() })) continue;
         await service.from("ai_audit_queue")
           .update({ status: "failed", result: { error: "deadline_exceeded" } })
           .eq("id", r.id).eq("status", "pending");
@@ -537,7 +538,8 @@ Deno.serve(async (req) => {
       let attempts = Number(row.attempts) || 0;
       let failures: unknown = row.result?.[FAILURES_META_KEY];
       let costUsd = Number(row.result?._cost_usd) || 0;
-      const deadline = pastDeadline({ createdAt: row.created_at, attempts, nowMs });
+      const cycleStartedAt: string = String(row.result?.[CYCLE_META_KEY] ?? row.updated_at ?? nowIso);
+      const deadline = pastDeadline({ startedAt: cycleStartedAt, attempts, nowMs });
 
       // 1) Poll the lanes in flight.
       for (const lane of AI_SEARCH_LANES) {
@@ -600,7 +602,7 @@ Deno.serve(async (req) => {
       if (!lanesSettled(lanes)) {
         await service.from("ai_audit_queue").update({
           attempts,
-          result: { [LANES_META_KEY]: lanes, [FAILURES_META_KEY]: failures ?? [], ...(costUsd ? { _cost_usd: costUsd } : {}) },
+          result: { [LANES_META_KEY]: lanes, [FAILURES_META_KEY]: failures ?? [], [CYCLE_META_KEY]: cycleStartedAt, ...(costUsd ? { _cost_usd: costUsd } : {}) },
         }).eq("id", row.id);
         return;
       }
@@ -653,7 +655,7 @@ Deno.serve(async (req) => {
         const next = initialLanes(partial);
         await service.from("ai_audit_queue").update({
           status: "running",
-          result: { [LANES_META_KEY]: next, [FAILURES_META_KEY]: failures },
+          result: { [LANES_META_KEY]: next, [FAILURES_META_KEY]: failures, [CYCLE_META_KEY]: startedAtTick ?? new Date().toISOString() },
         }).eq("id", row.id).eq("status", "running");
         console.log(`[ai-audit] normal run ${reason} q="${String(row.question).slice(0, 60)}" — split into lanes (already back: ${AI_SEARCH_LANES.filter((k) => next[k]?.state === "done").join(",") || "none"}); apify said: ${statusMessage ?? "-"}`);
       };
