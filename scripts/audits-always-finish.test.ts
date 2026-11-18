@@ -69,10 +69,14 @@ ok(mergeLaneItems({ chatgpt: { state: 'failed', tries: 2 }, gemini: { state: 'fa
 
 // E
 const now = Date.parse('2026-11-18T12:00:00Z');
-ok(!pastDeadline({ createdAt: '2026-11-18T09:00:00Z', attempts: 0, nowMs: now }), 'E: never-started backlog row is not ended');
-ok(pastDeadline({ createdAt: new Date(now - ROW_DEADLINE_MS - 1000).toISOString(), attempts: 1, nowMs: now }), 'E: started row past the deadline is ended');
-ok(!pastDeadline({ createdAt: new Date(now - ROW_DEADLINE_MS + 60_000).toISOString(), attempts: 3, nowMs: now }), 'E: started row inside the deadline keeps going');
-ok(!pastDeadline({ createdAt: null, attempts: 2, nowMs: now }), 'E: unknown age never ends a row');
+ok(!pastDeadline({ startedAt: '2026-11-18T09:00:00Z', attempts: 0, nowMs: now }), 'E: never-started backlog row is not ended');
+ok(pastDeadline({ startedAt: new Date(now - ROW_DEADLINE_MS - 1000).toISOString(), attempts: 1, nowMs: now }), 'E: started row past the deadline is ended');
+ok(!pastDeadline({ startedAt: new Date(now - ROW_DEADLINE_MS + 60_000).toISOString(), attempts: 3, nowMs: now }), 'E: started row inside the deadline keeps going');
+ok(!pastDeadline({ startedAt: null, attempts: 2, nowMs: now }), 'E: unknown age never ends a row');
+// The 18 Nov 13:12 regression: a question queued hours ago and re-opened by the 30-minute retry must not be ended at once.
+const qq0 = readFileSync('supabase/functions/process-ai-audit-queue/index.ts', 'utf8');
+ok(!/pastDeadline\(\{ startedAt: (r|row)\.created_at/.test(qq0) && qq0.includes('.lt("updated_at", new Date(Date.now() - 60 * 60 * 1000)'), 'E: the deadline never counts from when the question was first queued');
+ok(qq0.includes('[CYCLE_META_KEY]: startedAtTick ?? new Date().toISOString()') && qq0.includes('[CYCLE_META_KEY]: cycleStartedAt'), 'E: lanes carry the start of the current try, and keep it');
 ok(APIFY_RUN_TIMEOUT_SECS * 1000 > 12 * 60 * 1000, 'E: Apify\'s own timeout sits above our 12-minute guard');
 
 // F

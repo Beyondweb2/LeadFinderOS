@@ -156,10 +156,15 @@ export function mergeLaneItems(lanes: Lanes): Record<string, unknown> | null {
   return merged;
 }
 
+/** Where the current try of a question started (its normal run's start), carried onto the lanes. */
+export const CYCLE_META_KEY = "_cycle_started_at";
+
 /** Has a started question run out of time? Only rows that were started at least once (a row waiting its turn in a
- *  big batch is not stuck), judged from when it was queued. */
-export function pastDeadline(o: { createdAt: string | null | undefined; attempts: number; nowMs: number }): boolean {
+ *  big batch is not stuck), judged from when its CURRENT try began (CYCLE_META_KEY on a lane row, the last change on a
+ *  pending row) — ⛔ never from when it was queued: a question re-opened by the automatic Quick check retry 30+ minutes
+ *  after failing would be ended at once (it happened on the first deploy, 18 Nov 13:12). */
+export function pastDeadline(o: { startedAt: string | null | undefined; attempts: number; nowMs: number }): boolean {
   if (!(o.attempts > 0)) return false;
-  const t = Date.parse(String(o.createdAt ?? ""));
+  const t = Date.parse(String(o.startedAt ?? ""));
   return Number.isFinite(t) && o.nowMs - t > ROW_DEADLINE_MS;
 }
