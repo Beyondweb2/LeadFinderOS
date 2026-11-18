@@ -51,7 +51,7 @@ ok(googleAiModeApplies(after) === true && googleAiModeApplies(window) === false,
 ok(googleAiModeApplies(null) === false && googleAiModeApplies(undefined) === false && googleAiModeApplies('garbage') === false, 'D: a missing or unreadable date fails closed to the old ask');
 const q = read('../supabase/functions/process-ai-audit-queue/index.ts');
 ok(/aiMode: googleAiModeApplies\(methodCreatedAt\)/.test(q) && /remeasure_audit_id", auditId/.test(q), 'D: the queue decides by the method date, and a re-measure follows its baseline');
-ok((q.match(/startAiSearch\(String\(row\.question\), audit\.countryCode, apifyToken, \{ aiMode: audit\.aiMode \}\)/g) ?? []).length === 2, 'E: both start calls (first ask and retry) carry the same choice');
+ok((q.match(/startAiSearch\(String\(row\.question\), audit\.countryCode, apifyToken, \{ aiMode: audit\.aiMode, (lane, )?runTimeoutSecs: APIFY_RUN_TIMEOUT_SECS \}\)/g) ?? []).length === 3, 'E: every start call (first ask, retry, per-engine lane) carries the same choice');
 ok(!/startAiSearch\(String\(row\.question\), audit\.countryCode, apifyToken\)/.test(q), 'E: no start call is left on the old default');
 
 // E cost

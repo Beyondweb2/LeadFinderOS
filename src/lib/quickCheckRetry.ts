@@ -31,7 +31,7 @@ export const QUICK_CHECK_MAX_ASKS = 3;
 
 /** Row errors that mean "the provider did not finish" (process-ai-audit-queue's own words for it). */
 export const PROVIDER_FAILURE_ERRORS: ReadonlySet<string> = new Set([
-  'run_age_exceeded', 'apify_TIMED-OUT', 'apify_FAILED', 'apify_ABORTED', 'stuck_running_reclaimed',
+  'run_age_exceeded', 'apify_TIMED-OUT', 'apify_FAILED', 'apify_ABORTED', 'stuck_running_reclaimed', 'deadline_exceeded', 'no_items',
 ]);
 
 /** What the public link says. */

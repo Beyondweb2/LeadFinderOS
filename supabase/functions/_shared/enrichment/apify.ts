@@ -213,9 +213,13 @@ export async function startApifyRun(
   input: Record<string, unknown>,
   token: string,
   timeoutMs = 20_000,
+  /* runTimeoutSecs: Apify's OWN run timeout (its "timeout" query parameter). Apify stops the run itself at that age and
+     reports TIMED-OUT, so a hung run stops billing even if our abort call never lands (v1-audits-always-finish). */
+  runOpts: { runTimeoutSecs?: number } = {},
 ): Promise<{ runId: string; datasetId: string | null; status: ApifyRunStatus }> {
+  const qs = runOpts.runTimeoutSecs && runOpts.runTimeoutSecs > 0 ? `?timeout=${Math.round(runOpts.runTimeoutSecs)}` : "";
   const { res, body } = await apifyFetch(
-    `https://api.apify.com/v2/acts/${actorId}/runs`,
+    `https://api.apify.com/v2/acts/${actorId}/runs${qs}`,
     { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(input) },
     timeoutMs,
   );
@@ -243,6 +247,8 @@ export async function getApifyRun(
    *  Free to collect: this is the same GET we already make to poll the status. */
   usageTotalUsd: number | null;
   computeUnits: number | null;
+  /** The actor's own last status line (what it was doing). Kept on a failed attempt as evidence. */
+  statusMessage: string | null;
 }> {
   const { res, body } = await apifyFetch(
     `https://api.apify.com/v2/actor-runs/${runId}`,
@@ -258,7 +264,24 @@ export async function getApifyRun(
     runTimeSecs: typeof stats.runTimeSecs === "number" ? stats.runTimeSecs : null,
     usageTotalUsd: typeof data.usageTotalUsd === "number" ? data.usageTotalUsd : null,
     computeUnits: typeof stats.computeUnits === "number" ? stats.computeUnits : null,
+    statusMessage: typeof data.statusMessage === "string" ? data.statusMessage.slice(0, 300) : null,
   };
+}
+
+/** The last maxChars of a run's log (plain text). Best-effort evidence for a failed attempt: null on any error. */
+export async function getApifyRunLogTail(runId: string, token: string, maxChars = 1200, timeoutMs = 10_000): Promise<string | null> {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`https://api.apify.com/v2/actor-runs/${runId}/log`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal });
+    if (!res.ok) return null;
+    const text = await res.text();
+    return text.slice(-maxChars);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(t);
+  }
 }
 
 /** FETCH a finished run's dataset items (async). SAME array shape run-sync returns today. */

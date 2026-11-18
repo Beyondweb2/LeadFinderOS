@@ -77,7 +77,25 @@ export function toCountryCode(country?: string | null): string {
 
 /** Build the actor input for ONE question. countryCode should already be lowercase
  *  ISO-2 (use toCountryCode); we lowercase defensively. */
-export function buildAiSearchInput(query: string, countryCode: string, opts: { aiMode?: boolean } = {}): Record<string, unknown> {
+export function buildAiSearchInput(query: string, countryCode: string, opts: { aiMode?: boolean; lane?: AiSearchLane } = {}): Record<string, unknown> {
+  /* ⛔ ONE ENGINE PER RUN — the fallback "lane" (v1-audits-always-finish, 2026-11-18). After a question's normal run
+     (every engine in one Apify run) does not finish, it is asked again as one run per engine, so one hung engine can no
+     longer take the others down with it. Every OTHER engine is switched OFF EXPLICITLY: the actor takes its schema
+     default for any key not sent, so leaving a key out would not turn that engine off. */
+  if (opts.lane) {
+    const lane = opts.lane;
+    return {
+      queries: query,
+      countryCode: (countryCode || "gb").toLowerCase(),
+      maxPagesPerQuery: 1,
+      languageCode: "en",
+      chatGptSearch: { enableChatGpt: lane === "chatgpt" },
+      geminiSearch: { enableGemini: lane === "gemini" },
+      ...(lane === "ai_overview"
+        ? (opts.aiMode ? { aiModeSearch: { enableAiMode: true } } : { aiOverview: { scrapeFullAiOverview: true } })
+        : { aiModeSearch: { enableAiMode: false }, aiOverview: { scrapeFullAiOverview: false } }),
+    };
+  }
   return {
     queries: query,
     countryCode: (countryCode || "gb").toLowerCase(),
@@ -130,9 +148,22 @@ export async function startAiSearch(
   query: string,
   countryCode: string,
   token: string,
-  opts: { aiMode?: boolean } = {},
+  opts: { aiMode?: boolean; lane?: AiSearchLane; runTimeoutSecs?: number } = {},
 ): Promise<{ runId: string; datasetId: string | null; status: string }> {
-  return await startApifyRun(AI_SEARCH_ACTOR, buildAiSearchInput(query, countryCode, opts), token);
+  return await startApifyRun(AI_SEARCH_ACTOR, buildAiSearchInput(query, countryCode, opts), token, 20_000, { runTimeoutSecs: opts.runTimeoutSecs });
+}
+
+/** The engines a question can be split into, one Apify run each (the fallback lanes). Google organic rides on every run. */
+export type AiSearchLane = "chatgpt" | "gemini" | "ai_overview";
+export const AI_SEARCH_LANES: readonly AiSearchLane[] = ["chatgpt", "gemini", "ai_overview"];
+
+/** True when a dataset item carries this engine's answer block with text in it. */
+export function laneAnswered(item: unknown, lane: AiSearchLane): boolean {
+  const rec = asRecord(item);
+  if (!rec) return false;
+  const block = asRecord(firstKey(rec, ENGINE_BLOCK_KEYS[lane]));
+  if (!block) return false;
+  return TEXT_KEYS.some((k) => asStr(block[k]).trim().length > 0);
 }
 
 /** POLL a started run's status (READY/RUNNING/SUCCEEDED/FAILED/ABORTED/TIMED-OUT). */
@@ -146,6 +177,7 @@ export async function pollAiSearchRun(
   /** Apify's own cost figure for this run, available on the SAME poll we already make. */
   usageTotalUsd: number | null;
   computeUnits: number | null;
+  statusMessage: string | null;
 }> {
   return await getApifyRun(runId, token);
 }
