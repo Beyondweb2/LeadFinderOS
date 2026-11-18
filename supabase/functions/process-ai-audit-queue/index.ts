@@ -3,11 +3,12 @@ import { paidMode } from "../_shared/protection.ts";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource, recordCostCorrection } from "../_shared/enrichment/runner.ts";
 import { googleAiModeApplies } from "../../../src/lib/aiOverview.ts";
-import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, captureGoogleSerp, toCountryCode, aiOverviewStamp, AI_OVERVIEW_META_KEY, AI_SEARCH_LANES, type AiSearchLane, type AiSearchResult } from "../_shared/enrichment/ai-search.ts";
-import { abortApifyRun, getApifyRunLogTail } from "../_shared/enrichment/apify.ts";
+import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, captureGoogleSerp, toCountryCode, aiOverviewStamp, AI_OVERVIEW_META_KEY, AI_SEARCH_ACTOR, AI_SEARCH_LANES, type AiSearchLane, type AiSearchResult } from "../_shared/enrichment/ai-search.ts";
+import { abortApifyRun, getApifyRunLogTail, startApifyRun } from "../_shared/enrichment/apify.ts";
 import {
   APIFY_RUN_TIMEOUT_SECS, CYCLE_META_KEY, FAILURES_META_KEY, LANES_META_KEY, MISSING_META_KEY, addFailure, afterLaneFailure, failureNote, firstItem,
-  initialLanes, LANE_MAX_TRIES, lanesSettled, liveLaneCount, mergeLaneItems, missingLanes, pastDeadline, readLanes, type Lanes,
+  initialLanes, liveLaneCount, mergeLaneItems, missingLanes, pastDeadline, readLanes, type Lanes,
+  SCORED_LANES, HEDGE_AFTER_MS, addHedgeLanes, foldNormalItem, laneAgeLimitMs, laneMaxTries, scoredSettled, buildScoredInput, type LaneState,
 } from "../_shared/enrichment/ai-search-lanes.ts";
 import {
   AIO_FIRST_META_KEY, AIO_REASON_META_KEY, AIO_RETRY_META_KEY, GOOGLE_AI_RETRY_SECRET, aioReasonFor, aioRetryAppliesTo, SCRAPE_META_KEY,
@@ -382,7 +383,7 @@ Deno.serve(async (req) => {
     /* Apify slots held by per-engine lanes BEYOND the one slot their row already counts as (PHASE B's headroom counts
        'running' rows). Recomputed as lanes start and settle this tick. */
     const extraLaneSlots = new Map<string, number>();
-    for (const r of waiting) extraLaneSlots.set(r.id, Math.max(0, liveLaneCount(readLanes(r.result)) - 1));
+    for (const r of waiting) extraLaneSlots.set(r.id, Math.max(0, (r.result?._apify?.runId ? 1 : 0) + liveLaneCount(readLanes(r.result)) - 1));
 
     /* ══ GOOGLE AI ONE-TIME RETRY — OFF UNLESS THE SECRET SAYS OTHERWISE (2026-10-27) ═════════════
        See _shared/enrichment/google-ai-retry.ts. A question whose first run came back "not shown" may be
@@ -538,8 +539,59 @@ Deno.serve(async (req) => {
       let attempts = Number(row.attempts) || 0;
       let failures: unknown = row.result?.[FAILURES_META_KEY];
       let costUsd = Number(row.result?._cost_usd) || 0;
+      let normalSecs: number | null = row.result?._normal_secs ?? null;
       const cycleStartedAt: string = String(row.result?.[CYCLE_META_KEY] ?? row.updated_at ?? nowIso);
       const deadline = pastDeadline({ startedAt: cycleStartedAt, attempts, nowMs });
+      const toAbort: string[] = [];
+
+      /* 0) THE NORMAL RUN (ChatGPT + Gemini together, v1-ai-mode-separate), while it is still in flight. Its answers fold
+         into the scored lanes; past HEDGE_AFTER_MS an unanswered engine is also asked on its own run beside it. */
+      let normal: { runId: string; datasetId?: string | null; startedAtTick?: string | null } | null =
+        row.result?._apify?.runId ? row.result._apify : null;
+      const foldNormal = (item: Record<string, unknown> | null) => {
+        toAbort.push(...foldNormalItem(lanes, item).abort);
+        normal = null;
+      };
+      if (normal) {
+        const n = normal;
+        try {
+          const p = await pollAiSearchRun(n.runId, apifyToken);
+          if (p.status === "SUCCEEDED") {
+            const item = firstItem(await fetchAiSearchItems(n.runId, apifyToken));
+            if (p.usageTotalUsd != null) { costUsd += p.usageTotalUsd; await reconcileCost(row, p.usageTotalUsd); }
+            if (p.runTimeSecs != null) normalSecs = p.runTimeSecs;
+            if (!item) failures = addFailure(failures, failureNote({ atIso: nowIso, kind: "normal_run", reason: "no_items", statusMessage: p.statusMessage }));
+            foldNormal(item);
+          } else if (p.status === "FAILED" || p.status === "ABORTED" || p.status === "TIMED-OUT") {
+            const logTail = await getApifyRunLogTail(n.runId, apifyToken);
+            failures = addFailure(failures, failureNote({ atIso: nowIso, kind: "normal_run", reason: `apify_${p.status}`, statusMessage: p.statusMessage, logTail }));
+            let partial: Record<string, unknown> | null = null;
+            try { partial = firstItem(await fetchAiSearchItems(n.runId, apifyToken)); } catch { /* nothing came back */ }
+            foldNormal(partial);
+          } else {
+            const ageMs = n.startedAtTick ? nowMs - new Date(n.startedAtTick).getTime() : 0;
+            if (ageMs > MAX_RUN_AGE_MS || deadline) {
+              const logTail = await getApifyRunLogTail(n.runId, apifyToken);
+              await abortApifyRun(n.runId, apifyToken);
+              failures = addFailure(failures, failureNote({ atIso: nowIso, kind: "normal_run", reason: deadline ? "deadline_exceeded" : "run_age_exceeded", statusMessage: p.statusMessage, logTail }));
+              let partial: Record<string, unknown> | null = null;
+              try { partial = firstItem(await fetchAiSearchItems(n.runId, apifyToken)); } catch { /* nothing came back */ }
+              foldNormal(partial);
+            } else if (ageMs > HEDGE_AFTER_MS) {
+              const before = SCORED_LANES.filter((k) => lanes[k]).length;
+              addHedgeLanes(lanes);
+              if (SCORED_LANES.filter((k) => lanes[k]).length > before) {
+                console.log(`[ai-audit] hedge: normal run ${Math.round(ageMs / 1000)}s old, asking ChatGPT/Gemini on their own runs too q="${String(row.question).slice(0, 60)}"`);
+              }
+            }
+          }
+        } catch (e) {
+          console.error(`[process-ai-audit-queue] normal run poll error run=${n.runId}:`, e instanceof Error ? e.message : e);
+          if (deadline) { await abortApifyRun(n.runId, apifyToken); foldNormal(null); }
+        }
+      } else if (SCORED_LANES.some((k) => !lanes[k])) {
+        foldNormal(null); // no normal run on the row (lost, or an older row): every unanswered scored engine gets a lane
+      }
 
       // 1) Poll the lanes in flight.
       for (const lane of AI_SEARCH_LANES) {
@@ -562,7 +614,7 @@ Deno.serve(async (req) => {
             continue;
           }
           const ageMs = l.startedAtTick ? nowMs - new Date(l.startedAtTick).getTime() : 0;
-          if (ageMs > MAX_RUN_AGE_MS || deadline) {
+          if (ageMs > laneAgeLimitMs(lane, MAX_RUN_AGE_MS) || deadline) {
             const logTail = await getApifyRunLogTail(l.runId, apifyToken);
             await abortApifyRun(l.runId, apifyToken);
             const reason = deadline ? "deadline_exceeded" : "run_age_exceeded";
@@ -578,57 +630,89 @@ Deno.serve(async (req) => {
         }
       }
 
-      // 2) Start the lanes waiting to go (only the engines still missing ever get here).
+      /* 2) Start the lanes waiting to go (only engines still missing ever get here) — unless the scored engines are
+         already settled, when nothing more is wanted (a pending Google AI lane is simply not started). */
       const mayStart = tickMode === "running" || (tickMode === "prospecting_paused" && audit.pool !== "prospecting");
       for (const lane of AI_SEARCH_LANES) {
         const l = lanes[lane];
         if (!l || l.state !== "pending") continue;
         if (deadline) { lanes[lane] = { ...l, state: "failed", error: "deadline_exceeded" }; continue; }
+        if (scoredSettled(lanes)) break;
         if (!mayStart) continue; // the paid-action mode holds new starts; the deadline still ends the row
         const s = await startLaneRun(row, lane, l.tries);
         if (s && "refused" in s) { lanes[lane] = { ...l, state: "failed", error: s.refused }; continue; }
         if (!s) {
           const tries = l.tries + 1;
-          lanes[lane] = { ...l, tries, state: tries >= LANE_MAX_TRIES ? "failed" : "pending", error: "start_failed" };
+          lanes[lane] = { ...l, tries, state: tries >= laneMaxTries(lane) ? "failed" : "pending", error: "start_failed" };
           continue;
         }
         attempts += 1;
         lanes[lane] = { ...l, state: "running", tries: l.tries + 1, runId: s.runId, datasetId: s.datasetId, startedAtTick: new Date().toISOString(), error: null };
         console.log(`[ai-audit] lane ${lane} started q="${String(row.question).slice(0, 60)}" run=${s.runId}`);
       }
-      extraLaneSlots.set(row.id, Math.max(0, liveLaneCount(lanes) - 1));
 
-      // 3) Not settled yet: keep the lanes (and anything already back) on the row.
-      if (!lanesSettled(lanes)) {
+      // Abort hedge lanes the normal run made redundant (best-effort: stop billing).
+      for (const id of toAbort) await abortApifyRun(id, apifyToken);
+      const slots = (normal ? 1 : 0) + liveLaneCount(lanes);
+      extraLaneSlots.set(row.id, Math.max(0, slots - 1));
+
+      // 3) Not settled yet: keep the normal run, the lanes (and anything already back) on the row.
+      if (!scoredSettled(lanes)) {
         await service.from("ai_audit_queue").update({
           attempts,
-          result: { [LANES_META_KEY]: lanes, [FAILURES_META_KEY]: failures ?? [], [CYCLE_META_KEY]: cycleStartedAt, ...(costUsd ? { _cost_usd: costUsd } : {}) },
+          result: {
+            ...(normal ? { _apify: normal } : {}),
+            [LANES_META_KEY]: lanes, [FAILURES_META_KEY]: failures ?? [], [CYCLE_META_KEY]: cycleStartedAt,
+            ...(costUsd ? { _cost_usd: costUsd } : {}),
+            ...(normalSecs != null ? { _normal_secs: normalSecs } : {}),
+          },
         }).eq("id", row.id);
         return;
       }
 
-      // 4) Settled: done with what came back, or failed if nothing did.
+      /* 4) Settled: ChatGPT and Gemini are both done or failed. Anything still in flight is stopped — the normal run (its
+         engines are settled), and Google AI, which never holds the question: if it is not back now it is CUT and the
+         result says so (never "Google showed no AI answer", which the results page alone would otherwise imply). */
+      if (normal) { await abortApifyRun((normal as { runId: string }).runId, apifyToken); normal = null; }
+      for (const lane of AI_SEARCH_LANES) {
+        const l = lanes[lane];
+        if (!l) continue;
+        if (l.state === "running") {
+          if (l.runId) await abortApifyRun(l.runId, apifyToken);
+          lanes[lane] = { ...l, state: "failed", runId: null, error: "cut_at_finish" };
+        } else if (l.state === "pending") {
+          lanes[lane] = { ...l, state: "failed", error: l.error ?? "cut_at_finish" };
+        }
+      }
       extraLaneSlots.set(row.id, 0);
+      const finishedSecs = Math.round((nowMs - Date.parse(cycleStartedAt)) / 1000);
+      const timing = { finished_secs: Number.isFinite(finishedSecs) ? finishedSecs : null, normal_secs: normalSecs };
       const merged = mergeLaneItems(lanes);
-      if (merged) {
+      const scoredBack = SCORED_LANES.some((k) => lanes[k]?.state === "done");
+      if (merged && scoredBack) {
         const { result } = await resultFromItems(row, [merged]);
         if (costUsd) result._cost_usd = costUsd;
         result[LANES_META_KEY] = laneSummary(lanes);
         result[FAILURES_META_KEY] = failures ?? [];
+        result._timing = timing;
         const missing = missingLanes(lanes);
         if (missing.length) result[MISSING_META_KEY] = missing;
+        if (lanes.ai_overview && lanes.ai_overview.state !== "done") {
+          delete result[AI_OVERVIEW_META_KEY];
+          result[AIO_REASON_META_KEY] = `google_ai_${lanes.ai_overview.error ?? "not_back"}`;
+        }
         await service.from("ai_audit_queue").update({ status: "done", attempts, result }).eq("id", row.id);
-        console.log(`[ai-audit] question finished from lanes q="${String(row.question).slice(0, 60)}" missing=${missing.join(",") || "none"}`);
+        console.log(`[ai-audit] question finished in ${timing.finished_secs}s q="${String(row.question).slice(0, 60)}" missing=${missing.join(",") || "none"}`);
         return;
       }
-      const errors = AI_SEARCH_LANES.map((k) => String(lanes[k]?.error ?? ""));
+      const errors = SCORED_LANES.map((k) => String(lanes[k]?.error ?? ""));
       const error = errors.includes("deadline_exceeded") ? "deadline_exceeded"
         : errors.every((e) => e === "run_age_exceeded" || e === "apify_TIMED-OUT") ? "run_age_exceeded"
         : errors.find((e) => e && e !== "run_age_exceeded") ?? "run_age_exceeded";
       await service.from("ai_audit_queue").update({
         status: "failed",
         attempts,
-        result: { error, [AIO_REASON_META_KEY]: `run_${error}`, [LANES_META_KEY]: laneSummary(lanes), [FAILURES_META_KEY]: failures ?? [] },
+        result: { error, [AIO_REASON_META_KEY]: `run_${error}`, [LANES_META_KEY]: laneSummary(lanes), [FAILURES_META_KEY]: failures ?? [], _timing: timing },
       }).eq("id", row.id);
     }
 
@@ -834,11 +918,12 @@ Deno.serve(async (req) => {
            tick claim it — it costs nothing, nothing has been started, and the work is still wanted.
            It is deliberately NOT added to cappedRuns: marking the run capped here would finalise an
            audit that has not been attempted. */
-        if (headroomLeft <= 0) { deferred.push(row); continue; }
+        /* Each question now starts TWO Apify runs (ChatGPT + Gemini, and Google AI beside it): it takes two slots. */
+        if (headroomLeft < 2) { deferred.push(row); continue; }
 
         toStart.push(row);
         perRunCostBudget.set(row.run_id, costLeft - 1);
-        headroomLeft--;
+        headroomLeft -= 2;
       }
 
       if (deferred.length) {
@@ -879,7 +964,8 @@ Deno.serve(async (req) => {
             budgetPool: audit.pool,
             noCacheWrite: () => true, // never cache the start marker (would poison retries)
             run: async () => {
-              const { runId, datasetId } = await startAiSearch(String(row.question), audit.countryCode, apifyToken, { aiMode: audit.aiMode, runTimeoutSecs: APIFY_RUN_TIMEOUT_SECS });
+              /* ⛔ ChatGPT + Gemini ONLY (v1-ai-mode-separate): Google AI is its own run, started just below. */
+              const { runId, datasetId } = await startApifyRun(AI_SEARCH_ACTOR, buildScoredInput(String(row.question), audit.countryCode), apifyToken, 20_000, { runTimeoutSecs: APIFY_RUN_TIMEOUT_SECS });
               return { result: { runId, datasetId }, costUsd: estCost };
             },
           });
@@ -890,12 +976,25 @@ Deno.serve(async (req) => {
             return false;
           }
           if (!outcome.result?.runId) throw new Error("no_run_id");
+          const startedIso = new Date().toISOString();
+          runCost.set(row.run_id, (await accumulatedCost(row.run_id)) + estCost);
+          /* GOOGLE AI, BESIDE IT — its own run, one try, display only. It never holds the question: the question
+             finishes when ChatGPT and Gemini are in (pollLanes), cutting Google AI if it is not back by then. A Google AI
+             run that cannot start (budget, Apify) just leaves Google AI absent; the scored run goes ahead regardless. */
+          const g = await startLaneRun(row, "ai_overview", 0);
+          const aio: LaneState = g && "runId" in g
+            ? { state: "running", tries: 1, runId: g.runId, datasetId: g.datasetId, startedAtTick: startedIso, error: null }
+            : { state: "failed", tries: 1, error: g && "refused" in g ? g.refused : "start_failed" };
           await service.from("ai_audit_queue").update({
             status: "running",
-            attempts: (Number(row.attempts) || 0) + 1,
-            result: { _apify: { runId: outcome.result.runId, datasetId: outcome.result.datasetId ?? null, startedAtTick: new Date().toISOString() } },
+            attempts: (Number(row.attempts) || 0) + 1 + (aio.state === "running" ? 1 : 0),
+            result: {
+              _apify: { runId: outcome.result.runId, datasetId: outcome.result.datasetId ?? null, startedAtTick: startedIso },
+              [LANES_META_KEY]: { ai_overview: aio },
+              [CYCLE_META_KEY]: startedIso,
+            },
           }).eq("id", row.id);
-          console.log(`[ai-audit] started q="${String(row.question).slice(0, 60)}" run=${outcome.result.runId}`);
+          console.log(`[ai-audit] started q="${String(row.question).slice(0, 60)}" run=${outcome.result.runId} google_ai=${aio.runId ?? aio.error}`);
           return true;
         } catch (e) {
           // Start failed (no runId stored) — bump attempts and re-queue inline (or fail at MAX).
