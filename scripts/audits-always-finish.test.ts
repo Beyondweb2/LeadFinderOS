@@ -120,5 +120,48 @@ for (const p of ['src/pages/Inbox.tsx', 'src/pages/AiAudit.tsx']) {
 }
 ok(/invokeEdge<CreateAuditData>\('create-ai-audit'/.test(readFileSync('src/lib/createAuditCall.ts', 'utf8')) && /edgeErrorMessage\(e/.test(readFileSync('src/lib/createAuditCall.ts', 'utf8')), 'I: the helper turns a refusal into its sentence');
 
+// J — Google AI apart + the hedge (v1-ai-mode-separate)
+{
+  const L = await import('../supabase/functions/_shared/enrichment/ai-search-lanes.ts');
+  const s = L.buildScoredInput('q', 'GB') as Record<string, any>;
+  ok(s.countryCode === 'gb' && s.queries === 'q', 'J: the normal run keeps the question and market');
+  ok(s.chatGptSearch.enableChatGpt === true && s.geminiSearch.enableGemini === true, 'J: the normal run asks ChatGPT and Gemini together');
+  ok(s.aiModeSearch.enableAiMode === false && s.aiOverview.scrapeFullAiOverview === false, 'J: …and switches Google AI off explicitly');
+
+  const both = { organicResults: organic, chatGptSearchResult: { text: 'A Roofing.' }, geminiSearchResult: { text: 'B Roofing.' } };
+  const onlyGpt = { organicResults: organic, chatGptSearchResult: { text: 'A Roofing.' } };
+  // Started: Google AI running beside the normal run, no scored lanes yet → not settled (the normal run is the answer).
+  const start: Lanes = { ai_overview: { state: 'running', tries: 1, runId: 'g1' } };
+  ok(!L.scoredSettled(start), 'J: a just-started question is not settled (waits for the normal run)');
+  // Normal run back with both: settled at once, Google AI still running does NOT hold it.
+  const r1 = L.foldNormalItem(structuredClone(start), both);
+  ok(L.scoredSettled(r1.lanes) && r1.lanes.ai_overview?.state === 'running' && r1.abort.length === 0, 'J: ChatGPT + Gemini back → settled while Google AI is still running');
+  // Normal run back with ChatGPT only: Gemini gets a lane, not settled.
+  const r2 = L.foldNormalItem(structuredClone(start), onlyGpt);
+  ok(r2.lanes.chatgpt?.state === 'done' && r2.lanes.gemini?.state === 'pending' && !L.scoredSettled(r2.lanes), 'J: an engine the normal run missed gets its own lane');
+  // Hedge: lanes added beside a slow normal run; the normal run then answers → the running hedge lane is aborted.
+  const h = L.addHedgeLanes(structuredClone(start));
+  ok(h.chatgpt?.state === 'pending' && h.gemini?.state === 'pending' && h.ai_overview?.state === 'running', 'J: the hedge adds ChatGPT and Gemini lanes, Google AI untouched');
+  h.chatgpt = { state: 'running', tries: 1, runId: 'c1' };
+  h.gemini = { state: 'done', tries: 1, item: { geminiSearchResult: { text: 'From the hedge.' } } };
+  const r3 = L.foldNormalItem(h, both);
+  ok(r3.abort.join() === 'c1' && r3.lanes.chatgpt?.state === 'done', 'J: the normal run answering first stops the hedge lane (no double billing)');
+  ok((r3.lanes.gemini?.item as any)?.geminiSearchResult?.text === 'From the hedge.', 'J: a hedge lane that answered first keeps its answer');
+  ok(L.addHedgeLanes(structuredClone(r3.lanes)).chatgpt?.state === 'done', 'J: the hedge never re-opens an answered engine');
+  // Both scored lanes failed → settled (incomplete), never waits on Google AI.
+  ok(L.scoredSettled({ chatgpt: { state: 'failed', tries: 2 }, gemini: { state: 'failed', tries: 2 }, ai_overview: { state: 'running', tries: 1 } }), 'J: both scored engines failed → settled, Google AI does not hold it');
+  ok(L.laneMaxTries('ai_overview') === 1 && L.laneMaxTries('chatgpt') === 2, 'J: Google AI one try, scored engines two');
+  ok(L.HEDGE_AFTER_MS === 4 * 60_000 && L.laneAgeLimitMs('chatgpt', 12 * 60_000) === 5 * 60_000 && L.laneAgeLimitMs('ai_overview', 12 * 60_000) === 12 * 60_000, 'J: hedge after 4 min; a scored lane is retried after 5 min; Google AI keeps the normal limit');
+  ok(L.foldNormalItem({}, null).lanes.chatgpt?.state === 'pending', 'J: a lost or failed normal run with nothing back gives every scored engine a lane');
+
+  // The queue wiring.
+  ok(q.includes('startApifyRun(AI_SEARCH_ACTOR, buildScoredInput(String(row.question), audit.countryCode)') && q.includes('startLaneRun(row, "ai_overview", 0)'), 'J: each question starts ChatGPT + Gemini and, beside it, Google AI');
+  ok(q.includes('if (!scoredSettled(lanes))') && !q.includes('if (!lanesSettled(lanes))'), 'J: a question finishes on ChatGPT + Gemini, never waiting for Google AI');
+  ok(q.includes('error: "cut_at_finish"') && q.includes('delete result[AI_OVERVIEW_META_KEY]'), 'J: Google AI not back is cut and never read as "Google showed none"');
+  ok(q.includes('ageMs > HEDGE_AFTER_MS') && q.includes('addHedgeLanes(lanes)'), 'J: a slow normal run is hedged, not killed');
+  ok(q.includes('if (headroomLeft < 2)') && q.includes('headroomLeft -= 2'), 'J: a question takes two Apify slots against the ceiling');
+  ok(q.includes('result._timing = timing'), 'J: each finished question records how long it took');
+}
+
 console.log(f ? `\n${f} FAILED` : '\nALL PASS');
 process.exit(f ? 1 : 0);

@@ -163,6 +163,76 @@ export function mergeLaneItems(lanes: Lanes): Record<string, unknown> | null {
   return merged;
 }
 
+/* ══ GOOGLE AI APART + THE HEDGE (Paul, 2026-11-18, v1-ai-mode-separate) ═══════════════════════════════════════════
+   Every question now starts TWO Apify runs side by side: the normal run (ChatGPT + Gemini together) and the Google AI
+   lane (display only, one try). The question finishes the moment ChatGPT AND Gemini are settled — Google AI is folded
+   in if it is back by then, else cut (its run aborted) and recorded as not back. It never holds the audit.
+   ⛔ NOT A SHORTER TIME CAP. MAX_RUN_AGE_MS (12 min) still governs the normal run: at 5 min it once culled healthy-but-
+   slow runs into a retry storm (docs/open-problems.md). Instead, after HEDGE_AFTER_MS a still-unanswered scored engine
+   is ALSO asked on its own run while the normal run keeps going; whichever answers first counts and the other is
+   stopped. Measured before this change (154 clean single-question audits, 11–18 Nov): median 3.75 min, p75 5.5 min,
+   about 1 in 5 past 5 min — so the hedge fires on the slow fifth only, costing one extra run per slow engine. */
+
+/** The normal run's input: ChatGPT + Gemini together, Google AI switched OFF explicitly (the actor takes its schema
+ *  default for any key not sent). Lives here, not in ai-search.ts, so only the queue reaches it. */
+export function buildScoredInput(query: string, countryCode: string): Record<string, unknown> {
+  return {
+    queries: query,
+    countryCode: (countryCode || "gb").toLowerCase(),
+    maxPagesPerQuery: 1,
+    languageCode: "en",
+    chatGptSearch: { enableChatGpt: true },
+    geminiSearch: { enableGemini: true },
+    aiModeSearch: { enableAiMode: false },
+    aiOverview: { scrapeFullAiOverview: false },
+  };
+}
+
+/** The engines that are scored (the question waits for these). */
+export const SCORED_LANES: readonly AiSearchLane[] = ["chatgpt", "gemini"];
+/** A normal run still going this long gets its unanswered scored engines asked again on their own runs (beside it). */
+export const HEDGE_AFTER_MS = 4 * 60 * 1000;
+/** A single-engine lane for a scored engine still going this long is stopped and tried again (it is a hedge: the
+ *  normal run, if still alive, keeps going beside it). */
+export const LANE_RUN_AGE_MS = 5 * 60 * 1000;
+
+/** Age limit for one lane's run. Google AI gets the full normal limit (it never holds anything; it is cut at finish). */
+export function laneAgeLimitMs(lane: AiSearchLane, normalMaxMs: number): number {
+  return lane === "ai_overview" ? normalMaxMs : LANE_RUN_AGE_MS;
+}
+
+/**
+ * The normal run's answers (or the partial item of a failed one) fold into the scored lanes: an engine it answered is
+ * done (a hedge lane for it still running is returned to be aborted); an engine it did not answer and that has no lane
+ * yet gets one, pending. Google AI is never touched (the normal run does not ask it). Mutates and returns `lanes`.
+ */
+export function foldNormalItem(lanes: Lanes, item: Record<string, unknown> | null): { lanes: Lanes; abort: string[] } {
+  const abort: string[] = [];
+  for (const lane of SCORED_LANES) {
+    const l = lanes[lane];
+    if (item && laneAnswered(item, lane)) {
+      if (l?.state === "done") continue; // the hedge lane got there first: keep its answer
+      if (l?.state === "running" && l.runId) abort.push(l.runId);
+      lanes[lane] = { state: "done", tries: l?.tries ?? 0, item, error: null };
+      continue;
+    }
+    if (!l) lanes[lane] = { state: "pending", tries: 0 };
+  }
+  return { lanes, abort };
+}
+
+/** The hedge: every scored engine with no lane yet gets one, pending. Mutates and returns `lanes`. */
+export function addHedgeLanes(lanes: Lanes): Lanes {
+  for (const lane of SCORED_LANES) if (!lanes[lane]) lanes[lane] = { state: "pending", tries: 0 };
+  return lanes;
+}
+
+/** The question can finish: every scored engine has a lane and it is done or failed. (While the normal run is in flight
+ *  and has not been hedged yet the scored lanes do not exist, so this is false — the normal run is still the answer.) */
+export function scoredSettled(lanes: Lanes): boolean {
+  return SCORED_LANES.every((k) => { const l = lanes[k]; return !!l && (l.state === "done" || l.state === "failed"); });
+}
+
 /** Where the current try of a question started (its normal run's start), carried onto the lanes. */
 export const CYCLE_META_KEY = "_cycle_started_at";
 

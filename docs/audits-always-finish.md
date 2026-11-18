@@ -61,3 +61,24 @@
   finished `complete`. No question left running or pending.
 - Still to watch: the Google AI Mode add-on of `apify~google-search-scraper`. Until it comes back, every question
   pays one hung 12-minute normal run before the lanes start (~15–20 min per audit instead of ~5).
+
+## Google AI apart + the hedge (18 Nov, v1-ai-mode-separate)
+
+Paul: audits took 15–20 min because the combined run waited 12 min on the broken Google AI Mode before splitting.
+
+- **Every question now starts two Apify runs side by side:** the normal run asks ChatGPT + Gemini only
+  (`buildScoredInput` in `_shared/enrichment/ai-search-lanes.ts`, Google AI switched off explicitly), and the
+  `ai_overview` lane asks Google AI alone (one try, display only). Each question takes two slots against
+  `AUDIT_IN_FLIGHT_CEILING`.
+- **A question finishes when ChatGPT and Gemini are settled** (`scoredSettled`). Google AI is folded in if it is back;
+  otherwise its run is aborted, the lane is marked `cut_at_finish`, the overview stamp is removed and `_aio_reason` reads
+  `google_ai_cut_at_finish` — never "Google showed none" (the results page alone would have implied that).
+- **Timeouts — a hedge, not a shorter cap.** `MAX_RUN_AGE_MS` stays 12 min (at 5 min it once culled healthy runs into a
+  retry storm). After `HEDGE_AFTER_MS` (4 min) an unanswered scored engine is ALSO asked on its own run while the normal
+  run keeps going; whichever answers first counts and the other is aborted. A scored single-engine lane is retried after
+  `LANE_RUN_AGE_MS` (5 min), two tries. An engine that is down ends the question with what came back, or
+  "Audit incomplete" when neither answered.
+- Measured before (154 clean single-question audits, 11–18 Nov, queue start to last answer): median 3.75 min, p75 5.5,
+  about 1 in 5 past 5 min. So the hedge fires on roughly the slow fifth.
+- Each finished question records `_timing: { finished_secs, normal_secs }` (normal_secs = Apify's own run time).
+- Only `process-ai-audit-queue` reaches the changed code (ai-search.ts untouched on purpose).

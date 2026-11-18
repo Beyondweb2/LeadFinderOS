@@ -51,7 +51,10 @@ ok(googleAiModeApplies(after) === true && googleAiModeApplies(window) === false,
 ok(googleAiModeApplies(null) === false && googleAiModeApplies(undefined) === false && googleAiModeApplies('garbage') === false, 'D: a missing or unreadable date fails closed to the old ask');
 const q = read('../supabase/functions/process-ai-audit-queue/index.ts');
 ok(/aiMode: googleAiModeApplies\(methodCreatedAt\)/.test(q) && /remeasure_audit_id", auditId/.test(q), 'D: the queue decides by the method date, and a re-measure follows its baseline');
-ok((q.match(/startAiSearch\(String\(row\.question\), audit\.countryCode, apifyToken, \{ aiMode: audit\.aiMode, (lane, )?runTimeoutSecs: APIFY_RUN_TIMEOUT_SECS \}\)/g) ?? []).length === 3, 'E: every start call (first ask, retry, per-engine lane) carries the same choice');
+/* v1-ai-mode-separate: the first ask is ChatGPT + Gemini only (scoredOnly); Google AI is asked through the lane call,
+   which carries the audit's choice. So the retry and the lane carry it, and the first ask carries none. */
+ok((q.match(/startAiSearch\(String\(row\.question\), audit\.countryCode, apifyToken, \{ aiMode: audit\.aiMode, (lane, )?runTimeoutSecs: APIFY_RUN_TIMEOUT_SECS \}\)/g) ?? []).length === 2, 'E: every start call that asks Google AI (retry, per-engine lane) carries the same choice');
+ok((q.match(/startApifyRun\(AI_SEARCH_ACTOR, buildScoredInput\(String\(row\.question\), audit\.countryCode\)/g) ?? []).length === 1, 'E: the first ask is ChatGPT + Gemini only');
 ok(!/startAiSearch\(String\(row\.question\), audit\.countryCode, apifyToken\)/.test(q), 'E: no start call is left on the old default');
 
 // E cost
