@@ -1,3 +1,4 @@
+import { invokeCreateAudit } from '@/lib/createAuditCall';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
 import { InboxChannelSwitch, useInboxChannel } from '@/components/InboxChannelSwitch';
 import { smsTemplateAvailability, type InboxChannel } from '@/lib/inboxChannel';
@@ -1977,7 +1978,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   const startAudit = async (bizType: string, loc: string) => {
     if (!active?.leadId || !activeLead) return;
     setFiredAudits((prev) => new Set(prev).add(active.leadId!));
-    const { data, error } = await supabase.functions.invoke('create-ai-audit', {
+    const { data, error } = await invokeCreateAudit({
       body: {
         lead_id: active.leadId,
         business_name: activeLead.business_name,
@@ -2047,7 +2048,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     if (!window.confirm(`Run a new ${OUTREACH_HOOK_QUESTIONS} questions × ChatGPT + Gemini audit for ${activeLead.business_name}?\n\nThe old result is kept. Nothing is sent to the lead.`)) return;
     setHookRerunBusy(true);
     try {
-      const { data, error } = await supabase.functions.invoke('create-ai-audit', {
+      const { data, error } = await invokeCreateAudit({
         body: hookAuditRequestBody(activeLead, bizType, loc, old?.business_name),
       });
       if (error || !data?.ok) {
