@@ -82,3 +82,10 @@ Paul: audits took 15–20 min because the combined run waited 12 min on the brok
   about 1 in 5 past 5 min. So the hedge fires on roughly the slow fifth.
 - Each finished question records `_timing: { finished_secs, normal_secs }` (normal_secs = Apify's own run time).
 - Only `process-ai-audit-queue` reaches the changed code (ai-search.ts untouched on purpose).
+- **Proof (18 Nov 14:48 UTC, 3 ZZ QA audits × 3 questions, re-run through the normal start path):** whole audit
+  3.5, 4.1 and 6.5 min (median 4.1). Normal runs (ChatGPT + Gemini) took 87–206 s; 8 of 9 questions finished on
+  the normal run; 1 was hedged at 4 min and finished from its own-engine runs at 6.4 min. Google AI came back in
+  time on 7 of 9 and was cut on 2 (`google_ai_cut_at_finish`) without delaying anything. ⚠️ These QA audits are
+  Overview-era (older method), so their Google AI run asks the Overview, not the broken AI Mode — the scored-engine
+  timings are what this proves. Before: median 3.75 / p90 9.6 min on clean days (11–17 Nov); 18 Nov morning median
+  37.5 min, after the lanes fix ~15–20 min.
