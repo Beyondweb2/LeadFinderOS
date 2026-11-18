@@ -4,7 +4,7 @@ Paul's request: a salesperson on a call is asked "send me more info". The prospe
 Email or Text (no WhatsApp), previewed and editable, then sent.
 
 ## Where things are
-- Wording (Paul's text, word for word, only the variables change): `src/lib/moreInfoMessage.ts`. Test: `scripts/send-more-info.test.ts`.
+- Wording (Paul's text, word for word, only the variables change): `src/lib/moreInfoMessage.ts`. Email body re-worded 2026-11-18 ("Here's what we do about it:" with four bullets, price line alone, closing "Any questions, just reply to this email, or have a look at findable.live"); the text is unchanged. Test: `scripts/send-more-info.test.ts`.
 - Server: `supabase/functions/send-more-info` (modes `preview`, `send`, `settings`, `save_settings` admin-only). `verify_jwt = true`.
 - UI: `src/components/SendMoreInfo.tsx` (button + dialog), mounted in `src/components/ClosePanel.tsx` under the sign-up sends.
 - Setting: `public.more_info_settings.price_line` (one row, RLS on, no policies; read/written by the function). Default
