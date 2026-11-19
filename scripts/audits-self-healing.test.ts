@@ -132,6 +132,11 @@ const q = read('supabase/functions/process-ai-audit-queue/index.ts');
 ok(q.includes('const slots = slotCounter(slotBudget({ ownLiveRuns, ceiling: AUDIT_IN_FLIGHT_CEILING, live: apifyLive }))'), 'G: one slot budget per tick, from our runs and Apify\'s live reading');
 ok(q.includes('if (!slots.take()) { lanes[lane] = { ...l, error: "waiting_for_slot" }; continue; }') && q.includes('if (headroomLeft < 2 || !slots.take(2))'), 'G: every start takes a slot; none = wait');
 ok(q.includes('if (isHedge && !hedgeMayStart('), 'G: hedges go last');
+/* 19 Nov 17:08: a local `const slots` inside pollLanes shadowed the scheduler; slots.take() threw (temporal dead zone)
+   and no healed Gemini lane ever started. The edge checks cannot see a shadow, so this pins it. */
+ok((q.match(/\b(const|let|var) slots\b/g) ?? []).length === 1 && !/\(slots\)|slots:\s/.test(q), 'G: the scheduler `slots` is declared once and never shadowed');
+ok(q.includes('- claimed.length - idleRows.size) - laneExtra)') && q.includes('if (rowRuns === 0) idleRows.add(row.id); else idleRows.delete(row.id);'),
+  'G: a row waiting with no Apify run does not hold a new question\'s slot');
 ok(/if \("wait" in s\) \{[\s\S]{0,400}lanes\[lane\] = \{ \.\.\.l, error: "waiting_for_slot" \};/.test(q) && !/if \("wait" in s\) \{[\s\S]{0,400}tries \+ 1/.test(q), 'G: "plan full" keeps the lane pending, never a try');
 ok(q.includes('if (isCapacityRefusal(msg)) {') && q.includes('update({ status: "pending" }).eq("id", row.id).eq("status", "running")'), 'G: a full plan at a question\'s first start re-queues it, attempts untouched');
 ok(q.includes('if (scoredSettled(lanes, !!normal)) break;') && q.includes('if (!scoredSettled(lanes, !!normal)) {'), 'G: settling knows the normal run is alive');

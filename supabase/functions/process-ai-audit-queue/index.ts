@@ -388,6 +388,10 @@ Deno.serve(async (req) => {
        'running' rows). Recomputed as lanes start and settle this tick. */
     const extraLaneSlots = new Map<string, number>();
     for (const r of waiting) extraLaneSlots.set(r.id, Math.max(0, (r.result?._apify?.runId ? 1 : 0) + liveLaneCount(readLanes(r.result)) - 1));
+    /* 'running' rows that hold NO Apify run right now (lanes waiting for a slot, a healed ask before its lane starts):
+       PHASE B's row count must not treat them as holding a slot (v1-audits-self-healing). */
+    const idleRows = new Set<string>();
+    for (const r of waiting) if (!r.result?._apify?.runId && liveLaneCount(readLanes(r.result)) === 0) idleRows.add(r.id);
 
     /* ══ THE RUN SCHEDULER (v1-audits-self-healing, _shared/enrichment/apify-slots.ts) ══════════════════════════════
        One slot budget for the whole tick: the fewer of our audit ceiling minus our live runs, and Apify's own live free
@@ -686,8 +690,12 @@ Deno.serve(async (req) => {
 
       // Abort hedge lanes the normal run made redundant (best-effort: stop billing).
       for (const id of toAbort) await abortApifyRun(id, apifyToken);
-      const slots = (normal ? 1 : 0) + liveLaneCount(lanes);
-      extraLaneSlots.set(row.id, Math.max(0, slots - 1));
+      /* ⛔ NOT named `slots`: that is the tick's scheduler (above). A local number of that name here shadowed it, so step 2's
+         slots.take() hit the temporal dead zone and threw before anything was written (19 Nov 17:08–17:20: the healed
+         Gemini lanes never started). */
+      const rowRuns = (normal ? 1 : 0) + liveLaneCount(lanes);
+      extraLaneSlots.set(row.id, Math.max(0, rowRuns - 1));
+      if (rowRuns === 0) idleRows.add(row.id); else idleRows.delete(row.id);
 
       // 3) Not settled yet: keep the normal run, the lanes (and anything already back) on the row.
       if (!scoredSettled(lanes, !!normal)) {
@@ -719,6 +727,7 @@ Deno.serve(async (req) => {
         }
       }
       extraLaneSlots.set(row.id, 0);
+      idleRows.delete(row.id);
       const finishedSecs = Math.round((nowMs - Date.parse(cycleStartedAt)) / 1000);
       const timing = { finished_secs: Number.isFinite(finishedSecs) ? finishedSecs : null, normal_secs: normalSecs };
       const merged = mergeLaneItems(lanes);
@@ -945,7 +954,7 @@ Deno.serve(async (req) => {
         .eq("status", "running");
       /* Lanes hold one Apify slot each: a row split into three running lanes holds two more than its one row counts. */
       const laneExtra = [...extraLaneSlots.values()].reduce((a, b) => a + b, 0);
-      let headroomLeft = Math.max(0, AUDIT_IN_FLIGHT_CEILING - ((liveNow ?? 0) - claimed.length) - laneExtra);
+      let headroomLeft = Math.max(0, AUDIT_IN_FLIGHT_CEILING - ((liveNow ?? 0) - claimed.length - idleRows.size) - laneExtra);
 
       for (const row of claimed) {
         let costLeft = perRunCostBudget.get(row.run_id);
