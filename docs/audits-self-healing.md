@@ -52,4 +52,19 @@
 
 - Before (19 Nov, settled asks by day): 78 audits, **18 incomplete (23%)**; ChatGPT answered 90%, Gemini 81%. 18 Nov: 46 of
   70 (Google AI Mode hang). 12–17 Nov: 0.
-- After: see the deploy proof below.
+- After (19 Nov 17:35 UTC, same measure): 87 audits, **11 incomplete (13%)**; ChatGPT 93%, Gemini 91%. The heal re-opened
+  12 audits at 17:08 (round 1); 8 are now complete with both answers (incl. Rein Electrical, AGM GoDrive, Carl Electrical);
+  ChatGPT's earlier answers were kept untouched. 5 Kingston electricians (THS, Handyman Services, EB Electrical, Carmichael
+  Brown, New Malden) are still missing Gemini: their Gemini run hung twice ("Nothing extracted yet") at the 5-minute lane
+  limit. Round 2 runs ~19:35 UTC (with the 12-minute lane limit below), round 3 ~6 h after that.
+
+## Found after the first deploy (fixed the same evening)
+
+- A local `slots` number in pollLanes shadowed the scheduler: `slots.take()` threw before the row was written, so healed
+  Gemini lanes were claimed every tick and never started (17:08–17:21). Renamed (`rowRuns`); a test pins one declaration.
+  Lesson: the edge checks do not type-check `supabase/functions`; this does, and would have caught it:
+  `npx tsc --noEmit --allowImportingTsExtensions --skipLibCheck --target es2022 --module esnext --moduleResolution bundler --lib es2022,dom <file>`
+  (ignore the Deno / https-import errors and errors on lines you did not touch).
+- PHASE B counted 'running' rows that hold no Apify run (lanes waiting) as slots: now excluded (`idleRows`).
+- The 5-minute lane age limit is for hedges only; a lane that is the only run for its engine gets the full 12 minutes
+  (`laneAgeLimitMs(lane, max, normalAlive)`) — healthy runs for the Kingston question took 535–630 s.

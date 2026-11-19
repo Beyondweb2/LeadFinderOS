@@ -197,8 +197,12 @@ export const HEDGE_AFTER_MS = 4 * 60 * 1000;
 export const LANE_RUN_AGE_MS = 5 * 60 * 1000;
 
 /** Age limit for one lane's run. Google AI gets the full normal limit (it never holds anything; it is cut at finish). */
-export function laneAgeLimitMs(lane: AiSearchLane, normalMaxMs: number): number {
-  return lane === "ai_overview" ? normalMaxMs : LANE_RUN_AGE_MS;
+export function laneAgeLimitMs(lane: AiSearchLane, normalMaxMs: number, normalAlive = true): number {
+  /* ⛔ The 5-minute limit is for a HEDGE (the normal run still going beside it). A lane that is the ONLY run asking its
+     engine (the normal run failed, or a healed ask) gets the normal limit: on 19 Nov the Kingston question took 535–630 s
+     on healthy runs, and five healed Gemini lanes were cut at 5 min twice each ("Nothing extracted yet"). */
+  if (lane === "ai_overview" || !normalAlive) return normalMaxMs;
+  return LANE_RUN_AGE_MS;
 }
 
 /**

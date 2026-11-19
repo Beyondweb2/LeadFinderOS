@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs';
 import {
   APIFY_PLAN_MAX_RUNS, HEDGE_SPARE, OTHER_ACTORS_RESERVE, hedgeMayStart, isCapacityRefusal, slotBudget, slotCounter, startErrorText,
 } from '../supabase/functions/_shared/enrichment/apify-slots.ts';
-import { scoredSettled, type Lanes } from '../supabase/functions/_shared/enrichment/ai-search-lanes.ts';
+import { laneAgeLimitMs, scoredSettled, type Lanes } from '../supabase/functions/_shared/enrichment/ai-search-lanes.ts';
 import {
   HEAL_BASE_KEY, HEAL_DELAYS_MS, HEAL_GRACE_MS, HEAL_ROUNDS, giveUpPatch, giveUpReason, healLine, healMerge, healReopenPlan, healStamp,
   healVerdict, isHealRun, rowMissing, type HealAudit, type HealRow, type HealRun,
@@ -55,6 +55,10 @@ ok(!scoredSettled(replay, true), 'C: Gemini\'s refused hedge does NOT end the qu
 ok(scoredSettled(replay, false), 'C: once the normal run is gone, a failed lane settles (the question ends with what came back)');
 ok(scoredSettled({ chatgpt: { state: 'done', tries: 1 }, gemini: { state: 'done', tries: 1 } }, true), 'C: both hedges back → settled even with the normal run alive');
 ok(!scoredSettled({ chatgpt: { state: 'done', tries: 0 } }, true), 'C: no lane for an engine → not settled');
+
+ok(laneAgeLimitMs('gemini', 12 * 60_000, true) === 5 * 60_000 && laneAgeLimitMs('gemini', 12 * 60_000, false) === 12 * 60_000 && laneAgeLimitMs('ai_overview', 12 * 60_000, true) === 12 * 60_000,
+  'C: a hedge is cut at 5 min; a lane that is the only run for its engine (healed ask, failed normal run) gets the full 12');
+ok(read('supabase/functions/process-ai-audit-queue/index.ts').includes('laneAgeLimitMs(lane, MAX_RUN_AGE_MS, !!normal)'), 'C: the queue passes whether the normal run is alive');
 
 /* ── D. The heal verdict ── */
 const audit: HealAudit = { audit_purpose: 'audit', baseline_target_runs: null, is_market: false, is_measurement: false };
