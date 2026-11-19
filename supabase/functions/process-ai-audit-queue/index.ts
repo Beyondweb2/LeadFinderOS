@@ -637,7 +637,7 @@ Deno.serve(async (req) => {
             continue;
           }
           const ageMs = l.startedAtTick ? nowMs - new Date(l.startedAtTick).getTime() : 0;
-          if (ageMs > laneAgeLimitMs(lane, MAX_RUN_AGE_MS) || deadline) {
+          if (ageMs > laneAgeLimitMs(lane, MAX_RUN_AGE_MS, !!normal) || deadline) {
             const logTail = await getApifyRunLogTail(l.runId, apifyToken);
             await abortApifyRun(l.runId, apifyToken);
             const reason = deadline ? "deadline_exceeded" : "run_age_exceeded";
