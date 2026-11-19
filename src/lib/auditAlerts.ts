@@ -83,6 +83,13 @@ export const CAUSE_WORDS: Record<IncompleteCause, string> = {
   firms_unread: 'the firm-reading step did not read the answers',
 };
 
+/** Causes that still alert audit by audit. The AI search not answering (timeout / failed) does not since 19 Nov: those
+ *  audits heal themselves (auditSelfHeal.ts) and the provider's success rate alerts once when it drops
+ *  (providerHealth.ts). */
+export function causeAlertsPerAudit(cause: IncompleteCause): boolean {
+  return cause !== 'search_timeout' && cause !== 'search_failed';
+}
+
 /** A failed row's error that means "the Apify run never finished". */
 const TIMEOUT_RE = /^(run_age_exceeded|apify_TIMED-OUT|deadline_exceeded)$/;
 

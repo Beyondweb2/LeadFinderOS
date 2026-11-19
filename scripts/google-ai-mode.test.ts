@@ -53,8 +53,11 @@ const q = read('../supabase/functions/process-ai-audit-queue/index.ts');
 ok(/aiMode: googleAiModeApplies\(methodCreatedAt\)/.test(q) && /remeasure_audit_id", auditId/.test(q), 'D: the queue decides by the method date, and a re-measure follows its baseline');
 /* v1-ai-mode-separate: the first ask is ChatGPT + Gemini only (scoredOnly); Google AI is asked through the lane call,
    which carries the audit's choice. So the retry and the lane carry it, and the first ask carries none. */
-ok((q.match(/startAiSearch\(String\(row\.question\), audit\.countryCode, apifyToken, \{ aiMode: audit\.aiMode, (lane, )?runTimeoutSecs: APIFY_RUN_TIMEOUT_SECS \}\)/g) ?? []).length === 2, 'E: every start call that asks Google AI (retry, per-engine lane) carries the same choice');
-ok((q.match(/startApifyRun\(AI_SEARCH_ACTOR, buildScoredInput\(String\(row\.question\), audit\.countryCode\)/g) ?? []).length === 1, 'E: the first ask is ChatGPT + Gemini only');
+/* v1-audits-self-healing: the lane start builds its input with buildAiSearchInput (startApifyRunExplained keeps Apify's
+   words); the retry still uses startAiSearch. Both carry the audit's choice. */
+ok((q.match(/startAiSearch\(String\(row\.question\), audit\.countryCode, apifyToken, \{ aiMode: audit\.aiMode, runTimeoutSecs: APIFY_RUN_TIMEOUT_SECS \}\)/g) ?? []).length === 1
+  && (q.match(/buildAiSearchInput\(String\(row\.question\), audit\.countryCode, \{ aiMode: audit\.aiMode, lane \}\)/g) ?? []).length === 1, 'E: every start call that asks Google AI (retry, per-engine lane) carries the same choice');
+ok((q.match(/startApifyRunExplained\(AI_SEARCH_ACTOR, buildScoredInput\(String\(row\.question\), audit\.countryCode\)/g) ?? []).length === 1, 'E: the first ask is ChatGPT + Gemini only');
 ok(!/startAiSearch\(String\(row\.question\), audit\.countryCode, apifyToken\)/.test(q), 'E: no start call is left on the old default');
 
 // E cost

@@ -236,3 +236,5 @@
 - `docs/google-ai-mode.md` — 2026-11-12: Google AI = AI Mode for new audits, context only (not scored); which audits, cost, never-rules.
 - `docs/onboarding-to-audit.md` — 2026-11-15: onboarding → payment → baseline map; the two new answers (not wanted pushed, area covered); one exclusion rule; the setup-answers alert; Run Discovery / Create baseline from the client page
 - `docs/tps-screening.md` — TPS / CTPS screening before a UK call (2026-11-16, built, OFF until Paul adds TPSMYDATA_API_KEY + TPSMYDATA_API_URL; cost per check; PECR advice for SMS / WhatsApp to sole traders), the sales templates per role, and hiding leads we can't call.
+- `docs/audits-self-healing.md` — 2026-11-19: 7 audits incomplete = the hedge pushed us over Apify's 32-run limit; the run scheduler, audits re-running themselves (30 min / 2 h / 6 h, only missing answers, never charged, never sending), the AI-search health line + rate-drop alert.
+- `docs/ai-search-api-fallback-plan.md` — 2026-11-19: PLAN ONLY — an OpenAI / Gemini API fallback when Apify is down: how answers differ, cost, labels, never for baselines.

@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { refusalBody, requireAdmin } from "../_shared/access.ts";
+import { healthReport } from "../_shared/ai-search-health.ts";
 
 /* apify-usage-status — the newest Apify account-usage snapshot, for the operator UI.
  *
@@ -43,6 +44,12 @@ Deno.serve(async (req) => {
     const gate = await requireAdmin(req, service);
     if (!gate.ok) return json(refusalBody(gate), gate.status);
 
+    /* AI SEARCH HEALTH (v1-audits-self-healing, 2026-11-19): with { health: true } the same admin call also returns
+       Apify's success rate by engine over the last 24 h and what the self-heal did (_shared/ai-search-health.ts).
+       Read-only; a failed read is health: null and the page shows nothing for it. */
+    const body = await req.json().catch(() => ({}));
+    const health = body && (body as { health?: unknown }).health === true ? await healthReport(service) : undefined;
+
     const { data, error } = await service
       .from("apify_account_usage")
       .select("captured_at, monthly_usage_usd, max_monthly_usage_usd, usage_pct, cycle_start, cycle_end")
@@ -55,9 +62,9 @@ Deno.serve(async (req) => {
        ok:true with usage:null and let the UI render nothing. */
     if (error) {
       console.warn("[apify-usage-status] read failed:", error.message);
-      return json({ ok: true, usage: null, note: "usage unavailable" });
+      return json({ ok: true, usage: null, note: "usage unavailable", health });
     }
-    if (!data) return json({ ok: true, usage: null, note: "no snapshot recorded yet" });
+    if (!data) return json({ ok: true, usage: null, note: "no snapshot recorded yet", health });
 
     const used = data.monthly_usage_usd === null ? null : Number(data.monthly_usage_usd);
     const cap = data.max_monthly_usage_usd === null ? null : Number(data.max_monthly_usage_usd);
@@ -68,6 +75,7 @@ Deno.serve(async (req) => {
 
     return json({
       ok: true,
+      health,
       usage: {
         capturedAt: data.captured_at,
         monthlyUsageUsd: used,

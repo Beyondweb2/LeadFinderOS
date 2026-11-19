@@ -3,8 +3,12 @@ import { paidMode } from "../_shared/protection.ts";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource, recordCostCorrection } from "../_shared/enrichment/runner.ts";
 import { googleAiModeApplies } from "../../../src/lib/aiOverview.ts";
-import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, captureGoogleSerp, toCountryCode, aiOverviewStamp, AI_OVERVIEW_META_KEY, AI_SEARCH_ACTOR, AI_SEARCH_LANES, type AiSearchLane, type AiSearchResult } from "../_shared/enrichment/ai-search.ts";
-import { abortApifyRun, getApifyRunLogTail, startApifyRun } from "../_shared/enrichment/apify.ts";
+import { startAiSearch, buildAiSearchInput, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, captureGoogleSerp, toCountryCode, aiOverviewStamp, AI_OVERVIEW_META_KEY, AI_SEARCH_ACTOR, AI_SEARCH_LANES, type AiSearchLane, type AiSearchResult } from "../_shared/enrichment/ai-search.ts";
+import { abortApifyRun, getApifyRunLogTail } from "../_shared/enrichment/apify.ts";
+import { hedgeMayStart, isCapacityRefusal, slotBudget, slotCounter } from "../_shared/enrichment/apify-slots.ts";
+import { readApifyLive, startApifyRunExplained } from "../_shared/enrichment/apify-start.ts";
+import { HEAL_BASE_KEY, HEAL_ROW_KEY, healMerge, isHealRun } from "../../../src/lib/auditSelfHeal.ts";
+import { checkRateDrop } from "../_shared/ai-search-health.ts";
 import {
   APIFY_RUN_TIMEOUT_SECS, CYCLE_META_KEY, FAILURES_META_KEY, LANES_META_KEY, MISSING_META_KEY, addFailure, afterLaneFailure, failureNote, firstItem,
   initialLanes, liveLaneCount, mergeLaneItems, missingLanes, pastDeadline, readLanes, type Lanes,
@@ -36,7 +40,7 @@ import { advanceSequentialHook, isSequentialHookState } from "../../../src/lib/h
 import { RETRY_CLEAN_CAP, runSettlement, shouldInvokeCleaning, finaliseReadiness, markCleaningExhausted } from "../_shared/run-finalise.ts";
 import { cleaningSweepDue } from "../_shared/cleaning-sweep.ts";
 import { checkAuditCompleteness } from "../_shared/audit-alerts.ts";
-import { sweepLateRetries } from "../_shared/quick-check-retry.ts";
+import { sweepSelfHeal } from "../_shared/quick-check-retry.ts";
 import { AUDIT_RUN_CAP_USD } from "../../../src/lib/auditLimits.ts";
 import { POOL_DAILY_CAP_USD, budgetDecision, budgetPoolForPurpose, refusalRowError, type ApifyUsage, type BudgetPool } from "../../../src/lib/auditBudget.ts";
 import { latestApifyUsage } from "../_shared/audit-budget.ts";
@@ -385,6 +389,18 @@ Deno.serve(async (req) => {
     const extraLaneSlots = new Map<string, number>();
     for (const r of waiting) extraLaneSlots.set(r.id, Math.max(0, (r.result?._apify?.runId ? 1 : 0) + liveLaneCount(readLanes(r.result)) - 1));
 
+    /* ══ THE RUN SCHEDULER (v1-audits-self-healing, _shared/enrichment/apify-slots.ts) ══════════════════════════════
+       One slot budget for the whole tick: the fewer of our audit ceiling minus our live runs, and Apify's own live free
+       runs/memory minus what the other actors keep. EVERY AI-search start below takes a slot first (lanes, hedges, new
+       questions); no slot = the start waits for a later tick, never a failed try. Hedges go last (hedgeMayStart). On
+       19 Nov 16:17 the hedges asked for ~30 more runs on a plan already holding ~30 of 32, Apify refused them, and seven
+       audits finished without Gemini. */
+    const ownLiveRuns = waiting.reduce((n, r) => n + (r.result?._apify?.runId ? 1 : 0) + liveLaneCount(readLanes(r.result)), 0);
+    const apifyLive = apifyToken ? await readApifyLive(apifyToken) : null;
+    const slots = slotCounter(slotBudget({ ownLiveRuns, ceiling: AUDIT_IN_FLIGHT_CEILING, live: apifyLive }));
+    const { count: waitingQuestions } = await service.from("ai_audit_queue").select("id", { count: "exact", head: true }).eq("status", "pending");
+    if (apifyLive && slots.free < 4) console.log(`[scheduler] Apify ${apifyLive.activeRuns ?? "?"}/${apifyLive.maxRuns ?? "?"} runs, ${apifyLive.memoryUsedGb ?? "?"}/${apifyLive.memoryMaxGb ?? "?"} GB; ours ${ownLiveRuns}; free slots ${slots.free}; waiting questions ${waitingQuestions ?? 0}`);
+
     /* ══ GOOGLE AI ONE-TIME RETRY — OFF UNLESS THE SECRET SAYS OTHERWISE (2026-10-27) ═════════════
        See _shared/enrichment/google-ai-retry.ts. A question whose first run came back "not shown" may be
        asked ONCE more; only the Google AI answer is taken from the second run, so no score moves except by
@@ -484,7 +500,9 @@ Deno.serve(async (req) => {
     /* ══ PER-ENGINE LANES (v1-audits-always-finish, _shared/enrichment/ai-search-lanes.ts) ═══════════════════════
        After a question's normal run fails, each engine still missing is asked in its own Apify run. Same doors as
        every other start: the run's own cost cap, the budget pool's daily cap, the Apify reserve, the paid-action mode. */
-    async function startLaneRun(row: Row, lane: AiSearchLane, tries: number): Promise<{ runId: string; datasetId: string | null } | { refused: string } | null> {
+    /* The caller has ALREADY taken the slot. { wait } = Apify said the plan is full (isCapacityRefusal): the lane stays
+       pending with its tries untouched. { failed } = a real start failure, in Apify's own words. */
+    async function startLaneRun(row: Row, lane: AiSearchLane, tries: number): Promise<{ runId: string; datasetId: string | null } | { refused: string } | { wait: string } | { failed: string }> {
       const audit = await getAudit(row.audit_id);
       const reserve = budgetDecision({ pool: audit.pool, poolSpentUsd: 0, estCostUsd: 0, apify: apifyNow, capUsd: Number.POSITIVE_INFINITY });
       if (!reserve.allowed && reserve.reason === "apify_reserve") return { refused: refusalRowError("apify_reserve") };
@@ -501,17 +519,18 @@ Deno.serve(async (req) => {
           budgetPool: audit.pool,
           noCacheWrite: () => true,
           run: async () => {
-            const { runId, datasetId } = await startAiSearch(String(row.question), audit.countryCode, apifyToken, { aiMode: audit.aiMode, lane, runTimeoutSecs: APIFY_RUN_TIMEOUT_SECS });
+            const { runId, datasetId } = await startApifyRunExplained(AI_SEARCH_ACTOR, buildAiSearchInput(String(row.question), audit.countryCode, { aiMode: audit.aiMode, lane }), apifyToken, APIFY_RUN_TIMEOUT_SECS);
             return { result: { runId, datasetId }, costUsd: estCost };
           },
         });
         if (outcome.capReached) return { refused: refusalRowError("pool_cap") };
-        if (!outcome.result?.runId) return null;
+        if (!outcome.result?.runId) return { failed: "no_run_id" };
         runCost.set(row.run_id, spent + estCost);
         return { runId: outcome.result.runId, datasetId: outcome.result.datasetId ?? null };
       } catch (e) {
-        console.error(`[process-ai-audit-queue] lane ${lane} not started:`, e instanceof Error ? e.message : e);
-        return null;
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(`[process-ai-audit-queue] lane ${lane} not started:`, msg);
+        return isCapacityRefusal(msg) ? { wait: msg } : { failed: msg };
       }
     }
 
@@ -637,12 +656,26 @@ Deno.serve(async (req) => {
         const l = lanes[lane];
         if (!l || l.state !== "pending") continue;
         if (deadline) { lanes[lane] = { ...l, state: "failed", error: "deadline_exceeded" }; continue; }
-        if (scoredSettled(lanes)) break;
+        if (scoredSettled(lanes, !!normal)) break;
         if (!mayStart) continue; // the paid-action mode holds new starts; the deadline still ends the row
+        /* THE SCHEDULER: a hedge (the normal run is still going) is a speed nicety and goes last; every start needs a
+           slot. Waiting keeps the lane pending with its tries untouched. */
+        const isHedge = !!normal && lane !== "ai_overview";
+        if (isHedge && !hedgeMayStart({ free: slots.free, waitingQuestions: waitingQuestions ?? 0 })) { lanes[lane] = { ...l, error: "waiting_for_slot" }; continue; }
+        if (!slots.take()) { lanes[lane] = { ...l, error: "waiting_for_slot" }; continue; }
         const s = await startLaneRun(row, lane, l.tries);
-        if (s && "refused" in s) { lanes[lane] = { ...l, state: "failed", error: s.refused }; continue; }
-        if (!s) {
+        if ("refused" in s) { slots.giveBack(); lanes[lane] = { ...l, state: "failed", error: s.refused }; continue; }
+        if ("wait" in s) {
+          /* Apify says the plan is full: nothing more starts this tick, and this lane waits (not a try). */
+          while (slots.take()) { /* drain */ }
+          failures = addFailure(failures, failureNote({ atIso: nowIso, kind: `lane_${lane}`, reason: "apify_full", statusMessage: s.wait }));
+          lanes[lane] = { ...l, error: "waiting_for_slot" };
+          continue;
+        }
+        if ("failed" in s) {
+          slots.giveBack();
           const tries = l.tries + 1;
+          failures = addFailure(failures, failureNote({ atIso: nowIso, kind: `lane_${lane}`, reason: "start_failed", statusMessage: s.failed }));
           lanes[lane] = { ...l, tries, state: tries >= laneMaxTries(lane) ? "failed" : "pending", error: "start_failed" };
           continue;
         }
@@ -657,11 +690,12 @@ Deno.serve(async (req) => {
       extraLaneSlots.set(row.id, Math.max(0, slots - 1));
 
       // 3) Not settled yet: keep the normal run, the lanes (and anything already back) on the row.
-      if (!scoredSettled(lanes)) {
+      if (!scoredSettled(lanes, !!normal)) {
         await service.from("ai_audit_queue").update({
           attempts,
           result: {
             ...(normal ? { _apify: normal } : {}),
+            ...(row.result?.[HEAL_BASE_KEY] ? { [HEAL_BASE_KEY]: row.result[HEAL_BASE_KEY], [HEAL_ROW_KEY]: row.result[HEAL_ROW_KEY] } : {}),
             [LANES_META_KEY]: lanes, [FAILURES_META_KEY]: failures ?? [], [CYCLE_META_KEY]: cycleStartedAt,
             ...(costUsd ? { _cost_usd: costUsd } : {}),
             ...(normalSecs != null ? { _normal_secs: normalSecs } : {}),
@@ -688,6 +722,23 @@ Deno.serve(async (req) => {
       const finishedSecs = Math.round((nowMs - Date.parse(cycleStartedAt)) / 1000);
       const timing = { finished_secs: Number.isFinite(finishedSecs) ? finishedSecs : null, normal_secs: normalSecs };
       const merged = mergeLaneItems(lanes);
+      /* A HEALED ASK (src/lib/auditSelfHeal.ts): only its missing engines were asked again. The answers it already had
+         are kept untouched; each re-asked engine that came back replaces its empty cell. It ends 'done' either way —
+         it had answers before the re-run and still has them. */
+      const healBase = row.result?.[HEAL_BASE_KEY];
+      if (healBase && typeof healBase === "object") {
+        const healRow = (row.result?.[HEAL_ROW_KEY] ?? {}) as { round?: number; asked?: string[] };
+        const asked = Array.isArray(healRow.asked) ? healRow.asked : [];
+        const fresh = merged ? (await resultFromItems(row, [merged])).result : null;
+        const result = healMerge(healBase as Record<string, unknown>, fresh, asked, Number(healRow.round) || 1);
+        result[LANES_META_KEY] = laneSummary(lanes);
+        result[FAILURES_META_KEY] = failures ?? [];
+        result._timing = timing;
+        if (costUsd) result._cost_usd = (Number((healBase as Record<string, unknown>)._cost_usd) || 0) + costUsd;
+        await service.from("ai_audit_queue").update({ status: "done", attempts, result }).eq("id", row.id);
+        console.log(`[self-heal] ask re-run finished q="${String(row.question).slice(0, 60)}" asked=${asked.join(",")} healed=${JSON.stringify((result[HEAL_ROW_KEY] as { healed?: string[] }).healed)}`);
+        return;
+      }
       const scoredBack = SCORED_LANES.some((k) => lanes[k]?.state === "done");
       if (merged && scoredBack) {
         const { result } = await resultFromItems(row, [merged]);
@@ -919,7 +970,8 @@ Deno.serve(async (req) => {
            It is deliberately NOT added to cappedRuns: marking the run capped here would finalise an
            audit that has not been attempted. */
         /* Each question now starts TWO Apify runs (ChatGPT + Gemini, and Google AI beside it): it takes two slots. */
-        if (headroomLeft < 2) { deferred.push(row); continue; }
+        /* …and the tick's shared slot budget (the scheduler): lanes polled above may already have taken slots. */
+        if (headroomLeft < 2 || !slots.take(2)) { deferred.push(row); continue; }
 
         toStart.push(row);
         perRunCostBudget.set(row.run_id, costLeft - 1);
@@ -965,7 +1017,7 @@ Deno.serve(async (req) => {
             noCacheWrite: () => true, // never cache the start marker (would poison retries)
             run: async () => {
               /* ⛔ ChatGPT + Gemini ONLY (v1-ai-mode-separate): Google AI is its own run, started just below. */
-              const { runId, datasetId } = await startApifyRun(AI_SEARCH_ACTOR, buildScoredInput(String(row.question), audit.countryCode), apifyToken, 20_000, { runTimeoutSecs: APIFY_RUN_TIMEOUT_SECS });
+              const { runId, datasetId } = await startApifyRunExplained(AI_SEARCH_ACTOR, buildScoredInput(String(row.question), audit.countryCode), apifyToken, APIFY_RUN_TIMEOUT_SECS);
               return { result: { runId, datasetId }, costUsd: estCost };
             },
           });
@@ -982,9 +1034,12 @@ Deno.serve(async (req) => {
              finishes when ChatGPT and Gemini are in (pollLanes), cutting Google AI if it is not back by then. A Google AI
              run that cannot start (budget, Apify) just leaves Google AI absent; the scored run goes ahead regardless. */
           const g = await startLaneRun(row, "ai_overview", 0);
-          const aio: LaneState = g && "runId" in g
+          /* The slot for it was taken with the row's two; "plan full" leaves it pending (a later tick starts it if the
+             scored engines are not back yet), never a failed try. */
+          const aio: LaneState = "runId" in g
             ? { state: "running", tries: 1, runId: g.runId, datasetId: g.datasetId, startedAtTick: startedIso, error: null }
-            : { state: "failed", tries: 1, error: g && "refused" in g ? g.refused : "start_failed" };
+            : "wait" in g ? { state: "pending", tries: 0, error: "waiting_for_slot" }
+            : { state: "failed", tries: 1, error: "refused" in g ? g.refused : "start_failed" };
           await service.from("ai_audit_queue").update({
             status: "running",
             attempts: (Number(row.attempts) || 0) + 1 + (aio.state === "running" ? 1 : 0),
@@ -997,6 +1052,13 @@ Deno.serve(async (req) => {
           console.log(`[ai-audit] started q="${String(row.question).slice(0, 60)}" run=${outcome.result.runId} google_ai=${aio.runId ?? aio.error}`);
           return true;
         } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          /* THE PLAN IS FULL (the scheduler's backstop): back to pending, attempts untouched — queued, not failed. */
+          if (isCapacityRefusal(msg)) {
+            await service.from("ai_audit_queue").update({ status: "pending" }).eq("id", row.id).eq("status", "running");
+            console.warn(`[scheduler] Apify full at start, question re-queued (not a try): ${msg}`);
+            return false;
+          }
           // Start failed (no runId stored) — bump attempts and re-queue inline (or fail at MAX).
           const attempts = (Number(row.attempts) || 0) + 1;
           const failed = attempts >= MAX_ATTEMPTS;
@@ -1017,11 +1079,14 @@ Deno.serve(async (req) => {
     // (polling) row keeps its run open — so a run never finalises while a question is in flight.
     const finalised = await finaliseSettledRuns(service, [...touchedRuns], estCost, cappedRuns, apifyToken);
 
-    /* QUICK CHECK — ONE AUTOMATIC RETRY (Paul, 2026-11-16; src/lib/quickCheckRetry.ts). A Quick check whose run failed
-       because the provider did not finish is re-opened once, 30+ minutes later, with one start per ask; the next tick
-       starts it through the normal start path above (every budget limit applies). Every other minute; best-effort. */
+    /* AUDITS HEAL THEMSELVES (Paul, 2026-11-19; src/lib/auditSelfHeal.ts — replaces the Quick check's one retry). An
+       ordinary audit that finished incomplete because the AI search did not answer is re-opened 30 min, 2 h and 6 h
+       after it settled, asking only its missing answers; the next tick starts them through the normal start path above
+       (every budget limit and the slot scheduler apply). Every other minute; best-effort. */
     let lateRetries = 0;
-    if (Math.floor(Date.now() / 60_000) % 2 === 0) lateRetries = await sweepLateRetries(service, MAX_ATTEMPTS);
+    if (Math.floor(Date.now() / 60_000) % 2 === 0) lateRetries = await sweepSelfHeal(service, MAX_ATTEMPTS);
+    /* AI SEARCH HEALTH: one alert when ChatGPT's or Gemini's success rate drops (src/lib/providerHealth.ts). Every 5 min. */
+    if (Math.floor(Date.now() / 60_000) % 5 === 0 && Math.floor(Date.now() / 30_000) % 2 === 0) await checkRateDrop(service);
 
     /* 🔴 RETRY THE STUCK CLEANINGS. extract-competitors fires ONCE at finalisation; when gpt-4o
        returns a malformed batch ("model omitted N of M ids") it stamps complete:false and, until
@@ -1848,14 +1913,18 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       })());
       /* The free-check result. Success only: a capped run has partial data and a failed one has
          none, and a stranger must never receive either. */
-      if (!isCapped && !allFailed && runRow?.audit_id) freeCheckJobs.push({ runId, auditId: runRow.audit_id as string });
+      /* ⛔ A HEALED RUN SENDS NOTHING (v1-audits-self-healing, src/lib/auditSelfHeal.ts). It was re-opened hours after
+         it first finished; no free-check result, completion pitch, stalled-pitch flag or baseline step fires from it.
+         The operator sees the updated report. */
+      const healedRun = isHealRun(existingResults);
+      if (!healedRun && !isCapped && !allFailed && runRow?.audit_id) freeCheckJobs.push({ runId, auditId: runRow.audit_id as string });
       // D2 — completion auto-send candidates (COMPLETE only, like audit_reply/auto-report). The
       // heavier checks (setting, lead, phone, suppression) run once, after the loop.
-      if (!isCapped && !allFailed && runRow?.audit_id) completionSendJobs.push({ auditId: runRow.audit_id as string });
+      if (!healedRun && !isCapped && !allFailed && runRow?.audit_id) completionSendJobs.push({ auditId: runRow.audit_id as string });
       /* The mirror of the line above: this run will NEVER arm its parked pitch, so record it for the
          flag pass after the loop. `dominantError` is the queue's own reason when every question
          failed, so the operator is told WHY rather than just that it stopped. */
-      if ((isCapped || allFailed) && runRow?.audit_id) {
+      if (!healedRun && (isCapped || allFailed) && runRow?.audit_id) {
         stalledAutoReplyJobs.push({
           auditId: runRow.audit_id as string,
           runStatus,
@@ -1866,7 +1935,7 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       }
       // Baseline chain runs for capped runs as well — see baselineJobs above.
       // An all-failed run must never count toward a paid baseline.
-      if (!allFailed && runRow?.audit_id) baselineJobs.push({ auditId: runRow.audit_id as string });
+      if (!healedRun && !allFailed && runRow?.audit_id) baselineJobs.push({ auditId: runRow.audit_id as string });
     }
   }
   // Await the queued extraction calls so the edge runtime doesn't cut them off when we return.

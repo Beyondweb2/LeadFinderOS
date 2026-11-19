@@ -17,6 +17,10 @@
      • If it still fails, the report link says LINK_FAILED_WORDS (never "check back shortly"), and the rep's row shows
        "Run again".
 
+   ⛔ SUPERSEDED 2026-11-19 by src/lib/auditSelfHeal.ts (three re-runs at 30 min / 2 h / 6 h, only the missing answers,
+   any ordinary audit up to 12 asks, partial answers too). The queue, the incomplete alert and the public link now ask
+   healVerdict; this file keeps the link words and the older pure rule (its tests still describe the first retry).
+
    Pure. Reached by edge functions: relative imports with .ts.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
@@ -107,7 +111,7 @@ export function reopenPatch(run: RetryRun, why: string, nowIso: string, maxAttem
 
 /** What the public link says for an audit with no usable run: still coming (in flight, or a retry is due) vs finished
  *  without a result. */
-export function unavailableWords(o: { anyInFlight: boolean; verdict: RetryVerdict | null }): string {
+export function unavailableWords(o: { anyInFlight: boolean; verdict: RetryVerdict | { kind: string } | null }): string {
   if (o.anyInFlight) return LINK_WAITING_WORDS;
   if (o.verdict && (o.verdict.kind === 'retry_now' || o.verdict.kind === 'retry_later')) return LINK_WAITING_WORDS;
   return LINK_FAILED_WORDS;

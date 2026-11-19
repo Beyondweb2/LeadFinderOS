@@ -65,7 +65,7 @@ ok(pa.lines.some((l) => /next hour only raise the bell row's count/.test(l)), 'a
 
 /* ── 6. The writer and the watcher ────────────────────────────────────────────────────────────────── */
 const writer = read('supabase/functions/_shared/audit-alerts.ts');
-ok(!/incompleteAlert\(/.test(writer) && /addToSummary\(service, ownerId, incompleteCause\(qrows, refusals\)/.test(writer), 'the finaliser adds to a summary; no per-audit alert is left');
+ok(!/incompleteAlert\(/.test(writer) && writer.includes('const cause = incompleteCause(qrows, refusals);') && writer.includes('await addToSummary(service, ownerId, cause, auditId,'), 'the finaliser adds to a summary; no per-audit alert is left (AI-search causes skipped since 19 Nov: scripts/audits-self-healing.test.ts)');
 ok(/claimQuiet\(service, ownerId, "audit_finished", countedKey\(auditId\)\)/.test(writer) && /claimQuiet\(service, ownerId, "audit_finished", emailedKey\(row\.dedupe_key\)\)/.test(writer), 'each audit counted once, each summary emailed once (quiet claims)');
 ok(/read_at: now, cleared_at: now/.test(writer), 'the quiet claims are written cleared, so the bell never shows them');
 ok(/const open = await openRow\(service, ownerId, providerKeyPrefix\(r\.provider\)\);\n\s+if \(open\) \{\n\s+await service\.from\("notifications"\)\.update\(\{ count:/.test(writer), 'a provider refusal inside the hour only raises the count');

@@ -57,6 +57,7 @@ import { chooseReportDesign } from '@/lib/reportDesign';
 import { CreateBaselineDialog } from '@/components/audit/CreateBaselineDialog';
 import { paidReportKind } from '@/lib/reportKind';
 import { useApifyUsage, apifyTone, apifyWarningText, type ApifyUsage } from '@/hooks/useApifyUsage';
+import { AiSearchHealthLine } from '@/components/AiSearchHealthLine';
 import {
   WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS, FULL_MEASURE_QUESTIONS,
   DISCOVERY_QUESTIONS, DISCOVERY_MIN_QUESTIONS, DISCOVERY_MAX_QUESTIONS,
@@ -2517,6 +2518,8 @@ const AiAudit = () => {
       {/* APIFY SPEND — outside the step blocks on purpose, so it shows on the list, the results view
           and the empty state alike. It is the thing that silently stops every audit working. */}
       <ApifyUsageLine usage={apifyUsage} />
+      {/* AI search health by engine, last 24 h (v1-audits-self-healing). Admin page; renders nothing if unreadable. */}
+      <AiSearchHealthLine />
 
       {/* Stacked wizard — answered steps stay visible; each answer reveals the next. */}
       {step !== 'results' && (
