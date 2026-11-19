@@ -59,9 +59,9 @@ ok(unavailableWords({ anyInFlight: false, verdict: { kind: 'final', why: 'retrie
 const render = read('supabase/functions/render-audit-report/index.ts');
 ok(!render.includes('return no("This audit hasn’t completed yet — check back shortly.")') && /return no\(unavailableWords\(\{ anyInFlight, verdict \}\)\)/.test(render), 'the report link picks its words from the rule');
 const proc = read('supabase/functions/process-ai-audit-queue/index.ts');
-ok(/lateRetries = await sweepLateRetries\(service, MAX_ATTEMPTS\)/.test(proc), 'the queue tick runs the sweep');
+ok(proc.includes('lateRetries = await sweepSelfHeal(service, MAX_ATTEMPTS)'), 'the queue tick runs the sweep (since 19 Nov the self-heal: scripts/audits-self-healing.test.ts)');
 const sweep = read('supabase/functions/_shared/quick-check-retry.ts');
-ok(/\.eq\("id", r\.id\)\.eq\("status", "failed"\)\.is\("results->late_retry", null\)/.test(sweep), 'the re-open is a claim (still failed, still unstamped): never twice');
+ok(sweep.includes('.eq("id", run.id).eq("status", run.status).select("id")'), 'the re-open is a claim (still in the settled status it was read in): never twice');
 ok(!/sales_check_items|startAudit|ai_audits"\)\.insert|whatsapp|sendOperatorAlert/.test(sweep), 'the sweep never charges the rep, starts a new audit, or contacts anyone');
 const alerts = read('supabase/functions/_shared/audit-alerts.ts');
 ok(alerts.includes('if (retry && (retry.verdict.kind === "retry_now" || retry.verdict.kind === "retry_later")) return;'), 'no "incomplete" alert while the retry is still coming — only the final failure counts');

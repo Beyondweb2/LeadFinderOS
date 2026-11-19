@@ -31,7 +31,8 @@ import { auditCodeFromSlug, isShortCode, shortReportUrl } from "../../../src/lib
 import { paidReportKind } from "../../../src/lib/reportKind.ts";
 import { NAMED_RECHECK_AUDIT_PURPOSE, WEEKLY_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
 import { isRecheckPurpose, recheckLabel, RECHECK_RUNS } from "../../../src/lib/prospectRecheck.ts";
-import { lateRetryVerdict, unavailableWords, type RetryRow } from "../../../src/lib/quickCheckRetry.ts";
+import { unavailableWords } from "../../../src/lib/quickCheckRetry.ts";
+import { healVerdict, type HealRow } from "../../../src/lib/auditSelfHeal.ts";
 import { buildFaultLines, CRAWL_CHECK_VERSION, CRAWL_FRESH_MS, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
 import { usableSiteEvidence, type SiteEvidence } from "../../../src/lib/siteEvidence.ts";
 import { reportContentIssues } from "../../../src/lib/contentTrust.ts";
@@ -345,9 +346,9 @@ Deno.serve(async (req) => {
           .gt("created_at", String((audit as { created_at?: string | null }).created_at ?? "")).limit(1);
         newerAudit = Array.isArray(newer) && newer.length > 0;
       }
-      const verdict = anyInFlight ? null : lateRetryVerdict({
+      const verdict = anyInFlight ? null : healVerdict({
         audit: audit as never, runs: runRows.map((r) => ({ status: r.status, results: r.id === run.id ? (run as { results?: Record<string, unknown> | null }).results ?? null : null })),
-        rows: queueRows as unknown as RetryRow[], newerAudit, nowMs: Date.now(),
+        rows: queueRows as unknown as HealRow[], newerAudit, nowMs: Date.now(),
       });
       return no(unavailableWords({ anyInFlight, verdict }));
     }

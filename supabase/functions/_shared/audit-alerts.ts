@@ -13,7 +13,7 @@
 import { sendOperatorAlert } from "./operator-alert.ts";
 import { readRetryVerdict } from "./quick-check-retry.ts";
 import {
-  ALERT_WINDOW_MS, INCOMPLETE_CAUSES, causeOfKey, countedKey, emailedKey, incompleteCause, incompleteSummary, incompleteSummaryEmail,
+  ALERT_WINDOW_MS, INCOMPLETE_CAUSES, causeAlertsPerAudit, causeOfKey, countedKey, emailedKey, incompleteCause, incompleteSummary, incompleteSummaryEmail,
   isIncomplete, namesInSummary, providerAlert, providerKeyPrefix, refusalsIn, summaryDue, summaryEntry, summaryKey, summaryKeyPrefix,
   unmeasuredAnswers, type AlertProvider, type AlertRow, type IncompleteCause,
 } from "../../../src/lib/auditAlerts.ts";
@@ -128,7 +128,13 @@ export async function checkAuditCompleteness(service: Service, auditId: string):
     if (!ownerId) return;
     const { data: audit } = await service.from("ai_audits").select("business_name, short_code, lead_id").eq("id", auditId).maybeSingle();
     const a = audit as { business_name?: string | null; short_code?: string | null; lead_id?: string | null } | null;
-    await addToSummary(service, ownerId, incompleteCause(qrows, refusals), auditId, summaryEntry(String(a?.business_name ?? ""), a?.short_code ?? null), a?.lead_id ?? null);
+    const cause = incompleteCause(qrows, refusals);
+    /* ⛔ NOT PER AUDIT FOR THE AI SEARCH (Paul, 19 Nov, v1-audits-self-healing): "alert me only when the rate drops". An
+       audit the AI search did not answer heals itself (src/lib/auditSelfHeal.ts); the provider's success rate is
+       watched by audit-watch (src/lib/providerHealth.ts) and alerts once when it drops. Refusals and unread answers
+       still alert here — they are things to fix. */
+    if (!causeAlertsPerAudit(cause)) return;
+    await addToSummary(service, ownerId, cause, auditId, summaryEntry(String(a?.business_name ?? ""), a?.short_code ?? null), a?.lead_id ?? null);
   } catch (e) {
     console.error("[audit-alerts] completeness check failed (non-blocking):", e instanceof Error ? e.message : e);
   }

@@ -229,8 +229,16 @@ export function addHedgeLanes(lanes: Lanes): Lanes {
 
 /** The question can finish: every scored engine has a lane and it is done or failed. (While the normal run is in flight
  *  and has not been hedged yet the scored lanes do not exist, so this is false — the normal run is still the answer.) */
-export function scoredSettled(lanes: Lanes): boolean {
-  return SCORED_LANES.every((k) => { const l = lanes[k]; return !!l && (l.state === "done" || l.state === "failed"); });
+export function scoredSettled(lanes: Lanes, normalAlive = false): boolean {
+  /* ⛔ normalAlive (v1-audits-self-healing, 19 Nov): while the normal run is still going, a FAILED hedge lane does not
+     settle its engine — the normal run may still answer it. On 19 Nov 16:17 the hedge starts were refused (the Apify
+     plan was full), Gemini's hedge "failed" twice in seconds, the question finished without Gemini and the normal run
+     that would have answered was aborted. While the normal run is alive only "done" counts. */
+  return SCORED_LANES.every((k) => {
+    const l = lanes[k];
+    if (!l) return false;
+    return l.state === "done" || (!normalAlive && l.state === "failed");
+  });
 }
 
 /** Where the current try of a question started (its normal run's start), carried onto the lanes. */

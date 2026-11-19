@@ -5,6 +5,7 @@ import {
   type HookCardAudit, type HookCardScore, type HookReportLink, type HookReportState,
 } from '@/lib/hookVisibility';
 import type { HookScoreRow } from '@/lib/hookScore';
+import { healLine, healStamp, healVerdict, type HealAudit, type HealRow, type HealRun } from '@/lib/auditSelfHeal';
 
 /* The Inbox AI visibility card's loader (2026-09-25). READ-ONLY, and it runs for ONE lead: the
    conversation that is open. It reads that lead's audits, then the queue rows of the one run the
@@ -20,7 +21,7 @@ import type { HookScoreRow } from '@/lib/hookScore';
 const sb = supabase as unknown as { from: (t: string) => any };
 
 const POLL_MS = 10_000;
-const AUDIT_SELECT = 'id, lead_id, short_code, created_at, business_name, business_type, location_text, is_market, audit_purpose, baseline_target_runs, is_measurement, baseline_contract, ai_audit_runs(id, status, run_number, created_at, hook:results->hook, competitor_cleaning:results->competitor_cleaning)';
+const AUDIT_SELECT = 'id, lead_id, short_code, created_at, business_name, business_type, location_text, is_market, audit_purpose, baseline_target_runs, is_measurement, baseline_contract, ai_audit_runs(id, status, run_number, created_at, hook:results->hook, competitor_cleaning:results->competitor_cleaning, self_heal:results->self_heal, late_retry:results->late_retry)';
 
 export interface HookVisibilityData {
   /** Null when the lead has no outreach audit with a run. The report state is still set. */
@@ -49,8 +50,8 @@ async function load(leadId: string): Promise<HookVisibilityData> {
     short_code: a.short_code ?? null,
     // The run's projected keys, reassembled as the `results` shape the helpers read.
     ai_audit_runs: (a.ai_audit_runs ?? []).map((r) => {
-      const p = r as unknown as { id: string; status: string | null; run_number: number | null; created_at?: string | null; hook?: unknown; competitor_cleaning?: unknown };
-      return { id: p.id, status: p.status, run_number: p.run_number, created_at: p.created_at ?? null, results: { hook: p.hook ?? null, competitor_cleaning: p.competitor_cleaning ?? null } };
+      const p = r as unknown as { id: string; status: string | null; run_number: number | null; created_at?: string | null; hook?: unknown; competitor_cleaning?: unknown; self_heal?: unknown; late_retry?: unknown };
+      return { id: p.id, status: p.status, run_number: p.run_number, created_at: p.created_at ?? null, results: { hook: p.hook ?? null, competitor_cleaning: p.competitor_cleaning ?? null, self_heal: p.self_heal ?? null, late_retry: p.late_retry ?? null } };
     }),
   }));
   const history: HookHistoryItem[] = list.filter(isOutreachAudit).map((a) => {
@@ -62,10 +63,19 @@ async function load(leadId: string): Promise<HookVisibilityData> {
     return { audit: null, runId: null, runStatus: null, inFlight: false, state: null, card: null, report: hookReportState({ leadId, audits: list, picked: null, score: null }), history };
   }
   const { data: rows, error: rowsError } = await sb.from('ai_audit_queue')
-    .select('id, question, status, result, engines').eq('run_id', picked.runId).order('created_at', { ascending: true });
+    .select('id, question, status, result, engines, updated_at').eq('run_id', picked.runId).order('created_at', { ascending: true });
   if (rowsError) throw new Error(rowsError.message ?? 'Could not read audit results');
   const state = hookStateOf(picked.runResults);
   const card = scoreHookAuditForCard({ audit: picked.audit, state, runResults: picked.runResults, rows: (rows ?? []) as HookScoreRow[] });
+  const report = hookReportState({ leadId, audits: list, picked, score: card.score });
+  /* AUDITS HEAL THEMSELVES (2026-11-19, src/lib/auditSelfHeal.ts): an incomplete audit says when its missing answers
+     re-run, or the plain reason it gave up, instead of only "Run it again later". */
+  if (report.kind === 'failed' || report.kind === 'incomplete') {
+    const runs = ((list.find((a) => a.id === picked.audit.id)?.ai_audit_runs ?? []) as Array<{ status: string | null; results?: Record<string, unknown> | null }>)
+      .map((r) => ({ status: r.status, results: r.results ?? null })) as HealRun[];
+    const v = healVerdict({ audit: picked.audit as unknown as HealAudit, runs, rows: (rows ?? []) as HealRow[], newerAudit: false, nowMs: Date.now() });
+    report.heal = runs[0] ? healLine(v, healStamp(runs[0]), (ms) => new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' })) : null;
+  }
   return {
     audit: picked.audit,
     runId: picked.runId,
@@ -73,7 +83,7 @@ async function load(leadId: string): Promise<HookVisibilityData> {
     inFlight: hookRunInFlight(picked.runStatus),
     state,
     card,
-    report: hookReportState({ leadId, audits: list, picked, score: card.score }),
+    report,
     history,
   };
 }

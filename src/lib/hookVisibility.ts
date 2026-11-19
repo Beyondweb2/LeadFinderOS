@@ -78,9 +78,9 @@ export type HookReportState =
   /** A usable report. `isCurrent` = it belongs to the audit the card is showing. */
   | { kind: 'ready'; link: HookReportLink; isCurrent: boolean }
   /** A six-result hook that ended without six valid results: no score, no public report. */
-  | { kind: 'incomplete'; previous: HookReportLink | null }
+  | { kind: 'incomplete'; previous: HookReportLink | null; heal?: string | null }
   /** The card's run failed or was cancelled. */
-  | { kind: 'failed'; previous: HookReportLink | null }
+  | { kind: 'failed'; previous: HookReportLink | null; heal?: string | null }
   /** An older-format check whose run produced nothing usable, so it never had a public report. */
   | { kind: 'historical_no_report'; previous: HookReportLink | null }
   /** No audit at all for this lead. */

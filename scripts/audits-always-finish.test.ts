@@ -97,7 +97,10 @@ ok(failBlock.includes('fetchAiSearchItems(runId') && failBlock.includes('getApif
 ok(/filter\(\(r\) => r\.result\?\._apify\?\.runId \|\| readLanes\(r\.result\)\)/.test(q), 'G: lane rows are polled');
 ok(/!r\.result\?\._apify\?\.runId && !readLanes\(r\.result\)/.test(q), 'G: lane rows are never reclaimed as stranded');
 ok(/\.eq\("updated_at", row\.updated_at\)/.test(q), 'G: lane starts are claimed by updated_at (one tick only)');
-ok((q.match(/runTimeoutSecs: APIFY_RUN_TIMEOUT_SECS/g) ?? []).length === 3, 'G: Apify\'s own timeout on the normal start, the Google AI retry and the lane start');
+/* v1-audits-self-healing: the normal start and the lane start go through startApifyRunExplained, whose 4th argument is
+   Apify's own timeout; the Google AI retry still passes runTimeoutSecs. */
+ok((q.match(/runTimeoutSecs: APIFY_RUN_TIMEOUT_SECS/g) ?? []).length === 1 && (q.match(/apifyToken, APIFY_RUN_TIMEOUT_SECS\)/g) ?? []).length === 2,
+  'G: Apify\'s own timeout on the normal start, the Google AI retry and the lane start');
 ok(q.includes('error: "deadline_exceeded"') && q.includes('.eq("status", "pending").gt("attempts", 0)'), 'G: a started pending row past the deadline is ended');
 ok(q.includes('- laneExtra)'), 'G: lanes count against the in-flight ceiling');
 ok(q.includes('MAX_RUN_AGE_MS = 12 * 60 * 1000'), 'G: the 12-minute age guard is unchanged (never lowered)');
@@ -155,11 +158,11 @@ ok(/invokeEdge<CreateAuditData>\('create-ai-audit'/.test(readFileSync('src/lib/c
   ok(L.foldNormalItem({}, null).lanes.chatgpt?.state === 'pending', 'J: a lost or failed normal run with nothing back gives every scored engine a lane');
 
   // The queue wiring.
-  ok(q.includes('startApifyRun(AI_SEARCH_ACTOR, buildScoredInput(String(row.question), audit.countryCode)') && q.includes('startLaneRun(row, "ai_overview", 0)'), 'J: each question starts ChatGPT + Gemini and, beside it, Google AI');
-  ok(q.includes('if (!scoredSettled(lanes))') && !q.includes('if (!lanesSettled(lanes))'), 'J: a question finishes on ChatGPT + Gemini, never waiting for Google AI');
+  ok(q.includes('startApifyRunExplained(AI_SEARCH_ACTOR, buildScoredInput(String(row.question), audit.countryCode)') && q.includes('startLaneRun(row, "ai_overview", 0)'), 'J: each question starts ChatGPT + Gemini and, beside it, Google AI');
+  ok(q.includes('if (!scoredSettled(lanes, !!normal))') && !q.includes('if (!lanesSettled(lanes))'), 'J: a question finishes on ChatGPT + Gemini, never waiting for Google AI');
   ok(q.includes('error: "cut_at_finish"') && q.includes('delete result[AI_OVERVIEW_META_KEY]'), 'J: Google AI not back is cut and never read as "Google showed none"');
   ok(q.includes('ageMs > HEDGE_AFTER_MS') && q.includes('addHedgeLanes(lanes)'), 'J: a slow normal run is hedged, not killed');
-  ok(q.includes('if (headroomLeft < 2)') && q.includes('headroomLeft -= 2'), 'J: a question takes two Apify slots against the ceiling');
+  ok(q.includes('if (headroomLeft < 2 || !slots.take(2))') && q.includes('headroomLeft -= 2'), 'J: a question takes two Apify slots against the ceiling');
   ok(q.includes('result._timing = timing'), 'J: each finished question records how long it took');
 }
 

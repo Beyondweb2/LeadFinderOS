@@ -120,9 +120,9 @@ function ReportAction({ report, legacy, onRefresh, refreshing, onReportCopied, c
         </span>
       );
     case 'incomplete':
-      return <span className="inline-flex items-center gap-2 text-[11px] text-muted-foreground" data-testid="hook-audit-incomplete">Audit incomplete: too few AI answers came back to score it, so there is no report. <PreviousLink link={report.previous} /></span>;
+      return <span className="inline-flex items-center gap-2 text-[11px] text-muted-foreground" data-testid="hook-audit-incomplete">Audit incomplete: too few AI answers came back to score it, so there is no report.{report.heal ? ` ${report.heal}` : ''} <PreviousLink link={report.previous} /></span>;
     case 'failed':
-      return <span className="inline-flex items-center gap-2 text-[11px] text-destructive" data-testid="hook-audit-failed">Audit incomplete: the AI search didn’t finish in time, so there is no report. Run it again later. <PreviousLink link={report.previous} /></span>;
+      return <span className="inline-flex items-center gap-2 text-[11px] text-destructive" data-testid="hook-audit-failed">Audit incomplete: the AI search didn’t answer, so there is no report. {report.heal ?? 'Run it again later.'} <PreviousLink link={report.previous} /></span>;
     case 'historical_no_report':
       return <span className="inline-flex items-center gap-2 text-[11px] text-muted-foreground">No public report generated for this historical check. <PreviousLink link={report.previous} /></span>;
     case 'none':
