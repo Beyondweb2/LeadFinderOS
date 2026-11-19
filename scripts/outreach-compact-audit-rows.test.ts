@@ -136,12 +136,12 @@ console.log('── the big panel is gone; bulk checking stays ──');
     batch: { status: 'waiting', counts: { total: 12, queued: 3, running: 4, done: 4, reused: 1, failed: 0, skipped: 0 } },
     allowance: { limit: 50, remaining: 43 }, onStop: () => {}, ready: 5, hasNext: true, onOpenNext: () => {}, openedCount: 0, onStartOver: () => {},
   })));
-  ok(/Checking 12 ?: 5 ready · 4 checking · 3 waiting/.test(bar) && /Checks left today: 43 ?\/50/.test(bar) && /Stop/.test(bar) && /Open next ready \(5\)/.test(bar), `the bar: counts, allowance, Stop, Open next ready ("${bar}")`);
+  ok(/Checking 12 ?: 5 ready · 4 checking · 3 waiting/.test(bar) && /7 of 50 ?checks used today/.test(bar) && /Stop/.test(bar) && /Open next ready \(5\)/.test(bar), `the bar: counts, allowance, Stop, Open next ready ("${bar}")`);
   ok(!/limit reached/i.test(bar), '…no limit message while checks are left');
   const full = text(renderToStaticMarkup(createElement(OutreachCheckBar, { batch: null, allowance: { limit: 50, remaining: 50 }, ready: 0, hasNext: false, onOpenNext: () => {}, openedCount: 0, onStartOver: () => {} })));
-  ok(/Checks left today: 50 ?\/50/.test(full), `a fresh day reads "Checks left today: 50/50" ("${full}")`);
+  ok(/0 of 50 ?checks used today/.test(full), `a fresh day reads "0 of 50 checks used today" ("${full}")`);
   const zero = text(renderToStaticMarkup(createElement(OutreachCheckBar, { batch: null, allowance: { limit: 50, remaining: 0 }, ready: 0, hasNext: false, onOpenNext: () => {}, openedCount: 0, onStartOver: () => {} })));
-  ok(/Checks left today: 0 ?\/50/.test(zero) && /Daily check limit reached/.test(zero) && zero.length < 120, `at 0: "0/50" and one short line, "Daily check limit reached" ("${zero}")`);
+  ok(/50 of 50 ?checks used today/.test(zero) && /Daily check limit reached/.test(zero) && zero.length < 120, `at the limit: "50 of 50 checks used today" and one short line, "Daily check limit reached" ("${zero}")`);
   ok(/disabled=\{!!salesCheckBlocked\}/.test(table) && !/remaining\s*<=?\s*0/.test(read('src/pages/Outreach.tsx')), 'the button is NOT disabled at 0 — a press can still reuse recent results');
   ok(!/\$|£|usd|cost|spend/i.test(bar), 'no cost on the bar');
   const empty = text(renderToStaticMarkup(createElement(OutreachCheckBar, { batch: null, allowance: null, ready: 0, hasNext: false, onOpenNext: () => {}, openedCount: 2, onStartOver: () => {} })));

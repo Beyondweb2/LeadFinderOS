@@ -35,6 +35,17 @@ export const COVERAGE_ADD_MAX_ROWS = 500;
 export const PLACE_LOOKUP_CONCURRENCY = 8;
 /** Waits before each retry of a throttled lookup. Together they span a full minute, the guard's window. */
 export const LOOKUP_RETRY_DELAYS_MS: readonly number[] = [2_000, 5_000, 10_000, 20_000, 30_000];
+/** Lookups started per rolling minute (v1-rep-limits-own-actions, 19 Nov). The guard allows 40 a minute; 8 at once ran at
+ *  several hundred a minute, so one "Add 41 leads" drew 51 refusals and a restriction alert in the rep's name. Paced
+ *  under the limit, an add never meets it (the 429 retry stays as the backstop). */
+export const PLACE_LOOKUPS_PER_MINUTE = 36;
+
+/** How long to wait before the next start so no more than `perMinute` start in any 60 s. Pure. */
+export function paceWaitMs(startsMs: readonly number[], nowMs: number, perMinute = PLACE_LOOKUPS_PER_MINUTE): number {
+  const recent = startsMs.filter((t) => nowMs - t < 60_000);
+  if (recent.length < perMinute) return 0;
+  return Math.max(0, Math.min(...recent) + 60_000 - nowMs);
+}
 /** How long a looked-up answer is reused on this page. */
 export const LOOKUP_CACHE_MS = 30 * 60_000;
 
@@ -289,6 +300,20 @@ export async function runFindLeadsBulkAdd(
   const toLookUp = fresh.filter((l) => needsLookup(l) && !details.has(l.id));
   let refused = false;
   let idx = 0;
+  const starts: number[] = [];
+  /* Paced: the check and the push run with no await between them, so parallel workers never overshoot. The clock never
+     runs behind the waits already done (a frozen or skewed clock cannot make it spin). */
+  let clock = now();
+  const pace = async () => {
+    for (;;) {
+      clock = Math.max(clock, now());
+      const w = paceWaitMs(starts, clock);
+      if (w <= 0) { starts.push(clock); return; }
+      const target = clock + w; // the moment the oldest start leaves the window
+      await sleep(w);
+      clock = Math.max(clock, now(), target);
+    }
+  };
   const worker = async () => {
     for (;;) {
       const i = idx++;
@@ -297,6 +322,7 @@ export async function runFindLeadsBulkAdd(
       let d: LookupResult = null;
       if (!refused) {
         for (let attempt = 0; ; attempt++) {
+          await pace();
           try { d = await deps.lookup(l.id); } catch { d = null; }
           stats.made++;
           if (!isThrottled(d)) break;

@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { hooksCountingToday, type LimitAudit } from "../../../src/lib/hookLeadLimit.ts";
+import { AUDIT_START_ACTIONS, COUNTED_OUTCOMES, perLeadLimitWords } from "../../../src/lib/usageRefund.ts";
 import { askPlace } from "../../../src/lib/placeAsk.ts";
 import { townGated, TOWN_GATE_REASON } from "../../../src/lib/townVerdict.ts";
 import { cleanTypedTown } from "../../../src/lib/typedTown.ts";
@@ -860,12 +860,15 @@ Deno.serve(async (req) => {
       const isSales = actor.role !== "admin";
       if (isSales && isHookAudit && leadId) {
         const since = new Date(Date.now() - 86_400_000).toISOString();
-        /* Failed audits (every run failed or cancelled) do not use the rep's allowance — src/lib/hookLeadLimit.ts. */
-        const { data: todays, error: cErr } = await service.from("ai_audits").select("id, ai_audit_runs(status)")
-          .eq("lead_id", leadId).eq("audit_purpose", ORDINARY_AUDIT_PURPOSE).gte("created_at", since).limit(200);
+        /* ⛔ ONLY THIS REP'S OWN CLICKS COUNT (v1-rep-limits-own-actions, src/lib/usageRefund.ts): their own guard rows on this
+           lead — hook audits and bulk checks they pressed — still counted (a failed audit's row is 'refunded'). Audits the
+           system started on the lead (the reply chain, self-heal re-runs) never write a row in the rep's name, so never count. */
+        const { count: mine, error: cErr } = await service.from("api_usage_log").select("id", { count: "exact", head: true })
+          .eq("api_type", "guard").eq("user_id", actor.id).eq("lead_id", leadId).in("action", [...AUDIT_START_ACTIONS])
+          .in("outcome", [...COUNTED_OUTCOMES]).gte("created_at", since);
         if (cErr) return json({ ok: false, error: "hook_count_failed" }, 503);
-        if (hooksCountingToday((todays ?? []) as LimitAudit[]) >= SALES_HOOKS_PER_LEAD_PER_DAY) {
-          return json({ ok: false, error: "hook_limit_for_lead", detail: "This lead already has several hook audits today — open the latest one from the lead." }, 429);
+        if ((mine ?? 0) >= SALES_HOOKS_PER_LEAD_PER_DAY) {
+          return json({ ok: false, error: "hook_limit_for_lead", detail: perLeadLimitWords(mine ?? 0, SALES_HOOKS_PER_LEAD_PER_DAY) }, 429);
         }
       }
       /* A rep's re-check meets the same per-person limits as a hook (one action, counted alike), carrying its own estimate:

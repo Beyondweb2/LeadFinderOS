@@ -9,6 +9,7 @@ import { hedgeMayStart, isCapacityRefusal, slotBudget, slotCounter } from "../_s
 import { readApifyLive, startApifyRunExplained } from "../_shared/enrichment/apify-start.ts";
 import { HEAL_BASE_KEY, HEAL_ROW_KEY, healMerge, isHealRun } from "../../../src/lib/auditSelfHeal.ts";
 import { checkRateDrop } from "../_shared/ai-search-health.ts";
+import { refundGuardRow } from "../_shared/usage-refund.ts";
 import {
   APIFY_RUN_TIMEOUT_SECS, CYCLE_META_KEY, FAILURES_META_KEY, LANES_META_KEY, MISSING_META_KEY, addFailure, afterLaneFailure, failureNote, firstItem,
   initialLanes, liveLaneCount, mergeLaneItems, missingLanes, pastDeadline, readLanes, type Lanes,
@@ -1720,6 +1721,17 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     if (!Array.isArray(flipped) || flipped.length === 0) continue; // another poller already claimed this run
     finalised++;
     processingRuns.push({ runId, auditId: runRow?.audit_id as string, finalStatus: runStatus, allFailed });
+    /* ⛔ A FAILED AUDIT IS GIVEN BACK (v1-rep-limits-own-actions, src/lib/usageRefund.ts): the rep's click that started it
+       (a hook audit or a bulk check) stops counting toward every limit. This is the atomic finalise winner, so it runs
+       once per run; refundGuardRow touches at most one still-counted row. Only ordinary lead audits (reps' work). */
+    if ((allFailed || (isCapped && doneQuestions === 0)) && runRow?.audit_id) {
+      const { data: au } = await service.from("ai_audits").select("lead_id, created_at, audit_purpose").eq("id", runRow.audit_id).maybeSingle();
+      const a = au as { lead_id?: string | null; created_at?: string; audit_purpose?: string | null } | null;
+      if (a?.lead_id && a.created_at && a.audit_purpose === "audit") {
+        const given = await refundGuardRow(service, { leadId: a.lead_id, atIso: a.created_at, why: allFailed ? "audit failed" : "audit did not run" });
+        if (given) console.log(`[usage-refund] run ${runId}: the rep's click was given back (${allFailed ? "failed" : "not run"})`);
+      }
+    }
 
     /* ⛔ AN AUDIT RESULT NEVER CHANGES A LEAD'S STATUS (Paul, 2026-10-04, fix/07). The two rules that
        used to sit here and beside readyRuns below — Google AI named them in 3/3 (version 1) and named
