@@ -169,5 +169,21 @@ ok(!/Needs info/.test(readFileSync('src/components/LeadReadiness.tsx', 'utf8').r
 const gpd = readFileSync('supabase/functions/google-place-details/index.ts', 'utf8');
 ok(!/checkRateLimit\(/.test(gpd) && /guardAction\(supabase, actor\.id, 'place_details'/.test(gpd), 'google-place-details: the in-memory 30/min counter is gone; the guard is the one limit');
 
+/* ── 6. paced under the per-minute guard (v1-rep-limits-own-actions, 19 Nov: one "Add 41 leads" drew 51 refusals) ── */
+{
+  const { paceWaitMs, PLACE_LOOKUPS_PER_MINUTE } = await import('../src/lib/findLeadsBulkAdd.ts');
+  ok(PLACE_LOOKUPS_PER_MINUTE < 40, 'paced below the guard\'s 40 lookups a minute');
+  ok(paceWaitMs(Array(35).fill(0), 1000) === 0 && paceWaitMs(Array(36).fill(0), 1000) === 59_000 && paceWaitMs(Array(36).fill(0), 60_000) === 0, 'the 37th start in a minute waits for the oldest to leave the window');
+  let t = 0; const startsAt: number[] = [];
+  const many = Array.from({ length: 80 }, (_, i) => ({ id: `p${i}`, name: `Biz ${i}`, phone: '', address: '' }));
+  const r6 = await runFindLeadsBulkAdd(many as never, ctx, () => null, null, {
+    addLeads: fakeDb([]), lookup: async () => { startsAt.push(t); return { phone: '07700 900111' }; },
+    /* Parallel waits overlap: a wait ends at (its start + ms), never at the sum of everyone's waits. */
+    sleep: async (ms) => { const s0 = t; await Promise.resolve(); t = Math.max(t, s0 + ms); }, now: () => t,
+  });
+  const worstMinute = Math.max(...startsAt.map((s0) => startsAt.filter((x) => x >= s0 && x < s0 + 60_000).length));
+  ok(r6.ok && startsAt.length === 80 && worstMinute <= PLACE_LOOKUPS_PER_MINUTE, `80 leads: never more than ${PLACE_LOOKUPS_PER_MINUTE} lookups in any minute (worst ${worstMinute})`);
+}
+
 if (fails) { console.log(`\n${fails} FAILURE(S)`); process.exit(1); }
 console.log('\nALL PASS');

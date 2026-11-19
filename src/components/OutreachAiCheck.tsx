@@ -78,8 +78,8 @@ export interface CheckBarBatch {
 export function OutreachCheckBar({ batch, allowance, onStop, ready, hasNext, onOpenNext, openedCount, onStartOver, disabled, error }: {
   /** The rep's newest batch (sales only); null = none to show. */
   batch: CheckBarBatch | null;
-  /** Checks left today (sales only); null = not shown. */
-  allowance: { limit: number; remaining: number } | null;
+  /** The rep's checks today (sales only); null = not shown. `used` counts only their own checks that did not fail. */
+  allowance: { used?: number; limit: number; remaining: number } | null;
   onStop?: () => void;
   /** Ready, callable leads in the list as shown, not yet opened from here. */
   ready: number;
@@ -117,7 +117,9 @@ export function OutreachCheckBar({ batch, allowance, onStop, ready, hasNext, onO
         </span>
       )}
       {allowance && (
-        <span data-testid="outreach-check-allowance">Checks left today: <b className="text-foreground">{allowance.remaining}</b>/{allowance.limit}</span>
+        <span data-testid="outreach-check-allowance" title="Only your own checks count. Failed checks, automatic re-runs and retries are free. Counts the last 24 hours.">
+          <b className="text-foreground">{allowance.used ?? Math.max(0, allowance.limit - allowance.remaining)} of {allowance.limit}</b> checks used today
+        </span>
       )}
       {/* At 0 a press still reuses recent results (free); only a NEW check is refused, item by item. */}
       {allowance && allowance.remaining <= 0 && (

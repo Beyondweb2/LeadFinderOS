@@ -27,6 +27,7 @@ import {
 } from "../../../src/lib/salesCheck.ts";
 import { budgetDecision, type ApifyUsage } from "../../../src/lib/auditBudget.ts";
 import { isAggregatorUrl } from "./aggregators.ts";
+import { refundGuardRow } from "./usage-refund.ts";
 
 // deno-lint-ignore no-explicit-any
 type Client = any;
@@ -222,7 +223,8 @@ export async function readAllowance(deps: SalesCheckDeps, actorId: string): Prom
   const since = iso(deps.now() - 86_400_000);
   const [{ data: s }, used] = await Promise.all([
     deps.service.from("protection_settings").select("limits").eq("id", 1).maybeSingle(),
-    deps.service.from("sales_check_items").select("id").eq("actor_user_id", actorId).eq("audit_source", "new").gte("started_at", since),
+    /* Only the rep's own checks that did not fail (src/lib/usageRefund.ts): a failed check is given back. */
+    deps.service.from("sales_check_items").select("id").eq("actor_user_id", actorId).eq("audit_source", "new").neq("status", "failed").gte("started_at", since),
   ]);
   if (used.error) return null;
   return allowance(((used.data ?? []) as unknown[]).length, perRepDailyAllowance((s as { limits?: unknown } | null)?.limits));
@@ -346,7 +348,8 @@ async function processItem(deps: SalesCheckDeps, ctx: AdvanceCtx, item: ItemRow)
     return;
   }
   const r = startRefusalReason(res);
-  // Nothing started: release the reserved allowance slot.
+  // Nothing started: release the reserved allowance slot, and give back the guard row the gate wrote.
+  await refundGuardRow(deps.service, { leadId: l.id, actorId: ctx.actor.id, actions: ["sales_check"], atIso: iso(deps.now()), why: `check not started (${r.reason})` });
   return finishItem(deps, item.id, r.status, r.reason, {
     audit_source: null, est_cost_usd: 0,
     detail: r.reason === "not_in_town" ? String(res.detail ?? res.message ?? "").slice(0, 300) || null : null,
@@ -398,9 +401,11 @@ async function resolveItems(deps: SalesCheckDeps, actor: SalesActor, items: Item
       const run = ((r ?? []) as Array<{ id: string; created_at: string }>).sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))[0];
       await patchItem(deps, it.id, { status: "running", audit_id: audit.id, run_id: run?.id ?? null, crawl_source: ownWebsite(leads.get(it.lead_id)?.website) ? "with_audit" : "none" });
     } else if ((it.attempts ?? 0) >= SALES_CHECK_MAX_START_ATTEMPTS) {
+      if (it.audit_source === "new") await refundGuardRow(deps.service, { leadId: it.lead_id, actorId: actor.id, actions: ["sales_check"], atIso: it.started_at ?? iso(now), why: "check never started" });
       await finishItem(deps, it.id, "failed", "start_failed", { audit_source: null, est_cost_usd: 0 });
     } else {
-      // Back in line; the claim makes the retry exactly-once.
+      // Back in line; the claim makes the retry exactly-once. The retry is guarded again, so the first click is given back.
+      if (it.audit_source === "new") await refundGuardRow(deps.service, { leadId: it.lead_id, actorId: actor.id, actions: ["sales_check"], atIso: it.started_at ?? iso(now), why: "check restarted after an interruption" });
       const { error } = await deps.service.from("sales_check_items").update({ status: "queued", audit_source: null, est_cost_usd: 0, updated_at: iso(now) }).eq("id", it.id).eq("status", "starting");
       if (error) throw new Error(`item requeue failed: ${error.message}`);
     }

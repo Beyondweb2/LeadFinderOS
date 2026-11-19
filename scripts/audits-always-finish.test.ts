@@ -116,7 +116,9 @@ ok(countsTowardLeadLimit({ ai_audit_runs: [{ status: 'running' }] }) && countsTo
 ok(countsTowardLeadLimit({ ai_audit_runs: [{ status: 'failed' }, { status: 'complete' }] }), 'I: an audit with any good run counts');
 ok(hooksCountingToday([...Array(6)].map(() => ({ ai_audit_runs: [{ status: 'failed' }] }))) === 0, 'I: six failed automatic audits (HSM, 18 Nov) leave the rep\'s allowance untouched');
 const cai = readFileSync('supabase/functions/create-ai-audit/index.ts', 'utf8');
-ok(cai.includes('hooksCountingToday((todays ?? []) as LimitAudit[]) >= SALES_HOOKS_PER_LEAD_PER_DAY') && cai.includes('"../../../src/lib/hookLeadLimit.ts"'), 'I: create-ai-audit counts with the rule');
+/* Since 19 Nov (v1-rep-limits-own-actions) the per-lead limit counts the rep's OWN guard rows, failed ones refunded:
+   scripts/rep-limits-own-actions.test.ts. */
+ok(cai.includes('if ((mine ?? 0) >= SALES_HOOKS_PER_LEAD_PER_DAY)') && cai.includes('"../../../src/lib/usageRefund.ts"'), 'I: create-ai-audit counts with the rule');
 for (const p of ['src/pages/Inbox.tsx', 'src/pages/AiAudit.tsx']) {
   const s = readFileSync(p, 'utf8');
   ok(!s.includes("supabase.functions.invoke('create-ai-audit'") && s.includes('invokeCreateAudit({'), `I: ${p} starts audits through invokeEdge (the server's reason, never "non-2xx")`);
