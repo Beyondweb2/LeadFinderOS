@@ -65,7 +65,9 @@ export const DEFAULT_PROTECTION_LIMITS: ProtectionLimits = {
   apify_warn_pct: 90,
   actions: {
     lead_search: { paid: true, per_min: 10, per_hour: 60 },
-    place_details: { paid: true, per_min: 40, per_hour: 500 },
+    /* 40/500 → 400/3000 (2026-11-20, v1-fast-bulk-add, migration 20261224090000): Find Leads adds hundreds at once;
+       Google's own quota is 600 a minute; spend caps stay the safety net. findLeadsBulkAdd paces at 90 % of per_min. */
+    place_details: { paid: true, per_min: 400, per_hour: 3000 },
     enrich: { paid: true, per_hour: 150 },
     site_scrape: { paid: false, per_hour: 300 },
     hook_audit: { paid: true, per_10min: 10, per_day: 80 },

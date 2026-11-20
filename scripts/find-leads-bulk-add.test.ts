@@ -107,7 +107,8 @@ console.log('── 4. throttling waits and retries; a refusal stops lookups but
     lookup: async (pid) => (++n <= 2 ? { throttled: true } : { phone: byId.get(pid)?.phone ?? null }),
     sleep: async (ms) => { waits.push(ms); },
   });
-  ok(r.ok && r.summary.added === 6 && r.lookups.retries === 2 && waits.length === 2 && waits[0] === LOOKUP_RETRY_DELAYS_MS[0], `two 429s are waited out and retried; all 6 added — ${JSON.stringify(r.ok && r.lookups)}`);
+  /* A wait is slept in 1 s steps so the line can count down (v1-fast-bulk-add): the TOTAL waited is two first-retry delays. */
+  ok(r.ok && r.summary.added === 6 && r.lookups.retries === 2 && waits.reduce((a, b) => a + b, 0) === 2 * LOOKUP_RETRY_DELAYS_MS[0] && waits.every((w) => w <= 1000), `two 429s are waited out and retried; all 6 added — ${JSON.stringify(r.ok && r.lookups)}`);
 }
 {
   clearLookupCache();
@@ -171,18 +172,62 @@ ok(!/checkRateLimit\(/.test(gpd) && /guardAction\(supabase, actor\.id, 'place_de
 
 /* ── 6. paced under the per-minute guard (v1-rep-limits-own-actions, 19 Nov: one "Add 41 leads" drew 51 refusals) ── */
 {
-  const { paceWaitMs, PLACE_LOOKUPS_PER_MINUTE } = await import('../src/lib/findLeadsBulkAdd.ts');
-  ok(PLACE_LOOKUPS_PER_MINUTE < 40, 'paced below the guard\'s 40 lookups a minute');
-  ok(paceWaitMs(Array(35).fill(0), 1000) === 0 && paceWaitMs(Array(36).fill(0), 1000) === 59_000 && paceWaitMs(Array(36).fill(0), 60_000) === 0, 'the 37th start in a minute waits for the oldest to leave the window');
-  let t = 0; const startsAt: number[] = [];
-  const many = Array.from({ length: 80 }, (_, i) => ({ id: `p${i}`, name: `Biz ${i}`, phone: '', address: '' }));
-  const r6 = await runFindLeadsBulkAdd(many as never, ctx, () => null, null, {
-    addLeads: fakeDb([]), lookup: async () => { startsAt.push(t); return { phone: '07700 900111' }; },
-    /* Parallel waits overlap: a wait ends at (its start + ms), never at the sum of everyone's waits. */
-    sleep: async (ms) => { const s0 = t; await Promise.resolve(); t = Math.max(t, s0 + ms); }, now: () => t,
+  const { paceWaitMs, PLACE_LOOKUPS_PER_MINUTE, PLACE_DETAILS_GUARD_PER_MIN } = await import('../src/lib/findLeadsBulkAdd.ts');
+  const { DEFAULT_PROTECTION_LIMITS } = await import('../src/lib/protectionLimits.ts');
+  /* v1-fast-bulk-add (20 Nov, Paul): "adding 111 leads crawls". The guard is 400 a minute; the pacer sits under it. */
+  ok(DEFAULT_PROTECTION_LIMITS.actions.place_details.per_min === PLACE_DETAILS_GUARD_PER_MIN, 'the pacer\'s guard figure is the guard default');
+  ok(PLACE_LOOKUPS_PER_MINUTE < PLACE_DETAILS_GUARD_PER_MIN && PLACE_LOOKUPS_PER_MINUTE >= 300, `paced below the guard (${PLACE_LOOKUPS_PER_MINUTE} < ${PLACE_DETAILS_GUARD_PER_MIN}) and 300 leads start without a wait`);
+  ok(PLACE_DETAILS_GUARD_PER_MIN < 600, 'the guard stays under Google\'s own 600-a-minute Place Details quota');
+  const mig = readFileSync('supabase/migrations/20261224090000_place_details_bulk_add_limit.sql', 'utf8');
+  ok(new RegExp(`"per_min": ${PLACE_DETAILS_GUARD_PER_MIN}`).test(mig), 'the migration writes the same per-minute figure to the live row');
+  const P = PLACE_LOOKUPS_PER_MINUTE;
+  ok(paceWaitMs(Array(P - 1).fill(0), 1000) === 0 && paceWaitMs(Array(P).fill(0), 1000) === 59_000 && paceWaitMs(Array(P).fill(0), 60_000) === 0, 'the start past the minute\'s allowance waits for the oldest to leave the window');
+  /* A simulated add: each lookup takes 500 ms (a phone_cache hit through the edge function), 10 at once. */
+  const simulate = async (n: number) => {
+    let t = 0; const startsAt: number[] = []; const seen: AddProgress[] = [];
+    const many = Array.from({ length: n }, (_, i) => ({ id: `s${n}-${i}`, name: `Biz ${i}`, phone: '', address: '' }));
+    const r = await runFindLeadsBulkAdd(many as never, ctx, () => null, null, {
+      addLeads: fakeDb([]),
+      lookup: async () => { startsAt.push(t); const s0 = t; await Promise.resolve(); t = Math.max(t, s0 + 500); return { phone: '07700 900111' }; },
+      /* Parallel waits overlap: a wait ends at (its start + ms), never at the sum of everyone's waits. */
+      sleep: async (ms) => { const s0 = t; await Promise.resolve(); t = Math.max(t, s0 + ms); }, now: () => t,
+      onProgress: (p) => seen.push(p),
+    });
+    const worst = Math.max(...startsAt.map((s0) => startsAt.filter((x) => x >= s0 && x < s0 + 60_000).length));
+    return { r, startsAt, worst, seen, ms: t };
+  };
+  const s111 = await simulate(111), s300 = await simulate(300), s500 = await simulate(500);
+  console.log(`   simulated: 111 leads ${s111.ms / 1000}s · 300 leads ${s300.ms / 1000}s · 500 leads ${s500.ms / 1000}s`);
+  ok(s111.r.ok && s111.startsAt.length === 111 && !s111.seen.some((p) => p.waitSec), `111 leads: no pause (${s111.ms / 1000}s simulated)`);
+  ok(s300.r.ok && s300.startsAt.length === 300 && !s300.seen.some((p) => p.waitSec), `300 leads: no pause (${s300.ms / 1000}s simulated)`);
+  ok(s500.r.ok && s500.startsAt.length === 500 && s500.worst <= P, `500 leads: never more than ${P} in any minute (worst ${s500.worst})`);
+  ok(s500.seen.filter((p) => (p.waitSec ?? 0) > 0).length > 10, '500 leads: the pause is shown as a countdown, refreshed while it waits');
+  ok(addProgressText({ phase: 'lookups', done: 360, total: 500, waitSec: 42 }) === 'Adding 360 of 500 · next in 42s', '"Adding 360 of 500 · next in 42s"');
+  ok(addProgressText({ phase: 'lookups', done: 36, total: 111 }) === 'Adding 36 of 111', 'no pause → the plain line');
+}
+
+/* ── 7. search fills the phone cache, the phone never reaches the browser (v1-fast-bulk-add) ── */
+{
+  const spc = await import('../supabase/functions/_shared/search-place-cache.ts');
+  const d = spc.placeDetailsOf({
+    internationalPhoneNumber: '+44 7700 900111', nationalPhoneNumber: '07700 900111', formattedAddress: '1 High St, Hastings TN34 1AA, UK',
+    websiteUri: 'https://x.example', primaryTypeDisplayName: { text: 'Locksmith' }, googleMapsUri: 'https://maps.example/1', rating: 4.8, userRatingCount: 12,
+    addressComponents: [{ longText: 'Hastings', types: ['postal_town'] }],
   });
-  const worstMinute = Math.max(...startsAt.map((s0) => startsAt.filter((x) => x >= s0 && x < s0 + 60_000).length));
-  ok(r6.ok && startsAt.length === 80 && worstMinute <= PLACE_LOOKUPS_PER_MINUTE, `80 leads: never more than ${PLACE_LOOKUPS_PER_MINUTE} lookups in any minute (worst ${worstMinute})`);
+  ok(d.phone === '+44 7700 900111' && d.derivedTown === 'Hastings' && d.rating === 4.8 && d.reviewCount === 12 && !!d.address?.startsWith('1 High St'), 'a search place → phone, town, rating, reviews, address');
+  const none = spc.placeDetailsOf({});
+  ok(none.phone === null && none.derivedTown === null, 'no phone in the search → a null-phone row');
+  const rows = spc.phoneCacheRowsOf([{ id: 'a', _pd: d }, { id: 'a', _pd: d }, { id: 'b' }], '2026-11-20T00:00:00Z');
+  ok(rows.length === 1 && rows[0].place_id === 'a' && rows[0].details_version === 2 && rows[0].derived_town === 'Hastings', 'one v2 phone_cache row per place (the shape google-place-details serves as a hit)');
+  const gpd2 = readFileSync('supabase/functions/google-place-details/index.ts', 'utf8');
+  ok(/const CACHE_VERSION = 2;/.test(gpd2) && spc.PHONE_CACHE_VERSION === 2, 'the cache version matches google-place-details');
+  const stripped = spc.withoutPlaceDetails([{ id: 'a', name: 'A', _pd: d }]);
+  ok(!('_pd' in stripped[0]) && stripped[0].name === 'A', 'the private details are stripped');
+  const sl = readFileSync('supabase/functions/search-leads/index.ts', 'utf8');
+  ok((sl.match(/nextPageToken,' \+ SEARCH_DETAIL_FIELDS/g) ?? []).length === 4 && (sl.match(/_pd: placeDetailsOf\(place\)/g) ?? []).length === 4, 'every Find Leads text search asks for the details and keeps them');
+  const iStore = sl.indexOf('storeSearchPlaceDetails(serviceClient, leads)'), iStrip = sl.indexOf('leads = withoutPlaceDetails(leads)'), iCache = sl.indexOf("from('search_cache').upsert");
+  ok(iStore > 0 && iStrip > iStore && iCache > iStrip, 'stored, then stripped BEFORE search_cache and the response');
+  ok(!/reviews|photos|editorialSummary/.test(spc.SEARCH_DETAIL_FIELDS), 'only fields at or below the tier websiteUri already bills');
 }
 
 if (fails) { console.log(`\n${fails} FAILURE(S)`); process.exit(1); }

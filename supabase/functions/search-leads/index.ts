@@ -6,6 +6,7 @@ import { mapsDiscover } from '../_shared/enrichment/sources.ts';
 import { BOOKING_PLATFORM_DOMAINS, DIRECTORY_AND_RECORD_DOMAINS } from '../_shared/aggregators.ts';
 import { qualifierInfo, resolveGeoBias, pickedCountryKeySuffix } from '../_shared/geobias.ts';
 import { generateCacheKey } from '../_shared/search-cache-key.ts';
+import { SEARCH_DETAIL_FIELDS, placeDetailsOf, storeSearchPlaceDetails, withoutPlaceDetails, type SearchPlaceDetails } from '../_shared/search-place-cache.ts';
 import { countryFromAddress } from '../../../src/lib/leadCountry.ts';
 import { foundRecord } from '../../../src/lib/websiteStatusClass.ts';
 import { inTownVerdict, townKey, townRadiusKm, type InTownVerdict } from '../../../src/lib/inTown.ts';
@@ -314,7 +315,7 @@ async function thoroughTownSearch(
   keyword: string, box: Viewport, apiKey: string, debug: DebugMeta,
 ): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; tiles: number; calls: number }> {
   const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
-  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,places.formattedAddress,places.location,nextPageToken';
+  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,places.formattedAddress,places.location,nextPageToken,' + SEARCH_DETAIL_FIELDS;
   const grid = thoroughTiles(box);
   let reserved = 0, made = 0;
   const take = () => (reserved < THOROUGH_MAX_CALLS_PER_TOWN ? (reserved++, true) : false);
@@ -372,6 +373,7 @@ async function thoroughTownSearch(
         address: place.formattedAddress || undefined,
         lat: typeof place.location?.latitude === 'number' ? place.location.latitude : undefined,
         lng: typeof place.location?.longitude === 'number' ? place.location.longitude : undefined,
+        _pd: placeDetailsOf(place),
       });
     }
   }
@@ -569,6 +571,9 @@ interface SearchLead {
   /* IN THE SEARCHED TOWN? (2026-10-20, src/lib/inTown.ts). Set on every town-only answer, fresh or cached, and
      recomputed each time so a rule change applies at once. outsideTown (Google's boundary) is kept beside it. */
   townCheck?: InTownVerdict;
+  /* PRIVATE (2026-11-20, _shared/search-place-cache.ts): phone, town, rating from the same search, written to phone_cache
+     and stripped before the response and search_cache. ⛔ Never sent to the browser. */
+  _pd?: SearchPlaceDetails;
 }
 
 function classifyWebsite(websiteUri: string | null | undefined): { status: SearchLead['websiteStatus']; confidence: number; reason: string } {
@@ -617,7 +622,7 @@ async function textSearchPlaces(
   let pageToken: string | undefined;
   const MAX_PAGES = Math.max(1, maxPages);
   const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
-  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,places.formattedAddress,places.location,nextPageToken';
+  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,places.formattedAddress,places.location,nextPageToken,' + SEARCH_DETAIL_FIELDS;
   // Google Places API (New) max radius is 50,000m
   const clampedRadius = Math.min(radius, 50000);
 
@@ -735,6 +740,7 @@ async function textSearchPlaces(
         address: place.formattedAddress || undefined,
         lat: typeof place.location?.latitude === 'number' ? place.location.latitude : undefined,
         lng: typeof place.location?.longitude === 'number' ? place.location.longitude : undefined,
+        _pd: placeDetailsOf(place),
       });
 
       if (status === 'NO_WEBSITE') {
@@ -847,7 +853,7 @@ async function expandSearch(
 
     try {
       const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
-      const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,places.formattedAddress,places.location,nextPageToken';
+      const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,places.formattedAddress,places.location,nextPageToken,' + SEARCH_DETAIL_FIELDS;
       const clampedRadius = Math.min(radius, 50000);
 
       // Fetch 1 page per expansion centre to limit API spend
@@ -908,6 +914,7 @@ async function expandSearch(
             address: place.formattedAddress || undefined,
         lat: typeof place.location?.latitude === 'number' ? place.location.latitude : undefined,
         lng: typeof place.location?.longitude === 'number' ? place.location.longitude : undefined,
+        _pd: placeDetailsOf(place),
             isExpanded: true,
           });
           totalNoWebsite++;
@@ -1260,7 +1267,7 @@ async function fetchTile(
   keyword: string, lat: number, lng: number, radiusM: number, apiKey: string, debug: DebugMeta,
 ): Promise<SearchLead[]> {
   const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
-  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,places.formattedAddress,places.location,nextPageToken';
+  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,places.formattedAddress,places.location,nextPageToken,' + SEARCH_DETAIL_FIELDS;
   const out: SearchLead[] = [];
   let pageToken: string | undefined;
 
@@ -1300,6 +1307,7 @@ async function fetchTile(
         address: place.formattedAddress || undefined,
         lat: typeof place.location?.latitude === 'number' ? place.location.latitude : undefined,
         lng: typeof place.location?.longitude === 'number' ? place.location.longitude : undefined,
+        _pd: placeDetailsOf(place),
       });
     }
     pageToken = data.nextPageToken;
@@ -1707,6 +1715,14 @@ Deno.serve(async (req) => {
       leads = res.leads; selectionDebug = res.selectionDebug; expanded = res.expanded; townFilter = res.townFilter; townArea = res.townArea;
       console.log(`[DIAG-HANDLER] Found ${leads.length} leads (${selectionDebug.returnedNoWebsite} noWeb, ${selectionDebug.returnedHasWebsite} hasWeb, expanded: ${expanded})`);
     }
+
+    /* ─── SEARCH FILLS THE PHONE CACHE (2026-11-20, v1-fast-bulk-add, _shared/search-place-cache.ts) ───
+       The same search asked Google for phone / town / rating at no extra cost (same Enterprise tier as websiteUri).
+       Written to phone_cache so Find Leads' add answers from the cache (no Place Details call, no cost), then
+       ⛔ stripped: the phone never reaches the browser or search_cache from here. */
+    const placesCached = await storeSearchPlaceDetails(serviceClient, leads);
+    leads = withoutPlaceDetails(leads);
+    console.log(`[search-place-cache] ${placesCached} places written to phone_cache`);
 
     // ─── CACHE STORE ─────────────────────────────
     // Region: store { leads, region } so a cached re-run keeps the grid banner.
