@@ -6,6 +6,7 @@ Moved verbatim from CLAUDE.md §10 on 2026-10-15. Add a row here when you write 
 |---|---|
 | ⛔ ANY area — the binding RULES (moved out of CLAUDE.md word for word on 2026-11-10). Read the area's rules file before its records below | `docs/rules/engineering.md` (code, gate, deploy, edge, SQL) · `docs/rules/business.md` (offer, money, measurement) · `docs/rules/sales-and-access.md` (auth, RLS, Sales) · `docs/rules/messaging.md` (WhatsApp, SMS, Inbox) · `docs/rules/reports-build-state.md` (reports, build, UI state) · `docs/rules/setup-and-paul.md` (checkouts, SQL, QA) |
 | A rep told they hit a limit: what counts (only their own successful clicks), refunded guard rows, the per-lead limit, "X of 50 checks used today", Find Leads lookup pacing | `docs/rep-limits-own-actions.md` |
+| Find Leads add slow / place_details guard figure / search writing phone_cache / cost per add | `docs/fast-bulk-add.md` |
 | How a UK audit question names its town (no "UK", "Boston, Lincolnshire"), the countryCode every engine gets, the amber abroad-answer note, which baselines still say "UK" | `docs/natural-question-wording.md` |
 | How long the full gate takes, why, the parallel gate / tsx / incremental typecheck, TEST_CONCURRENCY | `docs/gate-speed.md` |
 | An audit incomplete / Apify full / start_failed / the run scheduler (slots), audits re-running themselves (30 min / 2 h / 6 h), the AI-search health line and rate-drop alert, the API fallback plan | `docs/audits-self-healing.md` (+ `docs/audits-always-finish.md`, `docs/ai-search-api-fallback-plan.md`) |

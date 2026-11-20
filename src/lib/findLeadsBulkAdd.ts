@@ -32,13 +32,18 @@ import { isAustralianLead, withAuState } from './australiaTowns.ts';
 export const COVERAGE_ADD_MAX_ROWS = 500;
 /** Lookups in flight at once (Paul, 2026-10-19: "cap about 8 to 10"). The server's own guard (guard_action
  *  'place_details', per minute / per hour, protection_settings) is the limit; a throttled call is retried. */
-export const PLACE_LOOKUP_CONCURRENCY = 8;
+export const PLACE_LOOKUP_CONCURRENCY = 10;
 /** Waits before each retry of a throttled lookup. Together they span a full minute, the guard's window. */
 export const LOOKUP_RETRY_DELAYS_MS: readonly number[] = [2_000, 5_000, 10_000, 20_000, 30_000];
-/** Lookups started per rolling minute (v1-rep-limits-own-actions, 19 Nov). The guard allows 40 a minute; 8 at once ran at
- *  several hundred a minute, so one "Add 41 leads" drew 51 refusals and a restriction alert in the rep's name. Paced
- *  under the limit, an add never meets it (the 429 retry stays as the backstop). */
-export const PLACE_LOOKUPS_PER_MINUTE = 36;
+/** The guard's per-minute allowance for 'place_details' (protection_settings; migration 20261224090000 and
+ *  DEFAULT_PROTECTION_LIMITS hold the same value). */
+export const PLACE_DETAILS_GUARD_PER_MIN = 400;
+/** Lookups started per rolling minute. 19 Nov (v1-rep-limits-own-actions): the guard allowed 40 a minute and 8 at once
+ *  ran at several hundred, so one "Add 41 leads" drew 51 refusals and a restriction alert — the add was paced at 36.
+ *  20 Nov (v1-fast-bulk-add, Paul: "adding 111 leads crawls"): the guard is 400 a minute (Google's own Place Details
+ *  quota is 600 a minute per project) and search-leads fills phone_cache so most lookups are free cache hits. Paced
+ *  at 90 % of the guard, an add never meets it (the 429 retry stays as the backstop): 300 leads start in one go. */
+export const PLACE_LOOKUPS_PER_MINUTE = Math.floor(PLACE_DETAILS_GUARD_PER_MIN * 0.9);
 
 /** How long to wait before the next start so no more than `perMinute` start in any 60 s. Pure. */
 export function paceWaitMs(startsMs: readonly number[], nowMs: number, perMinute = PLACE_LOOKUPS_PER_MINUTE): number {
@@ -209,12 +214,15 @@ export const isAccessProblem = (added: number, v: AddVisibility | null | undefin
 
 /* ── THE PROGRESS LINE ("Adding 23 of 40") ──────────────────────────────────────────────────────── */
 
-export interface AddProgress { phase: 'checking' | 'lookups' | 'saving' | 'done'; done: number; total: number }
+/** waitSec (v1-fast-bulk-add, 20 Nov): set while the add is paused for the per-minute limit or a throttled retry, so
+ *  the line says so and counts down — never a frozen "Adding 36 of 111". */
+export interface AddProgress { phase: 'checking' | 'lookups' | 'saving' | 'done'; done: number; total: number; waitSec?: number }
 export function addProgressText(p: AddProgress | null | undefined): string | null {
   if (!p) return null;
   if (p.phase === 'checking') return `Checking ${p.total}…`;
   if (p.phase === 'saving') return `Saving ${p.total}…`;
-  return `Adding ${Math.min(p.done, p.total)} of ${p.total}`;
+  const base = `Adding ${Math.min(p.done, p.total)} of ${p.total}`;
+  return p.phase === 'lookups' && p.waitSec && p.waitSec > 0 ? `${base} · next in ${p.waitSec}s` : base;
 }
 
 /* ── THE ADD, START TO FINISH ──────────────────────────────────────────────────────────────────── */
@@ -290,7 +298,17 @@ export async function runFindLeadsBulkAdd(
   const details = new Map<string, LookupAnswer>();
   const stats = { made: 0, cached: 0, withoutAnswer: 0, retries: 0 };
   let done = total - fresh.length;          // duplicates are done
-  const tick = () => deps.onProgress?.({ phase: 'lookups', done, total });
+  /* A pause (the per-minute pacer, a throttled retry) is shown as a countdown, refreshed every second. */
+  let pausedUntil = 0;
+  const tick = () => {
+    const w = Math.ceil((pausedUntil - now()) / 1000);
+    deps.onProgress?.(w > 0 ? { phase: 'lookups', done, total, waitSec: w } : { phase: 'lookups', done, total });
+  };
+  const pause = async (ms: number) => {
+    pausedUntil = Math.max(pausedUntil, now() + ms);
+    for (let left = ms; left > 0; left -= 1000) { tick(); await sleep(Math.min(1000, left)); }
+    tick();
+  };
   for (const l of fresh) {
     if (!needsLookup(l)) { done++; continue; }
     const c = lookupCache.get(l.id);
@@ -310,7 +328,7 @@ export async function runFindLeadsBulkAdd(
       const w = paceWaitMs(starts, clock);
       if (w <= 0) { starts.push(clock); return; }
       const target = clock + w; // the moment the oldest start leaves the window
-      await sleep(w);
+      await pause(w);
       clock = Math.max(clock, now(), target);
     }
   };
@@ -328,7 +346,7 @@ export async function runFindLeadsBulkAdd(
           if (!isThrottled(d)) break;
           if (attempt >= LOOKUP_RETRY_DELAYS_MS.length) { d = null; break; }
           stats.retries++;
-          await sleep(LOOKUP_RETRY_DELAYS_MS[attempt]);
+          await pause(LOOKUP_RETRY_DELAYS_MS[attempt]);
         }
         if (isLimit(d)) { refused = true; d = null; }
       }
