@@ -239,3 +239,4 @@
 - `docs/audits-self-healing.md` — 2026-11-19: 7 audits incomplete = the hedge pushed us over Apify's 32-run limit; the run scheduler, audits re-running themselves (30 min / 2 h / 6 h, only missing answers, never charged, never sending), the AI-search health line + rate-drop alert.
 - `docs/ai-search-api-fallback-plan.md` — 2026-11-19: PLAN ONLY — an OpenAI / Gemini API fallback when Apify is down: how answers differ, cost, labels, never for baselines.
 - `docs/rep-limits-own-actions.md` — 2026-11-19: what counted against Valentin; only a rep's own successful actions count; failed work refunded; per-lead limit = own clicks; lookups paced.
+- `docs/natural-question-wording.md` — 2026-11-20: new UK questions drop "UK" (asks already run from gb); the 10-question test (Boston went to Massachusetts without it); local names for risky towns; the abroad-answer flag; which client baselines still carry "UK".

@@ -784,9 +784,69 @@ export function placeSuffixForCountry(country: string | null | undefined): strin
   return PLACE_SUFFIX_BY_COUNTRY[k] ?? 'UK';
 }
 
+/* ══ UK QUESTIONS READ THE WAY PEOPLE ASK THEM (Paul, 2026-11-20, docs/natural-question-wording.md) ══════════════
+   "best plumber in Newcastle UK" is not what anyone types. Every ask already runs FROM the UK: the actor gets
+   countryCode "gb" (ai-search.ts toCountryCode), which it passes to Google AND to ChatGPT, Gemini and Google AI Mode.
+   So a NEW UK question names the town only — no "UK" — and a town famously shared with a bigger place abroad is
+   written the way locals write it ("Boston, Lincolnshire"). Never "UK".
+   ⛔ NEW QUESTIONS ONLY. A frozen baseline, a locked Hook set and a day-28 replay re-ask their STORED strings word
+   for word — nothing here touches them (measurement never changes mid-contract).
+   ⛔ Other countries keep their suffix ("Pune India") — this change is UK-only. */
+export function questionPlaceSuffix(country: string | null | undefined): string {
+  const s = placeSuffixForCountry(country);
+  return s === 'UK' ? '' : s;
+}
+
+/** UK towns that share a name with a bigger place abroad, written the way a local would when it matters. Keyed by
+ *  the bare lower-case town. ONLY where the bare name is genuinely risky; every other town stays as typed.
+ *  Evidence (2026-11-20 test, 10 real questions asked with and without "UK", all from a UK location):
+ *    Boston → all three engines answered about Massachusetts; Halifax → Gemini answered Nova Scotia; Lincoln →
+ *    Gemini mixed in Nebraska firms; Peterborough → Google AI named an Ontario firm. Newcastle, Stamford, Richmond,
+ *    Cambridge, Gloucester and York stayed in the UK bare, so they are NOT expanded — except Stamford, which has a
+ *    recorded Connecticut incident. Perth / Hamilton / Kingston / Windsor: much bigger namesakes, not yet tested.
+ *  ⛔ Never a town that is ambiguous INSIDE the UK (Richmond London vs Richmond Yorkshire, Wellington Somerset vs
+ *  Shropshire) — guessing the wrong one is worse than the bare name. The abroad flag (abroadAnswer.ts) catches the rest. */
+export const UK_LOCAL_PLACE_NAMES: Readonly<Record<string, string>> = {
+  boston: 'Boston, Lincolnshire',
+  halifax: 'Halifax, West Yorkshire',
+  lincoln: 'Lincoln, Lincolnshire',
+  peterborough: 'Peterborough, Cambridgeshire',
+  stamford: 'Stamford, Lincolnshire',
+  perth: 'Perth, Scotland',
+  hamilton: 'Hamilton, Scotland',
+  kingston: 'Kingston upon Thames',
+  windsor: 'Windsor, Berkshire',
+};
+
+const UK_MARKER = '(?:,\\s*|\\s+)(?:uk|u\\.k\\.|united kingdom|great britain|gb)\\b\\.?';
+
+function stripUkMarker(town: string): string {
+  return String(town ?? '').trim().replace(new RegExp(`${UK_MARKER}$`, 'i'), '').trim();
+}
+
+/** The town as a NEW UK question writes it: any trailing "UK" dropped, a risky bare name given its local form. */
+export function ukLocalPlaceName(town: string): string {
+  const t = stripUkMarker(town);
+  return UK_LOCAL_PLACE_NAMES[t.toLowerCase()] ?? t;
+}
+
+/** Rewrite one NEW UK question so its place reads naturally: "plumber in Boston UK" → "plumber in Boston,
+ *  Lincolnshire"; "locksmith in Wisbech, UK" → "locksmith in Wisbech". A question that does not name the town is untouched. */
+export function naturalUkQuestion(question: string, town: string): string {
+  const q = String(question ?? '').trim();
+  const bare = stripUkMarker(town);
+  if (!q || !bare) return q;
+  const local = ukLocalPlaceName(bare);
+  let out = q.replace(new RegExp(`(${escapeForRegex(local)}|${escapeForRegex(bare)})${UK_MARKER}`, 'gi'), '$1');
+  if (local !== bare && !new RegExp(escapeForRegex(local), 'i').test(out)) {
+    out = out.replace(new RegExp(`(^|[^a-z])${escapeForRegex(bare)}(?![a-z])`, 'i'), (_m, pre: string) => `${pre}${local}`);
+  }
+  return out.replace(/\s+/g, ' ').trim();
+}
+
 /**
  * The place a generic hook question (the top-up when the model gave fewer than three usable ones) is asked
- * about. UK: "<town> UK" unless the town already carries a UK marker — byte for byte what it was. A lead in
+ * about. UK (2026-11-20): the town as locals write it, never "UK" (ukLocalPlaceName). A lead in
  * another LISTED country names that country with the same join the rest of the audit uses ("Kuala Lumpur,
  * Malaysia", "Pune India") unless the town already names it; Singapore's town IS the country, so it is never
  * pinned twice. A blank or unlisted country is left bare, as before.
@@ -796,7 +856,7 @@ export function hookPlaceFor(town: string, country: string | null | undefined): 
   if (!t) return t;
   const c = String(country ?? '').trim().toUpperCase();
   if (c === 'UK' || c === 'GB') {
-    return /\b(uk|united kingdom|england|scotland|wales)\b/i.test(t) ? t : `${t} UK`;
+    return ukLocalPlaceName(t);
   }
   const suffix = placeSuffixForCountry(country);
   if (suffix === 'UK') return t;
@@ -852,7 +912,18 @@ export function qualifyPlace(
 ): { questions: string[]; repaired: Array<{ before: string; after: string }> } {
   const repaired: Array<{ before: string; after: string }> = [];
   const t = normalise(town);
-  if (!t || !suffix.trim()) return { questions, repaired };
+  if (!t) return { questions, repaired };
+  /* An EMPTY suffix is a UK audit from 2026-11-20 (questionPlaceSuffix): the place is made natural instead of pinned —
+     a stray "UK" the model wrote is dropped and a risky town gets its local form. */
+  if (!suffix.trim()) {
+    const out = questions.map((raw) => {
+      const q = (raw ?? '').trim();
+      const after = naturalUkQuestion(q, town);
+      if (after !== q) repaired.push({ before: q, after });
+      return after;
+    });
+    return { questions: out, repaired };
+  }
 
   const out = questions.map((raw) => {
     const q = (raw ?? '').trim();

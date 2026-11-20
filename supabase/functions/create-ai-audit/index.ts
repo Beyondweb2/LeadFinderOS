@@ -14,7 +14,7 @@ import { areaFromAddress, isBroadTown, BROAD_TOWN_NOTE } from "../../../src/lib/
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { DEFAULT_FIRST_REPLY_TEMPLATE, effectiveReplyMode, firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { pitchMayFollowAudit, pitchRefusalNote } from "../../../src/lib/auditPitchRule.ts";
-import { dropResearchIntent, dropOffTrade, dropMissingTown, qualifyPlace, placeSuffixForCountry, placeNamesCountry, placeJoin, dedupeQuestions, coverageDirective, stripRepeatedWords, capHeadTerms, headTermCap, hookPlaceFor } from "../../../src/lib/seedGuard.ts";
+import { dropResearchIntent, dropOffTrade, dropMissingTown, qualifyPlace, placeSuffixForCountry, placeNamesCountry, placeJoin, dedupeQuestions, coverageDirective, stripRepeatedWords, capHeadTerms, headTermCap, hookPlaceFor, questionPlaceSuffix, ukLocalPlaceName } from "../../../src/lib/seedGuard.ts";
 import { normalizeAuditList, serviceAreaQuestionDirective, serviceAreasFromDirective } from "../../../src/lib/auditQuestionContext.ts";
 import { dropUnfitQuestions, balanceHybrid, namesAreaPlace } from "../../../src/lib/generatedQuestionGuard.ts";
 import {
@@ -298,15 +298,14 @@ function hasUsableTown(loc: string): boolean {
  *  Sliced to `count`. */
 function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, specialisms: string, count: number, scope: BusinessScope, country: string | null, moneyCount = 0, market: MarketContext | null = null): string[] {
   const t = type || "business";
-  // UK LOCAL audits: UNCONDITIONALLY disambiguate the town in question text ("Stamford UK") —
-  // town names shared with bigger non-UK places (Stamford CT, Peterborough Ontario, Boston MA…)
-  // make engines answer from the wrong country. Simpler than an ambiguity list and never wrong.
-  // Skipped when the location already carries a UK marker.
+  // UK LOCAL audits (2026-11-20, Paul): the town as people write it, NEVER "UK" — every ask already runs from a UK
+  // location (countryCode gb). A town shared with a bigger place abroad gets its local form ("Stamford,
+  // Lincolnshire", "Boston, Lincolnshire"): seedGuard ukLocalPlaceName. Older stored questions keep "UK".
   const isUK = ["UK", "GB"].includes((country ?? "").trim().toUpperCase());
   /* A lead in another LISTED country gets its own name ("Pune India"), never "UK" (2026-09-28). UK
      wording is unchanged; a blank/unknown country is still left bare here, as before. */
   const abroad = isUK ? null : otherCountrySuffix(country);
-  const ukTown = (l: string) => (isUK && l && !/\b(uk|united kingdom|england|scotland|wales)\b/i.test(l) ? `${l} UK`
+  const ukTown = (l: string) => (isUK && l ? ukLocalPlaceName(l)
     : abroad && l && !mentionsCountryWord(l, abroad) ? `${l}${placeJoin(abroad)}${abroad}` : l);
   const niches = specialisms
     ? specialisms.split(/[,;/]|\band\b/i).map((x) => x.trim().toLowerCase()).filter((x) => x.length > 1)
@@ -2173,11 +2172,11 @@ async function generateQuestions(
   const name = businessName || "the business";
   const type = businessType || "local business";
   const loc = locationText || "the local area";
-  // UK disambiguation for LOCAL question text (mirrors fallbackQuestions.ukTown): always name the
-  // place as "<town> UK" so engines can't resolve an ambiguous town to a non-UK city.
+  // UK place for LOCAL question text (mirrors fallbackQuestions.ukTown): the town as locals write it, never "UK"
+  // (2026-11-20 — the search itself runs from the UK).
   const isUK = ["UK", "GB"].includes((country ?? "").trim().toUpperCase());
   const abroadQ = isUK ? null : otherCountrySuffix(country);
-  const locQ = isUK && locationText && !/\b(uk|united kingdom|england|scotland|wales)\b/i.test(locationText) ? `${locationText} UK`
+  const locQ = isUK && locationText ? ukLocalPlaceName(locationText)
     : abroadQ && locationText && !mentionsCountryWord(locationText, abroadQ) ? `${locationText}${placeJoin(abroadQ)}${abroadQ}` : loc;
   /* ⛔ THE MONEY-QUESTION BLOCK — EMPTY STRING WHEN OFF, so a caller that did not opt in gets a
      prompt byte-identical to the one it got before this existed. The text lives in
@@ -2204,7 +2203,7 @@ async function generateQuestions(
      src/lib/serviceScope.ts + customerQuestion.ts (baseline-discovery runs every question through
      them), so a question that ignores these rules is reshaped or dropped, never measured. */
   const customer = style?.customer === true;
-  const customerPlace = customer && locationText ? (isUK ? `${locationText}, UK` : abroadQ && !mentionsCountryWord(locationText, abroadQ) ? `${locationText}, ${abroadQ}` : locationText) : locQ;
+  const customerPlace = customer && locationText ? (isUK ? ukLocalPlaceName(locationText) : abroadQ && !mentionsCountryWord(locationText, abroadQ) ? `${locationText}, ${abroadQ}` : locationText) : locQ;
   const placeQ = customer ? customerPlace : locQ;
   const notOfferedLine = customer && style?.notOffered?.length
     ? `\n- The business does NOT offer: ${style.notOffered.join("; ")}. NEVER ask about any of these, not even in other words.`
@@ -2250,11 +2249,11 @@ ${NATURAL_RULES}`
 ${NATURAL_RULES}`;
 
   const LOCAL_RULES = customer
-    ? `- Name the place in EVERY question, written exactly "${placeQ}" — the country after the comma stops AI answering about a same-named town abroad.
+    ? `- Name the place in EVERY question, written exactly "${placeQ}"${isUK ? " — never add \"UK\" or another country word (the search already runs from the UK)" : " — the country after the comma stops AI answering about a same-named town abroad"}.
 - At most a third of the questions may be general recommendation questions ("Can you recommend a good ${type.toLowerCase()} in ${placeQ}?"); the rest are about one specific service, or a real situation the customer is in.
 - NEVER use "near me" in any form.`
     : `- Local framing is good: "[service] in ${locQ}".
-- ALWAYS write the place EXACTLY as "${locQ}" — never a bare town name (town names are often shared with bigger non-UK places, and a bare name makes AI answer about the wrong country).
+- ALWAYS write the place EXACTLY as "${locQ}"${isUK ? " — never add \"UK\" or any country word after it (the search already runs from the UK, and people do not type it)" : " — never a bare town name (town names are often shared with bigger places in other countries, and a bare name makes AI answer about the wrong country)"}.
 - Broad head-terms are allowed here (a small local pool is winnable): e.g. "best [service] in ${locQ}", "top [service] in ${locQ}".
 - NEVER use "near me" in any form — always name the actual place (${locQ}) instead.`;
 
@@ -2331,7 +2330,7 @@ Return via the return_questions tool.`;
 
   const userScopeLine = forceLocal
     ? `This business is LOCAL to ${locQ}. Generate ${n} short, single-intent LOCAL phrases ("[service] in ${locQ}"), NEVER "near me".
-The place is ALWAYS written exactly "${locQ}" — that trailing country word is PART OF THE PLACE and is required, not a "national term".
+The place is ALWAYS written exactly "${locQ}"${isUK ? " — with no \"UK\" after it" : " — that trailing country word is PART OF THE PLACE and is required, not a \"national term\""}.
 Do not otherwise widen the question to a country or region: no "for [audience] in England", no "nationwide", no "online".`
     : forceNational
     ? `This business is NATIONAL. Generate ${n} short, single-intent phrases across the INTENT MIX above — no town, no "near me", no broad head-terms, and never one intent reworded to fill another's slots.`
@@ -2506,11 +2505,10 @@ Do not otherwise widen the question to a country or region: no "for [audience] i
          "Wisbech UK" and banned "uk" as a national term. The prompt is fixed, but a prompt is a
          request; this is the check. Repairs rather than rejects: the question is right, only the
          place was under-specified. See qualifyPlace for why that differs from dropMissingTown.
-         ⚠️ The suffix stays "UK" deliberately. The geocoder can now supply "Cambridgeshire", which
-         pins a town far harder — but changing it changes what the engines return for EVERY town,
-         and a day-28 re-measurement compares against day-0 wording. Paul's decision, not a
-         code change. */
-      const pinned = qualifyPlace(localised.questions, town, placeSuffixForCountry(country));
+         ⚠️ UK from 2026-11-20 (Paul): questionPlaceSuffix gives "" so qualifyPlace makes the place NATURAL
+         instead — a stray "UK" is dropped and a town shared abroad gets its local form. Only NEW
+         questions pass through here; a day-28 re-measurement re-asks its stored day-0 strings. */
+      const pinned = qualifyPlace(localised.questions, town, questionPlaceSuffix(country));
       if (pinned.repaired.length) {
         console.warn(
           `[create-ai-audit] country marker added to ${pinned.repaired.length} question(s) for "${town}": `
@@ -2537,7 +2535,7 @@ Do not otherwise widen the question to a country or region: no "for [audience] i
         }
         hybridSet = balanced.questions;
       }
-      const pinned = qualifyPlace(hybridSet, town, placeSuffixForCountry(country));
+      const pinned = qualifyPlace(hybridSet, town, questionPlaceSuffix(country));
       if (pinned.repaired.length) {
         console.warn(
           `[create-ai-audit] hybrid: country marker added to ${pinned.repaired.length} local question(s) for "${town}": `

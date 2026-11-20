@@ -31,8 +31,8 @@ ok(offenders.length === 0, `no control characters in src/ or supabase/functions/
 
 // The regex create-ai-audit uses for both ukTown and locQ, as written in the file.
 const src = readFileSync(join(root, 'supabase/functions/create-ai-audit/index.ts'), 'utf8');
-const locQLine = src.split('\n').find((l) => l.includes('const locQ = isUK && locationText && !/')) ?? '';
-ok(locQLine.includes(String.raw`!/\b(uk|united kingdom|england|scotland|wales)\b/i`), 'locQ uses real \\b word boundaries');
+const locQLine = src.split('\n').find((l) => l.includes('const locQ = isUK && locationText')) ?? '';
+ok(locQLine.includes('ukLocalPlaceName(locationText)'), 'locQ uses the natural UK place (2026-11-20; the regex now lives in seedGuard)');
 const re = /\b(uk|united kingdom|england|scotland|wales)\b/i;
 ok(re.test('Bourne uk') && re.test('Leeds, England'), 'a town that already names the country is recognised (no double " UK")');
 ok(!re.test('Ukfield') && !re.test('Englefield Green'), 'whole words only: Ukfield / Englefield Green are not mistaken for the country');
