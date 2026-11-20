@@ -38,6 +38,7 @@ import { ReportBeforeAfter } from '@/components/ReportBeforeAfter';
 import { type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml';
 import { downloadReportHtml } from '@/lib/aiAuditReportDownload';
 import { isMarketAudit, MARKET_AUDIT_NO_REPORT } from '@/lib/auditReport';
+import { abroadFlagText, isUkAuditCountry } from '@/lib/abroadAnswer';
 import { measuringState } from '@/lib/measuringState';
 import { wholeAuditProgress } from '@/lib/auditRunningProgress';
 import { poolRuns, engineSummary, type PooledInput } from '@/lib/pooledRuns';
@@ -491,6 +492,8 @@ const AiAudit = () => {
      the wizard is the only source, populated once a stored run is loaded. */
   const [resultsBusinessType, setResultsBusinessType] = useState('');
   const [resultsLocationText, setResultsLocationText] = useState('');
+  /* The audit's own country, so a UK audit's answer about somewhere abroad can be flagged (abroadAnswer.ts). */
+  const [resultsCountry, setResultsCountry] = useState('');
   /* What the RESULTS view should use: the loaded run's own values, falling back to the wizard's for
      an audit launched in this session before the mirrors were set. Same shape, and the same reason,
      as `resultsBusinessName || businessName` throughout the results half of this page.
@@ -1006,6 +1009,7 @@ const AiAudit = () => {
        an audit the operator was still composing. */
     setResultsBusinessType(audit.business_type ?? '');
     setResultsLocationText(audit.location_text ?? '');
+    setResultsCountry(String((audit as { country?: string | null }).country ?? ''));
     setRun(latest as RunRow);
     setRunId((latest as RunRow).id);
     // (Was: hydrate the LLM playbook snapshot from results.playbook — nothing reads it now.)
@@ -1559,6 +1563,7 @@ const AiAudit = () => {
          run — and do not depend on the wizard fields staying populated behind it. */
       setResultsBusinessType(businessType);
       setResultsLocationText(locationText);
+      setResultsCountry(country);
       setRun(null); setQueueRows([]);
       setFormOpen(false);   // the audit is away — close the dialog so the results view is not behind it
       setStep('results');
@@ -1794,6 +1799,7 @@ const AiAudit = () => {
     // Mirrors, not the wizard's own fields — reopening a past audit must not overwrite a draft.
     setResultsBusinessType(audit.business_type ?? ''); // so the report's "what this means" line is populated for reopened audits
     setResultsLocationText(audit.location_text ?? ''); // so the competitor filter can drop the location for reopened audits
+    setResultsCountry(String((audit as { country?: string | null }).country ?? ''));
     setRun(latest as RunRow);
     setRunId((latest as RunRow).id);
     setOpenRunId((latest as RunRow).id);
@@ -3644,6 +3650,7 @@ const AiAudit = () => {
                   row={row}
                   businessName={resultsBusinessName}
                   locationText={resultsLoc}
+                  ukAudit={isUkAuditCountry(resultsCountry)}
                   ownWebsite={ownWebsite}
                   /* So an Apify cap failure can say WHEN it clears rather than just that it happened. */
                   apifyCycleEnd={apifyUsage?.cycleEnd ?? null}
@@ -3830,7 +3837,7 @@ function questionFacts(result: EngineMap, businessName: string, locationText: st
   return { reason, namedFirms: firms, clientNamed: named > 0, named, answers };
 }
 
-function QuestionCard({ row, businessName, locationText, ownWebsite, apifyCycleEnd }: { row: QueueRow; businessName: string; locationText: string; ownWebsite: string; apifyCycleEnd?: string | null }) {
+function QuestionCard({ row, businessName, locationText, ukAudit = false, ownWebsite, apifyCycleEnd }: { row: QueueRow; businessName: string; locationText: string; ukAudit?: boolean; ownWebsite: string; apifyCycleEnd?: string | null }) {
   const pending = row.status === 'pending' || row.status === 'running';
   // Failed rows store { error } (not an engine map). They have NO answer data, so no score.
   const failed = row.status === 'failed';
@@ -3891,7 +3898,7 @@ function QuestionCard({ row, businessName, locationText, ownWebsite, apifyCycleE
             {DISPLAY_ENGINES.map((e) => {
               const er = row.result?.[e];
               if (!er) return null;
-              return <EngineRow key={e} engine={e} er={er} businessName={businessName} locationText={locationText} />;
+              return <EngineRow key={e} engine={e} er={er} businessName={businessName} locationText={locationText} ukAudit={ukAudit} />;
             })}
           </div>
         )}
@@ -3900,7 +3907,9 @@ function QuestionCard({ row, businessName, locationText, ownWebsite, apifyCycleE
   );
 }
 
-function EngineRow({ engine, er, businessName, locationText }: { engine: string; er: EngineResult; businessName: string; locationText: string }) {
+function EngineRow({ engine, er, businessName, locationText, ukAudit = false }: { engine: string; er: EngineResult; businessName: string; locationText: string; ukAudit?: boolean }) {
+  /* ⛔ DISPLAY ONLY (2026-11-20): a UK audit's answer that reads as somewhere abroad — never changes a score. */
+  const abroad = ukAudit && engine !== 'google_organic' ? abroadFlagText(er.answer_text) : null;
   // Belt-and-braces: filter raw stored competitors through isRealCompetitor before display, matching
   // the scorecard + buildReportData, so regex-scraped junk can't show even pre re-extraction.
   /* The stored list, as stored. It used to be re-filtered through isRealCompetitor "belt-and-
@@ -3919,6 +3928,9 @@ function EngineRow({ engine, er, businessName, locationText }: { engine: string;
           </span>
         )}
       </div>
+      {abroad && (
+        <p className="mt-2 text-[12px] leading-relaxed text-amber-500" data-abroad-flag>{abroad}</p>
+      )}
       {/* The gut-punch: show what the AI actually said when the business is absent. */}
       {!cellNamed(er) && er.answer_text && (
         <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground italic line-clamp-4">

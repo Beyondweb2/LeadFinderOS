@@ -25,7 +25,7 @@ import { resolveServiceTruth, splitServiceList } from "../../../src/lib/serviceS
 import { excludedServicesOf } from "../../../src/lib/onboardingAnswers.ts";
 import { assessBaselineQuality, acceptedOverrides, unresolvedBlocks, QUALITY_OVERRIDE_MIN_REASON, type QualityOverride } from "../../../src/lib/baselineQuality.ts";
 import { coreQuestions } from "../../../src/lib/customerQuestion.ts";
-import { placeSuffixForCountry } from "../../../src/lib/seedGuard.ts";
+import { questionPlaceSuffix } from "../../../src/lib/seedGuard.ts";
 import { loadMeasurementHealth, retryMissingCells } from "../_shared/audit-baseline.ts";
 import { budgetState } from "../_shared/audit-budget.ts";
 import { maybeSendRemeasureResults } from "../_shared/remeasure-results.ts";
@@ -208,7 +208,7 @@ Deno.serve(async (req) => {
     const scope = discoveryScope(discoveryInput);
     /* The two mandatory core questions for the home town (customerQuestion.ts, C-03). */
     const core = merged.business_category && merged.primary_location
-      ? coreQuestions(merged.business_category, merged.primary_location, placeSuffixForCountry(String(lead.country ?? "")))
+      ? coreQuestions(merged.business_category, merged.primary_location, questionPlaceSuffix(String(lead.country ?? "")))
       : [];
     const store = (row.baseline_discovery && typeof row.baseline_discovery === "object") ? row.baseline_discovery as DiscoveryStore : null;
     const biz = { name: discoveryInput.businessName, location: merged.primary_location, website: merged.website, trade: merged.business_category };

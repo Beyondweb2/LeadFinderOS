@@ -41,6 +41,7 @@ import { isRealCompetitor } from './auditReport.ts';
 import { classifyKnownEntity } from './knownEntities.ts';
 import { articleTrade, pluraliseTrade } from './templateVars.ts';
 import { isAggregatorUrl } from './aggregators.ts';
+import { ukLocalPlaceName } from './seedGuard.ts';
 import { AUDIT_EST_USD_PER_QUESTION, asPence } from './marketView.ts';
 
 export const NICHE_SAMPLE_METHOD = 1;
@@ -93,7 +94,8 @@ export function nicheQuestions(trade: string, town: string): { ok: true; questio
   const a = articleTrade(trade);
   const p = pluraliseTrade(trade);
   if (!a.ok || !p.ok) return { ok: false, reason: 'Name the niche as the business a customer hires — e.g. "roofers", "dog groomers", "accountants".' };
-  const place = `${town.trim()}, UK`;
+  /* No "UK" (Paul, 2026-11-20): the ask runs from the UK; a town shared abroad gets its local form. */
+  const place = ukLocalPlaceName(town);
   return {
     ok: true,
     questions: [

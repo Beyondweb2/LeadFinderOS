@@ -20,8 +20,14 @@
    ⛔ NEVER APPLIED TO A FROZEN OR LOCKED QUESTION. The Hook Audit's questions are kept verbatim (Paul,
    2026-09-30) and a frozen set is replayed word for word. This module only shapes NEW Discovery drafts.
 
+   ⛔ UPDATE 2026-11-20 (Paul): a NEW UK question drops "UK" — every ask already runs from a UK location
+   (countryCode gb). The caller passes an EMPTY suffix for UK (seedGuard questionPlaceSuffix) and a town
+   shared with a bigger place abroad is written the local way ("Boston, Lincolnshire"). Other countries
+   keep ", <country>".
+
    Pure, deterministic. IMPORTED BY AN EDGE FUNCTION (baseline-discovery): relative .ts imports only.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
+import { ukLocalPlaceName } from './seedGuard.ts';
 
 const QUESTION_START = /^(who|whos|who's|what|whats|what's|where|which|can|could|is|are|do|does|did|how|i|im|i'm|i've|ive|my|any|should|would|will|has|have|recommend|please)\b/i;
 
@@ -58,10 +64,12 @@ export function tradePlural(trade: string): string {
 
 const article = (word: string) => (/^[aeiou]/i.test(word) && !/^(uni|eu|one)/i.test(word) ? 'an' : 'a');
 
-/** The place as a person writes it with its country: "Canterbury, UK". */
+/** The place as a person writes it. With a country suffix: "Pune, India". With an EMPTY suffix (a UK audit from
+ *  2026-11-20, questionPlaceSuffix): the town alone, or its local form when the bare name is shared abroad
+ *  ("Boston, Lincolnshire") — never "UK". */
 export function placeWithCountry(town: string, suffix = 'UK'): string {
   const t = townCase(town);
-  return suffix.trim() ? `${t}, ${suffix.trim()}` : t;
+  return suffix.trim() ? `${t}, ${suffix.trim()}` : ukLocalPlaceName(t);
 }
 
 /* ⛔ THE TWO MANDATORY CORE QUESTIONS (C-03). Session C's recommended 20 for a locksmith in Canterbury
@@ -121,12 +129,19 @@ export function toCustomerQuestion(question: string, ctx: CustomerQuestionContex
   if (!s) return s;
   /* Find the approved town (longest first) and put it back in its proper case. */
   const towns = ctx.towns.filter((t) => t && t.trim()).sort((a, b) => b.length - a.length);
-  const town = towns.find((t) => new RegExp(`(^|[^a-z])${escapeRe(t.trim())}([^a-z]|$)`, 'i').test(s)) ?? null;
-  const countryRe = suffix ? new RegExp(`(,\\s*|\\s+)(?:${escapeRe(suffix)}|uk|united kingdom|england|great britain|gb)\\b\\.?`, 'i') : null;
+  let town = towns.find((t) => new RegExp(`(^|[^a-z])${escapeRe(t.trim())}([^a-z]|$)`, 'i').test(s)) ?? null;
+  /* UK (empty suffix): when the question already carries the town's local form ("Boston, Lincolnshire"), that IS the
+     town — otherwise the bare "Boston" inside it would be expanded a second time. */
+  if (!suffix && town) {
+    const local = ukLocalPlaceName(town);
+    if (local !== town.trim() && new RegExp(escapeRe(local), 'i').test(s)) town = local;
+  }
+  const countryWords = suffix ? `${escapeRe(suffix)}|uk|united kingdom|england|great britain|gb` : 'uk|united kingdom|great britain|gb';
+  const countryRe = new RegExp(`(,\\s*|\\s+)(?:${countryWords})\\b\\.?`, 'i');
 
   if (isCustomerQuestion(s)) {
     if (town) {
-      // Re-case the town and make sure it carries ", UK" exactly once.
+      // Re-case the town and make sure it carries its country exactly once (UK: none, 2026-11-20).
       const re = new RegExp(`${escapeRe(town.trim())}((?:,\\s*|\\s+)(?:uk|united kingdom|england|great britain|gb)\\b)?`, 'i');
       s = s.replace(re, placeWithCountry(town, suffix));
     }
@@ -143,7 +158,7 @@ export function toCustomerQuestion(question: string, ctx: CustomerQuestionContex
   const tIdx = lower.lastIndexOf(town.trim().toLowerCase());
   let subject = s.slice(0, tIdx).replace(/\b(in|near|around|for|at)\s*$/i, '').trim();
   let after = s.slice(tIdx + town.trim().length).trim();
-  if (countryRe) after = after.replace(new RegExp(`^(,\\s*)?(?:${escapeRe(suffix)}|uk|united kingdom|england|great britain|gb)\\b\\.?`, 'i'), '').trim();
+  if (countryRe) after = after.replace(new RegExp(`^(,\\s*)?(?:${countryWords}|england)\\b\\.?`, 'i'), '').trim();
   after = after.replace(/^[,.\s]+/, '').trim();
   const place = placeWithCountry(town, suffix);
 

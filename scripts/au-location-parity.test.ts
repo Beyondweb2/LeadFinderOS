@@ -158,7 +158,7 @@ ok(!placeNamesCountry('Leeds WA', 'UK') && !placeNamesCountry('Pune NSW', 'India
   const c = read('supabase/functions/create-ai-audit/index.ts');
   ok(/function mentionsCountryWord\(text: string, word: string\): boolean \{\n\s+return placeNamesCountry\(text, word\);\n\}/.test(c), 'create-ai-audit\'s place strings (locQ, the fallback\'s town) ask placeNamesCountry — no "Sydney NSW Australia", no "Sydney AU Australia"');
   ok(/abroadQ && !mentionsCountryWord\(locationText, abroadQ\) \? `\$\{locationText\}, \$\{abroadQ\}` : locationText/.test(c), 'the customer-style place is never "Sydney, Australia, Australia"');
-  ok(/const locQ = isUK && locationText && !\/\\b\(uk\|united kingdom\|england\|scotland\|wales\)\\b\/i\.test\(locationText\) \? `\$\{locationText\} UK`/.test(c), 'the UK place string is unchanged ("<town> UK")');
+  ok(/const locQ = isUK && locationText \? ukLocalPlaceName\(locationText\)/.test(c), 'the UK place string is the natural town, never "<town> UK" (2026-11-20)');
 }
 
 console.log('\n── the wrong-town guard reads uk_towns only for a UK lead ──');

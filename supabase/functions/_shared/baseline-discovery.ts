@@ -21,7 +21,7 @@ import { discoveryProgress, poolMatchesJob, poolVersion, type DiscoveryProgress,
 import { engineTallies } from "../../../src/lib/discoveryOpportunity.ts";
 import { buildServiceScope, describeScope, inScope, questionScope, type ScopeVerdict } from "../../../src/lib/serviceScope.ts";
 import { areaCoreQuestion, coreQuestions, toCustomerQuestion } from "../../../src/lib/customerQuestion.ts";
-import { placeSuffixForCountry } from "../../../src/lib/seedGuard.ts";
+import { questionPlaceSuffix } from "../../../src/lib/seedGuard.ts";
 /** = src/lib/queueAuditStatus.ts RUN_USABLE (that module is not edge-safe). balanced-baseline.test.ts
  *  fails if the two ever differ. */
 export const DISCOVERY_RUN_USABLE = new Set(["complete", "capped"]);
@@ -128,7 +128,7 @@ export async function generateDiscoveryPool(input: DiscoveryInput, call: { url: 
   for (let i = 0; i < Math.max(...perTown.map((l) => l.length), 0); i++) for (const l of perTown) if (l[i]) interleaved.push(l[i]);
   const allTowns = [input.primaryTown, ...ctx.areas];
   const scope = discoveryScope(input);
-  const suffix = placeSuffixForCountry(input.country);
+  const suffix = questionPlaceSuffix(input.country);
   const cqCtx = { trade: input.businessCategory, towns: allTowns, countrySuffix: suffix };
   /* ⛔ THE CORE QUESTIONS FIRST (C-03, 2026-10-04). Session C's pool for a Canterbury locksmith had no
      plain "locksmith in Canterbury" question at all, and the old fill skipped a town whenever the

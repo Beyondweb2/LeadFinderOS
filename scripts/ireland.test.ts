@@ -55,7 +55,7 @@ eq(placeSuffixForCountry('Ireland'), 'Ireland', 'place suffix');
 eq(hookPlaceFor('Westport', 'Ireland'), 'Westport, Ireland', 'Westport, Ireland');
 eq(hookPlaceFor('Mayo, Ireland', 'Ireland'), 'Mayo, Ireland', 'not pinned twice');
 ok(!/united kingdom|\buk\b/i.test(hookPlaceFor('Cork', 'Ireland')), 'no UK in an Irish question');
-eq(hookPlaceFor('Leeds', 'UK'), 'Leeds UK', 'UK wording unchanged');
+eq(hookPlaceFor('Leeds', 'UK'), 'Leeds', 'UK: the town alone, no "UK" (2026-11-20)');
 
 // Coverage
 ok(COVERAGE_COUNTRIES.includes('Ireland'), 'Ireland is a Coverage country');

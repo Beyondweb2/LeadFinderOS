@@ -144,9 +144,9 @@ ok(placeSuffixForCountry('India') === 'India' && placeSuffixForCountry('UK') ===
 }
 {
   const cai = read('supabase/functions/create-ai-audit/index.ts');
-  ok((cai.match(/qualifyPlace\([^)]*placeSuffixForCountry\(country\)\)/g) ?? []).length === 2 && !/qualifyPlace\((localised|spread)\.questions, town\)/.test(cai), 'both create-ai-audit call sites pass the lead\'s country');
+  ok((cai.match(/qualifyPlace\([^)]*questionPlaceSuffix\(country\)\)/g) ?? []).length === 2 && !/qualifyPlace\((localised|spread)\.questions, town\)/.test(cai), 'both create-ai-audit call sites pass the lead\'s country');
   ok(/abroadQ && locationText && !mentionsCountryWord\(locationText, abroadQ\)/.test(cai), 'the generator prompt names the place "Pune India" for an India lead');
-  ok(/\$\{locationText\} UK`/.test(cai), '…and still "<town> UK" for a UK lead');
+  ok(/isUK && locationText \? ukLocalPlaceName\(locationText\)/.test(cai) && !/\$\{locationText\} UK`/.test(cai), '…and the natural town, never "<town> UK", for a UK lead (2026-11-20)');
 }
 
 console.log('\n── Send window: ONE window (London); a +91 number gets no special hours (India removed 2026-10-15) ──');

@@ -55,8 +55,10 @@ console.log("\n── questions: the same four intents in every town ──");
 const qa = nicheQuestions("Roofers", "Leeds"), qb = nicheQuestions("roofers", "Ely");
 ok(qa.ok && qa.questions.length === 4 && qb.ok, "four questions");
 ok(qa.ok && qb.ok && qa.questions.every((q, i) => q.replace("Leeds", "T") === qb.questions[i].replace("Ely", "T")), "identical wording across towns — only the town changes");
-ok(qa.ok && qa.questions.every((q) => /Leeds, UK/.test(q) && !/near me/i.test(q)), "town disambiguated with UK; no 'near me'");
-ok(qa.ok && qa.questions[0] === "Can you recommend a roofer in Leeds, UK?", "customer wording (article + singular from the one trade map)");
+ok(qa.ok && qa.questions.every((q) => /Leeds/.test(q) && !/\bUK\b/.test(q) && !/near me/i.test(q)), "town named the natural way, no \"UK\" (2026-11-20); no 'near me'");
+ok(qa.ok && qa.questions[0] === "Can you recommend a roofer in Leeds?", "customer wording (article + singular from the one trade map)");
+const qn = nicheQuestions("Roofers", "Boston");
+ok(qn.ok && qn.questions[0] === "Can you recommend a roofer in Boston, Lincolnshire?", "a town shared abroad gets its local form");
 ok(nicheQuestions("accountants", "Ely").ok && (nicheQuestions("accountants", "Ely") as { questions: string[] }).questions[0].includes("an accountant"), "an accountant, not a accountant");
 ok(!nicheQuestions("", "Leeds").ok && !nicheQuestions("plumbers and electricians", "Leeds").ok, "a blank or multi-trade niche is refused");
 

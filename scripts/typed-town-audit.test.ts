@@ -65,7 +65,7 @@ ok(placeSuffixForCountry("Malaysia") === "Malaysia" && placeSuffixForCountry("Si
 ok(hookPlaceFor("Kuala Lumpur", "Malaysia") === "Kuala Lumpur, Malaysia", "Malaysia: comma join");
 ok(hookPlaceFor("Kuala Lumpur, Malaysia", "Malaysia") === "Kuala Lumpur, Malaysia", "…never pinned twice");
 ok(hookPlaceFor("Singapore", "Singapore") === "Singapore", "Singapore's town IS the country — not pinned twice");
-ok(hookPlaceFor("Leeds", "UK") === "Leeds UK" && hookPlaceFor("Leeds UK", "GB") === "Leeds UK", "UK wording is byte-identical");
+ok(hookPlaceFor("Leeds", "UK") === "Leeds" && hookPlaceFor("Leeds UK", "GB") === "Leeds", "UK: the natural town, never \"UK\" (2026-11-20)");
 ok(hookPlaceFor("Pune", "India") === "Pune India", "India keeps its space");
 ok(hookPlaceFor("Leeds", null) === "Leeds", "blank country is left bare, as before");
 
