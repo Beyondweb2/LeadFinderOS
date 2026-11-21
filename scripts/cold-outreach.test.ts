@@ -141,6 +141,8 @@ const EXPECTED_CONTINUATIONS = [
   /* Paul, 2026-11-16: polite_hook + polite_hook2, set up exactly like webdev_hook. */
   "polite_hook",
   "polite_hook2",
+  /* Paul, 2026-11-21: gone_cold, manual only (src/lib/goneCold.ts). */
+  "gone_cold",
 ].sort();
 const actual = [...CONTINUATION_TEMPLATES].sort();
 const added = actual.filter((t) => !EXPECTED_CONTINUATIONS.includes(t));

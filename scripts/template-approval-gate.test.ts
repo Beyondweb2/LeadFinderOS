@@ -16,6 +16,7 @@
    two auto-send settings refuse the name at the moment it is chosen. This file drives both for real.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync } from 'node:fs';
+import { GONE_COLD_APPROVED } from '../src/lib/goneCold.ts';
 import {
   WA_TEMPLATES,
   claimTemplatePayload,
@@ -58,7 +59,9 @@ for (const t of STALE_OFFER_TEMPLATES) {
   try { claimTemplatePayload(t, WA_TEMPLATES[t].lang, 'MC Locksmiths', 'https://findable.live/onboarding/x', FULL); } catch (e) { msg = (e as Error).message; }
   ok(msg.startsWith('unsafe_template_var:template_not_approved:'), `${t}: refused at the one door with the readable-hold prefix`);
 }
-const others = Object.keys(WA_TEMPLATES).filter((t) => t !== AI_SITE_FINDINGS_V2 && !STALE_OFFER_TEMPLATES.has(t));
+/* gone_cold (2026-11-21, src/lib/goneCold.ts): held while its own switch is off (in review at Meta). */
+ok(templateAwaitingApproval('gone_cold') === !GONE_COLD_APPROVED, 'gone_cold: held exactly while GONE_COLD_APPROVED is false');
+const others = Object.keys(WA_TEMPLATES).filter((t) => t !== AI_SITE_FINDINGS_V2 && !STALE_OFFER_TEMPLATES.has(t) && t !== 'gone_cold');
 ok(others.length >= 10, `${others.length} other registered templates checked`);
 ok(others.every((t) => templateAwaitingApproval(t) === false), 'NO other registered template is held by the approval gate');
 for (const t of ['initial_opener_v2', 'audit_followup_fault', 'audit_followup', 'audit_reply']) {

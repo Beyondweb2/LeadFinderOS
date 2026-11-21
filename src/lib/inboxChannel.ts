@@ -68,6 +68,8 @@ export type SmsTemplateAvailability = { ok: true } | { ok: false; reason: string
 export function smsTemplateAvailability(name: string): SmsTemplateAvailability {
   if (name === SMS_LINK_TEMPLATE) return { ok: false, reason: 'Sent from Close on the lead, which makes the right link for this customer.' };
   if (VIDEO_TEMPLATES.has(name)) return { ok: false, reason: 'Has a video — WhatsApp only.' };
+  /* gone_cold (2026-11-21, src/lib/goneCold.ts): a WhatsApp nudge about a WhatsApp message — never a text. */
+  if (name === 'gone_cold') return { ok: false, reason: 'WhatsApp only.' };
   if (WA_TEMPLATE_REQS[name]?.group === 'site') return { ok: false, reason: 'Retired barber template — not sent.' };
   return { ok: true };
 }

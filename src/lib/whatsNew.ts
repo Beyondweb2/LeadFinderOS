@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-21-gone-cold-template', date: '2026-11-21', title: 'New template: Gone cold (waiting for Meta approval)', audience: 'admin',
+    body: 'A new WhatsApp template, Gone cold ("Hey, did you get my last message? Not sure it sent properly"), is in the template picker. It shows Waiting for Meta approval and cannot be sent until Meta approves it. After that it is offered only in a lead’s Inbox conversation, only when we have messaged them and they have not replied, never to anyone who opted out or is on Do Not Contact, and never queued or sent in bulk.',
+    report: {
+      added: ['Gone cold in the template picker, greyed "Waiting for Meta approval" for now.'],
+      changed: [],
+      removed: [],
+      effect: 'Once Meta approves it you can nudge a lead who went quiet with one press, one lead at a time.',
+    } },
   { id: '2026-11-21-unfinished-audits', date: '2026-11-21', title: 'An unfinished audit never shows a final score', audience: 'all',
     body: 'A long audit (39 searches asked three times) ran out of its per-run spending limit part-way and still showed a final-looking 0%. Long audits now get a limit that grows with their size, an unfinished one says "In progress, 94 of 234 answers", and its report header shows the real searches and asks.',
     report: { added: ['"In progress, X of Y answers" on the audit page when answers are missing.', 'A teammate tick-box to use the answers in hand anyway.'], changed: ['Create report and prospect preview wait until an audit has every answer (or the tick-box is used).', 'The per-run spending limit now grows with the number of searches, so long audits finish.', 'The report header says the real searches and asks (for example 39 searches x 3 asks).'], removed: [] ,

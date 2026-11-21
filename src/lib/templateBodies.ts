@@ -29,6 +29,7 @@ import { onboardingTemplateBody, signupLinkTemplateBody } from './whatsappLinkTe
 import { WELCOME_PACK_TEMPLATE_BODY } from './welcomePackWhatsApp.ts';
 import { reportOfferBody } from './reportOfferTemplate.ts';
 import { dashboardTemplateTranscript } from './dashboardTemplates.ts';
+import { goneColdBody } from './goneCold.ts';
 import { politeHook2Body, politeHookBody, webdevExampleBody, webdevHookBody, webdevReportBody } from './webdevReport.ts';
 
 // ── Findable, link-bearing ────────────────────────────────────────────────
@@ -452,6 +453,8 @@ export const READABLE_TEMPLATE_BODIES: Record<string, TemplateBodyFn> = {
   /* polite_hook / polite_hook2: no variables (src/lib/webdevReport.ts), shared with whatsapp-send.ts. */
   polite_hook: () => politeHookBody(),
   polite_hook2: () => politeHook2Body(),
+  /* gone_cold: no variables (src/lib/goneCold.ts), shared with whatsapp-send.ts. */
+  gone_cold: () => goneColdBody(),
   audit_reply: auditReplyBody,
   video_template: videoTemplateBody,
   competitor_hook: competitorHookBody,

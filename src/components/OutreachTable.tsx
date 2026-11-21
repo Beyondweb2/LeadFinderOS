@@ -164,6 +164,7 @@ import { checkReportOffer, summariseReportOffer, type ReportOfferSummary } from 
 import { ReportOfferPreviewBox } from '@/components/ReportOfferPreviewBox';
 /** What a salesperson can bulk-queue: the approved openers, and the report offer (2026-10-14). */
 import { getTemplateSendability } from '@/lib/whatsappTemplates';
+import { GONE_COLD_APPROVED, MANUAL_ONLY_TEMPLATES } from '@/lib/goneCold';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { logDataAccess } from '@/lib/dataAccessLog';
 import { maySetStatus } from '@/lib/access';
@@ -416,6 +417,8 @@ export function OutreachTable({
   const team = useTeamDirectory();
   /* An initial opener is refused only while Meta has not approved it — there is no selected opener. */
   const openerBlocked = (t: string) => isInitialOpener(t) && !getTemplateSendability(t, { shareToken: null }, {}).ok;
+  /* gone_cold (src/lib/goneCold.ts): manual, one lead at a time — never queued. Shown greyed with why. */
+  const manualOnly = (t: string) => MANUAL_ONLY_TEMPLATES.has(t);
   const { isPhoneCopied, markMultipleAsCopied } = useCopiedPhones();
   const isMobile = useIsMobile();
   const ITEMS_PER_PAGE = isMobile ? ITEMS_PER_PAGE_MOBILE : ITEMS_PER_PAGE_DESKTOP;
@@ -3817,9 +3820,10 @@ export function OutreachTable({
                 {WHATSAPP_TEMPLATES.map((t) => {
                   const blocked = openerBlocked(t.value);
                   const stale = STALE_OFFER_TEMPLATES.has(t.value);
+                  const manual = manualOnly(t.value);
                   return (
-                    <SelectItem key={t.value} value={t.value} disabled={blocked || stale}>
-                      <span className="flex flex-col"><span>{t.label}</span>{blocked && <span className="text-[10px] text-amber-600">Waiting on Meta approval</span>}</span>
+                    <SelectItem key={t.value} value={t.value} disabled={blocked || stale || manual}>
+                      <span className="flex flex-col"><span>{t.label}</span>{blocked && <span className="text-[10px] text-amber-600">Waiting on Meta approval</span>}{manual && <span className="text-[10px] text-amber-600">{GONE_COLD_APPROVED ? 'Send by hand from the Inbox — never queued' : 'Waiting for Meta approval'}</span>}</span>
                     </SelectItem>
                   );
                 })}
@@ -3844,7 +3848,7 @@ export function OutreachTable({
           )}
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setQueueDialogOpen(false)}>Cancel</Button>
-            <Button size="sm" disabled={!listComplete || !queueTemplate || openerBlocked(queueTemplate) || selectionOwners.refuse}
+            <Button size="sm" disabled={!listComplete || !queueTemplate || openerBlocked(queueTemplate) || manualOnly(queueTemplate) || selectionOwners.refuse}
               variant={selectionOwners.needsConfirm ? 'outline' : 'default'}
               className={selectionOwners.needsConfirm ? 'border-amber-500/70 text-amber-800 dark:text-amber-300' : undefined}
               onClick={() => handleQueueForWhatsApp(queueTemplate)}>

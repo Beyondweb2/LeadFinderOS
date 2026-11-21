@@ -570,6 +570,8 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
   /* polite_hook / polite_hook2 (Paul, 2026-11-16) — short follow-ups with no variables. A follow-up only (never a first message). */
   { value: 'polite_hook', label: 'Polite hook — "Ah nice, this actually might be useful to you then…"' },
   { value: 'polite_hook2', label: 'Polite hook 2 — "Ah nice, I’m actually a web dev myself…"' },
+  /* gone_cold (Paul, 2026-11-21) — to a lead we messaged who has not replied. Manual, one lead at a time (src/lib/goneCold.ts). */
+  { value: 'gone_cold', label: 'Gone cold — "Hey, did you get my last message?"' },
   { value: 'audit_reply', label: 'Audit reply (report + competitors)' },
   /* 🔴 THE LABEL SAID "Audit result hook (outreach)" AND THAT IS THE NAME OF THE TEMPLATE THIS ONE
      REPLACED. `audit_result_hook` was retired on 2026-09-12; `video_template` is its successor,

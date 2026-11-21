@@ -10,6 +10,7 @@ import path from "node:path";
 import { WHATSAPP_TEMPLATES } from "../src/types/outreach.ts";
 import { isColdOutreachTemplate } from "../src/lib/coldOutreach.ts";
 import { STALE_OFFER_TEMPLATES } from "../src/lib/findableOffer.ts";
+import { MANUAL_ONLY_TEMPLATES } from "../src/lib/goneCold.ts";
 import { QUEUE_SKIP_LABEL, refusalText } from "../src/lib/salesCrm.ts";
 
 let f = 0;
@@ -22,7 +23,9 @@ const cold = arr("v_cold"), follow = arr("v_followups"), blocked = arr("v_blocke
 
 console.log("── the SQL lists = the code's lists ──");
 const all = WHATSAPP_TEMPLATES.map((t) => t.value);
-const sendable = all.filter((v) => !STALE_OFFER_TEMPLATES.has(v));
+/* gone_cold (2026-11-21) is MANUAL ONLY: never queueable, by anyone. */
+const sendable = all.filter((v) => !STALE_OFFER_TEMPLATES.has(v) && !MANUAL_ONLY_TEMPLATES.has(v));
+ok([...MANUAL_ONLY_TEMPLATES].every((v) => !cold.includes(v) && !follow.includes(v)), "manual-only templates (gone_cold) are never queueable");
 ok(sendable.every((v) => cold.includes(v) || follow.includes(v)), `every sendable template is queueable by a salesperson (${sendable.filter((v) => !cold.includes(v) && !follow.includes(v)).join(", ") || "all"})`);
 ok([...cold, ...follow].every((v) => all.includes(v)), "nothing queueable that is not in WHATSAPP_TEMPLATES");
 ok(cold.every((v) => isColdOutreachTemplate(v)) && follow.every((v) => !isColdOutreachTemplate(v)), "cold / follow-up split = isColdOutreachTemplate");

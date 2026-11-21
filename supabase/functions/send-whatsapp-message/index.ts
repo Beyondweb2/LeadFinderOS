@@ -39,7 +39,8 @@ import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
 import { canWorkLead, isClientLead, refusalBody, resolveActor, type Actor } from "../_shared/access.ts";
 import { guardAction } from "../_shared/protection.ts";
-import { checkOptedOut, checkWrongNumber } from "../_shared/suppression.ts";
+import { checkOptedOut, checkSuppressed, checkWrongNumber } from "../_shared/suppression.ts";
+import { GONE_COLD_APPROVED, GONE_COLD_STOP_STATUSES, GONE_COLD_TEMPLATE, goneColdRefusal } from "../../../src/lib/goneCold.ts";
 import { OPT_OUT_REFUSAL_REASON, optOutBlocksTemplate } from "../../../src/lib/marketingConsent.ts";
 import { STRONG_STATUSES, postgrestList } from "../../../src/lib/strongStatuses.ts";
 import { QA_REFUSAL_REASON } from "../../../src/lib/qaSafety.ts";
@@ -135,7 +136,9 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
 /* 2026-11-16a: in-window free text from EVERY door (lead popup, dashboard, Quick Close, welcome pack, bulk), judged with the landing
    margin (inWindowFreeText.ts freeWindowOpen); free_only:true refuses anything that would go as the paid template (would_be_paid). */
 /* 2026-11-16b: polite_hook + polite_hook2 follow-ups (no variables; needs prior WhatsApp; Meta live status first). */
-const BUILD_ID = "2026-11-18a-audits-always-finish";
+/* 2026-11-21a: gone_cold (no variables; manual only; only to a lead we messaged who has not replied, outside the window; opt-out and
+   Do Not Contact block; sends only when Meta's LIVE status is APPROVED, UNKNOWN refuses too). */
+const BUILD_ID = "2026-11-21a-gone-cold";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -484,6 +487,36 @@ Deno.serve(async (req) => {
     const windowOpen = lastInboundAt != null && Date.now() - lastInboundAt < WINDOW_MS;
     /* For turning a template into a FREE message: open only if it lands inside the 24 hours with the margin to spare. */
     const freeWindow = freeWindowOpen(lastInboundAt);
+
+    /* ⛔ gone_cold (2026-11-21, src/lib/goneCold.ts) — before the payload and the dry-run return, so Preview reports it too.
+       The switch first; then Meta's LIVE status must be APPROVED (an unreadable status refuses, never "try it"); then opt-outs,
+       Do Not Contact (any suppression row or a stopped lead status) and the thread: messaged, no reply, window closed. Fails closed. */
+    if (templateName === GONE_COLD_TEMPLATE) {
+      let approved = false;
+      if (GONE_COLD_APPROVED) {
+        const gcAvail = await templateAvailability(service, templateName);
+        if (gcAvail.status !== "APPROVED") {
+          return json({ ok: false, error: "template_" + gcAvail.status.toLowerCase(), template: templateName, reason: gcAvail.status === "UNKNOWN" ? "Could not read Meta's approval for this template - nothing was sent." : "Meta says this template is " + gcAvail.status.toLowerCase().replace("_", " ") + " - nothing was sent." }, 200);
+        }
+        approved = true;
+      }
+      const gcOpt = await checkOptedOut(service, { phone: "+" + to, leadId: resolvedLeadId });
+      const gcSupp = await checkSuppressed(service, { phone: "+" + to, leadId: resolvedLeadId });
+      const { data: gcLead, error: gcLeadErr } = resolvedLeadId
+        ? await service.from("outreach_leads").select("status").eq("id", resolvedLeadId).maybeSingle()
+        : { data: null, error: null };
+      const gcStatus = String((gcLead as { status?: string | null } | null)?.status ?? "");
+      const { data: gcThread, error: gcThreadErr } = await service.from("whatsapp_messages")
+        .select("direction, created_at, status, template_name").eq("phone", to).order("created_at", { ascending: false }).limit(200);
+      const gc = goneColdRefusal({
+        approved,
+        optedOut: gcOpt,
+        doNotContact: gcLeadErr ? null : (gcSupp.suppressed || GONE_COLD_STOP_STATUSES.has(gcStatus)),
+        thread: gcThreadErr ? null : ((gcThread ?? []) as { direction: "inbound" | "outbound"; created_at: string; status?: string | null; template_name?: string | null }[]),
+        now: Date.now(),
+      });
+      if (gc) return json({ ok: false, error: gc.code, template: templateName, reason: gc.reason }, 200);
+    }
 
     /* ⛔ QA SAFETY (2026-10-04, src/lib/qaSafety.ts). A QA fixture gets the TEST-MODE env for this one
        request — every branch below (window, payload, simulated record, response) then behaves exactly

@@ -103,7 +103,7 @@ const NOW = Date.parse('2026-11-16T12:00:00Z');
   ok(gate.includes('freeOnly && usedTemplate ? async () => ({ ok: false as const, error: "would_be_paid"'), 'free_only outside their send hours → refused, nothing queued (a queued send could go paid later)');
   ok(s.includes('if (env.live && !windowOpen) return json({ ok: false, error: "window_closed" }, 200);'), 'a typed free-text reply keeps its own gate, unchanged');
   /* A later change may bump BUILD_ID again (2026-11-16b polite_hook did): pin this change's own log line, not today's id. */
-  ok(s.includes('/* 2026-11-16a: in-window free text from EVERY door') && /const BUILD_ID = "2026-11-1[6-9][a-z]-/.test(s), 'BUILD_ID bumped');
+  ok(s.includes('/* 2026-11-16a: in-window free text from EVERY door') && /const BUILD_ID = "2026-11-(1[6-9]|[23][0-9])[a-z]-/.test(s), 'BUILD_ID bumped');
 }
 
 /* ── 5. the browser: one request field, the bulk split, the labels ── */

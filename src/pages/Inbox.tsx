@@ -18,6 +18,7 @@ import { bulkFreePaidLine, FREE_SEND_LABEL, PAID_SEND_LABEL, PAID_TEMPLATE_COST_
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useInbox, windowFor, normalizeWaNumber, type WaConversation, type LeadLite, type WaMessage } from '@/hooks/useInbox';
 import { getTemplateSendability, WA_TEMPLATE_REQS, canonicalTemplate, templateGroupLabel } from '@/lib/whatsappTemplates';
+import { GONE_COLD_APPROVED, GONE_COLD_STOP_STATUSES, GONE_COLD_TEMPLATE, goneColdRefusal } from '@/lib/goneCold';
 import { useToast } from '@/hooks/use-toast';
 import { unresolvedTokens } from '@/lib/leadUtils';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -276,6 +277,7 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
   webdev_example: 'Web dev example (app pitch + sample report)',
   polite_hook: 'Polite hook ("Ah nice, … built it myself")',
   polite_hook2: 'Polite hook 2 ("Ah nice, I’m actually a web dev myself")',
+  gone_cold: 'Gone cold ("Hey, did you get my last message?")',
   onboarding_followup: 'Onboarding follow-up',
   book_call: 'Arrange a call',
   re_engage_49: 'Re-engage (gone quiet)',
@@ -1693,7 +1695,14 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       const c = cleanNeededItem(neededItem);
       return c.ok ? d : { ok: false, reason: 'reason' in c && c.reason === 'needed_item_too_long' ? `Keep what you need under ${NEEDED_ITEM_MAX} characters.` : 'Type what you need from them first.' };
     }
-    const base = getTemplateSendability(name, { shareToken: null }, { reportSlug: activeReport?.auditId ?? null, hasSiteFault: active?.leadId ? hasSiteFaultLeadIds.has(active.leadId) : false, hasSiteFindings: active?.leadId ? hasSiteFindingsLeadIds.has(active.leadId) : false });
+    /* gone_cold (src/lib/goneCold.ts): only this one-lead screen can judge the thread, so only it supplies the verdict (a text greys it: smsTemplateAvailability).
+       The server re-checks everything (Meta's live status, opt-outs, Do Not Contact, the thread) before it sends. */
+    const goneCold = name === GONE_COLD_TEMPLATE && active?.leadId ? (() => {
+      const st = String((activeLead as { status?: string | null } | undefined)?.status ?? '');
+      const r = goneColdRefusal({ approved: GONE_COLD_APPROVED, optedOut: st === 'opted_out', doNotContact: GONE_COLD_STOP_STATUSES.has(st), thread: thread as unknown as { direction: 'inbound' | 'outbound'; created_at: string; status?: string | null; template_name?: string | null }[], now: Date.now() });
+      return r ? { ok: false, reason: r.reason } : { ok: true };
+    })() : undefined;
+    const base = getTemplateSendability(name, { shareToken: null }, { reportSlug: activeReport?.auditId ?? null, hasSiteFault: active?.leadId ? hasSiteFaultLeadIds.has(active.leadId) : false, hasSiteFindings: active?.leadId ? hasSiteFindingsLeadIds.has(active.leadId) : false, goneCold });
     if (!base.ok || !sms) return base;
     return smsTemplateAvailability(name); // template-availability difference: video / retired barber / Quick Close link templates are greyed with a reason
   };
