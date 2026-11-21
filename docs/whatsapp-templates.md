@@ -837,3 +837,27 @@ English, Marketing, no header/footer/buttons, **zero variables** (`vars: []`). B
 `NEEDS_PRIOR_WHATSAPP`), treated as approved with Meta's LIVE status read first at both senders (BUILD_ID
 `2026-11-15d-webdev-hook`), in both pickers (needs no link and no audit), Inbox label "Web dev hook", "Put in message box" gets
 the full wording. Test: `scripts/webdev-hook-template.test.ts`.
+
+## `gone_cold` — "did you get my last message?", manual only, waiting for Meta (2026-11-21, Paul)
+
+Body, exactly: "Hey, did you get my last message?\n\nNot sure it sent properly". English, Marketing, **no variables**. Meta template
+id 2575430126271853, business 1693100295675184 — **Paul confirmed (2026-11-21) this is the Move37 account V1 sends from**; the code
+could not prove it, because the status sync could not identify the sending account (every `whatsapp_template_status` row read
+`no_waba`). In Meta review when added. Rules live in `src/lib/goneCold.ts`.
+- **Approval, two halves, both fail closed.** `GONE_COLD_APPROVED` (false) is read FIRST by `getTemplateSendability` (every picker
+  shows "Waiting for Meta approval") and by `templateAwaitingApproval` (the one server door, `claimTemplatePayload`). Once flipped,
+  `send-whatsapp-message` still reads Meta's LIVE status and sends only on APPROVED — **UNKNOWN refuses too** (unlike the older
+  follow-ups that try and let Meta decide). BUILD_ID `2026-11-21a-gone-cold`.
+- **Who it may go to (`goneColdRefusal`, both the Inbox picker and the sender):** we have a non-failed WhatsApp message to the
+  number, nothing came in after our last one, no inbound in the last 24 hours, and our last message was not already gone_cold.
+  Opt-out (`checkOptedOut`), Do Not Contact (any `contact_suppressions` row, or lead status not_interested / wrong_number /
+  opted_out / do_not_contact) and an unreadable answer all refuse. Checked before the dry-run return, so Preview reports it.
+- **Manual only (`MANUAL_ONLY_TEMPLATES`):** only the Inbox one-lead picker supplies the thread verdict, so every other picker greys
+  it; the Inbox bulk planner skips it; the Outreach queue dialog greys it and disables Queue; `process-whatsapp-queue` refuses it
+  in the drip, the first-reply lane and both auto-send settings; it is in no `sales_queue_opener` list
+  (`sales-templates-parity.test.ts` pins that). Texts grey it (`smsTemplateAvailability`, WhatsApp only).
+- **Status sync:** `_shared/template-status.ts` now also looks in `KNOWN_BUSINESS_IDS` (the Move37 business) when the token lists
+  nothing; the owning-number check still picks exactly the account that owns `WHATSAPP_PHONE_NUMBER_ID`, or none. Setting the secret
+  `WHATSAPP_BUSINESS_ACCOUNT_ID` remains the direct fix.
+- **When Meta approves:** flip `GONE_COLD_APPROVED` to true, run `scripts/gone-cold-template.test.ts` (update its switch line),
+  deploy `send-whatsapp-message` + the SPA. Test: `scripts/gone-cold-template.test.ts`.

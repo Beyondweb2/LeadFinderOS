@@ -21,6 +21,10 @@ export const APPROVED_TTL_MS = 30 * 60_000;
 export const OTHER_TTL_MS = 3 * 60_000;
 export const FAILED_TTL_MS = 60_000;
 
+/** Meta business portfolio ids to look in for the sending account (ids, not secrets). 1693100295675184 = the Move37 business V1
+ *  sends from (Paul, 2026-11-21, with the gone_cold template). */
+export const KNOWN_BUSINESS_IDS: readonly string[] = ["1693100295675184"];
+
 let wabaMemo: string | null = null;
 let wabaWhy = "";
 
@@ -49,6 +53,11 @@ async function wabaId(token: string): Promise<string | null> {
     const biz = await graph("me/businesses?fields=id&limit=10", token);
     const bizIds = ((biz.data?.data as Array<{ id?: string }> | undefined) ?? []).map((b) => String(b.id)).filter(Boolean);
     notes.push(`me/businesses:${biz.status}:${bizIds.length}`);
+    /* 2026-11-21: debug_token and me/businesses list nothing for this token (every cache row read no_waba), so the Move37 business
+       Paul named (KNOWN_BUSINESS_IDS) is asked too, and tried as an account id itself. Safe: these are only CANDIDATES — the
+       owning-number check below still picks exactly the one account that owns WHATSAPP_PHONE_NUMBER_ID, or none. */
+    for (const k of KNOWN_BUSINESS_IDS) { if (!bizIds.includes(k)) bizIds.push(k); cands.add(k); }
+    notes.push(`known:${KNOWN_BUSINESS_IDS.length}`);
     for (const b of bizIds) {
       for (const edge of ["owned_whatsapp_business_accounts", "client_whatsapp_business_accounts"]) {
         const w = await graph(`${b}/${edge}?fields=id&limit=25`, token);

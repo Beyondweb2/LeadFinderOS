@@ -17,6 +17,7 @@ import { paidMode } from "../_shared/protection.ts";
 import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.ts";
 import { checkSuppressed, suppress } from "../_shared/suppression.ts";
 import { isColdOutreachTemplate, NEEDS_PRIOR_WHATSAPP, NEEDS_PRIOR_WHATSAPP_REASON } from "../../../src/lib/coldOutreach.ts";
+import { MANUAL_ONLY_REASON, MANUAL_ONLY_TEMPLATES } from "../../../src/lib/goneCold.ts";
 import { rivalHookDecision, templateNeedsRivals } from "../../../src/lib/rivalHook.ts";
 /* ⚠️ templateBodyParams IS DELIBERATELY NOT IMPORTED ANY MORE. This file used to assemble one
    send payload by hand from it, which is how video_template went out without its video header for
@@ -308,6 +309,8 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   /* polite_hook / polite_hook2 (2026-11-16) — ZERO variables. MIRRORS whatsapp-send.ts. */
   polite_hook: { lang: "en", vars: [] },
   polite_hook2: { lang: "en", vars: [] },
+  /* gone_cold (2026-11-21) — ZERO variables. MIRRORS whatsapp-send.ts. ⛔ MANUAL ONLY: this queue refuses it (MANUAL_ONLY_TEMPLATES). */
+  gone_cold: { lang: "en", vars: [] },
   // Was MISSING while being selectable in the bulk picker, so a lead set to audit_reply silently
   // received booking_page_intro — a barber booking pitch. No lead was ever queued with it, so
   // nothing mis-sent, but the gap was live.
@@ -1229,6 +1232,7 @@ Deno.serve(async (req) => {
       const raw = typeof body.template === "string" ? body.template.trim() : "";
       const next: string | null = raw ? raw : null;
       if (next && !WA_TEMPLATES[next]) return json({ ok: false, error: "unknown_template" }, 400);
+      if (next && MANUAL_ONLY_TEMPLATES.has(next)) return json({ ok: false, error: "manual_only", detail: MANUAL_ONLY_REASON }, 400);
       /* ⛔ REGISTERED IS NOT SENDABLE. An auto-send template fires on its own for every qualifying
          lead, so storing one Meta has not approved would turn one click into a stream of failed sends
          to real prospects. claimTemplatePayload would hold each of them anyway; refusing it HERE means
@@ -1247,6 +1251,7 @@ Deno.serve(async (req) => {
       const raw = typeof body.template === "string" ? body.template.trim() : "";
       const next: string | null = raw ? raw : null;
       if (next && !WA_TEMPLATES[next]) return json({ ok: false, error: "unknown_template" }, 400);
+      if (next && MANUAL_ONLY_TEMPLATES.has(next)) return json({ ok: false, error: "manual_only", detail: MANUAL_ONLY_REASON }, 400);
       // ⛔ Same rule as the completion template above — registered is not sendable.
       if (next && templateAwaitingApproval(next)) return json({ ok: false, error: "template_not_approved", detail: `${next} is waiting on Meta approval` }, 400);
       const { error: sErr } = await service.from("whatsapp_outreach_state")
@@ -1661,6 +1666,8 @@ Deno.serve(async (req) => {
           }
           const tmpl = WA_TEMPLATES[templateName];
           if (!tmpl) { await finish("flagged_error", `unknown_template:${templateName}`); results[row.lead_id] = "flagged_error"; continue; }
+          /* ⛔ gone_cold (src/lib/goneCold.ts) is manual only — never sent from this lane. */
+          if (MANUAL_ONLY_TEMPLATES.has(templateName)) { await finish("flagged_error", `manual_only:${templateName}`); results[row.lead_id] = "flagged_error"; continue; }
           let payload: Record<string, unknown>;
           let renderedBody: string;
           // Hoisted for the send-audit row below: the name and the outbound link actually used.
@@ -2356,6 +2363,14 @@ Deno.serve(async (req) => {
         business: lead.business_name,
         ...statusPayload,
       }, 200);
+    }
+    /* ⛔ MANUAL ONLY (gone_cold, src/lib/goneCold.ts): the drip never sends it; the lead leaves the queue with the reason. */
+    if (MANUAL_ONLY_TEMPLATES.has(requestedTemplate)) {
+      await service.from("outreach_leads").update({
+        status: statusBeforeQueue(lead.previous_status as string | null),
+        whatsapp_delivery_status: "manual_only", contact_method: null, queued_at: null, previous_status: null,
+      }).eq("id", lead.id);
+      return json({ ok: true, skipped: "manual_only", reason: MANUAL_ONLY_REASON, lead_id: lead.id, business: lead.business_name, ...statusPayload });
     }
     if (!TEMPLATES[requestedTemplate]) {
       await service.from("outreach_leads").update({

@@ -13,6 +13,7 @@ import { AI_SITE_FINDINGS_V2, AI_SITE_FINDINGS_V2_APPROVED } from './siteFinding
 import { STALE_OFFER_TEMPLATES } from './findableOffer.ts';
 import { isInitialOpener, openerApproved } from './openerVariant.ts';
 import { isColdOutreachTemplate } from './coldOutreach.ts';
+import { GONE_COLD_APPROVED, GONE_COLD_TEMPLATE, GONE_COLD_WAITING_REASON, MANUAL_ONLY_REASON } from './goneCold.ts';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    🔴 TEMPLATES THAT WERE RE-REGISTERED AT META UNDER A NEW NAME, AND THE HISTORY THAT CARRIES THE
@@ -106,6 +107,8 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
   /* polite_hook / polite_hook2 (2026-11-16) - short follow-ups with NO variables: no name, no link, no audit needed. */
   polite_hook:            { needsUrl: false, needsAudit: false, group: 'followup' },
   polite_hook2:           { needsUrl: false, needsAudit: false, group: 'followup' },
+  /* gone_cold (2026-11-21) - "did you get my last message?", NO variables; its own gate is in getTemplateSendability (goneCold.ts). */
+  gone_cold:              { needsUrl: false, needsAudit: false, group: 'followup' },
   // audit_reply is not yet wired into the manual send path; its rule lives here so the guard is
   // ready the moment it's added to the picker + sender (no drift when that happens).
   audit_reply:            { needsUrl: false, needsAudit: true,  group: 'audit' },
@@ -210,6 +213,9 @@ export interface SendabilityAudit {
    *  findings from ({{6}} of ai_site_findings_v2). Presence gates that one template; every other
    *  template ignores it. Resolved per-lead by the caller from resolveSiteFindings. */
   hasSiteFindings?: boolean;
+  /** gone_cold only (src/lib/goneCold.ts): the caller's verdict from the open thread (goneColdRefusal). ABSENT = this screen
+   *  cannot judge the thread (a bulk send, the queue, a screen without the conversation) — gone_cold is then refused. */
+  goneCold?: { ok: boolean; reason?: string };
 }
 
 export interface Sendability {
@@ -250,6 +256,13 @@ export function getTemplateSendability(
   }
   /* The registered body quotes the retired £29.99 monthly and "Stop any time" (2026-09-23) — blocked
      until a corrected version is approved at Meta. Same set the server refuses on. */
+  /* ⛔ gone_cold (2026-11-21, src/lib/goneCold.ts): Meta's approval first, then the thread verdict only a one-lead screen can
+     give. No verdict = not offered (bulk, queue, any screen without the conversation) — manual, one lead at a time. */
+  if (template === GONE_COLD_TEMPLATE) {
+    if (!GONE_COLD_APPROVED) return { ok: false, reason: GONE_COLD_WAITING_REASON };
+    if (!audit?.goneCold) return { ok: false, reason: MANUAL_ONLY_REASON };
+    return audit.goneCold.ok ? { ok: true } : { ok: false, reason: audit.goneCold.reason ?? 'Not for this lead.' };
+  }
   if (STALE_OFFER_TEMPLATES.has(template)) {
     return { ok: false, reason: 'Quotes the old £29.99/month offer — blocked until the corrected version is approved at Meta.' };
   }
