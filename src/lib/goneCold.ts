@@ -17,8 +17,9 @@
 
 export const GONE_COLD_TEMPLATE = 'gone_cold';
 
-/** ⛔ The switch. false until Meta approves the template (then one line + deploy). The server still reads Meta's live status. */
-export const GONE_COLD_APPROVED = false;
+/** ⛔ The switch. Paul, 2026-11-21: ON — treated as approved. The sender no longer pre-checks Meta's live status for
+ *  gone_cold; if Meta rejects a send, the normal send error shows. Opt-out / DNC / thread rules and manual-only are unchanged. */
+export const GONE_COLD_APPROVED = true;
 
 export const GONE_COLD_WAITING_REASON = 'Waiting for Meta approval';
 

@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-21-gone-cold-on', date: '2026-11-21', title: 'Gone cold template is switched on', audience: 'admin',
+    body: 'The Gone cold WhatsApp template is now a normal choice in a lead’s Inbox conversation. The same rules still apply: only a lead we messaged who has not replied, never anyone who opted out or is on Do Not Contact, one lead at a time, never queued. If Meta refuses it, you see the normal send error.',
+    report: {
+      added: [],
+      changed: ['Gone cold is no longer greyed "Waiting for Meta approval" in the Inbox picker.'],
+      removed: ['The extra Meta approval check before a Gone cold send.'],
+      effect: 'You can nudge a lead who went quiet now, one lead at a time.',
+    } },
   { id: '2026-11-21-gone-cold-template', date: '2026-11-21', title: 'New template: Gone cold (waiting for Meta approval)', audience: 'admin',
     body: 'A new WhatsApp template, Gone cold ("Hey, did you get my last message? Not sure it sent properly"), is in the template picker. It shows Waiting for Meta approval and cannot be sent until Meta approves it. After that it is offered only in a lead’s Inbox conversation, only when we have messaged them and they have not replied, never to anyone who opted out or is on Do Not Contact, and never queued or sent in bulk.',
     report: {
