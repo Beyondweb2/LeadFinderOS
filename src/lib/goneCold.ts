@@ -71,9 +71,7 @@ export function goneColdRefusal(f: GoneColdFacts): { code: string; reason: strin
   const outs = ok.filter((m) => m.direction === 'outbound').sort((a, b) => ts(b) - ts(a));
   if (!outs.length) return { code: 'gone_cold_never_messaged', reason: 'Only for a lead we have already messaged on WhatsApp — nothing was sent.' };
   const lastOut = outs[0];
-  const ins = ok.filter((m) => m.direction === 'inbound');
-  if (ins.some((m) => ts(m) >= ts(lastOut))) return { code: 'gone_cold_they_replied', reason: 'They replied after your last message — reply to them instead.' };
-  if (ins.some((m) => f.now - ts(m) < WINDOW_MS_24H)) return { code: 'gone_cold_window_open', reason: 'Their 24-hour window is open — type a normal reply instead.' };
+  /* Paul, 2026-11-21: allowed even when they sent the last message (no "they replied" / 24-hour-window refusal). */
   if (String(lastOut.template_name ?? '') === GONE_COLD_TEMPLATE) return { code: 'gone_cold_already_sent', reason: 'Your last message was already this nudge — nothing was sent.' };
   return null;
 }

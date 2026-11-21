@@ -70,8 +70,8 @@ ok(goneColdRefusal(cold({ thread: [out(72, { status: 'failed' }), out(48)] })) =
 console.log('── the thread rules ──');
 ok(goneColdRefusal(cold({ thread: [] }))?.code === 'gone_cold_never_messaged', 'never messaged → refused');
 ok(goneColdRefusal(cold({ thread: [out(72, { status: 'failed' })] }))?.code === 'gone_cold_never_messaged', 'only failed sends → refused');
-ok(goneColdRefusal(cold({ thread: [out(72), inn(60)] }))?.code === 'gone_cold_they_replied', 'they replied after our last message → refused');
-ok(goneColdRefusal(cold({ thread: [inn(5), out(2)] }))?.code === 'gone_cold_window_open', 'inbound within 24h (window open) → refused');
+ok(goneColdRefusal(cold({ thread: [out(72), inn(60)] })) === null, 'they replied after our last message → allowed (Paul, 2026-11-21)');
+ok(goneColdRefusal(cold({ thread: [inn(5), out(2)] })) === null, 'inbound within 24h → allowed (Paul, 2026-11-21)');
 ok(goneColdRefusal(cold({ thread: [out(72), out(30, { template_name: 'gone_cold' })] }))?.code === 'gone_cold_already_sent', 'our last message was already gone_cold → refused');
 ok(goneColdRefusal(cold({ thread: null }))?.code === 'contact_guard_unreadable', 'thread unreadable → refused');
 
