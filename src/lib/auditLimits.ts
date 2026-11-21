@@ -17,6 +17,20 @@ import { APIFY_RESERVE_PCT, POOL_DAILY_CAP_USD } from './auditBudget.ts';
 /** Per-RUN Apify cost ceiling: a run that would pass it stops starting questions. */
 export const AUDIT_RUN_CAP_USD = 1.0;
 
+/** What ONE question may cost inside a run: eight actor starts at the per-question estimate (SOURCES.ai_search.estCostUsd,
+ *  $0.0125) — a normal question uses two or three (ChatGPT+Gemini, Google AI beside it, a lane retry). */
+export const AUDIT_PER_QUESTION_CAP_USD = 0.1;
+
+/** The cap for ONE run of `questionCount` questions: never below the flat floor, and growing with the question count.
+ *  ⛔ WHY (21 Nov 2026, London Domestic Maintenance Ltd): the flat $1 was sized for runs of up to 20 questions with one start
+ *  each. A 39-question run starts two actors per question, spent $1 on about 16 questions, and the other 71 rows were
+ *  failed with 'cost_cap' - an audit that looked finished at "0/94". The daily budget pool and the Apify reserve still
+ *  bound the spend; this only stops a legitimate long run from being cut off. */
+export function auditRunCapUsd(questionCount: number): number {
+  const n = Number.isFinite(questionCount) && questionCount > 0 ? Math.floor(questionCount) : 0;
+  return Math.max(AUDIT_RUN_CAP_USD, n * AUDIT_PER_QUESTION_CAP_USD);
+}
+
 /** The most leads one bulk-audit job may carry (a larger job is REFUSED, not sliced). */
 export const AUDIT_BULK_JOB_MAX_LEADS = 100;
 

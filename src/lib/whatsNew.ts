@@ -24,6 +24,10 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-21-unfinished-audits', date: '2026-11-21', title: 'An unfinished audit never shows a final score', audience: 'all',
+    body: 'A long audit (39 searches asked three times) ran out of its per-run spending limit part-way and still showed a final-looking 0%. Long audits now get a limit that grows with their size, an unfinished one says "In progress, 94 of 234 answers", and its report header shows the real searches and asks.',
+    report: { added: ['"In progress, X of Y answers" on the audit page when answers are missing.', 'A teammate tick-box to use the answers in hand anyway.'], changed: ['Create report and prospect preview wait until an audit has every answer (or the tick-box is used).', 'The per-run spending limit now grows with the number of searches, so long audits finish.', 'The report header says the real searches and asks (for example 39 searches x 3 asks).'], removed: [] ,
+      effect: 'You can no longer send or share a score built from a half-finished audit by mistake.' } },
   { id: '2026-11-20-fast-bulk-add', date: '2026-11-20', title: 'Adding many leads is fast again', audience: 'all',
     body: 'Adding leads from Find Leads was slowed to about 36 a minute yesterday. It is now fast again: a few hundred leads are added in well under a minute. Phone numbers now come with the search itself, so most adds need no extra lookup. If an add ever has to pause, the button says so and counts down, for example "Adding 360 of 500 · next in 42s".',
     report: { added: ['A countdown on the Add button if an add has to pause.'], changed: ['Adding many leads no longer waits between lookups.', 'Find Leads searches now bring each business\'s phone number with them, so adding them is quicker and costs nothing extra.'], removed: ['The 36-a-minute pace on adding leads.'], effect: 'Adding 100 or 300 leads takes seconds, not minutes, and never triggers a limit warning.' } },

@@ -311,12 +311,13 @@ function headlineText(m: ReportModel): string {
 function engineTone(n: number, a: number): string { return !a ? 'grey' : n === 0 ? 'red' : n / a < 0.5 ? 'amber' : 'green'; }
 
 function headBlock(m: ReportModel): string {
-  const searches = m.counts.searches;
+  const searches = m.planned?.searches ?? m.counts.searches;
+  const asks = m.planned?.asks ?? m.asks;
   return `<header class="rp-head"><div class="rp-brand"><div class="rp-wm">Findable<i>.</i></div><div class="rp-sub">${TYPE_LABEL[m.kind]}</div></div>` +
     `<div class="rp-meta"><div class="rp-meta-top"><span>Report for</span><span class="rp-date">${esc(m.dateLabel)}</span></div>` +
     `<h1 class="rp-biz">${esc(shortName(m.businessName))}</h1>${(m.place === undefined ? m.where : m.place) ? `<div class="rp-where">${esc(String(m.place === undefined ? m.where : m.place))}</div>` : ''}` +
     (m.recheckLabel ? `<div class="rp-method" data-recheck="1"><strong>${esc(m.recheckLabel)}</strong> &middot; ${esc(m.dateLabel)}</div>` : '') +
-    `<div class="rp-method">${plural(searches, 'search', 'searches')} &times; 2 AI${m.asks > 1 ? ` &times; ${m.asks} asks` : ''} &middot; ${plural(m.score.answers, 'answer')}${m.overview.shown ? ' &middot; plus Google AI, shown for context' : ''}</div></div></header>`;
+    `<div class="rp-method">${plural(searches, 'search', 'searches')} &times; 2 AI${asks > 1 ? ` &times; ${asks} asks` : ''} &middot; ${plural(m.score.answers, 'answer')}${m.overview.shown ? ' &middot; plus Google AI, shown for context' : ''}</div></div></header>`;
 }
 
 function scoreBlock(m: ReportModel): string {
@@ -636,7 +637,8 @@ function targetedSearchesBlock(m: ReportModel): string {
   const named = m.all.filter((q) => q.namedYou > 0);
   const not = m.all.filter((q) => q.namedYou === 0);
   const group = (title: string, qs: OppQuestion[]) => qs.length ? `<p class="rp-grp">${esc(title)}</p><table class="rp-tbl"><thead>${head}</thead><tbody>${qs.map(row).join('')}</tbody></table>` : '';
-  const asks = m.asks > 1 ? `${m.asks} times` : 'once';
+  const askN = m.planned?.asks ?? m.asks;
+  const asks = askN > 1 ? `${askN} times` : 'once';
   return `<section class="rp-panel"><h2 class="rp-h">Your targeted searches</h2><p class="rp-h-sub">${plural(m.all.length, 'search', 'searches')}, each asked ${asks} on ChatGPT and Gemini. We ask the same ones again every ${REMEASURE_WEEKS_STANDARD} weeks.</p>` +
     (m.all.length ? group(`Where AI names you · ${named.length}`, named) + group(named.length ? `Not named yet · ${not.length}` : `Not named yet · this is where we start`, not) : `<p class="rp-h-sub">No searches to show yet.</p>`) + `</section>`;
 }

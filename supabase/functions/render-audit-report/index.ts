@@ -627,6 +627,8 @@ Deno.serve(async (req) => {
         /* THE HEADER'S PLACE (Paul, 2026-11-15): what is KNOWN about the business — its town, else its stored address, else
            (nationwide) the country. Never the commonest place in the search list: that put "Clare" on Moments' baseline. */
         const au = audit as { business_address?: string | null; business_scope?: string | null; country?: string | null };
+        /* The header says what the audit was SET UP to ask (39 searches x 3 asks), not what came back (94 answers read as 29 x 2). */
+        if (designKind !== "hook" && questions.length > 0 && (crawlRuns ?? []).length > 0) model.planned = { searches: questions.length, asks: (crawlRuns ?? []).length };
         model.place = reportPlaceLabel({ town, address: au.business_address ?? null, scope: au.business_scope ?? null, country: au.country ?? null, fromSearches: model.where });
         /* "Re-check: 3 searches, asked 3 times each" beside the date (src/lib/prospectRecheck.ts). */
         if (isRecheckAudit) model.recheckLabel = recheckLabel(questions.length, Number((audit as { baseline_target_runs?: number | null }).baseline_target_runs ?? RECHECK_RUNS) || RECHECK_RUNS);

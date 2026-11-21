@@ -41,6 +41,7 @@ import { isMarketAudit, MARKET_AUDIT_NO_REPORT } from '@/lib/auditReport';
 import { abroadFlagText, isUkAuditCountry } from '@/lib/abroadAnswer';
 import { measuringState } from '@/lib/measuringState';
 import { wholeAuditProgress } from '@/lib/auditRunningProgress';
+import { auditCoverage, type CoverageRow } from '@/lib/auditCoverage';
 import { poolRuns, engineSummary, type PooledInput } from '@/lib/pooledRuns';
 import { isPaidLead } from '@/lib/leadPayment';
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells } from '@/lib/competitorCleaning';
@@ -467,6 +468,10 @@ const AiAudit = () => {
      72 cells. `runScope` is 'all' (pooled, the default whenever there is more than one run) or
      a single run id. `runId` still points at the reference run throughout, so the draining
      poller, Re-run and the report keep working exactly as before. */
+  /* Every queue row of the open audit (run + status only): is it really finished? (src/lib/auditCoverage.ts) */
+  const [coverageRows, setCoverageRows] = useState<CoverageRow[] | null>(null);
+  /* A teammate chose to use the answers in hand: Create report / prospect sharing unlock. Per open audit, never stored. */
+  const [coverageOverride, setCoverageOverride] = useState(false);
   const [auditRuns, setAuditRuns] = useState<{ id: string; run_number: number; status: string; created_at: string }[]>([]);
   const [runScope, setRunScope] = useState<'all' | string>('all');
   const [pooledInputs, setPooledInputs] = useState<PooledInput[]>([]);
@@ -1876,6 +1881,30 @@ const AiAudit = () => {
     return () => { alive = false; };
   }, [step, auditId]);
 
+  /* Is the open audit finished? Reads every queue row's run + status (a few hundred at most), refreshed when a run's status changes. */
+  const runStatusKey = auditRuns.map((r) => r.id + ':' + r.status).join(',');
+  useEffect(() => {
+    setCoverageOverride(false);
+  }, [auditId]);
+  useEffect(() => {
+    if (step !== 'results' || !auditId || auditRuns.length === 0) { setCoverageRows(null); return; }
+    let alive = true;
+    (async () => {
+      const out: CoverageRow[] = [];
+      const PAGE_ROWS = 1000;
+      for (let from = 0; ; from += PAGE_ROWS) {
+        const { data, error } = await (supabase as unknown as SupabaseClient)
+          .from('ai_audit_queue').select('run_id, status').eq('audit_id', auditId).order('id', { ascending: true }).range(from, from + PAGE_ROWS - 1);
+        if (error) return; // unknown: say nothing rather than guess
+        const page = (data ?? []) as CoverageRow[];
+        out.push(...page);
+        if (page.length < PAGE_ROWS) break;
+      }
+      if (alive) setCoverageRows(out);
+    })();
+    return () => { alive = false; };
+  }, [step, auditId, runStatusKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (step !== 'results' || runScope !== 'all' || auditRuns.length < 2) { setPooledInputs([]); return; }
     let alive = true;
@@ -1991,6 +2020,12 @@ const AiAudit = () => {
   }, [savedAudits, searchExtras]);
 
   const openAuditRow = listSource.find((a) => a.id === auditId) ?? null;
+  const coverage = useMemo(() => (coverageRows && openAuditRow
+    ? auditCoverage({ purpose: openAuditRow.audit_purpose, targetRuns: openAuditRow.baseline_target_runs, runs: auditRuns, rows: coverageRows })
+    : null), [coverageRows, openAuditRow, auditRuns]);
+  /* ⛔ An audit that did not get every answer it was set up to ask is IN PROGRESS, never a final score. */
+  const coverageBlocked = !!coverage && coverage.applies && !coverage.complete;
+  const sharingBlocked = coverageBlocked && !coverageOverride;
   /* The open audit's progress for the WHOLE audit, the same words and % as its Past audits row
      ("Run 2 of 3 · 20 of 40 searches · 50%", wholeAuditProgress; Paul, 2026-11-15). The run in flight
      takes this page's own live queue count, which is fresher than the list's. */
@@ -3184,14 +3219,15 @@ const AiAudit = () => {
                       fixed. Caught by a second session reading the code rather than the comment
                       I wrote about it. */}
                   {!isDraining && liveTally.done > 0 && (
-                    <Button size="sm" onClick={openReportForCurrentRun}>
+                    <Button size="sm" onClick={openReportForCurrentRun} disabled={sharingBlocked}
+                      title={sharingBlocked ? `Not finished (${coverage?.label}). Use the answers in hand below, or wait for the rest.` : undefined}>
                       <FileText className="mr-2 h-4 w-4" /> {runId && reports[runId] ? 'View report' : 'Create report'}
                     </Button>
                   )}
 
                   {/* Prospect Preview — an OUTREACH homepage mock-up + evidence card for this audit's lead.
                       Generate on click only; it never sends (src/components/ProspectPreviewPanel.tsx). */}
-                  {!isDraining && liveTally.done > 0 && openAuditRow?.lead_id && (
+                  {!isDraining && !sharingBlocked && liveTally.done > 0 && openAuditRow?.lead_id && (
                     <ProspectPreviewButton leadId={openAuditRow.lead_id} />
                   )}
 
@@ -3459,6 +3495,9 @@ const AiAudit = () => {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {coverageBlocked && coverage ? (
+                  <ScoreTile label="AI Visibility" value="In progress" sub={`${coverage.label} · no score until it is finished`} tone="muted" />
+                  ) : (
                   <ScoreTile
                     label={pooled ? `AI Visibility · ${auditRuns.length} runs pooled` : 'AI Visibility'}
                     value={vizTotal > 0 ? `${vizNamed}/${vizTotal}` : poolLoading ? '…' : '—'}
@@ -3470,6 +3509,7 @@ const AiAudit = () => {
                       : poolLoading ? 'Reading every run…' : 'No searches completed'}
                     tone={vizTone}
                   />
+                  )}
                   {hasSeo ? (
                     <ScoreTile label="SEO grade" value={seoGrade || '—'} sub="Website SEO health" tone={gradeTone(seoGrade)} />
                   ) : resultsHasWebsite ? (
@@ -3477,6 +3517,19 @@ const AiAudit = () => {
                   ) : (
                     <ScoreTile label="SEO grade" value="N/A" sub="No website for this business" tone="muted" />
                   )}
+                </div>
+              )}
+
+              {coverageBlocked && coverage && (
+                <div className="rounded-md border border-amber-500/60 bg-amber-500/10 p-3 text-xs space-y-2" data-coverage="incomplete">
+                  <div>
+                    <span className="font-medium text-amber-700 dark:text-amber-400">Not finished: {coverage.label}.</span>
+                    <span className="text-muted-foreground"> The rest were never read, so any score here would be a guess. The report and sharing wait until it is complete.</span>
+                  </div>
+                  <label className="flex items-center gap-2 text-muted-foreground cursor-pointer">
+                    <input type="checkbox" checked={coverageOverride} onChange={(e) => setCoverageOverride(e.target.checked)} />
+                    Use the answers in hand anyway (a teammate's call)
+                  </label>
                 </div>
               )}
 
