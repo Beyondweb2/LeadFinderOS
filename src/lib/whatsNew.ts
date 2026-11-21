@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-21-gone-cold-after-reply', date: '2026-11-21', title: 'Gone cold can go even if they wrote last', audience: 'admin',
+    body: 'Gone cold is no longer blocked when the lead sent the last message or wrote in the last 24 hours. Opt-out and Do Not Contact still block it, it is still one lead at a time, and it still will not go twice in a row.',
+    report: {
+      added: [],
+      changed: [],
+      removed: ['"They replied after your last message" and "24-hour window is open" no longer block Gone cold.'],
+      effect: 'You can send the nudge to a lead who replied and then went quiet.',
+    } },
   { id: '2026-11-21-gone-cold-on', date: '2026-11-21', title: 'Gone cold template is switched on', audience: 'admin',
     body: 'The Gone cold WhatsApp template is now a normal choice in a lead’s Inbox conversation. The same rules still apply: only a lead we messaged who has not replied, never anyone who opted out or is on Do Not Contact, one lead at a time, never queued. If Meta refuses it, you see the normal send error.',
     report: {
