@@ -44,15 +44,15 @@ ok(WHATSAPP_TEMPLATES.some((t) => t.value === 'gone_cold'), 'one more choice in 
 ok(!isColdOutreachTemplate('gone_cold') && NEEDS_PRIOR_WHATSAPP.has('gone_cold'), 'a follow-up: never a first touch');
 ok(!isServiceTemplate('gone_cold'), 'marketing: an opt-out blocks it (not a service template)');
 
-console.log('── 1. blocked while Meta has not approved ──');
-ok(GONE_COLD_APPROVED === false, 'the switch is off (in review at Meta)');
+console.log('── 1. switched on (Paul, 2026-11-21: treat as approved) ──');
+ok(GONE_COLD_APPROVED === true, 'the switch is on');
 const pick = getTemplateSendability('gone_cold', { shareToken: null }, { goneCold: { ok: true } });
-ok(!pick.ok && pick.reason === GONE_COLD_WAITING_REASON && GONE_COLD_WAITING_REASON === 'Waiting for Meta approval', 'picker: greyed "Waiting for Meta approval" even for a lead that went cold');
-ok(templateAwaitingApproval('gone_cold'), 'the one server door (claimTemplatePayload) refuses it');
+ok(pick.ok && GONE_COLD_WAITING_REASON === 'Waiting for Meta approval', 'picker: a normal option for a lead that went cold');
+ok(!templateAwaitingApproval('gone_cold'), 'the one server door (claimTemplatePayload) lets it through');
 ok(goneColdRefusal(cold({ approved: false }))?.code === 'template_waiting_meta', 'rule: not approved refuses first');
 const sender = read('supabase/functions/send-whatsapp-message/index.ts');
 const gate = sender.slice(sender.indexOf('if (templateName === GONE_COLD_TEMPLATE) {'));
-ok(/if \(GONE_COLD_APPROVED\) \{\s+const gcAvail = await templateAvailability\(service, templateName\);\s+if \(gcAvail\.status !== "APPROVED"\)/.test(gate), 'sender: Meta\'s LIVE status must be APPROVED (UNKNOWN refuses too)');
+ok(/const approved = GONE_COLD_APPROVED;/.test(gate) && !/gcAvail/.test(gate.slice(0, 2000)), 'sender: the switch alone, no Meta live-status pre-check');
 ok(sender.indexOf('if (templateName === GONE_COLD_TEMPLATE) {') < sender.indexOf('if (dryRun) {'), 'sender: the gate runs before the dry-run return and the payload');
 
 console.log('── 2. blocked for opt-out and Do Not Contact ──');

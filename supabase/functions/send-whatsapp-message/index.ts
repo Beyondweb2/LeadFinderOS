@@ -492,14 +492,8 @@ Deno.serve(async (req) => {
        The switch first; then Meta's LIVE status must be APPROVED (an unreadable status refuses, never "try it"); then opt-outs,
        Do Not Contact (any suppression row or a stopped lead status) and the thread: messaged, no reply, window closed. Fails closed. */
     if (templateName === GONE_COLD_TEMPLATE) {
-      let approved = false;
-      if (GONE_COLD_APPROVED) {
-        const gcAvail = await templateAvailability(service, templateName);
-        if (gcAvail.status !== "APPROVED") {
-          return json({ ok: false, error: "template_" + gcAvail.status.toLowerCase(), template: templateName, reason: gcAvail.status === "UNKNOWN" ? "Could not read Meta's approval for this template - nothing was sent." : "Meta says this template is " + gcAvail.status.toLowerCase().replace("_", " ") + " - nothing was sent." }, 200);
-        }
-        approved = true;
-      }
+      /* Paul, 2026-11-21: no Meta live-status pre-check for gone_cold any more — the switch alone; Meta's own send error shows if it refuses. */
+      const approved = GONE_COLD_APPROVED;
       const gcOpt = await checkOptedOut(service, { phone: "+" + to, leadId: resolvedLeadId });
       const gcSupp = await checkSuppressed(service, { phone: "+" + to, leadId: resolvedLeadId });
       const { data: gcLead, error: gcLeadErr } = resolvedLeadId
