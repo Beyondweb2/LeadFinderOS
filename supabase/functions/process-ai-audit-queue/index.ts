@@ -42,7 +42,7 @@ import { RETRY_CLEAN_CAP, runSettlement, shouldInvokeCleaning, finaliseReadiness
 import { cleaningSweepDue } from "../_shared/cleaning-sweep.ts";
 import { checkAuditCompleteness } from "../_shared/audit-alerts.ts";
 import { sweepSelfHeal } from "../_shared/quick-check-retry.ts";
-import { AUDIT_RUN_CAP_USD } from "../../../src/lib/auditLimits.ts";
+import { AUDIT_RUN_CAP_USD, auditRunCapUsd } from "../../../src/lib/auditLimits.ts";
 import { POOL_DAILY_CAP_USD, budgetDecision, budgetPoolForPurpose, refusalRowError, type ApifyUsage, type BudgetPool } from "../../../src/lib/auditBudget.ts";
 import { latestApifyUsage } from "../_shared/audit-budget.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
@@ -364,12 +364,20 @@ Deno.serve(async (req) => {
     // Accumulated per-run Apify cost. `attempts` = number of actor runs STARTED for a row, so
     // sum(attempts)*estCost is the run's spend so far (async: cost is incurred at start).
     const runCost = new Map<string, number>();
+    const runQuestionCount = new Map<string, number>();
     async function accumulatedCost(runId: string): Promise<number> {
       if (runCost.has(runId)) return runCost.get(runId)!;
       const { data: rows } = await service.from("ai_audit_queue").select("attempts").eq("run_id", runId);
       const spent = (rows ?? []).reduce((s: number, r: Row) => s + (Number(r.attempts) || 0) * estCost, 0);
       runCost.set(runId, spent);
+      runQuestionCount.set(runId, (rows ?? []).length);
       return spent;
+    }
+    /* This run's own ceiling: scales with its question count (auditRunCapUsd), so a 39-question run is not cut off at the
+       flat $1 that was sized for 20. */
+    async function runCapUsd(runId: string): Promise<number> {
+      await accumulatedCost(runId);
+      return auditRunCapUsd(runQuestionCount.get(runId) ?? 0);
     }
     const cappedRuns = new Set<string>();
     const touchedRuns = new Set<string>(touchedRunsEarly);
@@ -427,7 +435,7 @@ Deno.serve(async (req) => {
     async function startAioRetry(row: Row, audit: { userId: string; pool: BudgetPool; countryCode: string }, first: Record<string, unknown>): Promise<boolean> {
       try {
         const spent = await accumulatedCost(row.run_id);
-        if (spent + estCost > CAP_USD) return false; // this run's own budget has no room for another run
+        if (spent + estCost > await runCapUsd(row.run_id)) return false; // this run's own budget has no room for another run
         const outcome = await runEnrichSource<{ runId: string; datasetId: string | null }>({
           service,
           userId: audit.userId || row.user_id,
@@ -512,7 +520,7 @@ Deno.serve(async (req) => {
       const reserve = budgetDecision({ pool: audit.pool, poolSpentUsd: 0, estCostUsd: 0, apify: apifyNow, capUsd: Number.POSITIVE_INFINITY });
       if (!reserve.allowed && reserve.reason === "apify_reserve") return { refused: refusalRowError("apify_reserve") };
       const spent = await accumulatedCost(row.run_id);
-      if (spent + estCost > CAP_USD) return { refused: "cost_cap" };
+      if (spent + estCost > await runCapUsd(row.run_id)) return { refused: "cost_cap" };
       try {
         const outcome = await runEnrichSource<{ runId: string; datasetId: string | null }>({
           service,
@@ -961,7 +969,7 @@ Deno.serve(async (req) => {
         let costLeft = perRunCostBudget.get(row.run_id);
         if (costLeft === undefined) {
           const spent = await accumulatedCost(row.run_id);
-          costLeft = Math.max(0, Math.floor((CAP_USD - spent) / estCost + 1e-9));
+          costLeft = Math.max(0, Math.floor((await runCapUsd(row.run_id) - spent) / estCost + 1e-9));
           perRunCostBudget.set(row.run_id, costLeft);
         }
 

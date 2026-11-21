@@ -49,6 +49,9 @@ export interface ReportModel {
   overview: { asked: number; shown: number; named: number };
   /** How many times each search was asked of each AI. */
   asks: number;
+  /** What the audit was SET UP to ask (searches x runs), when the renderer knows it. Header words only: an unfinished audit
+   *  still says 39 searches x 3 asks, never the count of what happened to come back. */
+  planned?: { searches: number; asks: number };
   /** The search shown as a chat example: the first-contact report's pick, or the top target of the opportunity report. */
   featured: OppQuestion | null;
   /** Every search that counts, in the order shown (client: the tracked order; others: best first). */

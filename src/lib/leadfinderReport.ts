@@ -311,7 +311,7 @@ export function renderLeadfinderReport(m: ReportModel, opts: LfosRenderOpts = {}
     const inner = header(m.dateLabel, m.recheckLabel) + `<div class="lf-body"><div class="lf-wait"><div class="lf-eyebrow">Audit incomplete</div>` +
       `<h1>The report for ${esc(biz)} isn't finished yet</h1>` +
       `<p class="lf-sub">We couldn't read ${m.incomplete.unmeasured} of the ${m.incomplete.answers} AI answers, so no figures are shown. We have been alerted and will check them again; this page shows the finished report when that is done.</p></div>` +
-      `${closing()}${footer(m.dateLabel, m.asks)}</div>`;
+      `${closing()}${footer(m.dateLabel, m.planned?.asks ?? m.asks)}</div>`;
     return page(`${biz} - AI visibility report | LeadFinderOS`, inner);
   }
   const judgeable = opts.nameNotJudgeable !== true;
@@ -343,7 +343,7 @@ export function renderLeadfinderReport(m: ReportModel, opts: LfosRenderOpts = {}
     `<li>AI answers change from day to day. These are measurements, not guarantees.</li></ul></div></section>`;
   const split = judgeable ? splitBlock(m) : '';
   const sample = opts.example ? `<div class="lf-sample" role="note">Example report · sample data<span>A made-up business, to show what a report looks like.</span></div>` : '';
-  const inner = sample + header(m.dateLabel, m.recheckLabel) + `<div class="lf-body">${hero}${split}${searchSec}${pair}${notes}${closing()}${footer(m.dateLabel, m.asks)}</div>`;
+  const inner = sample + header(m.dateLabel, m.recheckLabel) + `<div class="lf-body">${hero}${split}${searchSec}${pair}${notes}${closing()}${footer(m.dateLabel, m.planned?.asks ?? m.asks)}</div>`;
   return page(`${opts.example ? 'Example report · sample data | LeadFinderOS' : `${biz} - AI visibility report | LeadFinderOS`}`, inner, { print: opts.print, sticky: !opts.print });
 }
 
