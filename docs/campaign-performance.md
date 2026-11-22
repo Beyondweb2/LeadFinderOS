@@ -68,8 +68,12 @@ Tests: `scripts/campaign-performance.test.ts`.
 - Only for leads in a LeadFinderOS-style campaign (report_style `leadfinderos`, the "Web devs/agencies · WhatsApp" campaign);
   any other lead is refused with the reason. Queueable as a cold opener (migration `20261226100000_initial_with_link.sql`:
   the live `sales_queue_opener` with one more name in `v_cold`; opt-out / Do Not Contact / UK-mobile / limits unchanged).
-- No own wording: Meta's approved body is not in the app, so the stored message is `[initial_with_link]` and it always goes as
-  the template (never free text). The picker preview says so. When the exact body is known, add a renderer.
+- Sending: the stored message is `[initial_with_link]` (whatsapp-send.ts has no renderer for it, on purpose), so it always
+  goes as the template (never free text).
+- Display (2026-11-22, fix/initial-with-link-text): the SPA mirror (`initialWithLinkBody` in `src/lib/initialWithLink.ts`, used by
+  `templateBodies.ts`) shows Meta's approved wording, with the code as `<tracking code>` (the Inbox does not know a row's code).
+  Pinned in `scripts/campaign-performance.test.ts`, which also asserts the sender still stores the placeholder. ai-reply-drafts and
+  warm-lead-reply reach this mirror (as thread context only) and were not redeployed; they pick it up on their next deploy.
 - `leadfinderos.com/go/<code>`: repo `leadfinderos-waitlist`, `functions/go/[code].ts`, holds NO key — it 302s the visitor to
   `track-engagement?go=<code>`, which logs the click (bots marked) and 302s to `https://leadfinderos.com/` whatever happens.
 - Clicks show in the campaign table's "Link / report open" column on the `initial_with_link` row.
