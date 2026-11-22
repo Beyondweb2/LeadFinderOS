@@ -9,11 +9,14 @@
      track-engagement?go=<code>, which logs the click (bots / previews marked) and redirects to https://leadfinderos.com/.
    - ⛔ LeadFinderOS-style campaigns only (report_style 'leadfinderos', the web-dev / agency campaign): a Findable prospect is
      never sent a LeadFinderOS link (the brands never cross).
-   - ⛔ DISPLAY ONLY: initialWithLinkBody below is Meta's approved wording (Paul pasted it 2026-11-22), used ONLY by the SPA's
-     readable mirror (templateBodies.ts) so the Inbox / previews show the words instead of "[initial_with_link]". The SENDERS
-     still store the placeholder "[initial_with_link]" (whatsapp-send.ts has no renderer for it, on purpose), so it always goes
-     as the TEMPLATE, never as free text in our words (inWindowFreeText.ts treats a placeholder as "no wording").
-     ⚠️ The SPA does not know which code a sent row carried (it is in tracked_links), so the display shows TRACKING_CODE_SHOWN.
+   - initialWithLinkBody below is Meta's approved wording (Paul pasted it 2026-11-22). 2026-11-22b (fix/initial-with-link-parity,
+     Paul: "behave exactly like the other templates"): BOTH SENDERS store it with the lead's REAL code (send-whatsapp-message,
+     dry run included, and process-whatsapp-queue), so it has a plain-text version: inside the 24 hours it goes as free text of
+     these words (no template charge), outside it the Meta template with {{1}} = the code. One code per lead + template
+     (_shared/tracked-link.ts goCodeFor reuses it), so preview, "Put in message box" and the send carry the same link.
+     whatsapp-send.ts's renderer still has no entry (with no code it stays the "[initial_with_link]" placeholder).
+     ⚠️ The SPA's own mirror (templateBodies.ts) does not know a row's code, so it shows TRACKING_CODE_SHOWN; the Inbox eye
+     shows the dry run's real words for the chosen template.
    ⚠️ Explicit .ts imports only: reached by edge functions.
    ============================================================ */
 

@@ -68,8 +68,15 @@ Tests: `scripts/campaign-performance.test.ts`.
 - Only for leads in a LeadFinderOS-style campaign (report_style `leadfinderos`, the "Web devs/agencies · WhatsApp" campaign);
   any other lead is refused with the reason. Queueable as a cold opener (migration `20261226100000_initial_with_link.sql`:
   the live `sales_queue_opener` with one more name in `v_cold`; opt-out / Do Not Contact / UK-mobile / limits unchanged).
-- Sending: the stored message is `[initial_with_link]` (whatsapp-send.ts has no renderer for it, on purpose), so it always
-  goes as the template (never free text).
+- Sending (2026-11-22b, fix/initial-with-link-parity — replaces "always the template"): Paul wanted it to behave exactly like
+  the other templates. Both senders store `initialWithLinkBody(<the lead's code>)` (send-whatsapp-message incl. its dry run,
+  process-whatsapp-queue), so it has a plain-text version: Inbox window open → free text of those words (no charge), closed →
+  the Meta template, {{1}} = the code. The queue drip never swaps it (cold opener, like every cold opener). `goCodeFor` now
+  REUSES the lead's newest code for this template (one per lead + template), so preview, "Put in message box" and the send
+  carry the same link; the dry run makes one if none exists. Clicks are logged by code, so either way counts the same. The Inbox
+  eye shows the dry run's words for the chosen template (the SPA cannot know the code). whatsapp-send.ts was NOT touched (it
+  reaches whatsapp-status); with no code its renderer still gives `[initial_with_link]`. The comment in `initialWithLink.ts`
+  changed (comment only), so ai-reply-drafts / warm-lead-reply / track-engagement were not redeployed.
 - Display (2026-11-22, fix/initial-with-link-text): the SPA mirror (`initialWithLinkBody` in `src/lib/initialWithLink.ts`, used by
   `templateBodies.ts`) shows Meta's approved wording, with the code as `<tracking code>` (the Inbox does not know a row's code).
   Pinned in `scripts/campaign-performance.test.ts`, which also asserts the sender still stores the placeholder. ai-reply-drafts and

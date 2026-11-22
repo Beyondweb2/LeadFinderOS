@@ -34,6 +34,7 @@ import {
 import { campaignsRepresented } from "../_shared/campaign-interleave.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
 import { goCodeFor, trackReportLink } from "../_shared/tracked-link.ts";
+import { initialWithLinkBody } from "../../../src/lib/initialWithLink.ts";
 import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
 import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, FIRST_REPLY_MODES, autoReplyEnvOn, autoReplyToggleOn, firstReplyMode, firstReplyTemplate, isDecline, isStaleAutoReply, modeSends, parseFirstReplyMode, phoneSuppressed, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { effectiveFirstReplyMode } from "../../../src/lib/firstReplyAutomation.ts";
@@ -2928,7 +2929,9 @@ Deno.serve(async (req) => {
     const mainTrade = isColdOutreachTemplate(templateName) ? null : tradeForFreeText(tvars, templateExtra.trade, mainLastInbound);
     const campaignPayload = claimTemplatePayload(templateName, lang, lead.business_name as string, resolvedUrl, mainTrade?.freeTextOnly ? { ...templateExtra, freeTextOnly: true } : templateExtra);
     let campaignBody = renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, mainTrade ? mainTrade.bodyTrade : templateExtra.trade, templateExtra.competitors, undefined, templateExtra.town, templateExtra.siteFault, templateExtra.siteFindings, templateExtra.visibilityScore, templateExtra.senderName);
-    const campaignSnapshot = createTemplateSnapshot({ templateName, language: lang, body: campaignBody, payload: campaignPayload });
+    /* initial_with_link (2026-11-22b): the stored words are Meta's approved wording with this lead's real link (MIRRORS send-whatsapp-message). */
+    if (templateExtra.goCode) campaignBody = initialWithLinkBody(templateExtra.goCode);
+    const campaignSnapshot =createTemplateSnapshot({ templateName, language: lang, body: campaignBody, payload: campaignPayload });
     /* ⛔ A queued FOLLOW-UP inside their 24-hour window goes as free text (2026-11-16, _shared/free-window.ts — the same rule as
        every other door), still recorded as that template. A cold opener never has an open window, so it is never swapped. */
     if (mainTrade) campaignBody = mainTrade.fixWords(campaignBody);

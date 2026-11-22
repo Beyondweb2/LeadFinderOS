@@ -24,6 +24,18 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-22-initial-with-link-parity', date: '2026-11-22', title: 'Initial with link works like the other templates', audience: 'admin',
+    body: 'In the Inbox picker, Initial with link now shows its real wording with the lead’s own tracking link (leadfinderos.com/go/…). When their 24 hours are open, "Put in message box" fills the box with it and it goes free as a normal message. When closed it goes as the Meta template with the same link.',
+    report: {
+      added: ['A plain-text version of Initial with link: the approved wording with this lead’s real tracking link.'],
+      changed: [
+        'Preview, Put in message box and Send template show and use the real link instead of [initial_with_link] or <tracking code>.',
+        'Their 24 hours open: it goes as a normal message (no template charge). Closed: the Meta template, as before.',
+        'Each lead keeps one tracking link for this message, so the preview and the send carry the same link. Clicks count the same either way.',
+      ],
+      removed: ['"No plain-text version" and "Paid template (no free version)" on Initial with link while their 24 hours are open.'],
+      effect: 'Replying to a web dev inside their 24 hours with this message is free, and you see exactly what they will get.',
+    } },
   { id: '2026-11-22-initial-with-link-text', date: '2026-11-22', title: 'Initial with link shows its real wording', audience: 'admin',
     body: 'The Inbox and message previews now show the approved words of the Initial with link opener ("Hey ✌️, fellow web dev here …") instead of [initial_with_link]. The lead’s own tracking code shows as <tracking code>. It still always goes as the Meta template.',
     report: {
