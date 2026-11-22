@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ListFilter, Loader2, Megaphone, MessageCircle, Pause, Pencil, Phone, Plus, Send, Trash2 } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { BarChart3, ListFilter, Loader2, Megaphone, MessageCircle, Pause, Pencil, Phone, Plus, Send, Trash2 } from 'lucide-react';
 import { EmptyState, ErrorState, LoadState, PageHeader, ToneChip } from '@/components/operator/ui';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { CampaignEditDialog } from '@/components/campaigns/CampaignEditDialog';
+import { CampaignPerformanceTable } from '@/components/campaigns/CampaignPerformanceTable';
 import { useCampaignActions, useMyCampaigns } from '@/hooks/useMyCampaigns';
 import {
   CAMPAIGN_METHOD_LABEL, campaignDisplayName, campaignErrorText, campaignStats, launchSkipLine, type CampaignSummary,
@@ -23,7 +24,7 @@ import {
 const MINE = '__mine__';
 const ALL = '';
 
-function CampaignCard({ c, admin, onEdit }: { c: CampaignSummary; admin: boolean; onEdit: (c: CampaignSummary) => void }) {
+function CampaignCard({ c, admin, onEdit, onPerformance }: { c: CampaignSummary; admin: boolean; onEdit: (c: CampaignSummary) => void; onPerformance: (c: CampaignSummary) => void }) {
   const actions = useCampaignActions();
   const { toast } = useToast();
   const [busy, setBusy] = useState<string | null>(null);
@@ -65,6 +66,7 @@ function CampaignCard({ c, admin, onEdit }: { c: CampaignSummary; admin: boolean
       {method === 'whatsapp' && c.queued > 0 && <p className="text-xs text-muted-foreground">{c.queued} {c.queued === 1 ? 'opener' : 'openers'} waiting to send in the send window.</p>}
       <div className="flex flex-wrap gap-1.5">
         <Button asChild size="sm" variant="outline"><Link to={`/outreach?campaign=${c.id}`} data-testid="campaign-open-leads"><ListFilter className="mr-1 h-3.5 w-3.5" />Open leads</Link></Button>
+        {method === 'whatsapp' && <Button size="sm" variant="ghost" onClick={() => onPerformance(c)} data-testid="campaign-performance-open"><BarChart3 className="mr-1 h-3.5 w-3.5" />Performance</Button>}
         <Button size="sm" variant="ghost" onClick={() => onEdit(c)} disabled={!!busy} data-testid="campaign-edit"><Pencil className="mr-1 h-3.5 w-3.5" />Edit</Button>
         {method === 'whatsapp' && c.ready > 0 && <Button size="sm" variant="ghost" onClick={() => void send()} disabled={!!busy} data-testid="campaign-send">{spin('send', Send)}Send openers ({c.ready})</Button>}
         {method === 'whatsapp' && c.queued > 0 && <Button size="sm" variant="ghost" onClick={pause} disabled={!!busy} data-testid="campaign-pause">{spin('pause', Pause)}Pause sending</Button>}
@@ -79,6 +81,10 @@ export default function Campaigns() {
   const [editing, setEditing] = useState<CampaignSummary | null>(null);
   const [creating, setCreating] = useState(false);
   const [owner, setOwner] = useState<string>(ALL);
+  /* Which campaign's performance table is open: in the URL (what you look at), so the view can be linked and survives a reload. */
+  const [params, setParams] = useSearchParams();
+  const perfId = params.get('perf');
+  const setPerf = (id: string | null) => setParams((p) => { const n = new URLSearchParams(p); if (id) n.set('perf', id); else n.delete('perf'); return n; }, { replace: true });
   const admin = q.data?.admin === true;
   const all = q.data?.campaigns ?? [];
   const owners = useMemo(() => {
@@ -107,7 +113,8 @@ export default function Campaigns() {
     {q.data && shown.length === 0 && <EmptyState icon={Megaphone} tone="blue" title={all.length === 0 ? 'No campaigns yet.' : 'No campaigns for this owner.'}>
       {all.length === 0 ? 'Create one (niche, Call or WhatsApp, optional area), then pick it in Find Leads before you add businesses.' : undefined}
     </EmptyState>}
-    {shown.length > 0 && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{shown.map((c) => <CampaignCard key={c.id} c={c} admin={admin} onEdit={setEditing} />)}</div>}
+    {perfId && (() => { const pc = all.find((c) => c.id === perfId); return pc ? <CampaignPerformanceTable key={pc.id} campaignId={pc.id} name={campaignDisplayName(pc, admin)} onClose={() => setPerf(null)} /> : null; })()}
+    {shown.length > 0 && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{shown.map((c) => <CampaignCard key={c.id} c={c} admin={admin} onEdit={setEditing} onPerformance={(x) => setPerf(x.id)} />)}</div>}
 
     <CampaignEditDialog open={creating} onOpenChange={setCreating} />
     <CampaignEditDialog open={!!editing} onOpenChange={(v) => { if (!v) setEditing(null); }} campaign={editing} />

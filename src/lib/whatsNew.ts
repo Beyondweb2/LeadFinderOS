@@ -24,6 +24,19 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-22-campaign-performance', date: '2026-11-22', title: 'Campaign performance: which message works best', audience: 'all',
+    body: 'Manage campaigns → Performance on a WhatsApp campaign shows a table per message: sent, read, real replies (auto-replies left out), report/link opens and interested. The best message is highlighted once it has 20+ sends.',
+    report: {
+      added: [
+        'A Performance button on every WhatsApp campaign card, opening a table with one row per message sent in that campaign.',
+        'Real reply vs raw reply: a reply that looks like an auto-reply, or arrives within a minute of our message, is left out of Real.',
+        'Report opens and link clicks are now logged one by one; WhatsApp, Facebook, Slack, Twitter and Google link previews are left out.',
+        'A new opener, Initial with link, for the Web devs / agencies campaign: it carries a leadfinderos.com/go/… link with a tracking code for each lead, and its clicks show in the table.',
+      ],
+      changed: ['Report links in messages now go out as a short findable.live/l/… link (or the LeadFinderOS address for web-dev campaigns) that opens the same report and records the click.'],
+      removed: [],
+      effect: 'You can see which opener or follow-up earns real replies and opens. Messages with fewer than 20 sends are greyed out and never called best.',
+    } },
   { id: '2026-11-21-gone-cold-after-reply', date: '2026-11-21', title: 'Gone cold can go even if they wrote last', audience: 'admin',
     body: 'Gone cold is no longer blocked when the lead sent the last message or wrote in the last 24 hours. Opt-out and Do Not Contact still block it, it is still one lead at a time, and it still will not go twice in a row.',
     report: {

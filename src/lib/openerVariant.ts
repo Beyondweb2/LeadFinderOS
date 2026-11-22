@@ -50,13 +50,21 @@ export const INITIAL_OPENER_C = 'initial_contact_short';
  */
 export const INITIAL_OPENER_D = 'initial_question';
 
+/**
+ * The LINK opener (Paul, 2026-11-22; src/lib/initialWithLink.ts): one variable, a per-lead tracking code in
+ * https://leadfinderos.com/go/{{1}}. In review at Meta (ID 1084953241232593); Paul: treat it as approved — no gate, and a Meta
+ * refusal shows as the normal failed send. WhatsApp-only, and only for LeadFinderOS-style campaigns (checked at send).
+ */
+export const INITIAL_OPENER_E = 'initial_with_link';
+export const INITIAL_WITH_LINK_APPROVED = true;
+
 /** The two openers the SMS lane carries (and its parity tests pin), display order: the original first. The short opener is
  *  WhatsApp-only and is NOT here — see WHATSAPP_OPENERS. */
 export const INITIAL_OPENERS = [INITIAL_OPENER_A, INITIAL_OPENER_B] as const;
 
 /** Every cold WhatsApp opener (what isInitialOpener answers for). */
 /* initial_question (INITIAL_OPENER_D) is NOT here: Paul, 2026-11-15 — it is a follow-up, not an opener (coldOutreach.ts). */
-export const WHATSAPP_OPENERS = [INITIAL_OPENER_A, INITIAL_OPENER_B, INITIAL_OPENER_C] as const;
+export const WHATSAPP_OPENERS = [INITIAL_OPENER_A, INITIAL_OPENER_B, INITIAL_OPENER_C, INITIAL_OPENER_E] as const;
 export type InitialOpener = (typeof INITIAL_OPENERS)[number];
 
 /** ⛔ THE COLD OPENER IS THE ORIGINAL (Paul, 2026-11-02, RED since 25 Oct): the short opener was ramped to about 200 a day just
@@ -80,5 +88,6 @@ export function openerApproved(name: string | null | undefined): boolean {
   if (n === INITIAL_OPENER_B) return INITIAL_OPENER_V2_APPROVED;
   if (n === INITIAL_OPENER_C) return true;   // Meta's live status decides, server-side — not a constant here
   if (n === INITIAL_OPENER_D) return true;   // same: Meta's live status decides, server-side
+  if (n === INITIAL_OPENER_E) return INITIAL_WITH_LINK_APPROVED;   // Paul, 2026-11-22: treat as approved
   return false;
 }

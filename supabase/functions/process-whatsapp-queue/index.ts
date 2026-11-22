@@ -33,6 +33,7 @@ import {
 } from "../_shared/outreach-audit.ts";
 import { campaignsRepresented } from "../_shared/campaign-interleave.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
+import { goCodeFor, trackReportLink } from "../_shared/tracked-link.ts";
 import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
 import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, FIRST_REPLY_MODES, autoReplyEnvOn, autoReplyToggleOn, firstReplyMode, firstReplyTemplate, isDecline, isStaleAutoReply, modeSends, parseFirstReplyMode, phoneSuppressed, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { effectiveFirstReplyMode } from "../../../src/lib/firstReplyAutomation.ts";
@@ -298,6 +299,8 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   initial_opener_v2: { lang: "en", vars: [] },
   /* initial_contact_short (2026-10-15) — ONE variable, the cleaned business name. MIRRORS whatsapp-send.ts. */
   initial_contact_short: { lang: "en", vars: ["name"] },
+  /* initial_with_link (2026-11-22) — ONE variable, the per-lead tracking code. MIRRORS whatsapp-send.ts. */
+  initial_with_link: { lang: "en", vars: ["go_code"] },
   /* initial_question (2026-11-15) — ZERO variables. MIRRORS whatsapp-send.ts. */
   initial_question: { lang: "en", vars: [] },
   /* webdev_report (2026-11-15) — {{1}} business name, {{2}} the latest report link (audit branch, link-only). MIRRORS whatsapp-send.ts. */
@@ -1687,8 +1690,12 @@ Deno.serve(async (req) => {
           let arFreeTextOnly = false;
           if (buildsFromAudit(tmpl.vars)) {
             // audit_reply-class: needs the lead's own completed audit.
-            const vars = await resolveAuditReplyVars(service, row.lead_id, { templateName });
+            let vars = await resolveAuditReplyVars(service, row.lead_id, { templateName });
             if (!vars.ok) { await finish("flagged_no_audit", vars.reason); results[row.lead_id] = "flagged_no_audit"; continue; }
+            /* ⛔ THE TRACKED REPORT LINK (2026-11-22, _shared/tracked-link.ts) — the same wrap as send-whatsapp-message; fail-open. */
+            if (tmpl.vars.includes("url") || tmpl.vars.includes("audit_url")) {
+              vars = { ...vars, link: await trackReportLink(service, { leadId: row.lead_id, template: templateName, url: vars.link }) };
+            }
             /* ⛔ THE EXTRA IS BUILT FROM WHAT THE TEMPLATE DECLARES, NOT FROM A GUESSED CLASS.
                This branch is entered on `vars.includes("trade") || vars.includes("competitors")` and
                used to hand over `{ trade, competitors }` unconditionally - right while audit_reply
@@ -2441,7 +2448,7 @@ Deno.serve(async (req) => {
        EVERY builder of its payload and count them before believing you have them all.
        ⚠️ The guard did its job: it refused rather than sending a message with a missing link, and
        failed_temporary means the lead retries rather than being burned. */
-    const templateExtra: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; visibilityScore?: string; senderName?: string } = {};
+    const templateExtra: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; visibilityScore?: string; senderName?: string; goCode?: string } = {};
     /* The ordered deep-crawl finding kinds this campaign send's {{6}} carried, for
        whatsapp_messages.findings_shown. Null for every template that does not carry site findings. */
     let campaignFindingsShown: string[] | null = null;
@@ -2462,6 +2469,18 @@ Deno.serve(async (req) => {
         }, 200);
       }
       templateExtra.onboardingUrl = ob.url;
+    }
+    /* ⛔ initial_with_link's tracking code (2026-11-22, src/lib/initialWithLink.ts). FAIL-CLOSED: no code (or not a LeadFinderOS-style
+       campaign) → the lead leaves the queue with the reason, nothing is sent. */
+    if (tvars.includes("go_code")) {
+      const gc = await goCodeFor(service, lead.id as string, templateName);
+      if (!gc.ok) {
+        await service.from("outreach_leads").update({
+          status: "not_contacted", whatsapp_delivery_status: "go_link_unavailable", contact_method: null,
+        }).eq("id", lead.id);
+        return json({ ok: false, error: "go_link_unavailable", reason: gc.reason, lead_id: lead.id, business: lead.business_name, ...statusPayload }, 200);
+      }
+      templateExtra.goCode = gc.code;
     }
     /* ⛔ ai_visibility_report_offer (2026-10-14): a resolver refusal is FINAL for this template — "named in the answers",
        "no competitors", "no score" cannot improve without a new check — so the lead leaves the queue with the reason on

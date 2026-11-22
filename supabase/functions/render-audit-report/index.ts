@@ -26,6 +26,7 @@ import { showOffer } from "../../../src/lib/buyOffer.ts";
 import { prospectOnlyLead } from "../../../src/lib/prospectOnly.ts";
 import { onboardingUrl, resolveSiteOrigin, ORIGIN_ENV } from "../_shared/onboarding-followup.ts";
 import { SITE_SHOT_BUCKET } from "../../../src/lib/siteShot.ts";
+import { botReasonFor } from "../../../src/lib/engagementBots.ts";
 
 import { auditCodeFromSlug, isShortCode, shortReportUrl } from "../../../src/lib/reportSlug.ts";
 import { paidReportKind } from "../../../src/lib/reportKind.ts";
@@ -140,6 +141,32 @@ async function recordAuditOpen(service: any, auditId: string, userAgent: string)
   } catch (e) {
     console.warn("[render-audit-report] open-tracking error (non-fatal):", e instanceof Error ? e.message : e);
   }
+}
+
+/* ══ THE REPORT VIEW LOG (2026-11-22, docs/campaign-performance.md) ══════════════════════════════════════════════════
+   Every public (non-preview) load is one report_views row, bots INCLUDED but marked (src/lib/engagementBots.ts), so the
+   campaign table can count people and still show how many previews it left out. The page then carries a few bytes of
+   script that ping track-engagement once: a page whose script ran is a real browser, however fast after the send.
+   NEVER throws, NEVER blocks the report: any failure = no row, no ping, the page as before. */
+// deno-lint-ignore no-explicit-any
+async function logReportView(service: any, auditId: string, userAgent: string): Promise<string | null> {
+  try {
+    const { data, error } = await service.rpc("log_report_view", { p_audit_id: auditId, p_user_agent: userAgent, p_bot_reason: botReasonFor(userAgent) });
+    if (error) { console.warn("[render-audit-report] view log skipped:", error.message); return null; }
+    return typeof data === "string" && UUID_RE.test(data) ? data : null;
+  } catch (e) {
+    console.warn("[render-audit-report] view log error (non-fatal):", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+/** The page's ping, placed before the LAST </body>. No id = the page unchanged. */
+function withViewPing(html: string, supabaseUrl: string, viewId: string | null): string {
+  if (!viewId) return html;
+  const u = `${supabaseUrl}/functions/v1/track-engagement?ping=${viewId}`;
+  const s = `<script>(function(){try{var u=${JSON.stringify(u)};if(navigator.sendBeacon){navigator.sendBeacon(u)}else{fetch(u,{method:"POST",mode:"no-cors",keepalive:true})}}catch(e){}})()</script>`;
+  const at = html.lastIndexOf("</body>");
+  return at < 0 ? html + s : html.slice(0, at) + s + html.slice(at);
 }
 
 Deno.serve(async (req) => {
@@ -550,9 +577,12 @@ Deno.serve(async (req) => {
        ONCE, so a salesperson checking the report before sending it used to take the prospect's first
        open for ever. What counts as an open: a non-bot load of the public report WITHOUT preview=1.
        Anyone can append the flag, which can only UNDER-count — never invent an open. */
+    let viewId: string | null = null;
     if (url.searchParams.get("preview") !== "1") {
       await recordAuditOpen(service, audit.id, req.headers.get("user-agent") ?? "");
+      viewId = await logReportView(service, audit.id, req.headers.get("user-agent") ?? "");
     }
+    const page = (html: string) => withViewPing(html, supabaseUrl, viewId);
     /* ══ THE REDESIGNED CLIENT PAGES (2026-11-11) ═══════════════════════════════════════════════════════
        Discovery -> opportunity report; paid baseline -> baseline report; a complete six-answer hook -> hook
        report. PRESENTATION ONLY: they read the same stored answers (counts), never a score, and never run the
@@ -561,7 +591,7 @@ Deno.serve(async (req) => {
     /* ══ LEADFINDEROS STYLE (src/lib/leadfinderReport.ts): always its own page, built from the same model; never the classic
        Findable page, never ?design=classic. A hook (three searches or fewer) shows each search; a longer audit shows them all. */
     if (lfos && data.measuring) {
-      return htmlResponse(renderLeadfinderMeasuring(audit.business_name ?? "", data.generatedAtLabel, data.measuring.runsDone, data.measuring.runsTarget), 200, { noStore: true });
+      return htmlResponse(page(renderLeadfinderMeasuring(audit.business_name ?? "", data.generatedAtLabel, data.measuring.runsDone, data.measuring.runsTarget)), 200, { noStore: true });
     }
     /* A prospect re-check (3 searches, asked 3 times each) is judged per search like a Discovery, never as a hook. */
     const isRecheckAudit = isRecheckPurpose((audit as { audit_purpose?: string | null }).audit_purpose);
@@ -634,7 +664,7 @@ Deno.serve(async (req) => {
         if (isRecheckAudit) model.recheckLabel = recheckLabel(questions.length, Number((audit as { baseline_target_runs?: number | null }).baseline_target_runs ?? RECHECK_RUNS) || RECHECK_RUNS);
         if (lfos) {
           model.signupUrl = null;
-          return htmlResponse(renderLeadfinderReport(model, { print: url.searchParams.get("print") === "1", nameNotJudgeable: data.nameNotJudgeable === true }), 200);
+          return htmlResponse(page(renderLeadfinderReport(model, { print: url.searchParams.get("print") === "1", nameNotJudgeable: data.nameNotJudgeable === true })), 200);
         }
         /* "YOU'RE ALREADY NAMED ON X SEARCHES" (Paul, 2026-11-15; src/lib/alreadyNamed.ts): a rules-v2 baseline opens with the
            searches its Discovery's STORED answers already name it on. Shown once, never re-measured for the client, never part
@@ -648,7 +678,7 @@ Deno.serve(async (req) => {
             console.error("[render-audit-report] already-named read failed (no section shown):", e instanceof Error ? e.message : e);
           }
         }
-        return htmlResponse(renderReport(model, { print: url.searchParams.get("print") === "1" }), 200);
+        return htmlResponse(page(renderReport(model, { print: url.searchParams.get("print") === "1" })), 200);
       } catch (e) {
         // A design that cannot render must never cost the reader their report: fall through to the classic page.
         console.error("[render-audit-report] redesign failed, serving classic:", e instanceof Error ? e.message : e);
@@ -656,7 +686,7 @@ Deno.serve(async (req) => {
         if (lfos) return no("Something went wrong rendering this report.");
       }
     }
-    return htmlResponse(renderReportHtml(data), 200, { noStore: !!data.measuring });
+    return htmlResponse(page(renderReportHtml(data)), 200, { noStore: !!data.measuring });
   } catch (e) {
     console.error("[render-audit-report] error:", e instanceof Error ? e.message : e);
     const msg = "Something went wrong rendering this report.";
