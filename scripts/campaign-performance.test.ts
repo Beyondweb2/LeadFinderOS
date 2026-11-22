@@ -168,6 +168,12 @@ console.log("\n── initial_with_link (leadfinderos.com/go/<code>) ──");
   ok(/status: 302, headers: \{ location: GO_LINK_DESTINATION/.test(te2), "?go= always lands on https://leadfinderos.com/");
   const m2 = read("supabase/migrations/20261226100000_initial_with_link.sql");
   ok(m2.includes("'initial_contact_short', 'initial_with_link', 'ai_visibility_report_offer'") && m2.includes("v_reason := public.opener_contact_block(v_id);"), "queueable as a cold opener; opt-out / Do Not Contact block unchanged");
+  /* 2026-11-22 (fix/initial-with-link-text): the Inbox shows Meta's approved words — DISPLAY ONLY. */
+  const { readableTemplateBody } = await import("../src/lib/templateBodies.ts");
+  const APPROVED = "Hey ✌️, fellow web dev here\n\nIf you sell websites, SEO or AI visibility you might wanna check this out\n\nhttps://leadfinderos.com/go/<tracking code>\n\nAll the best\nPaul";
+  ok(readableTemplateBody("[initial_with_link]", "initial_with_link", { businessName: "Acme Web", url: "https://x.test/onboard" }) === APPROVED, "the Inbox shows the approved wording, not [initial_with_link]");
+  const { renderTemplateBody } = await import("../supabase/functions/_shared/whatsapp-send.ts");
+  ok(renderTemplateBody("initial_with_link", "Acme Web", "") === "[initial_with_link]", "the sender still stores the placeholder, so it always goes as the Meta template (never free text)");
 }
 
 if (f) { console.log(`\n${f} FAILED`); process.exit(1); }
