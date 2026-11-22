@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-22-initial-with-link-text', date: '2026-11-22', title: 'Initial with link shows its real wording', audience: 'admin',
+    body: 'The Inbox and message previews now show the approved words of the Initial with link opener ("Hey ✌️, fellow web dev here …") instead of [initial_with_link]. The lead’s own tracking code shows as <tracking code>. It still always goes as the Meta template.',
+    report: {
+      added: [],
+      changed: ['Initial with link: the Inbox, lead panel and template previews show Meta’s approved wording instead of the template name.'],
+      removed: [],
+      effect: 'You can read what the prospect was sent. Nothing about how it is sent changed.',
+    } },
   { id: '2026-11-22-campaign-performance', date: '2026-11-22', title: 'Campaign performance: which message works best', audience: 'all',
     body: 'Manage campaigns → Performance on a WhatsApp campaign shows a table per message: sent, read, real replies (auto-replies left out), report/link opens and interested. The best message is highlighted once it has 20+ sends.',
     report: {

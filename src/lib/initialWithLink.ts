@@ -9,9 +9,11 @@
      track-engagement?go=<code>, which logs the click (bots / previews marked) and redirects to https://leadfinderos.com/.
    - ⛔ LeadFinderOS-style campaigns only (report_style 'leadfinderos', the web-dev / agency campaign): a Findable prospect is
      never sent a LeadFinderOS link (the brands never cross).
-   - ⛔ NO OWN WORDING: the approved body text was not supplied, so the app never renders it. The stored transcript is the
-     placeholder "[initial_with_link]", which also means it always goes as the TEMPLATE, never as free text in our words
-     (inWindowFreeText.ts treats a placeholder as "no wording"). When Paul pastes the exact body, add a renderer.
+   - ⛔ DISPLAY ONLY: initialWithLinkBody below is Meta's approved wording (Paul pasted it 2026-11-22), used ONLY by the SPA's
+     readable mirror (templateBodies.ts) so the Inbox / previews show the words instead of "[initial_with_link]". The SENDERS
+     still store the placeholder "[initial_with_link]" (whatsapp-send.ts has no renderer for it, on purpose), so it always goes
+     as the TEMPLATE, never as free text in our words (inWindowFreeText.ts treats a placeholder as "no wording").
+     ⚠️ The SPA does not know which code a sent row carried (it is in tracked_links), so the display shows TRACKING_CODE_SHOWN.
    ⚠️ Explicit .ts imports only: reached by edge functions.
    ============================================================ */
 
@@ -25,4 +27,19 @@ export const GO_CODE_RE = /^[a-z0-9]{8}$/;
 
 export function goLink(code: string): string {
   return `${GO_LINK_ORIGIN}/go/${code}`;
+}
+
+/** What the display shows in place of {{1}} when the real code is not known. */
+export const TRACKING_CODE_SHOWN = '<tracking code>';
+
+/** Meta's approved body, byte for byte (line breaks kept); {{1}} = the per-lead go code. DISPLAY ONLY — see the header. */
+export function initialWithLinkBody(code: string = TRACKING_CODE_SHOWN): string {
+  return `Hey ✌️, fellow web dev here
+
+If you sell websites, SEO or AI visibility you might wanna check this out
+
+${goLink(code || TRACKING_CODE_SHOWN)}
+
+All the best
+Paul`;
 }
