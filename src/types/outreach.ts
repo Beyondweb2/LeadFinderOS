@@ -3,7 +3,7 @@
    label states the approval — one constant, no second copy of the rule.
    ⚠️ This file is reached by NO edge function (check-import-graph --reached-by), so the import adds
    nothing to any edge closure. */
-import { INITIAL_OPENER_B, INITIAL_OPENER_C, INITIAL_OPENER_D, INITIAL_OPENER_V2_APPROVED } from '@/lib/openerVariant';
+import { INITIAL_OPENER_B, INITIAL_OPENER_C, INITIAL_OPENER_D, INITIAL_OPENER_E, INITIAL_OPENER_V2_APPROVED } from '@/lib/openerVariant';
 /* ai_site_findings_v2's name lives in one leaf (src/lib/siteFindings.ts, beside the generator for
    the {{6}} that makes it different). */
 import { AI_SITE_FINDINGS_V2 } from '@/lib/siteFindings';
@@ -557,6 +557,9 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
   /* initial_contact_short — "Hey, is this {{1}}?" (2026-10-15). Meta's LIVE status gates it server-side: until Meta approves it a send
      or a queue is refused with Meta's own word. */
   { value: INITIAL_OPENER_C, label: 'Initial contact short — "Hey, is this …?" (cleaned name)' },
+  /* initial_with_link (Paul, 2026-11-22; src/lib/initialWithLink.ts) — a cold opener carrying leadfinderos.com/go/<tracking code>. In
+     review at Meta; Paul: treat as approved. Sent only to leads in a LeadFinderOS-style (web dev / agency) campaign — refused otherwise. */
+  { value: INITIAL_OPENER_E, label: 'Initial with link — LeadFinderOS link with a tracking code (web dev / agency campaigns)' },
   /* initial_question (Paul, 2026-11-15) — "Hi mate, do you build websites or do SEO or AI visibility?", no variables. Meta's LIVE
      status gates it server-side, like the short opener. */
   { value: INITIAL_OPENER_D, label: 'Initial question — "Do you build websites or do SEO or AI visibility?"' },

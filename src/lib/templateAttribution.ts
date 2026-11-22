@@ -85,7 +85,13 @@ export interface SendCredit extends ReplyCredit { sendIndex: number }
  * THE RULE ITSELF — creditRepliesByTemplate is this, minus the index. One walk, so the campaign card
  * and the Sales Dashboard cannot disagree about which message earned a reply.
  */
-export function creditRepliesToSends(msgs: AttributableMsg[]): SendCredit[] {
+export function creditRepliesToSends(
+  msgs: AttributableMsg[],
+  /* Which inbound counts as an answer. Default = the one rule every existing surface uses (not looksAutomated). The
+     campaign performance table passes its RAW (every inbound) and REAL (realReply.ts) rules — the same walk, so it
+     cannot disagree with the rest about which send earned a reply. A non-answer neither earns credit nor closes the run. */
+  isAnswer: (index: number) => boolean = (index) => !looksAutomated(msgs[index].body ?? ''),
+): SendCredit[] {
   const credits: SendCredit[] = [];
   const seen = new Set<string>();
   /* The run of templated sends since the last inbound. Its LAST entry takes the credit; more than
@@ -99,7 +105,7 @@ export function creditRepliesToSends(msgs: AttributableMsg[]): SendCredit[] {
        the sender and the dashboard agree on what a human is. It also must NOT close the run: a
        booking bot replying instantly would otherwise absolve the next send of competing with the
        one before it. */
-    if (looksAutomated(m.body ?? '')) return;
+    if (!isAnswer(index)) return;
     if (run.length > 0) {
       const last = run[run.length - 1];
       if (!seen.has(last.template)) {

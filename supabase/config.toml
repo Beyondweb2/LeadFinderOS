@@ -250,6 +250,17 @@ verify_jwt = true
 [functions.sales-performance]
 verify_jwt = true
 
+# campaign-performance: the Campaigns page per-template table (2026-11-22, docs/campaign-performance.md). SPA-only caller with
+# the signed-in user JWT; the handler resolves the role (admin: any campaign; a salesperson: only their own, their leads). Counts only.
+[functions.campaign-performance]
+verify_jwt = true
+
+# track-engagement: PUBLIC logger (2026-11-22). The report page ping (?ping=<view id>) and the tracked-link lookup
+# (?link=<code>, called by the findable.live and app.leadfinderos.com /l/ proxies). The handler is the gate: exact-shape ids only,
+# writes only through service-role-only SQL functions, returns only our own addresses.
+[functions.track-engagement]
+verify_jwt = false
+
 # sales-prospect-check: "Run AI audit" — a salesperson's bulk pre-call check (fix/07, 2026-10-04).
 # SPA-only caller with the signed-in user's JWT (a salesperson; the admin for its overview); the handler
 # resolves the role itself on every call and judges every lead server-side. It calls create-ai-audit and

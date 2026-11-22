@@ -14,6 +14,8 @@ import {
   firstNameFrom,
 } from "../_shared/whatsapp-send.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
+import { goLink } from "../../../src/lib/initialWithLink.ts";
+import { goCodeFor, trackReportLink } from "../_shared/tracked-link.ts";
 import type { SendErrorParts } from "../../../src/lib/sendErrorMeaning.ts";
 import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
 /* 🔴 THE SAME LEAF THE QUEUE READS, AND IT WAS USED HERE FOR A DAY WITHOUT BEING IMPORTED.
@@ -138,7 +140,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
 /* 2026-11-16b: polite_hook + polite_hook2 follow-ups (no variables; needs prior WhatsApp; Meta live status first). */
 /* 2026-11-21a: gone_cold (no variables; manual only; only to a lead we messaged who has not replied, outside the window; opt-out and
    Do Not Contact block; sends only when Meta's LIVE status is APPROVED, UNKNOWN refuses too). */
-const BUILD_ID = "2026-11-21a-gone-cold";
+const BUILD_ID = "2026-11-22a-tracked-report-link";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -965,6 +967,13 @@ Deno.serve(async (req) => {
           lang = WA_TEMPLATES[templateName].lang;
           fellBackReason = rivalCall.reason;
         }
+        /* ⛔ THE TRACKED REPORT LINK (2026-11-22, _shared/tracked-link.ts, docs/campaign-performance.md). A report link this
+           template carries goes as findable.live/l/<code> (or app.leadfinderos.com/l/<code>), which logs the click and opens the
+           same report. Everything after this line uses it — payload, free-text words, stored body. Fail-open: any problem keeps
+           the original link. A dry run makes no link. */
+        if (!dryRun && (tvars.includes("url") || tvars.includes("audit_url"))) {
+          a = { ...a, link: await trackReportLink(service, { leadId: resolvedLeadId, template: templateName, url: a.link }) };
+        }
         /* ⛔ BUILT FROM THE TEMPLATE'S DECLARED VARS - see the identical note in
            process-whatsapp-queue. `needsAudit` is `trade || competitors`, so audit_result_hook
            enters here as well, and a fixed `{ trade, competitors }` would leave its `town` and
@@ -1037,6 +1046,17 @@ Deno.serve(async (req) => {
            template and would otherwise fall through this opener branch with no history guard at all
            (openers are guarded in the queue, not here). Same contract as hook_followup: a lead, then
            pitchEverSent for THIS template — a second "is this the right number" nudge is pressure. */
+        /* ⛔ initial_with_link's tracking code (2026-11-22, src/lib/initialWithLink.ts): made for THIS send, fail-closed, only for a lead
+           in a LeadFinderOS-style campaign. A dry run builds the payload with a stand-in code and stores nothing. */
+        let goCode: string | undefined;
+        if (tvars.includes("go_code")) {
+          if (dryRun) goCode = "dryrun00";
+          else {
+            const gc = await goCodeFor(service, resolvedLeadId, templateName);
+            if (!gc.ok) return json({ ok: false, error: "go_link_unavailable", reason: gc.reason, template: templateName }, 200);
+            goCode = gc.code;
+          }
+        }
         if (templateName === "contact_followup") {
           if (!resolvedLeadId) return json({ ok: false, error: "template_needs_lead" }, 400);
           if (await pitchEverSent(service, resolvedLeadId, templateName)) {
@@ -1060,9 +1080,9 @@ Deno.serve(async (req) => {
           if (!shareToken) return json({ ok: false, error: "no_claim_link" }, 400);
           claimUrl = `${CLAIM_ORIGIN}/s/${shareToken}`;
         }
-        payload = claimTemplatePayload(templateName, lang, businessName, claimUrl, { town: leadTown });
+        payload = claimTemplatePayload(templateName, lang, businessName, claimUrl, { town: leadTown, goCode });
         storedBody = renderTemplateBody(templateName, businessName, claimUrl, undefined, undefined, undefined, leadTown);
-        auditClaimUrl = claimUrl;
+        auditClaimUrl = goCode && !dryRun ? goLink(goCode) : claimUrl;
       }
       messageType = "template";
       usedTemplate = templateName;

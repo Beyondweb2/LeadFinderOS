@@ -86,7 +86,8 @@ export const BRANCH_SUPPLIES: Record<TemplateBranch, ReadonlySet<string>> = {
        message name (_shared/sender-name.ts) — all resolved in the audit branch of both senders. */
     "name_or_there", "visibility_score", "sender_name",
   ]),
-  plain: new Set(["name", "url", "town"]),
+  /* go_code (initial_with_link, 2026-11-22): made in the plain branch of both senders by _shared/tracked-link.ts goCodeFor. */
+  plain: new Set(["name", "url", "town", "go_code"]),
 };
 
 /** Variables this template declares that its branch cannot answer. Empty means it can be sent. */

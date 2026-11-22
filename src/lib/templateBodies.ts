@@ -443,6 +443,9 @@ export const READABLE_TEMPLATE_BODIES: Record<string, TemplateBodyFn> = {
   initial_contact: initialContactBody,
   initial_opener_v2: initialOpenerV2Body,
   initial_contact_short: initialContactShortBody,
+  /* initial_with_link (2026-11-22, src/lib/initialWithLink.ts): a PREVIEW only. Meta's approved wording is not in the app, so the senders
+     store "[initial_with_link]" and always send the template (never these words as free text). u = the sample link. */
+  initial_with_link: () => 'Opener with your tracked link: https://leadfinderos.com/go/<tracking code> (the wording is the one approved in Meta)',
   initial_question: initialQuestionBody,
   /* webdev_report: the ONE body, shared with whatsapp-send.ts (src/lib/webdevReport.ts). b = {{1}}, u = {{2}} the report link. */
   webdev_report: (b: string, u: string) => webdevReportBody(b, u),

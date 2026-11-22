@@ -66,7 +66,7 @@ ok(fn.includes("preview") && fn.includes('"user-agent"'), "opens still tracked t
 const rar = read("supabase/functions/render-audit-report/index.ts");
 ok(rar.includes('.from("campaigns").select("report_style")') && rar.includes("reportStyleOf("), "renderer reads the lead's campaign style at render time");
 ok(rar.includes('if (lfosHost && !lfos) return no('), "the LeadFinderOS address refuses a Findable-style report");
-ok(rar.includes("if (lfos) return no(") && rar.indexOf("if (lfos) return no(") < rar.indexOf("return htmlResponse(renderReportHtml(data)"), "a LeadFinderOS lead never falls through to the Findable classic page");
+ok(rar.includes("if (lfos) return no(") && rar.indexOf("if (lfos) return no(") < rar.indexOf("return htmlResponse(page(renderReportHtml(data))"), "a LeadFinderOS lead never falls through to the Findable classic page");
 ok(rar.includes("renderLeadfinderMeasuring("), "still measuring: the LeadFinderOS waiting page");
 ok(/if \(lfos\) \{\s*if \(auditShortCode\) data\.shareUrl = lfosReportUrl/.test(rar) && rar.includes("data.showOffer = false;"), "LeadFinderOS: its own share link, no offer");
 

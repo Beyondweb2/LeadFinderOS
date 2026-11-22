@@ -17,7 +17,8 @@ let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
 const ROOT = path.resolve(import.meta.dirname, "..");
 const read = (p: string) => readFileSync(path.join(ROOT, p), "utf8").replace(/\r\n/g, "\n");
-const SQL = read("supabase/migrations/20261219090000_sales_queue_every_template.sql");
+/* 2026-11-22: the newest copy of the function (initial_with_link joined the cold list). */
+const SQL = read("supabase/migrations/20261226100000_initial_with_link.sql");
 const arr = (name: string) => { const m = SQL.match(new RegExp(`${name} text\\[\\] := array\\[([^\\]]*)\\]`)); return m ? [...m[1].matchAll(/'([a-z0-9_]+)'/g)].map((x) => x[1]) : []; };
 const cold = arr("v_cold"), follow = arr("v_followups"), blocked = arr("v_blocked");
 

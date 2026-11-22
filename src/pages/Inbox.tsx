@@ -271,6 +271,7 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
      the switch was turned back off. Picker = the future; this = the past. */
   initial_opener_v2: 'Initial contact v2 (newer opener)',
   initial_contact_short: 'Initial contact short ("Hey, is this …?")',
+  initial_with_link: 'Initial with link (leadfinderos.com tracking link)',
   initial_question: 'Initial question ("Do you build websites…?")',
   webdev_report: 'Web dev report ("I ran one on …")',
   webdev_hook: 'Web dev hook (app pitch, no link)',

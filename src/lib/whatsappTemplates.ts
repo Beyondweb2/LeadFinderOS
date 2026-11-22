@@ -94,6 +94,8 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
   initial_opener_v2:      { needsUrl: false, needsAudit: false, group: 'opener' },
   /* initial_contact_short (2026-10-15) - the short opener. Same shape as initial_contact: one variable (the cleaned name), no link, no audit. */
   initial_contact_short:  { needsUrl: false, needsAudit: false, group: 'opener' },
+  /* initial_with_link (2026-11-22) - the link opener. Its one variable is a tracking code the SERVER makes; no claim link, no audit. */
+  initial_with_link:      { needsUrl: false, needsAudit: false, group: 'opener' },
   /* initial_question (2026-11-15) - a FOLLOW-UP with NO variables: no name, no link, no audit. Group 'followup' (2026-11-16, was
      'opener'); it is a continuation (coldOutreach.ts) and only goes to a number already messaged. */
   initial_question:       { needsUrl: false, needsAudit: false, group: 'followup' },

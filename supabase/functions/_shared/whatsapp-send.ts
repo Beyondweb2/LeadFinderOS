@@ -63,7 +63,10 @@ export type TemplateVar = "name" | "url" | "trade" | "trade_plural" | "trade_art
      {{4}} the check's visibility score ("66%"), {{6}} the SENDING person's own message name (_shared/sender-name.ts). */
   | "name_or_there" | "visibility_score" | "sender_name"
   /* 2026-10-26 — needs_from_you {{2}}: the item the client still has to send (src/lib/dashboardTemplates.ts cleanNeededItem). */
-  | "needed_item";
+  | "needed_item"
+  /* 2026-11-22 — initial_with_link (src/lib/initialWithLink.ts): {{1}} the per-lead tracking code in https://leadfinderos.com/go/{{1}},
+     made at send time by _shared/tracked-link.ts goCodeFor. */
+  | "go_code";
 
 /* ⛔ THE VIDEO HEADER'S URL, IN ONE PLACE (Paul, 2026-09-12).
    `video_template` is registered at Meta with a VIDEO header, which means the send MUST carry a
@@ -115,6 +118,10 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
      sender read Meta's LIVE status first and refuse with Meta's word while it is in review.
      MIRRORS process-whatsapp-queue; change both together. */
   initial_contact_short: { lang: "en", vars: ["name"] },
+  /* initial_with_link — Paul, 2026-11-22 (src/lib/initialWithLink.ts). English, Marketing, Meta ID 1084953241232593, IN REVIEW;
+     Paul: treat as approved (no gate; Meta's refusal shows as the normal failed send). ONE variable: the tracking code.
+     MIRRORS process-whatsapp-queue; change both together. */
+  initial_with_link: { lang: "en", vars: ["go_code"] },
   /* initial_question — Paul, 2026-11-15. "Hi mate, do you build websites or do SEO or AI visibility?". English, ZERO
      variables, no header/footer/buttons: vars MUST stay [] (no parameters). COLD (not a continuation). Meta's LIVE status is
      read first at both senders (like initial_contact_short). MIRRORS process-whatsapp-queue; change both together. */
@@ -922,7 +929,7 @@ export function templateBodyParams(
   vars: TemplateVar[],
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; templateName?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string; neededItem?: string; welcomePackUrl?: string; freeTextOnly?: boolean },
+  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; templateName?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string; neededItem?: string; welcomePackUrl?: string; goCode?: string; freeTextOnly?: boolean },
 ) {
   /* Last line of defence for a template whose copy needs a real name. Callers check first and
      return a readable refusal; this throws so a new caller that forgets cannot quietly send
@@ -1102,6 +1109,11 @@ export function templateBodyParams(
       }
       /* needs_from_you {{2}}: what the client still has to send. Blank or over-long refuses (Meta rejects an empty
          parameter, and a vague "something" is not a request); the unsafe_template_var: prefix makes it a visible hold. */
+      case "go_code": {
+        const c = (extra?.goCode ?? "").trim();
+        if (!/^[a-z0-9]{8}$/.test(c)) throw new Error("unsafe_template_var:no_tracking_code:the tracking link could not be made");
+        return c;
+      }
       case "needed_item": {
         const c = cleanNeededItem(extra?.neededItem);
         if (!c.ok) throw new Error(`unsafe_template_var:${c.reason}:say what you need from them`);
@@ -1190,7 +1202,7 @@ export function claimTemplatePayload(
   lang: string,
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string; neededItem?: string; welcomePackUrl?: string; freeTextOnly?: boolean },
+  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string; neededItem?: string; welcomePackUrl?: string; goCode?: string; freeTextOnly?: boolean },
 ) {
   /* THROWS on an unrecognised template rather than assuming ["name","url"].
      That assumption was a quieter version of the queue's template fallback: an unregistered name got
