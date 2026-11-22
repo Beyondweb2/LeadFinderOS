@@ -18,7 +18,7 @@ import { LFOS_REPORT_ORIGIN } from "../../../src/lib/reportBrand.ts";
 type Service = any;
 
 /**
- * initial_with_link's {{1}} (src/lib/initialWithLink.ts): a fresh tracking code for this lead + template.
+ * initial_with_link's {{1}} (src/lib/initialWithLink.ts): this lead's tracking code for this template (reused, or made once).
  * ⛔ FAIL-CLOSED, unlike the report wrap: without a code the message's link is broken, so the send is refused with a reason.
  * ⛔ Only for a lead in a LeadFinderOS-style campaign (report_style 'leadfinderos').
  */
@@ -35,6 +35,15 @@ export async function goCodeFor(service: Service, leadId: string | null | undefi
       style = String((camp as { report_style?: string | null } | null)?.report_style ?? "findable");
     }
     if (style !== "leadfinderos") return { ok: false, reason: "This message is only for leads in a LeadFinderOS-style campaign (web developers / agencies)." };
+    /* ONE CODE PER LEAD + TEMPLATE (2026-11-22b, fix/initial-with-link-parity): the Inbox preview, "Put in message box" and the
+       send all show the SAME real link, so the newest code already made for this lead + template is reused; one is made only
+       when there is none. Clicks are logged by code, so either way (template or free text) counts the same. */
+    const { data: had, error: hErr } = await service.from("tracked_links").select("code")
+      .eq("lead_id", leadId).eq("template_name", template).eq("target_url", GO_LINK_DESTINATION)
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (hErr) return { ok: false, reason: "Could not read the tracking link, so nothing was sent. Try again." };
+    const old = (had as { code?: string } | null)?.code;
+    if (typeof old === "string" && GO_CODE_RE.test(old)) return { ok: true, code: old };
     const { data, error } = await service.rpc("create_tracked_link", { p_lead_id: leadId, p_template: template, p_target: GO_LINK_DESTINATION });
     if (error || typeof data !== "string" || !GO_CODE_RE.test(data)) return { ok: false, reason: "Could not make the tracking link, so nothing was sent. Try again." };
     return { ok: true, code: data };

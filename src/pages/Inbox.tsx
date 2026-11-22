@@ -62,6 +62,7 @@ import { updateLeadStatus } from '@/lib/leadStatus';
 import { PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, type PipelineStatus } from '@/types/outreach';
 import { TemplateEye } from '@/components/TemplateWordingPreview';
 import { templatePreviewText } from '@/lib/templatePreview';
+import { TRACKING_CODE_SHOWN } from '@/lib/initialWithLink';
 import { smsPreview } from '@/lib/smsPreview';
 import { INBOX_DASHBOARD_GROUP_LABEL, INBOX_DASHBOARD_TEMPLATES, inboxDashboardSendability, isDashboardTemplate, needsTypedItem } from '@/lib/inboxDashboardTemplates';
 import { cleanNeededItem, DASHBOARD_TEMPLATES, dashboardGreeting, NEEDED_ITEM_MAX } from '@/lib/dashboardTemplates';
@@ -1718,6 +1719,9 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
      hovering a row asks nothing (only the chosen template is checked). It never disables a button: it only warns. A check that could
      not run (an old deploy without the dry run, a network drop) says nothing rather than guess. */
   const sendCheckCache = useRef(new Map<string, string | null>());
+  /* The same dry run's words, per check id. Used only by the eye when the app's own copy cannot know a value (initial_with_link's
+     tracking code, which the server makes): then the eye shows the sender's real words with the real link. */
+  const sendCheckBody = useRef(new Map<string, string>());
   const [sendCheck, setSendCheck] = useState<{ id: string; warning: string | null } | null>(null);
   const sendCheckId = active?.leadId && template ? `${active.key}|${template}|${needsTypedItem(template) ? neededItem.trim() : ''}` : null;
   useEffect(() => {
@@ -1733,6 +1737,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       const r = await preview({ phone: lead.phone, leadId: lead.leadId, country: activeLead?.country ?? null, templateName: tpl, allowResend: thread.some((m) => m.direction === 'outbound' && m.template_name === tpl), ...(needsTypedItem(tpl) ? { templateVars: { needed_item: neededItem } } : {}) });
       if (r.error === 'preview_unsupported') return;
       const warning = r.ok ? null : (r.reason || r.error || 'the server would refuse it');
+      if (r.ok && r.body) sendCheckBody.current.set(sendCheckId, r.body);
       sendCheckCache.current.set(sendCheckId, warning);
       if (!stale) setSendCheck({ id: sendCheckId, warning });
     }, 400);
@@ -1778,7 +1783,11 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     if (isDashboardTemplate(name)) return dashboardTemplatePreview(name, { business: activeLead?.business_name ?? '', greeting: dashboardGreeting(activeLead?.contact_name, activeLead?.business_name ?? ''), neededItem: neededItem.trim() || '(type it above)' });
     const lead = activeLead as { contact_name?: string | null; derived_town?: string | null; search_location?: string | null; search_keyword?: string | null } | undefined;
     if (sms) { try { return smsPreview(name as Parameters<typeof smsPreview>[0], { business_name: activeLead?.business_name, derived_town: lead?.derived_town ?? null }); } catch { /* no SMS version: the app's copy below */ } }
-    return templatePreviewText(name, { businessName: activeLead?.business_name, firstName: lead?.contact_name, town: lead?.derived_town ?? lead?.search_location, trade: lead?.search_keyword });
+    const own = templatePreviewText(name, { businessName: activeLead?.business_name, firstName: lead?.contact_name, town: lead?.derived_town ?? lead?.search_location, trade: lead?.search_keyword });
+    /* initial_with_link: the app does not know this lead's tracking code, so the chosen template's eye shows the dry run's words
+       (the real link) once the automatic check has run. Until then it shows the copy with <tracking code>. */
+    if (own?.includes(TRACKING_CODE_SHOWN) && name === template && sendCheckId) return sendCheckBody.current.get(sendCheckId) ?? own;
+    return own;
   };
 
   // Approved WhatsApp-template picker. Shown in

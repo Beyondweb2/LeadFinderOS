@@ -173,7 +173,23 @@ console.log("\n── initial_with_link (leadfinderos.com/go/<code>) ──");
   const APPROVED = "Hey ✌️, fellow web dev here\n\nIf you sell websites, SEO or AI visibility you might wanna check this out\n\nhttps://leadfinderos.com/go/<tracking code>\n\nAll the best\nPaul";
   ok(readableTemplateBody("[initial_with_link]", "initial_with_link", { businessName: "Acme Web", url: "https://x.test/onboard" }) === APPROVED, "the Inbox shows the approved wording, not [initial_with_link]");
   const { renderTemplateBody } = await import("../supabase/functions/_shared/whatsapp-send.ts");
-  ok(renderTemplateBody("initial_with_link", "Acme Web", "") === "[initial_with_link]", "the sender still stores the placeholder, so it always goes as the Meta template (never free text)");
+  ok(renderTemplateBody("initial_with_link", "Acme Web", "") === "[initial_with_link]", "with no code the renderer still gives the placeholder (never words with a broken link)");
+  /* 2026-11-22b (fix/initial-with-link-parity): parity with the other templates — the real words with this lead's real link. */
+  const { initialWithLinkBody } = await import("../src/lib/initialWithLink.ts");
+  const { freeTextVersionOf, inWindowShape } = await import("../src/lib/inWindowFreeText.ts");
+  const REAL = initialWithLinkBody("ab12cd34");
+  ok(REAL === APPROVED.replace("<tracking code>", "ab12cd34"), "the plain-text version is the approved wording with https://leadfinderos.com/go/<the code>");
+  const v = freeTextVersionOf(p, REAL);
+  ok(v.ok === true && v.text === REAL, "it has a plain-text version (no 'No plain-text version')");
+  const open = inWindowShape({ origin: "inbox", windowOpen: true, allowClosedText: false, typed: false, version: v });
+  ok(open.as === "text" && (open as { text: string }).text === REAL, "window open → goes as free text, those words (no template charge)");
+  ok(inWindowShape({ origin: "inbox", windowOpen: false, allowClosedText: false, typed: false, version: v }).as === "template", "window closed → the Meta template ({{1}} = the code)");
+  const swm2 = read("supabase/functions/send-whatsapp-message/index.ts");
+  ok(/if \(goCode\) storedBody = initialWithLinkBody\(goCode\);/.test(swm2), "send-whatsapp-message stores / previews the real words");
+  ok(!/dryrun00/.test(swm2), "the dry run (preview, Put in message box) uses the lead's real code, not a stand-in");
+  ok(/if \(templateExtra\.goCode\) campaignBody = initialWithLinkBody\(templateExtra\.goCode\);/.test(read("supabase/functions/process-whatsapp-queue/index.ts")), "the queue stores the real words too");
+  ok(/from\("tracked_links"\)\.select\("code"\)[\s\S]{0,200}eq\("template_name", template\)/.test(tl2) && tl2.indexOf('from("tracked_links").select("code")') < tl2.indexOf('rpc("create_tracked_link"'), "one code per lead + template: reused before a new one is made (preview link = sent link)");
+  ok(/sendCheckBody\.current\.get\(sendCheckId\)/.test(read("src/pages/Inbox.tsx")), "the Inbox eye shows the dry run's real link for it");
 }
 
 if (f) { console.log(`\n${f} FAILED`); process.exit(1); }

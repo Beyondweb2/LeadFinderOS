@@ -14,7 +14,7 @@ import {
   firstNameFrom,
 } from "../_shared/whatsapp-send.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
-import { goLink } from "../../../src/lib/initialWithLink.ts";
+import { goLink, initialWithLinkBody } from "../../../src/lib/initialWithLink.ts";
 import { goCodeFor, trackReportLink } from "../_shared/tracked-link.ts";
 import type { SendErrorParts } from "../../../src/lib/sendErrorMeaning.ts";
 import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
@@ -1046,16 +1046,14 @@ Deno.serve(async (req) => {
            template and would otherwise fall through this opener branch with no history guard at all
            (openers are guarded in the queue, not here). Same contract as hook_followup: a lead, then
            pitchEverSent for THIS template — a second "is this the right number" nudge is pressure. */
-        /* ⛔ initial_with_link's tracking code (2026-11-22, src/lib/initialWithLink.ts): made for THIS send, fail-closed, only for a lead
-           in a LeadFinderOS-style campaign. A dry run builds the payload with a stand-in code and stores nothing. */
+        /* ⛔ initial_with_link's tracking code (2026-11-22, src/lib/initialWithLink.ts): fail-closed, only for a lead in a
+           LeadFinderOS-style campaign. 2026-11-22b (fix/initial-with-link-parity): the dry run asks for the REAL code too (this lead's
+           one code, made once and reused — _shared/tracked-link.ts), so the preview and "Put in message box" show the real link. */
         let goCode: string | undefined;
         if (tvars.includes("go_code")) {
-          if (dryRun) goCode = "dryrun00";
-          else {
-            const gc = await goCodeFor(service, resolvedLeadId, templateName);
-            if (!gc.ok) return json({ ok: false, error: "go_link_unavailable", reason: gc.reason, template: templateName }, 200);
-            goCode = gc.code;
-          }
+          const gc = await goCodeFor(service, resolvedLeadId, templateName);
+          if (!gc.ok) return json({ ok: false, error: "go_link_unavailable", reason: gc.reason, template: templateName }, 200);
+          goCode = gc.code;
         }
         if (templateName === "contact_followup") {
           if (!resolvedLeadId) return json({ ok: false, error: "template_needs_lead" }, 400);
@@ -1082,7 +1080,10 @@ Deno.serve(async (req) => {
         }
         payload = claimTemplatePayload(templateName, lang, businessName, claimUrl, { town: leadTown, goCode });
         storedBody = renderTemplateBody(templateName, businessName, claimUrl, undefined, undefined, undefined, leadTown);
-        auditClaimUrl = goCode && !dryRun ? goLink(goCode) : claimUrl;
+        /* initial_with_link: Meta's approved wording with THIS lead's real link (not the "[initial_with_link]" placeholder), so it has a
+           plain-text version like every other template — free text inside the 24 hours, the template ({{1}} = the code) outside. */
+        if (goCode) storedBody = initialWithLinkBody(goCode);
+        auditClaimUrl = goCode ? goLink(goCode) : claimUrl;
       }
       messageType = "template";
       usedTemplate = templateName;
