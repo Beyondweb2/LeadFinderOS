@@ -2,7 +2,7 @@
    number-type hold and the UK-only queue. Pure rules plus source wiring. Nothing here can message anyone. */
 import { readFileSync } from 'node:fs';
 import { COLD_HOURLY_MAX, COLD_MIN_GAP_MIN, NUMBER_DAILY_COLD_CAP, SAFETY_DAILY_COLD_CAP, hourCapRetryAt, metaSafetyReason, numberDailyCap, safetyNetEmail } from '../src/lib/whatsappQualityCap.ts';
-import { FAILURE_RUN_PAUSE, currentFailureRun, failureRunVerdict, strikeSinceAfterRuns } from '../src/lib/whatsappPace.ts';
+import { FAILURE_RUN_PAUSE, currentFailureRun, failureRunVerdict, failureRunWindows, insideFailureRun, strikeSinceAfterRuns } from '../src/lib/whatsappPace.ts';
 import { coldVerdict, numberColdState, type ColdFacts, type ColdSendRow } from '../src/lib/whatsappColdGuard.ts';
 import { countrySettingsFrom } from '../src/lib/outreachMarkets.ts';
 import { isStrike, statusAfterStrike, struckOut, NOT_ON_WHATSAPP_CODE, STRIKE_DELIVERY_STATES, PROOF_DELIVERY_STATES, STRIKE_MOVES_STATUSES } from '../src/lib/whatsappOneStrike.ts';
@@ -79,6 +79,21 @@ console.log('the failure-run breaker (23 Nov: 19 of 19 failed and the auto-pause
   ok(since.getTime() === Date.parse(ago(2)) + 1, 'after a run, the pass starts after its last failure: those leads are not struck');
   const later = strikeSinceAfterRuns([...today, r(5, 'read'), r(3, 'failed')], lookback);
   ok(later.getTime() === Date.parse(ago(10)) + 1 && later.getTime() < Date.parse(ago(3)), '…and a lone failure after the number recovered is still judged');
+}
+
+console.log('the per-lead check leaves out failures inside a run (the 25 leads restored on 23 Nov)');
+{
+  const r = (min: number, s: string | null) => ({ created_at: ago(min), delivery_status: s });
+  /* 22 Nov 13:19 read, 13:24 failed, 13:27 + 13:30 read, then 25 failures in a row (with a "sent" between). */
+  const rows = [r(100, 'read'), r(95, 'failed'), r(92, 'read'), r(89, 'read'),
+    ...Array.from({ length: 25 }, (_, i) => r(85 - i * 3, 'failed')), r(20, 'sent')];
+  const w = failureRunWindows(rows);
+  ok(w.length === 1 && w[0][0] === Date.parse(ago(85)) && w[0][1] === Date.parse(ago(85 - 24 * 3)), 'one window: the first to the last failure of the run');
+  ok(insideFailureRun(Date.parse(ago(40)), w) && !insideFailureRun(Date.parse(ago(95)), w), 'a failure inside it is left out; the lone 13:24 failure is still a strike');
+  ok(failureRunWindows([r(30, 'failed'), r(20, 'failed'), r(10, 'read'), r(5, 'failed')]).length === 0, 'no run of 5: nothing is left out');
+  ok(failureRunWindows([...Array.from({ length: 5 }, (_, i) => r(60 - i, 'failed')), r(40, 'read'), ...Array.from({ length: 6 }, (_, i) => r(30 - i, 'failed'))]).length === 2, 'two runs, two windows');
+  const g2 = read('supabase/functions/_shared/cold-whatsapp-gate.ts');
+  ok(/failureRunWindows\(/.test(g2) && /insideFailureRun\(Date\.parse\(r\.created_at\), windows\)/.test(g2) && /if \(qErr\) return null;/.test(g2), 'whatsappStruckOut uses the windows, and refuses when it cannot read them');
 }
 
 console.log('one strike');

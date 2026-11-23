@@ -13,6 +13,10 @@ import type { CountrySettings, Market } from "../../../src/lib/outreachMarkets.t
 import { loadCountrySettings } from "./country-settings.ts";
 import { healthVerdict, type StoredHealth } from "../../../src/lib/whatsappNumberHealth.ts";
 import { struckOut, statusAfterStrike, STRIKE_DELIVERY_STATES, type StrikeSendRow } from "../../../src/lib/whatsappOneStrike.ts";
+import { failureRunWindows, insideFailureRun } from "../../../src/lib/whatsappPace.ts";
+
+/** How far back the per-lead check looks for runs of failures (the number being refused, not the lead). */
+const RUN_WINDOW_DAYS = 30;
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -118,11 +122,22 @@ export async function whatsappStruckOut(service: Service, leadId: string | null,
     const d = String(digits ?? "").replace(/\D/g, "");
     const ors = [leadId ? `lead_id.eq.${leadId}` : null, d ? `phone.eq.${d}` : null].filter(Boolean) as string[];
     if (!ors.length) return false;
-    const { data: rows, error } = await service.from("whatsapp_sends").select("delivery_status, error_code, test_mode")
+    const { data: rows, error } = await service.from("whatsapp_sends").select("created_at, delivery_status, error_code, test_mode")
       .or(ors.join(",")).eq("test_mode", false).order("created_at", { ascending: false }).limit(200);
     if (error) return null;
-    const sends = (rows ?? []) as StrikeSendRow[];
+    let sends = (rows ?? []) as Array<StrikeSendRow & { created_at: string }>;
     if (!sends.some((r) => STRIKE_DELIVERY_STATES.includes(String(r.delivery_status ?? "")))) return false;
+    /* 2026-11-23 pm (src/lib/whatsappPace.ts failureRunWindows): a failure inside a RUN of the queue's failures (5+ in a row, none
+       delivered between) was WhatsApp refusing the number, not this lead: it is no strike. Unreadable = null (refuse). */
+    const since = new Date(Date.now() - RUN_WINDOW_DAYS * 24 * 3_600_000).toISOString();
+    const { data: qRows, error: qErr } = await service.from("whatsapp_sends").select("created_at, delivery_status")
+      .is("user_id", null).eq("test_mode", false).gte("created_at", since).order("created_at", { ascending: false }).limit(8000);
+    if (qErr) return null;
+    const windows = failureRunWindows((qRows ?? []) as Array<{ created_at: string; delivery_status: string | null }>);
+    if (windows.length) {
+      sends = sends.filter((r) => !(STRIKE_DELIVERY_STATES.includes(String(r.delivery_status ?? "")) && insideFailureRun(Date.parse(r.created_at), windows)));
+      if (!sends.some((r) => STRIKE_DELIVERY_STATES.includes(String(r.delivery_status ?? "")))) return false;
+    }
     let inbound = false;
     if (leadId) {
       const { data: m, error: mErr } = await service.from("whatsapp_messages").select("id").eq("lead_id", leadId).eq("direction", "inbound").limit(1);
