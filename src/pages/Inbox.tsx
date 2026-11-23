@@ -279,6 +279,7 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
   webdev_example: 'Web dev example (app pitch + sample report)',
   polite_hook: 'Polite hook ("Ah nice, … built it myself")',
   polite_hook2: 'Polite hook 2 ("Ah nice, I’m actually a web dev myself")',
+  polite_hook3: 'Polite hook 3 ("Ah nice, this might actually be useful to you then..", tracked link)',
   gone_cold: 'Gone cold ("Hey, did you get my last message?")',
   onboarding_followup: 'Onboarding follow-up',
   book_call: 'Arrange a call',
@@ -1786,7 +1787,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     const own = templatePreviewText(name, { businessName: activeLead?.business_name, firstName: lead?.contact_name, town: lead?.derived_town ?? lead?.search_location, trade: lead?.search_keyword });
     /* initial_with_link: the app does not know this lead's tracking code, so the chosen template's eye shows the dry run's words
        (the real link) once the automatic check has run. Until then it shows the copy with <tracking code>. */
-    if (own?.includes(TRACKING_CODE_SHOWN) && name === template && sendCheckId) return sendCheckBody.current.get(sendCheckId) ?? own;
+    if ((own?.includes(TRACKING_CODE_SHOWN) || name === 'polite_hook3') && name === template && sendCheckId) return sendCheckBody.current.get(sendCheckId) ?? own;
     return own;
   };
 

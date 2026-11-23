@@ -36,6 +36,7 @@ import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
 import { goCodeFor, trackReportLink } from "../_shared/tracked-link.ts";
 import { logOutboundMessage } from "../_shared/outbound-log.ts";
 import { initialWithLinkBody } from "../../../src/lib/initialWithLink.ts";
+import { POLITE_HOOK3_TEMPLATE as HOOK3_TEMPLATE, politeHook3Body as hook3Words } from "../../../src/lib/webdevReport.ts";
 import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
 import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, FIRST_REPLY_MODES, autoReplyEnvOn, autoReplyToggleOn, firstReplyMode, firstReplyTemplate, isDecline, isStaleAutoReply, modeSends, parseFirstReplyMode, phoneSuppressed, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { effectiveFirstReplyMode } from "../../../src/lib/firstReplyAutomation.ts";
@@ -314,6 +315,8 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   /* polite_hook / polite_hook2 (2026-11-16) — ZERO variables. MIRRORS whatsapp-send.ts. */
   polite_hook: { lang: "en", vars: [] },
   polite_hook2: { lang: "en", vars: [] },
+  /* polite_hook3 (2026-11-23) — ZERO variables; free text carries the lead's tracked link. No Meta gate (treated as approved). MIRRORS whatsapp-send.ts. */
+  polite_hook3: { lang: "en", vars: [] },
   /* gone_cold (2026-11-21) — ZERO variables. MIRRORS whatsapp-send.ts. ⛔ MANUAL ONLY: this queue refuses it (MANUAL_ONLY_TEMPLATES). */
   gone_cold: { lang: "en", vars: [] },
   // Was MISSING while being selectable in the bulk picker, so a lead set to audit_reply silently
@@ -2474,7 +2477,8 @@ Deno.serve(async (req) => {
     }
     /* ⛔ initial_with_link's tracking code (2026-11-22, src/lib/initialWithLink.ts). FAIL-CLOSED: no code (or not a LeadFinderOS-style
        campaign) → the lead leaves the queue with the reason, nothing is sent. */
-    if (tvars.includes("go_code")) {
+    /* hook3 (2026-11-23): no Meta variable, but its free-text version carries this lead's tracked link (same fail-closed, LeadFinderOS-only rule). */
+    if (tvars.includes("go_code") || templateName === HOOK3_TEMPLATE) {
       const gc = await goCodeFor(service, lead.id as string, templateName);
       if (!gc.ok) {
         await service.from("outreach_leads").update({
@@ -2931,12 +2935,14 @@ Deno.serve(async (req) => {
     const campaignPayload = claimTemplatePayload(templateName, lang, lead.business_name as string, resolvedUrl, mainTrade?.freeTextOnly ? { ...templateExtra, freeTextOnly: true } : templateExtra);
     let campaignBody = renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, mainTrade ? mainTrade.bodyTrade : templateExtra.trade, templateExtra.competitors, undefined, templateExtra.town, templateExtra.siteFault, templateExtra.siteFindings, templateExtra.visibilityScore, templateExtra.senderName);
     /* initial_with_link (2026-11-22b): the stored words are Meta's approved wording with this lead's real link (MIRRORS send-whatsapp-message). */
-    if (templateExtra.goCode) campaignBody = initialWithLinkBody(templateExtra.goCode);
+    if (templateExtra.goCode && templateName !== HOOK3_TEMPLATE) campaignBody = initialWithLinkBody(templateExtra.goCode);
+    /* hook3 (2026-11-23): the template keeps Meta's plain-link words; only a free-text swap (window open) carries the tracked link. */
+    const swapWords = templateExtra.goCode && templateName === HOOK3_TEMPLATE ? hook3Words(templateExtra.goCode) : campaignBody;
     const campaignSnapshot =createTemplateSnapshot({ templateName, language: lang, body: campaignBody, payload: campaignPayload });
     /* ⛔ A queued FOLLOW-UP inside their 24-hour window goes as free text (2026-11-16, _shared/free-window.ts — the same rule as
        every other door), still recorded as that template. A cold opener never has an open window, so it is never swapped. */
     if (mainTrade) campaignBody = mainTrade.fixWords(campaignBody);
-    const campaignSwap = isColdOutreachTemplate(templateName) ? null : freeWindowSwap(campaignPayload, campaignBody, mainLastInbound);
+    const campaignSwap = isColdOutreachTemplate(templateName) ? null : freeWindowSwap(campaignPayload, swapWords, mainLastInbound);
     if (campaignSwap) campaignBody = campaignSwap.body;
     /* Written for free text only and it would go as the paid template: not sent, nothing written; the next tick judges it again. */
     if (mainTrade?.freeTextOnly && !campaignSwap) {

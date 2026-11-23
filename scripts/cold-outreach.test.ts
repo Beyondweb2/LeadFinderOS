@@ -141,6 +141,8 @@ const EXPECTED_CONTINUATIONS = [
   /* Paul, 2026-11-16: polite_hook + polite_hook2, set up exactly like webdev_hook. */
   "polite_hook",
   "polite_hook2",
+  /* Paul, 2026-11-23: polite_hook3, the same follow-up with a tracked link in its free-text version. */
+  "polite_hook3",
   /* Paul, 2026-11-21: gone_cold, manual only (src/lib/goneCold.ts). */
   "gone_cold",
 ].sort();

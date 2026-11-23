@@ -192,7 +192,8 @@ console.log('\n── Sales can NOT queue an Indian mobile any more; UK rule unc
   /* 2026-11-16: 20261219090000 re-creates it (the live body, read back; salespeople queue every approved template — follow-ups in
      their own branch). The cold branch and the market rule are unchanged. */
   /* 2026-11-22: 20261226100000 re-creates it (the live body, read back; 'initial_with_link' joins the cold list). Cold branch and market rule unchanged. */
-  ok(latest === '20261226100000_initial_with_link.sql', 'the newest sales_queue_opener is the initial_with_link migration (' + latest + ')');
+  /* 2026-11-23: 20261227090000 re-creates it (the live body, read back; 'polite_hook3' joins the follow-ups). Cold branch and market rule unchanged. */
+  ok(latest === '20261227090000_polite_hook3.sql', 'the newest sales_queue_opener is the polite_hook3 migration (' + latest + ')');
   ok(fn.includes("elsif public.mobile_market(public.phone_market_country(v_lead.country, v_lead.phone), v_pk) is null then v_reason := 'not_a_uk_mobile';")
     && fn.includes("elsif not public.outreach_channel_on(public.mobile_market(public.phone_market_country(v_lead.country, v_lead.phone), v_pk), 'whatsapp') then v_reason := 'country_off';"),
     'the one cold test: a mobile in a market whose WhatsApp switch is on');

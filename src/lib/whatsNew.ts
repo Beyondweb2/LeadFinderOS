@@ -24,6 +24,18 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-23-polite-hook-3', date: '2026-11-23', title: 'New follow-up: Polite hook 3', audience: 'admin',
+    body: 'A new follow-up message for web developers who have replied: "Ah nice, this might actually be useful to you then..". Inside their 24 hours it goes free with the lead’s own tracked link (leadfinderos.com/go/…), outside it goes as the Meta template with the plain link.',
+    report: {
+      added: [
+        'Polite hook 3 in the template picker (Outreach and Inbox), shown as a follow-up and found in the Campaign Performance table.',
+        'Open window: sent as a normal free message with the lead’s tracked link; the preview and "Put in message box" show that same link.',
+        'Closed window: the Meta template, as approved, with the plain leadfinderos.com link (not tracked).',
+      ],
+      changed: [],
+      removed: [],
+      effect: 'You can send the follow-up and see who clicks. It only goes to a number we have already messaged, only for LeadFinderOS-style campaigns, and opt-outs and Do Not Contact still block it.',
+    } },
   { id: '2026-11-23-queue-sends-real-words', date: '2026-11-23', title: 'Automatic sends show the real link in the Inbox', audience: 'admin',
     body: 'Initial with link messages sent by the automatic queue now show the lead’s real tracking link in the Inbox, not leadfinderos.com/go/<tracking code>. The 23 already sent were corrected. The prospects always got the real link; only the Inbox copy was wrong.',
     report: {

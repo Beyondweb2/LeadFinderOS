@@ -102,3 +102,19 @@ Tests: `scripts/campaign-performance.test.ts`.
   `[initial_with_link]`, and read back 23/23 matching. Older initial_contact etc. rows were NOT backfilled: the SPA's mirror already
   renders them correctly. Test: `scripts/queue-inbox-real-words.test.ts` (a fake DB with the trigger and unique index).
   Redeployed: process-whatsapp-queue only.
+
+## polite_hook3 — follow-up hook with a tracked link in its free-text version (2026-11-23, feat/polite-hook3)
+
+- WhatsApp template, English, Marketing, NO variables. Paul: treat as approved — no Meta status gate (a refusal shows as the normal failed
+  send). Body (Meta's, plain link): "Ah nice, this might actually be useful to you then.." … "…how I found you - https://leadfinderos.com/ …
+  All the best, Paul". One body in `politeHook3Body()` (`src/lib/webdevReport.ts`).
+- Window OPEN (the usual case): goes as free text, the same words with the lead's tracked link `https://leadfinderos.com/go/<code>`. The code is
+  `goCodeFor` (`_shared/tracked-link.ts`): the lead's ONE code for this template, reused; LeadFinderOS-style campaigns only, fail-closed (a Findable
+  prospect is refused with the reason). Preview, "Put in message box" and the send show that link (the dry run's words; the eye shows them too).
+- Window CLOSED: the Meta template as approved, plain untracked link. The row stores the plain words (the tracked words are stored only when it went
+  as free text).
+- A follow-up (`NEEDS_PRIOR_WHATSAPP`), queueable (migration `20261227090000_polite_hook3.sql`: one more name in `v_followups` of the live
+  `sales_queue_opener`; opt-out / Do Not Contact / limits unchanged). Appears in the Campaign Performance table like any sent template; clicks are
+  logged by code (`track-engagement?go=`), on the `polite_hook3` row.
+- whatsapp-send.ts changed (registry + body table) and is reached by `whatsapp-status`, which is HELD and was NOT redeployed.
+- Test: `scripts/polite-hook3.test.ts`.

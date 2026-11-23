@@ -17,7 +17,7 @@ import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
 import { REPORT_OFFER_NO_NAME, REPORT_OFFER_TEMPLATE, reportOfferBody } from "../../../src/lib/reportOfferTemplate.ts";
 import { maskSecrets, metaErrorPartsFromResponse, type SendErrorParts } from "../../../src/lib/sendErrorMeaning.ts";
 import { cleanNeededItem, dashboardTemplateTranscript } from "../../../src/lib/dashboardTemplates.ts";
-import { politeHook2Body, politeHookBody, webdevExampleBody, webdevHookBody, webdevReportBody } from "../../../src/lib/webdevReport.ts";
+import { politeHook2Body, politeHook3Body, politeHookBody, webdevExampleBody, webdevHookBody, webdevReportBody } from "../../../src/lib/webdevReport.ts";
 
 export const GRAPH_VERSION = "v21.0";
 
@@ -141,6 +141,9 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
      NEED_PRIOR_WHATSAPP. Meta's LIVE status is read first at both senders. MIRRORS the queue. */
   polite_hook: { lang: "en", vars: [] },
   polite_hook2: { lang: "en", vars: [] },
+  /* polite_hook3 — Paul, 2026-11-23 (src/lib/webdevReport.ts). English, Marketing, ZERO variables (plain link in Meta's body); the free-text
+     version carries the lead's tracked link. Treated as approved: NO Meta status gate. MIRRORS the queue. */
+  polite_hook3: { lang: "en", vars: [] },
   /* gone_cold — Paul, 2026-11-21 (src/lib/goneCold.ts). English, Marketing, ZERO variables. MANUAL ONLY, only to a lead we messaged
      who has not replied; Meta's LIVE status must say APPROVED (send-whatsapp-message). MIRRORS the queue, which refuses it. */
   gone_cold: { lang: "en", vars: [] },
@@ -863,6 +866,7 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   webdev_example: () => webdevExampleBody(),
   polite_hook: () => politeHookBody(),
   polite_hook2: () => politeHook2Body(),
+  polite_hook3: () => politeHook3Body(),
   gone_cold: () => goneColdBody(),
   audit_reply: auditReplyBody,
   video_template: videoTemplateBody,

@@ -573,6 +573,8 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
   /* polite_hook / polite_hook2 (Paul, 2026-11-16) — short follow-ups with no variables. A follow-up only (never a first message). */
   { value: 'polite_hook', label: 'Polite hook — "Ah nice, this actually might be useful to you then…"' },
   { value: 'polite_hook2', label: 'Polite hook 2 — "Ah nice, I’m actually a web dev myself…"' },
+  /* polite_hook3 (Paul, 2026-11-23) — follow-up with a tracked leadfinderos.com link; LeadFinderOS-style campaigns only. */
+  { value: 'polite_hook3', label: 'Polite hook 3 — "Ah nice, this might actually be useful to you then.." (tracked link)' },
   /* gone_cold (Paul, 2026-11-21) — to a lead we messaged who has not replied. Manual, one lead at a time (src/lib/goneCold.ts). */
   { value: 'gone_cold', label: 'Gone cold — "Hey, did you get my last message?"' },
   { value: 'audit_reply', label: 'Audit reply (report + competitors)' },

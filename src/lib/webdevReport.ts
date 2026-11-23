@@ -9,6 +9,7 @@
       the audit pitches do not apply to it. It needs only a finished audit with a report.
    Reachable from edge functions (relative .ts imports only); its one import, reportBrand.ts, imports only the app address. */
 import { LFOS_EXAMPLE_URL } from './reportBrand.ts';
+import { goLink } from './initialWithLink.ts';
 
 export const WEBDEV_REPORT_TEMPLATE = 'webdev_report';
 
@@ -123,6 +124,27 @@ https://leadfinderos.com
 
 All the best
 Paul✌️`;
+}
+
+/* polite_hook3 — Paul, 2026-11-23. WhatsApp template, English, Marketing, NO VARIABLES (Meta's body has the plain link
+   https://leadfinderos.com/). Treated as approved: no Meta status gate; a refusal from Meta shows as the normal failed send.
+   ⛔ Two versions of the same words, ONE difference — the link:
+      · template (window closed): Meta's body as approved, plain untracked link (politeHook3Body() with no code);
+      · free text (window open, the usual case): the lead's own tracked link leadfinderos.com/go/<code> (one code per lead +
+        template, _shared/tracked-link.ts goCodeFor — the same code initial_with_link would reuse). Clicks are logged by code.
+   ⛔ LeadFinderOS-style campaigns only (goCodeFor refuses any other lead — a Findable prospect is never sent this link).
+   ⛔ A continuation (NEEDS_PRIOR_WHATSAPP), like polite_hook / polite_hook2. */
+export const POLITE_HOOK3_TEMPLATE = 'polite_hook3';
+
+/** polite_hook3: Meta's approved body, byte for byte. With a lead's go code the link is that lead's tracked one (free text only). */
+export function politeHook3Body(goCode?: string | null): string {
+  const link = goCode ? goLink(goCode) : 'https://leadfinderos.com/';
+  return `Ah nice, this might actually be useful to you then..
+
+It's what I use to find and message clients, it's how I found you - ${link}
+
+All the best,
+Paul`;
 }
 
 /** polite_hook2: the registered body, byte for byte as approved in Meta (2026-11-16). No variables. */

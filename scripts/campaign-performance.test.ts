@@ -185,9 +185,9 @@ console.log("\n── initial_with_link (leadfinderos.com/go/<code>) ──");
   ok(open.as === "text" && (open as { text: string }).text === REAL, "window open → goes as free text, those words (no template charge)");
   ok(inWindowShape({ origin: "inbox", windowOpen: false, allowClosedText: false, typed: false, version: v }).as === "template", "window closed → the Meta template ({{1}} = the code)");
   const swm2 = read("supabase/functions/send-whatsapp-message/index.ts");
-  ok(/if \(goCode\) storedBody = initialWithLinkBody\(goCode\);/.test(swm2), "send-whatsapp-message stores / previews the real words");
+  ok(/if \(goCode && templateName !== POLITE_HOOK3_TEMPLATE\) storedBody = initialWithLinkBody\(goCode\);/.test(swm2), "send-whatsapp-message stores / previews the real words");
   ok(!/dryrun00/.test(swm2), "the dry run (preview, Put in message box) uses the lead's real code, not a stand-in");
-  ok(/if \(templateExtra\.goCode\) campaignBody = initialWithLinkBody\(templateExtra\.goCode\);/.test(read("supabase/functions/process-whatsapp-queue/index.ts")), "the queue stores the real words too");
+  ok(/if \(templateExtra\.goCode && templateName !== HOOK3_TEMPLATE\) campaignBody = initialWithLinkBody\(templateExtra\.goCode\);/.test(read("supabase/functions/process-whatsapp-queue/index.ts")), "the queue stores the real words too");
   ok(/from\("tracked_links"\)\.select\("code"\)[\s\S]{0,200}eq\("template_name", template\)/.test(tl2) && tl2.indexOf('from("tracked_links").select("code")') < tl2.indexOf('rpc("create_tracked_link"'), "one code per lead + template: reused before a new one is made (preview link = sent link)");
   ok(/sendCheckBody\.current\.get\(sendCheckId\)/.test(read("src/pages/Inbox.tsx")), "the Inbox eye shows the dry run's real link for it");
 }

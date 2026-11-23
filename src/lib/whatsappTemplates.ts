@@ -109,6 +109,7 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
   /* polite_hook / polite_hook2 (2026-11-16) - short follow-ups with NO variables: no name, no link, no audit needed. */
   polite_hook:            { needsUrl: false, needsAudit: false, group: 'followup' },
   polite_hook2:           { needsUrl: false, needsAudit: false, group: 'followup' },
+  polite_hook3:           { needsUrl: false, needsAudit: false, group: 'followup' },
   /* gone_cold (2026-11-21) - "did you get my last message?", NO variables; its own gate is in getTemplateSendability (goneCold.ts). */
   gone_cold:              { needsUrl: false, needsAudit: false, group: 'followup' },
   // audit_reply is not yet wired into the manual send path; its rule lives here so the guard is

@@ -31,7 +31,7 @@ import { reportOfferBody } from './reportOfferTemplate.ts';
 import { dashboardTemplateTranscript } from './dashboardTemplates.ts';
 import { goneColdBody } from './goneCold.ts';
 import { initialWithLinkBody } from './initialWithLink.ts';
-import { politeHook2Body,politeHookBody, webdevExampleBody, webdevHookBody, webdevReportBody } from './webdevReport.ts';
+import { politeHook2Body,politeHook3Body,politeHookBody, webdevExampleBody, webdevHookBody, webdevReportBody } from './webdevReport.ts';
 
 // ── Findable, link-bearing ────────────────────────────────────────────────
 const onboardingFollowupBody = (b: string, u: string) =>
@@ -458,6 +458,8 @@ export const READABLE_TEMPLATE_BODIES: Record<string, TemplateBodyFn> = {
   /* polite_hook / polite_hook2: no variables (src/lib/webdevReport.ts), shared with whatsapp-send.ts. */
   polite_hook: () => politeHookBody(),
   polite_hook2: () => politeHook2Body(),
+  /* polite_hook3: the approved (plain-link) wording; an open window sends the lead's tracked link instead (the Inbox eye shows the dry run's words). */
+  polite_hook3: () => politeHook3Body(),
   /* gone_cold: no variables (src/lib/goneCold.ts), shared with whatsapp-send.ts. */
   gone_cold: () => goneColdBody(),
   audit_reply: auditReplyBody,
