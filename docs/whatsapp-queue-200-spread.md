@@ -42,8 +42,11 @@ number-range hold stay.
 
 - The UK's own stored cap (`outreach_country_settings`, UK = 150) still sits under the number's 200, so the UK day tops out at
   150 until an admin sets UK to 200 on the countries screen. Not changed from code (a stored admin setting).
-- The 28 leads struck during the outage: restore is Paul's call. Restoring alone is not enough: `whatsappStruckOut` would strike
-  them again from the same failed rows.
+- ~~The 28 leads struck during the outage~~ DONE 23 Nov 12:58 (Paul said restore): the run was 25 sends (22 Nov 13:34 → 23 Nov
+  12:35, nothing delivered between); those 25 leads (18 Paul, 7 Valentin) were set back to queued (contact_method whatsapp,
+  delivery status cleared). The lone 22 Nov 13:24 failure (deliveries either side) stays struck. `whatsappStruckOut` now leaves
+  out failures inside a run (`failureRunWindows`, 30 days), so the per-send check does not strike them again.
+- Paul resumed the queue at 12:52; the next two sends (12:54, 12:59) failed too, so the breaker pauses it again after 5.
 - The queue was not paused by hand (the write was refused by the session's permission check); the breaker pauses it on its first
   tick after the deploy, because the last 19 queue sends failed.
 - The exact Meta code needs the held webhook (Findable switch).
