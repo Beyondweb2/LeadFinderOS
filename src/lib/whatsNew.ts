@@ -24,6 +24,17 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-23-queue-sends-real-words', date: '2026-11-23', title: 'Automatic sends show the real link in the Inbox', audience: 'admin',
+    body: 'Initial with link messages sent by the automatic queue now show the lead’s real tracking link in the Inbox, not leadfinderos.com/go/<tracking code>. The 23 already sent were corrected. The prospects always got the real link; only the Inbox copy was wrong.',
+    report: {
+      added: [],
+      changed: [
+        'Every message the automatic queue sends (and the hook / contact follow-ups) now stores the exact words it sent in the Inbox.',
+        'The 23 Initial with link messages sent on 22 Nov now show each lead’s real link.',
+      ],
+      removed: ['The <tracking code> placeholder on automatic Initial with link sends.'],
+      effect: 'What you read in the Inbox is what the prospect got, link included.',
+    } },
   { id: '2026-11-22-initial-with-link-parity', date: '2026-11-22', title: 'Initial with link works like the other templates', audience: 'admin',
     body: 'In the Inbox picker, Initial with link now shows its real wording with the lead’s own tracking link (leadfinderos.com/go/…). When their 24 hours are open, "Put in message box" fills the box with it and it goes free as a normal message. When closed it goes as the Meta template with the same link.',
     report: {

@@ -34,6 +34,7 @@ import {
 import { campaignsRepresented } from "../_shared/campaign-interleave.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
 import { goCodeFor, trackReportLink } from "../_shared/tracked-link.ts";
+import { logOutboundMessage } from "../_shared/outbound-log.ts";
 import { initialWithLinkBody } from "../../../src/lib/initialWithLink.ts";
 import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
 import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, FIRST_REPLY_MODES, autoReplyEnvOn, autoReplyToggleOn, firstReplyMode, firstReplyTemplate, isDecline, isStaleAutoReply, modeSends, parseFirstReplyMode, phoneSuppressed, pitchEverSent } from "../_shared/auto-reply-rules.ts";
@@ -2185,15 +2186,15 @@ Deno.serve(async (req) => {
           // Clear the marker (out of the lane); DO NOT touch the pipeline status — this is a
           // follow-up to an existing conversation, not an opener.
           await clearMarker();
-          try {
-            await service.from("whatsapp_messages").insert({
-              direction: "outbound", user_id: (hookLead.user_id as string | null) ?? null, lead_id: hookLead.id,
-              phone: to, body: hBody,
-              message_type: hMessageType, template_name: "hook_followup", wa_message_id: hMessageId,
-              status: hDelivery, test_mode: hTestMode,
-              template_snapshot: createTemplateSnapshot({ templateName: "hook_followup", language: hLang, body: hBody, payload: hPayload }),
-            });
-          } catch (e) { console.error(`[hook_followup] message-log insert threw (non-blocking, ${hookLead.id}):`, (e as Error).message); }
+          /* The trigger's "[hook_followup]" row gets the real words (_shared/outbound-log.ts). Non-blocking. */
+          const hLogErr = await logOutboundMessage(service, {
+            direction: "outbound", user_id: (hookLead.user_id as string | null) ?? null, lead_id: hookLead.id,
+            phone: to, body: hBody,
+            message_type: hMessageType, template_name: "hook_followup", wa_message_id: hMessageId,
+            status: hDelivery, test_mode: hTestMode,
+            template_snapshot: createTemplateSnapshot({ templateName: "hook_followup", language: hLang, body: hBody, payload: hPayload }),
+          });
+          if (hLogErr) console.error(`[hook_followup] message-log write failed (non-blocking, ${hookLead.id}):`, hLogErr);
         } else if (hOutcome === "no_whatsapp") {
           // Permanent — never retry. Drop the marker.
           await clearMarker();
@@ -2296,15 +2297,15 @@ Deno.serve(async (req) => {
           // Clear the marker (out of the lane); DO NOT touch the pipeline status — this is a
           // follow-up to an existing conversation, not an opener.
           await clearMarker();
-          try {
-            await service.from("whatsapp_messages").insert({
-              direction: "outbound", user_id: (contactLead.user_id as string | null) ?? null, lead_id: contactLead.id,
-              phone: to, body: cBody,
-              message_type: "template", template_name: "contact_followup", wa_message_id: cMessageId,
-              status: cDelivery, test_mode: cTestMode,
-              template_snapshot: createTemplateSnapshot({ templateName: "contact_followup", language: cLang, body: cBody, payload: cPayload }),
-            });
-          } catch (e) { console.error(`[contact_followup] message-log insert threw (non-blocking, ${contactLead.id}):`, (e as Error).message); }
+          /* The trigger's "[contact_followup]" row gets the real words (_shared/outbound-log.ts). Non-blocking. */
+          const cLogErr = await logOutboundMessage(service, {
+            direction: "outbound", user_id: (contactLead.user_id as string | null) ?? null, lead_id: contactLead.id,
+            phone: to, body: cBody,
+            message_type: "template", template_name: "contact_followup", wa_message_id: cMessageId,
+            status: cDelivery, test_mode: cTestMode,
+            template_snapshot: createTemplateSnapshot({ templateName: "contact_followup", language: cLang, body: cBody, payload: cPayload }),
+          });
+          if (cLogErr) console.error(`[contact_followup] message-log write failed (non-blocking, ${contactLead.id}):`, cLogErr);
         } else if (cOutcome === "no_whatsapp") {
           // Permanent — never retry. Drop the marker.
           await clearMarker();
@@ -3062,22 +3063,10 @@ Deno.serve(async (req) => {
           template_snapshot: campaignSnapshot,
           ...(campaignFindingsShown?.length ? { findings_shown: campaignFindingsShown } : {}),
         };
-      let logErr = "";
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          /* A retry must never become a DUPLICATE: if the first attempt actually landed (a timeout after the write),
-             the Meta message id is already on a row and we stop. */
-          if (attempt > 0 && messageId) {
-            const { data: landed } = await service.from("whatsapp_messages").select("id").eq("wa_message_id", messageId).limit(1);
-            if (Array.isArray(landed) && landed.length > 0) { logErr = ""; break; }
-          }
-          const { error: msgErr } = await service.from("whatsapp_messages").insert(outboundRow);
-          if (!msgErr) { logErr = ""; break; }
-          logErr = (msgErr as { message?: string }).message ?? "insert failed";
-        } catch (e) {
-          logErr = (e as Error).message;
-        }
-      }
+      /* 🔴 2026-11-23 (_shared/outbound-log.ts): the whatsapp_sends trigger has ALREADY made this row with "[<template>]". The
+         old loop saw it as "landed" and stopped, so the real words (initial_with_link's real link) never reached the Inbox.
+         logOutboundMessage gives that row the real words + snapshot; a retry still never becomes a duplicate. */
+      const logErr = await logOutboundMessage(service, outboundRow);
       if (logErr) {
         console.error(`[whatsapp] outbound message-log insert failed twice (non-blocking, ${lead.id}):`, logErr);
         try {
