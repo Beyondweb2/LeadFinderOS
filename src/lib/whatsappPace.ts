@@ -79,3 +79,66 @@ export function autoPauseVerdict(attempts: number, failed: number): { pause: boo
 
 /** A send status that counts as a failure for the auto-pause (Meta said no, or it never left). */
 export const FAILED_SEND_STATUSES = ['failed', 'failed_temporary'] as const;
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   THE FAILURE-RUN BREAKER (2026-11-23 pm, docs/whatsapp-queue-200-spread.md). On 23 Nov every one of the queue's 19 cold sends
+   failed (07:00–12:13 London) and the auto-pause above never tripped: at RED's slow pace only 3–4 went an hour, never the 8 it
+   needs inside 60 minutes. Each failure also marked a lead No WhatsApp for good (one strike). A RUN of failures with nothing
+   delivered in between is the number being refused, not a few dead numbers (normal is ~12% failed: 5 in a row by chance is about
+   1 in 40,000), so it pauses the queue whatever the pace. A person resumes it, as for the auto-pause.
+   ⛔ Settled sends only: a send still "sent" (no report yet, or a phone that is off) neither breaks nor extends a run.
+   ⛔ The one-strike pass never strikes a failure that was part of such a run (strikeSinceAfterRuns): it says nothing about the lead.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Failed cold sends in a row (nothing delivered between) that pause the queue. */
+export const FAILURE_RUN_PAUSE = 5;
+/** How far back the breaker looks. */
+export const FAILURE_RUN_LOOKBACK_HOURS = 6;
+
+export interface RunSendRow { created_at: string; delivery_status: string | null }
+const RUN_OK: ReadonlySet<string> = new Set(['delivered', 'read', 'played']);
+const RUN_FAIL: ReadonlySet<string> = new Set(['failed', 'failed_temporary', 'no_whatsapp']);
+
+const byTime = (a: RunSendRow, b: RunSendRow) => Date.parse(a.created_at) - Date.parse(b.created_at);
+
+/** Settled sends, oldest first, as true (delivered) / false (failed). */
+function settled(rows: readonly RunSendRow[]): Array<{ at: number; ok: boolean }> {
+  return [...rows].sort(byTime).flatMap((r): Array<{ at: number; ok: boolean }> => {
+    const s = String(r.delivery_status ?? '');
+    const at = Date.parse(r.created_at);
+    if (!Number.isFinite(at)) return [];
+    return RUN_OK.has(s) ? [{ at, ok: true }] : RUN_FAIL.has(s) ? [{ at, ok: false }] : [];
+  });
+}
+
+/** How many of the newest settled sends failed in a row. */
+export function currentFailureRun(rows: readonly RunSendRow[]): number {
+  const s = settled(rows);
+  let n = 0;
+  for (let i = s.length - 1; i >= 0 && !s[i].ok; i--) n++;
+  return n;
+}
+
+/** Should the queue pause itself for a run of failures? */
+export function failureRunVerdict(rows: readonly RunSendRow[]): { pause: boolean; reason: string | null } {
+  const n = currentFailureRun(rows);
+  if (n < FAILURE_RUN_PAUSE) return { pause: false, reason: null };
+  return {
+    pause: true,
+    reason: `The last ${n} queue messages all failed, with none delivered in between. WhatsApp is refusing the number's cold ` +
+      'messages, so the queue paused itself before more leads were marked No WhatsApp. Check WhatsApp Manager, then press Resume.',
+  };
+}
+
+/** The one-strike pass's start: never earlier than the lookback, and after the end of the latest run of FAILURE_RUN_PAUSE or more
+ *  failures (those failures were the number being refused, not the leads). */
+export function strikeSinceAfterRuns(rows: readonly RunSendRow[], lookbackStart: Date): Date {
+  const s = settled(rows);
+  let since = lookbackStart.getTime();
+  let run = 0;
+  for (let i = 0; i < s.length; i++) {
+    run = s[i].ok ? 0 : run + 1;
+    if (run >= FAILURE_RUN_PAUSE) since = Math.max(since, s[i].at + 1);
+  }
+  return new Date(since);
+}

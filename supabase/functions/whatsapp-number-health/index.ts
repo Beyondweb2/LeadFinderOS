@@ -12,6 +12,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAdmin, refusalBody } from "../_shared/access.ts";
 import { GRAPH_VERSION } from "../_shared/whatsapp-send.ts";
 import { normaliseRating, tripwireReason, type QualityRating } from "../../../src/lib/whatsappNumberHealth.ts";
+import { metaSafetyReason, safetyNetEmail } from "../../../src/lib/whatsappQualityCap.ts";
+import { raiseOperatorAlert } from "../_shared/audit-alerts.ts";
+import { operatorAppUrl } from "../../../src/config/operatorApp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -139,6 +142,25 @@ Deno.serve(async (req) => {
         await service.from("whatsapp_queue_pause_log").insert({ scope: "queue", action: "cold_stopped", source: "auto", by_user_id: null, reason: stopReason });
         console.warn("[whatsapp-number-health] cold WhatsApp stopped");
       }
+    }
+    /* ⛔ THE SAFETY NET (2026-11-23 pm, Paul; src/lib/whatsappQualityCap.ts): Meta lowered the tier or flagged the number → the cold
+       cap is 60 a day (the cold guard reads the stored row, so it already applies). On the TURN into it, Paul gets one email + bell. */
+    const safetyBefore = metaSafetyReason(prev as never);
+    const safetyNow = metaSafetyReason({
+      meta_messaging_tier: reading.tierField ? reading.tier : prevTier, meta_number_status: reading.status ?? prevStatus,
+      meta_can_send: reading.canSend ?? (prev?.meta_can_send as string | null) ?? null,
+    });
+    /* ⚠️ No health-log row: the table's kind CHECK has no word for it, and a refused kind would lose the whole insert. The tier /
+       status rows above already record what changed; the email + bell record the cap. */
+    if (safetyNow && !safetyBefore) {
+      const mail = safetyNetEmail(safetyNow);
+      try {
+        await raiseOperatorAlert(service, "team_update", {
+          title: mail.subject, body: mail.lines[0], link: "/whatsapp-queue", subject: mail.subject,
+          lines: [...mail.lines, "", "Open the WhatsApp queue: " + operatorAppUrl("/whatsapp-queue")],
+          dedupeKey: "wa-safety-cap:" + nowIso.slice(0, 13),
+        });
+      } catch { /* the cap applies whether or not the email goes */ }
     }
     if (logs.length) {
       const { error: lErr } = await service.from("whatsapp_number_health_log").insert(logs);

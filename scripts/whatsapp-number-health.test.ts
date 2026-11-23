@@ -25,16 +25,16 @@ ok(g.state === 'green' && g.limitText === null, 'green changes nothing');
 
 console.log('yellow');
 const y = at('YELLOW');
-ok(y.state === 'yellow' && /limited to 100 a day/.test(y.limitText ?? ''), 'yellow: limited to 100 a day (2026-11-23)');
+ok(y.state === 'yellow' && /200 a day/.test(y.limitText ?? ''), 'yellow: the colour sets no cap, 200 a day (2026-11-23 pm)');
 
 console.log('red');
 const r = at('RED');
-ok(r.state === 'red' && /limited to 60 a day/.test(r.limitText ?? ''), 'red: limited to 60 a day (2026-11-23)');
-/* 2026-11-23: the rating sets the number's daily cap (src/lib/whatsappQualityCap.ts, scripts/whatsapp-fewer-failures.test.ts). */
+ok(r.state === 'red' && /200 a day/.test(r.limitText ?? '') && /drops it to 60/.test(r.limitText ?? ''), 'red: 200 a day, 60 if Meta lowers or flags (2026-11-23 pm)');
+/* 2026-11-23 pm: the number's daily cap is src/lib/whatsappQualityCap.ts (scripts/whatsapp-fewer-failures.test.ts). */
 
 console.log('cannot be read');
 for (const [why, v] of [['never read', healthVerdict(null, now)], ['stale', at('GREEN', stale)], ['UNKNOWN', at('UNKNOWN')], ['bad date', at('GREEN', 'nope')]] as const) {
-  ok(v.state === 'unreadable' && /RED’s limit of 60/.test(v.limitText ?? ''), `${why}: keeps to RED’s limit (the safe default)`);
+  ok(v.state === 'unreadable' && /safety limit of 60/.test(v.limitText ?? ''), `${why}: keeps to the safety limit (the safe default)`);
 }
 
 console.log('tiers');

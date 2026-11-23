@@ -174,7 +174,7 @@ console.log("\n── (3) the queue status line is a light read; the tick is unc
   ok((q.match(/lite \? NO_COUNT : service/g) ?? []).length === 6, "the panel's six head counts are skipped for the line");
   ok(/lite \? Promise\.resolve\(null\) : \(async \(\) => \{/.test(q), "…and the audit-ready count");
   ok((q.match(/if \(!lite\) try \{/g) ?? []).length === 3, "…and the pause history, number health and test-held count");
-  ok(/const myQueueEarly = lite \? \{ scan: myQueueScan\(\), lastSent: lastQueueSendsBySender\(service, dayStart\) \} : null;/.test(q), "the line's scan and last-sends start early, only for my_queue");
+  ok(/const myQueueEarly = lite \? \{ scan: myQueueScan\(\), sendsBy: queueSendsBySender\(service, dayStart\) \} : null;/.test(q), "the line's scan and last-sends (and today's counts) start early, only for my_queue");
   ok(/await \(myQueueEarly\?\.scan \?\? myQueueScan\(\)\)/.test(q) && (q.match(/\.order\("queued_at", \{ ascending: true \}\)\.limit\(QUEUE_SCAN\)/g) ?? []).length === 1, "…the same scan query, written once");
   const sql = read("src/components/SenderQueueLines.tsx");
   ok(/placeholderData: \(\) => readCached\(userId\)/.test(sql) && /Last seen — updating…/.test(sql), "the app shows the last line at once, marked as updating");

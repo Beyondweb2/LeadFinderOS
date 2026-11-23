@@ -23,8 +23,9 @@ const settings = (my: Record<string, unknown> = {}) => countrySettingsFrom([
   { country: 'UK', whatsapp_on: true },
   { country: 'MY', whatsapp_on: true, whatsapp_daily_cap: 30, send_start_min: 420, send_end_min: 1230, timezone: 'Asia/Kuala_Lumpur', ...my },
 ] as never);
-/* 2026-11-23: a GREEN number by default, so these country rules are tested under the widest number cap (150). */
-const facts = (sends: ColdSendRow[], o: Partial<ColdFacts> = {}): ColdFacts => ({ stopReason: null, settings: settings(), sends, health: 'green', ...o });
+/* 2026-11-23 pm: a normal Meta reading by default, so these country rules are tested under the number's 200. */
+const facts = (sends: ColdSendRow[], o: Partial<ColdFacts> = {}): ColdFacts => ({ stopReason: null, settings: settings(), sends, health: 'green',
+  meta: { meta_messaging_tier: 'TIER_2K', meta_number_status: 'CONNECTED', meta_can_send: 'LIMITED', meta_health_ok_at: NOW.toISOString() }, ...o });
 const MY = '60123456789'; const UK = '447700900123';
 const delivered = (phone: string) => [row(300, phone, 'delivered'), row(298, phone, 'read'), row(296, phone, 'delivered')];
 
@@ -62,11 +63,13 @@ console.log('caps');
   ok(below.go && below.used === 149, 'the UK at 149 of 150 still sends');
   const uk150 = [...uk149, row(40, UK, 'delivered')];
   const atCap = coldVerdict('UK', facts(uk150), NOW);
-  ok(!atCap.go && atCap.code === 'quality_cap' && atCap.used === 150 && atCap.cap === 150, 'the UK at 150 is held (the number’s GREEN cap is 150 too)');
+  ok(!atCap.go && atCap.code === 'country_cap' && atCap.used === 150 && atCap.cap === 150, 'the UK at 150 is held by its own cap (the number’s is 200)');
   const atOwnCap = coldVerdict('UK', facts(uk149.slice(0, 100), { settings: countrySettingsFrom([{ country: 'UK', whatsapp_on: true, whatsapp_daily_cap: 100 }] as never) }), NOW);
   ok(!atOwnCap.go && atOwnCap.code === 'country_cap' && atOwnCap.cap === 100, 'a UK cap below the number’s is held by its own cap');
-  const myAfterUk = coldVerdict('MY', facts(uk150), NOW);
-  ok(!myAfterUk.go && myAfterUk.code === 'quality_cap' && myAfterUk.used === 0, '…and since 2026-11-23 Malaysia waits too: one number, one daily cap');
+  ok(coldVerdict('MY', facts(uk150), NOW).go, 'the UK at 150: Malaysia still has room under the number’s 200');
+  const uk200 = Array.from({ length: 200 }, (_, i) => row(70 + i * 2, UK, 'delivered'));
+  const myAfterUk = coldVerdict('MY', facts(uk200), NOW);
+  ok(!myAfterUk.go && myAfterUk.code === 'quality_cap' && myAfterUk.used === 0, '…and once the number has sent 200, Malaysia waits too: one number, one daily cap');
   const sgOwn = coldVerdict('SG', facts(uk150, { settings: settings({}) }), NOW);
   ok(sgOwn.used === 0, 'another country has its own count');
   ok(teamColdCount(facts(uk150).sends, NOW) === 150, 'the display count is the London day');
@@ -88,7 +91,7 @@ console.log('the rating sets the number cap, nothing else');
     ok(!('halveCap' in v) && !('blockCapRise' in v), rating + ': the verdict has nothing that could change a cap');
   }
   ok(!/healthLimitedCap|capRiseRefused|halveCap|blockCapRise/.test(q + g), 'no halving and no block on changing a cap');
-  ok(/health: healthVerdict\(st as StoredHealth, now\)\.state/.test(g), 'the cold gate reads the cached rating once, for the number cap');
+  ok(/health: healthVerdict\(st as StoredHealth, now\)\.state/.test(g) && /meta_number_status, meta_can_send/.test(g), 'the cold gate reads the cached reading once, for the number cap');
   ok(!/teamCap|team_cap|daily_cap/.test(g), 'the cold gate has no team cap');
   ok(!/\bdaily_cap\b/.test(q.slice(q.indexOf('Deno.serve'))), 'the queue handler no longer reads or writes the old team cap');
 }
@@ -157,7 +160,7 @@ console.log('the tripwire');
   const m = coldVerdict('MY', facts([], { stopReason: 'Meta lowered the tier.' }), NOW);
   ok(!m.go && m.code === 'cold_stopped', '…and every other country');
   const red = healthVerdict({ meta_quality_rating: 'RED', meta_health_ok_at: NOW.toISOString() }, NOW);
-  ok(!/paused|halved/.test(red.limitText ?? '') && /limited to 60 a day/.test(red.limitText ?? ''), 'RED limits the day to 60 and does not stop');
+  ok(!/paused|halved/.test(red.limitText ?? '') && /200 a day/.test(red.limitText ?? ''), 'RED sets no cap (200 a day) and does not stop');
 }
 
 console.log('the opener');

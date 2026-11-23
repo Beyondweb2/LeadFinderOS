@@ -24,6 +24,21 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-23-queue-200-spread', date: '2026-11-23', title: 'WhatsApp queue: 200 a day, evenly spread, and a failure breaker', audience: 'admin',
+    body: 'The number now sends up to 200 cold WhatsApps a day (at most 20 an hour, at least 3 minutes apart), whatever the quality colour. If Meta lowers the number’s messaging limit or flags it, the limit drops to 60 a day by itself and you get an email. If 5 queue messages in a row fail with none delivered, the queue pauses itself and emails you.',
+    report: {
+      added: [
+        'Failure breaker: 5 failed queue messages in a row (none delivered in between) pause the queue, however slowly it is sending. You get an email; Resume starts a fresh count.',
+        'Safety limit: Meta lowering the messaging limit or flagging the number drops cold WhatsApp to 60 a day, with an email.',
+        'Each sender’s queue line shows how many went today and their fair share of today’s limit, beside the next send time.',
+      ],
+      changed: [
+        'The quality colour (RED / YELLOW / GREEN) no longer sets the daily limit. The number’s limit is 200 a day.',
+        'Failures that happen in a run (the number being refused) no longer mark leads No WhatsApp.',
+      ],
+      removed: ['The RED 60 / YELLOW 100 / GREEN 150 limits.'],
+      effect: 'Steadier sending when the number is healthy, and the queue stops quickly instead of burning good leads when WhatsApp refuses the number.',
+    } },
   { id: '2026-11-23-queue-fewer-failures', date: '2026-11-23', title: 'WhatsApp queue: fewer failed sends', audience: 'admin',
     body: 'The queue now keeps to a daily limit set by the number’s quality rating (RED 60, YELLOW 100, GREEN 150, at most 15 an hour), spread evenly over the day. A number WhatsApp could not deliver to is marked No WhatsApp and never sent cold WhatsApp again.',
     report: {
