@@ -32,7 +32,8 @@ import { DASHBOARD_PENDING_QUEUE_STATUSES, DASHBOARD_RESEND_WINDOW_MS, DASHBOARD
 import { displayBusinessName } from "../../../src/lib/displayName.ts";
 import { isUkColdDestination, NOT_A_UK_MOBILE } from "../../../src/lib/ukColdDestination.ts";
 import { COUNTRY_OFF, MARKET_NAME, channelOn, mobileMarketOf } from "../../../src/lib/outreachMarkets.ts";
-import { claimColdSlot, coldGateFor, loadColdFacts } from "../_shared/cold-whatsapp-gate.ts";
+import { applyStrike, claimColdSlot, coldGateFor, loadColdFacts, whatsappStruckOut } from "../_shared/cold-whatsapp-gate.ts";
+import { STRUCK_OUT_WORDS } from "../../../src/lib/whatsappOneStrike.ts";
 import { COLD_SLOT_QUEUED_WORDS, coldGapMs } from "../../../src/lib/whatsappColdGuard.ts";
 import { coldOpenerFor } from "../../../src/lib/openerVariant.ts";
 import { phoneProblemWords } from "../../../src/lib/phoneCountry.ts";
@@ -1144,6 +1145,14 @@ Deno.serve(async (req) => {
       const coldM = mobileMarketOf(to);
       const facts = await loadColdFacts(service);
       if (!facts) return json({ ok: false, error: "cold_guard_unreadable", template: usedTemplate, reason: "Could not check today's WhatsApp limits, so nothing was sent. Try again." }, 200);
+      /* ⛔ ONE STRIKE (2026-11-23, src/lib/whatsappOneStrike.ts): a number WhatsApp could not deliver to is never sent a cold
+         template again. Unreadable = refused, nothing sent. A reply to a message they send us is not cold and never reaches this. */
+      const struck = await whatsappStruckOut(service, resolvedLeadId ?? null, to);
+      if (struck !== false) {
+        if (struck && resolvedLeadId) await applyStrike(service, resolvedLeadId, null);
+        return json({ ok: false, error: struck ? "no_whatsapp_struck_out" : "strike_check_failed", template: usedTemplate,
+          reason: struck ? STRUCK_OUT_WORDS : "Could not check this number's WhatsApp history, so nothing was sent. Try again." }, 200);
+      }
       const verdict = coldM ? await coldGateFor(service, facts, coldM) : null;
       if (verdict && !verdict.go && verdict.code !== "probe_wait") {
         return json({ ok: false, error: verdict.code, template: usedTemplate, reason: verdict.reason }, 200);

@@ -24,6 +24,21 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-23-queue-fewer-failures', date: '2026-11-23', title: 'WhatsApp queue: fewer failed sends', audience: 'admin',
+    body: 'The queue now keeps to a daily limit set by the number’s quality rating (RED 60, YELLOW 100, GREEN 150, at most 15 an hour), spread evenly over the day. A number WhatsApp could not deliver to is marked No WhatsApp and never sent cold WhatsApp again.',
+    report: {
+      added: [
+        'The queue screen shows the quality colour, today’s limit, how many went today and how many this hour.',
+        'One strike: a failed WhatsApp send marks the lead No WhatsApp, takes it out of every WhatsApp queue and opens the text route. Past failures were done too.',
+      ],
+      changed: [
+        'The queue sends to UK mobiles only. Malaysia, Singapore and Australia stay off.',
+        'Leads most likely to be on WhatsApp go first. A newer mobile range (073, 074, 076) with no website waits until the number is GREEN: those failed 34 to 44% of the time.',
+        'Sends are spread over the whole day (about one every 15 minutes on RED), not 17 to 20 an hour.',
+      ],
+      removed: [],
+      effect: 'Fewer failed messages from the number while it is RED, and outreach keeps going at a steady pace. Leads that are held or marked No WhatsApp can still be texted or called.',
+    } },
   { id: '2026-11-23-polite-hook-3', date: '2026-11-23', title: 'New follow-up: Polite hook 3', audience: 'admin',
     body: 'A new follow-up message for web developers who have replied: "Ah nice, this might actually be useful to you then..". Inside their 24 hours it goes free with the lead’s own tracked link (leadfinderos.com/go/…), outside it goes as the Meta template with the plain link.',
     report: {

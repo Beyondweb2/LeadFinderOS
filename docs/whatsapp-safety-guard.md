@@ -1,5 +1,7 @@
 # The cold WhatsApp guard (2026-11-02, `fix/whatsapp-safety-guard`)
 
+> **2026-11-23 (`feat/queue-fewer-failures`, docs/whatsapp-fewer-failures.md): the rating now sets ONE number-wide cold cap** (RED 60 / YELLOW 100 / GREEN 150, max 15 an hour), one strike marks undeliverable numbers No WhatsApp, and the queue is UK-only. "A rating changes no cap" below is history.
+
 > **Later the same day (`fix/uk-cap-separate-from-malaysia`, migration `20261202090000`): the team cap is gone, on Paul's instruction.** Each country has its own cold cap and none draws on another's. See "Separate caps" below; older sections describe the first version where they mention a team cap.
 
 Why: the number has been rated RED since 25 Oct. The queue had a cap, a gap and rating checks; a person's cold send had none. Malaysia kept switching itself off for good. Rule: `src/lib/whatsappColdGuard.ts`. Database half: `supabase/functions/_shared/cold-whatsapp-gate.ts`. Migration: `20261201090000_whatsapp_safety_guard.sql`. Tests: `scripts/whatsapp-cold-guard.test.ts`.

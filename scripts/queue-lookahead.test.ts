@@ -59,7 +59,7 @@ ok(/\.order\("queued_at", \{ ascending: true \}\)/.test(q), 'the READ is still o
    before the next one started. Within a campaign the order is still exactly FIFO — that property is
    asserted in campaign-interleave.test.ts, where it belongs. */
 /* 2026-11-16: senders take turns across ticks, campaigns inside each sender (_shared/queue-fairness.ts, queue-fairness.test.ts). */
-ok(/fairQueueOrder\(scanned, lastQueueSendBySender\)\.slice\(0, QUEUE_LOOKAHEAD\)/.test(q),
+ok(/fairQueueOrder\(scanned, lastQueueSendBySender\)[\s\S]{0,300}\.slice\(0, QUEUE_LOOKAHEAD\)/.test(q),
    'and the look-ahead is taken from the per-sender (then per-campaign) round-robin, not from raw FIFO');
 
 console.log('\n-- 🔴 skipping writes NOTHING to the lead it passes over --');

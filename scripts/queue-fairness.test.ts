@@ -94,7 +94,7 @@ ok(senderNextSendAt('2026-11-16T14:00:00Z', 2, 8) === '2026-11-16T14:16:00.000Z'
 
 console.log('\n── the wiring ──');
 const fn = read('supabase/functions/process-whatsapp-queue/index.ts');
-ok(/const candidates = fairQueueOrder\(scanned, lastQueueSendBySender\)\.slice\(0, QUEUE_LOOKAHEAD\)/.test(fn) && !/interleaveByCampaign\(scanned\)/.test(fn), 'the tick picks from the per-sender fair order');
+ok(/const candidates = \(?fairQueueOrder\(scanned, lastQueueSendBySender\)[\s\S]{0,300}\.slice\(0, QUEUE_LOOKAHEAD\)/.test(fn) && !/interleaveByCampaign\(scanned\)/.test(fn), 'the tick picks from the per-sender fair order');
 ok(fn.indexOf('fairQueueOrder(scanned') > fn.indexOf('if (allCapsUsed && !qaDrill) return json') && fn.indexOf('fairQueueOrder(scanned') > fn.indexOf('skipped: "not_due"'), 'cap, pacing and every gate still run first (it changes who, never how many)');
 ok(/stuckDedupeKey\(/.test(fn) && /raiseOperatorAlert\(service, "team_update"/.test(fn), 'stuck: one bell row + one email per episode (raiseOperatorAlert dedupe)');
 ok(/mode === "my_queue"/.test(fn) && /mode === "my_queue"\) salesActor|"my_queue"/.test(fn), 'my_queue is readable by a salesperson (their own line)');

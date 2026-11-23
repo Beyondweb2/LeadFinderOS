@@ -7,8 +7,10 @@ import { phoneProblemWords } from "../../../src/lib/phoneCountry.ts";
 import { AU_ZONE_COLUMNS, auLeadTz } from "../../../src/lib/auLeadZone.ts";
 import { NOT_A_MOBILE, NOT_A_MOBILE_REASON, templateDestinationRefusal } from "../../../src/lib/whatsAppDestination.ts";
 import { loadCountrySettings } from "../_shared/country-settings.ts";
-import { claimColdSlot, coldGateFor, loadColdFacts } from "../_shared/cold-whatsapp-gate.ts";
-import { coldAllowanceLeft, coldVerdict, teamColdCount, type ColdVerdict } from "../../../src/lib/whatsappColdGuard.ts";
+import { applyStrike, claimColdSlot, coldGateFor, loadColdFacts, whatsappStruckOut } from "../_shared/cold-whatsapp-gate.ts";
+import { coldAllowanceLeft, coldVerdict, numberColdState, teamColdCount, type ColdVerdict } from "../../../src/lib/whatsappColdGuard.ts";
+import { HIGH_RISK_HELD_WORDS, likelihoodRank, likelihoodSendable, whatsAppLikelihood } from "../../../src/lib/whatsappLikelihood.ts";
+import { STRUCK_OUT_WORDS } from "../../../src/lib/whatsappOneStrike.ts";
 import { coldOpenerFor } from "../../../src/lib/openerVariant.ts";
 import { isUkColdDestination, NOT_A_UK_MOBILE } from "../../../src/lib/ukColdDestination.ts";
 import { statusBeforeQueue, statusWhenWhatsAppUnavailable, statusWithContactEvidence } from "../../../src/lib/coldWhatsAppEligibility.ts";
@@ -258,6 +260,12 @@ const QUEUE_LOOKAHEAD = 60;
 const QUEUE_SCAN = 400;
 /** The stored phone prefix of each abroad market (MY / SG are stored E.164; Australian numbers come from Google as +61). */
 const HELD_PHONE_PREFIX: Record<Exclude<Market, "UK">, string> = { MY: "+60", SG: "+65", AU: "+61" };
+/* ⛔ THE QUEUE SENDS TO UK MOBILES ONLY (2026-11-23, Paul; docs/whatsapp-fewer-failures.md). Malaysia, Singapore and Australia
+   were 37–78% failures. Their switches still govern a PERSON's send; the drip never picks an abroad lead, whatever a switch
+   says, and its pacing spreads the UK's allowance alone. A held abroad lead stays queued (nothing written). */
+const QUEUE_MARKETS: readonly Market[] = ["UK"];
+/** How far back each tick's one-strike pass looks (the one-off backfill looked at everything). */
+const ONE_STRIKE_LOOKBACK_MS = 3 * 24 * 3_600_000;
 
 /* ⛔ 3 → 1 ON 2026-09-14, WITH DAILY_CAP → 400 AND THE CRON → EVERY MINUTE. See the DAILY_CAP note
    for the simulation. The rule that decides this constant has not changed since it was written:
@@ -880,7 +888,13 @@ Deno.serve(async (req) => {
       }
     }
     /* What the countries that are on have left today. The pacing spreads it over the day; at 0 the tick has nothing to do. */
-    const coldLeft = coldAllowanceLeft((["UK", ...ABROAD_MARKETS] as Market[]).filter((m) => channelOn(countrySettings, m, "whatsapp")).map((m) => coldNow[m]));
+    /* 2026-11-23: the queue's markets only (QUEUE_MARKETS), and never more than the whole number has left today (the quality cap),
+       so the pacing spreads RED's 60 over the day instead of 150 + Malaysia's 30 + Singapore's 150 (22 Nov: 17–20 an hour). */
+    const numberCold = coldFacts ? numberColdState(coldFacts) : null;
+    const coldLeft = Math.min(
+      coldAllowanceLeft(QUEUE_MARKETS.filter((m) => channelOn(countrySettings, m, "whatsapp")).map((m) => coldNow[m])),
+      numberCold ? numberCold.left : 0);
+    const numberGreen = coldFacts?.health === "green";
     const paused: boolean = stateRow?.paused === true;
     const uk = londonNow();
     // Minute-granular so the 21:30 end is honoured (a whole-hour compare would run to 21:59).
@@ -908,6 +922,7 @@ Deno.serve(async (req) => {
     /* ⛔ 2026-10-22 (src/lib/countryHold.ts heldCountryOff): a lead whose country's WhatsApp is OFF is held like the
        window and the cap — not chosen, nothing written — and sends once the country is switched back on. */
     const leadSendable = (r: QRow) => {
+      if (!QUEUE_MARKETS.includes(rowMarket(r) as Market)) return false;
       if (heldCountryOff(countrySettings, rowMarket(r))) return false;
       if (!leadWindowOpen(r)) return false;
       return !marketHeld(rowMarket(r));
@@ -943,6 +958,9 @@ Deno.serve(async (req) => {
         }])),
       },
       /* 2026-10-14: the admin-set numbers (stored null = the default) and the auto-pause note, for the queue panel. */
+      /* 2026-11-23: the whole number's cold allowance from the cached quality reading (src/lib/whatsappQualityCap.ts). */
+      numberCap: numberCold ? { used: numberCold.used, cap: numberCold.cap, rating: numberCold.rating, lastHour: numberCold.lastHour,
+        hourMax: numberCold.hourMax, blocked: numberCold.block ? numberCold.block.reason : null } : null,
       pace: { gapFloorMin: pace.gapFloorMin, personDefault: pace.personDefault,
               stored: { min_gap_minutes: paceRow?.min_gap_minutes ?? null } },
       /* 2026-10-21: Meta's quality rating and messaging tier for the number (display only). */
@@ -1878,6 +1896,16 @@ Deno.serve(async (req) => {
     }
 
     // --- Tick: decide whether to send one ---
+    /* ⛔ ONE STRIKE (2026-11-23, src/lib/whatsappOneStrike.ts, SQL public.apply_whatsapp_one_strike): a lead whose WhatsApp could
+       not be delivered becomes No WhatsApp and leaves every WhatsApp lane, before anything is picked. Sends nothing. Never fatal:
+       the per-lead check before the send below is the backstop. */
+    if (!qaDrill) try {
+      const { data: strike, error: sErr } = await service.rpc("apply_whatsapp_one_strike", { _since: new Date(Date.now() - ONE_STRIKE_LOOKBACK_MS).toISOString(), _dry_run: false });
+      if (sErr) console.error("[queue] one-strike pass failed (non-fatal):", sErr.message);
+      else if ((strike as { leads?: number } | null)?.leads) console.log(`[queue] one strike: ${(strike as { leads: number }).leads} lead(s) marked No WhatsApp`);
+    } catch (e) {
+      console.error("[queue] one-strike pass threw (non-fatal):", e instanceof Error ? e.message : String(e));
+    }
     /* ⛔ A QUEUED LEAD WITH NO NUMBER CAN NEVER BE CHOSEN (2026-10-08). The selection below excludes a null phone,
        so a lead queued without one sat 'queued' for 9 days, looking like it was waiting its turn (Roof Rhino,
        Precision Roofers). We now KNOW it cannot be WhatsApped, so it leaves the queue and says so: back to its
@@ -1959,6 +1987,8 @@ Deno.serve(async (req) => {
 
     /* Every country that is on has used its own cap. One that has not still goes: leadSendable holds only the ones that have. */
     if (allCapsUsed && !qaDrill) return json({ ok: true, skipped: "cap_reached", ...statusPayload, auditAhead });
+    /* 2026-11-23: the number's own limits (today's quality cap, 15 an hour) hold every lane, follow-ups included. */
+    if (numberCold?.block && !qaDrill) return json({ ok: true, skipped: numberCold.block.code, reason: numberCold.block.reason, ...statusPayload, auditAhead });
     /* ⛔ THE GAP (src/lib/whatsappColdGuard.ts): a person's cold send takes the same slot. send_now skips the pacing below, never this. */
     if (!qaDrill && !force && coldFacts?.gapUntil && new Date(coldFacts.gapUntil) > new Date()) {
       return json({ ok: true, skipped: "cold_gap", ...statusPayload });
@@ -1980,12 +2010,12 @@ Deno.serve(async (req) => {
        badge, and re-enters the drip the moment its town verifies. */
     const queuedQuery = service
       .from("outreach_leads")
-      .select(`id, business_name, phone, email, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, previous_status, user_id, campaign_id, queued_at, assigned_to_user_id, queued_by_user_id, ${AU_ZONE_COLUMNS}`);
+      .select(`id, business_name, phone, email, website, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, previous_status, user_id, campaign_id, queued_at, assigned_to_user_id, queued_by_user_id, ${AU_ZONE_COLUMNS}`);
     /* 2026-10-22: leads held because their country is OFF are left out of the read by their stored prefix (+60 / +65 / +61),
        so a long held queue can never fill QUEUE_SCAN and starve the UK behind it. heldCountryOff below stays the rule. */
     let queuedFiltered = (qaDrill ? queuedQuery.eq("id", qaDrillLeadId as string) : queuedQuery);
     for (const m of ABROAD_MARKETS) {
-      if (heldCountryOff(countrySettings, m) || (!qaDrill && marketHeld(m))) queuedFiltered = queuedFiltered.not("phone", "like", `${HELD_PHONE_PREFIX[m]}%`);
+      if (!QUEUE_MARKETS.includes(m) || heldCountryOff(countrySettings, m) || (!qaDrill && marketHeld(m))) queuedFiltered = queuedFiltered.not("phone", "like", `${HELD_PHONE_PREFIX[m]}%`);
     }
     /* 2026-11-02: and the other way round: a UK held by the guard must not fill the scan with UK leads and starve Malaysia. UK
        numbers are stored in several shapes, abroad ones always with their prefix, so this names the abroad ones. */
@@ -2051,13 +2081,22 @@ Deno.serve(async (req) => {
     /* ⛔ HELD, NOT DROPPED: a lead outside its own window is simply not chosen this tick (nothing is
        written) and is filtered out BEFORE the look-ahead slice, so a run of held leads at the head can never
        hide the sendable ones behind them. */
-    const scanned = qaDrill ? scannedAll : scannedAll.filter(leadSendable);
-    const heldForLocalWindow = scannedAll.length - scanned.length;
+    const likelihoodOf = (r: Record<string, unknown>) => whatsAppLikelihood(toWhatsAppNumber(String(r.phone ?? ""), (r.country as string | null) ?? null), (r.website as string | null) ?? null);
+    const inWindow = qaDrill ? scannedAll : scannedAll.filter(leadSendable);
+    /* ⛔ 2026-11-23 (src/lib/whatsappLikelihood.ts): a newer-range mobile with no website failed 34–44% of the time. Held, not
+       dropped (nothing written), unless the number is GREEN. */
+    const scanned = qaDrill ? inWindow : inWindow.filter((r) => likelihoodSendable(likelihoodOf(r), numberGreen));
+    const heldForLocalWindow = scannedAll.length - inWindow.length;
     if (heldForLocalWindow > 0) console.log(`[queue] ${heldForLocalWindow} queued lead(s) held: outside their own local send window`);
+    if (inWindow.length > scanned.length) console.log(`[queue] ${inWindow.length - scanned.length} queued lead(s) ${HIGH_RISK_HELD_WORDS}`);
     /* ⛔ PER-SENDER ROUND-ROBIN (2026-11-16, _shared/queue-fairness.ts): senders take turns ACROSS ticks (least recently served
        first), campaigns take turns inside each sender. Still one send per tick; every cap, window and guard above is untouched. */
     const lastQueueSendBySender = qaDrill ? new Map<string, string>() : await lastQueueSendsBySender(service, dayStart);
-    const candidates = fairQueueOrder(scanned, lastQueueSendBySender).slice(0, QUEUE_LOOKAHEAD) as Array<Record<string, unknown>>;
+    /* 2026-11-23: the likeliest to be on WhatsApp first (a stable sort, so the fair order holds inside each band). */
+    const candidates = (fairQueueOrder(scanned, lastQueueSendBySender) as Array<Record<string, unknown>>)
+      .map((r, i) => ({ r, i, k: likelihoodRank(likelihoodOf(r)) }))
+      .sort((a, b) => a.k - b.k || a.i - b.i).map((x) => x.r)
+      .slice(0, QUEUE_LOOKAHEAD);
     if (scanned.length > candidates.length || campaignsRepresented(scanned) > 1 || sendersRepresented(scanned) > 1) {
       console.log(`[queue] scanned ${scanned.length} queued lead(s) across ${sendersRepresented(scanned)} sender(s) and ${campaignsRepresented(scanned)} campaign(s); examining the fairest ${candidates.length}`);
     }
@@ -2663,6 +2702,16 @@ Deno.serve(async (req) => {
         reason: `${lead.business_name ?? "That lead"}: ${phoneProblemWords(lead.phone as string | null, lead.country as string | null) ?? "not a mobile we message."} Nothing was sent.`,
         lead_id: lead.id, business: lead.business_name, ...statusPayload,
       });
+    }
+    /* ⛔ ONE STRIKE, PER LEAD (2026-11-23): the backstop for the pass at the top of the tick. Unreadable = this tick sends nothing. */
+    if (!qaDrill) {
+      const out = await whatsappStruckOut(service, String(lead.id), toNumber);
+      if (out === null) return json({ ok: true, skipped: "strike_check_failed", ...statusPayload });
+      if (out) {
+        await applyStrike(service, String(lead.id), "queued");
+        return json({ ok: true, skipped: "no_whatsapp_struck_out", reason: `${lead.business_name ?? "That lead"}: ${STRUCK_OUT_WORDS}`,
+          lead_id: lead.id, business: lead.business_name, ...statusPayload });
+      }
     }
     /* ⛔ THE FOUR UK-WORDED TEMPLATES NEVER GO OUTSIDE THE UK (2026-10-14, reportOfferTemplate.ts): £ prices and UK figures
        in a message to Malaysia or Singapore. Dequeued with the reason on the lead. */

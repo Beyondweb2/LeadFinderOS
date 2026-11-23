@@ -11,11 +11,14 @@ import {
 } from "../../../src/lib/whatsappColdGuard.ts";
 import type { CountrySettings, Market } from "../../../src/lib/outreachMarkets.ts";
 import { loadCountrySettings } from "./country-settings.ts";
+import { healthVerdict, type StoredHealth } from "../../../src/lib/whatsappNumberHealth.ts";
+import { struckOut, statusAfterStrike, STRIKE_DELIVERY_STATES, type StrikeSendRow } from "../../../src/lib/whatsappOneStrike.ts";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
 
-const STATE_COLUMNS = "cold_stop_at, cold_stop_reason, cold_gap_until";
+/* 2026-11-23: plus the cached quality reading, which sets the number's daily cap (src/lib/whatsappQualityCap.ts). */
+const STATE_COLUMNS = "cold_stop_at, cold_stop_reason, cold_gap_until, meta_quality_rating, meta_messaging_tier, meta_health_ok_at, meta_health_checked_at, meta_health_error";
 const FAILED = ["failed", "failed_temporary"];
 
 export interface LoadedColdFacts extends ColdFacts { stopAt: string | null; gapUntil: string | null }
@@ -58,6 +61,7 @@ export async function loadColdFacts(service: Service, settingsIn?: CountrySettin
       stopReason: (st.cold_stop_at ? (st.cold_stop_reason as string | null) ?? "Meta limited the number." : null),
       stopAt: (st.cold_stop_at as string | null) ?? null,
       gapUntil: (st.cold_gap_until as string | null) ?? null,
+      health: healthVerdict(st as StoredHealth, now).state,
       settings, sends,
     };
   } catch {
@@ -96,6 +100,51 @@ export async function claimColdSlot(service: Service, now: Date = new Date()): P
       .eq("id", 1).or(`cold_gap_until.is.null,cold_gap_until.lte.${nowIso}`)
       .select("id");
     return !error && Array.isArray(data) && data.length === 1;
+  } catch {
+    return false;
+  }
+}
+
+/* ══ ONE STRIKE (2026-11-23, src/lib/whatsappOneStrike.ts) ══════════════════════════════════════════════════════════════
+   Has a message to this lead or this number ever failed as undeliverable, with nothing delivered and nothing from them?
+   true = struck out (a cold door refuses). null = could not be read: the caller refuses too (fails towards not sending). */
+export async function whatsappStruckOut(service: Service, leadId: string | null, digits: string | null): Promise<boolean | null> {
+  try {
+    const d = String(digits ?? "").replace(/\D/g, "");
+    const ors = [leadId ? `lead_id.eq.${leadId}` : null, d ? `phone.eq.${d}` : null].filter(Boolean) as string[];
+    if (!ors.length) return false;
+    const { data: rows, error } = await service.from("whatsapp_sends").select("delivery_status, error_code, test_mode")
+      .or(ors.join(",")).eq("test_mode", false).order("created_at", { ascending: false }).limit(200);
+    if (error) return null;
+    const sends = (rows ?? []) as StrikeSendRow[];
+    if (!sends.some((r) => STRIKE_DELIVERY_STATES.includes(String(r.delivery_status ?? "")))) return false;
+    let inbound = false;
+    if (leadId) {
+      const { data: m, error: mErr } = await service.from("whatsapp_messages").select("id").eq("lead_id", leadId).eq("direction", "inbound").limit(1);
+      if (mErr) return null;
+      inbound = (m ?? []).length > 0;
+    }
+    if (!inbound && d) {
+      const { data: m, error: mErr } = await service.from("whatsapp_messages").select("id").eq("phone", d).eq("direction", "inbound").limit(1);
+      if (mErr) return null;
+      inbound = (m ?? []).length > 0;
+    }
+    return struckOut(sends, inbound);
+  } catch {
+    return null;
+  }
+}
+
+/** Mark a struck-out lead No WhatsApp and take it out of every WhatsApp lane. Never throws; false = the write failed. */
+export async function applyStrike(service: Service, leadId: string, currentStatus: string | null): Promise<boolean> {
+  try {
+    const { error } = await service.from("outreach_leads").update({
+      status: statusAfterStrike(currentStatus), whatsapp_delivery_status: "no_whatsapp",
+      hook_followup_queued_at: null, contact_followup_queued_at: null,
+    }).eq("id", leadId);
+    if (error) return false;
+    await service.from("outreach_leads").update({ contact_method: null }).eq("id", leadId).eq("contact_method", "whatsapp");
+    return true;
   } catch {
     return false;
   }
