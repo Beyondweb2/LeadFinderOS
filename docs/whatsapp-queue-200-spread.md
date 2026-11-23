@@ -40,8 +40,7 @@ number-range hold stay.
 
 ## Not done / open
 
-- The UK's own stored cap (`outreach_country_settings`, UK = 150) still sits under the number's 200, so the UK day tops out at
-  150 until an admin sets UK to 200 on the countries screen. Not changed from code (a stored admin setting).
+- ~~The UK's own stored cap (UK = 150)~~ DONE 23 Nov 15:19 (Paul asked): UK `whatsapp_daily_cap` = 200, read back.
 - ~~The 28 leads struck during the outage~~ DONE 23 Nov 12:58 (Paul said restore): the run was 25 sends (22 Nov 13:34 → 23 Nov
   12:35, nothing delivered between); those 25 leads (18 Paul, 7 Valentin) were set back to queued (contact_method whatsapp,
   delivery status cleared). The lone 22 Nov 13:24 failure (deliveries either side) stays struck. `whatsappStruckOut` now leaves
@@ -50,3 +49,19 @@ number-range hold stay.
 - The queue was not paused by hand (the write was refused by the session's permission check); the breaker pauses it on its first
   tick after the deploy, because the last 19 queue sends failed.
 - The exact Meta code needs the held webhook (Findable switch).
+
+## 23 Nov pm: the cause was an unpaid WhatsApp account (fix-wa-sends)
+
+- Cause: the Move37 WhatsApp account was unpaid. Meta ACCEPTED every template (a message id each) and failed it on delivery, no
+  code stored (held webhook) — so it looked like a number problem. Warm in-window replies still delivered. Paul paid before the 15:17 hand test.
+- Meta read 15:15 (`whatsapp-number-health` probe via pg_net, writes nothing): WABA + BUSINESS `can_send_message` AVAILABLE;
+  number CONNECTED, RED, TIER_2K, LIMITED (RED quality only; the SIP-calling errors 138024/138025 are unrelated). No billing
+  field is exposed on health_status, so "paid" is proved by delivery, not by a reading.
+- Hand test: `send-whatsapp-message` got a server door for `test_send` (CRON_SECRET + `x-internal-job: wa-hand-test`,
+  destination still the WHATSAPP_TEST_NUMBER secret = Paul's own number; leaves one test_mode `whatsapp_messages` row so the
+  webhook's status is readable; `scripts/wa-hand-test-door.test.ts`). 15:17 initial_contact → **delivered**. Caveat: Paul's
+  number is warm, so the real proof is the next cold queue send.
+- Nobody was still struck (the run exemption held). 3 leads failed today after the first restore (12:59, 14:00, 15:05) sat at
+  `whatsapp_failed`: set back to queued at the back (queued_at 15:18). The two 12:54/14:04 `failed_temporary` leads were still queued.
+- Queue resumed 15:19 by the same write as the Resume button (on Paul's instruction, logged under his id). First cold queue
+  send after it, 15:20 initial_contact → **delivered**. Fixed.
