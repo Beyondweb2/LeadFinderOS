@@ -17,8 +17,9 @@ import { struckOut, statusAfterStrike, STRIKE_DELIVERY_STATES, type StrikeSendRo
 // deno-lint-ignore no-explicit-any
 type Service = any;
 
-/* 2026-11-23: plus the cached quality reading, which sets the number's daily cap (src/lib/whatsappQualityCap.ts). */
-const STATE_COLUMNS = "cold_stop_at, cold_stop_reason, cold_gap_until, meta_quality_rating, meta_messaging_tier, meta_health_ok_at, meta_health_checked_at, meta_health_error";
+/* 2026-11-23: plus the cached Meta reading. Since 23 Nov pm the tier / status / can-send set the number's daily cap (200, or the
+   safety net's 60: src/lib/whatsappQualityCap.ts); the quality colour only feeds the likelihood hold. */
+const STATE_COLUMNS = "cold_stop_at, cold_stop_reason, cold_gap_until, meta_quality_rating, meta_messaging_tier, meta_health_ok_at, meta_health_checked_at, meta_health_error, meta_number_status, meta_can_send";
 const FAILED = ["failed", "failed_temporary"];
 
 export interface LoadedColdFacts extends ColdFacts { stopAt: string | null; gapUntil: string | null }
@@ -62,6 +63,10 @@ export async function loadColdFacts(service: Service, settingsIn?: CountrySettin
       stopAt: (st.cold_stop_at as string | null) ?? null,
       gapUntil: (st.cold_gap_until as string | null) ?? null,
       health: healthVerdict(st as StoredHealth, now).state,
+      meta: {
+        meta_messaging_tier: (st.meta_messaging_tier as string | null) ?? null, meta_number_status: (st.meta_number_status as string | null) ?? null,
+        meta_can_send: (st.meta_can_send as string | null) ?? null, meta_health_ok_at: (st.meta_health_ok_at as string | null) ?? null,
+      },
       settings, sends,
     };
   } catch {

@@ -9,7 +9,11 @@ import { cn } from '@/lib/utils';
    or "Not moving since 13:10: <reason>". The words are the server's (_shared/queue-fairness.ts senderQueueLine), from the same
    scan, holds and per-sender turn order the queue sends by. A salesperson sees their own line; the admin also sees every
    sender's. Reading it sends nothing. */
-export interface SenderLine { sender: string; name: string; queued: number; state: 'empty' | 'paused' | 'stuck' | 'queued'; line: string }
+export interface SenderLine {
+  sender: string; name: string; queued: number; state: 'empty' | 'paused' | 'stuck' | 'queued'; line: string;
+  /* 2026-11-23 pm (Paul): the number's cap today, this sender's fair share of it, their queue sends today, their next send. */
+  sentToday?: number; cap?: number; share?: number; nextSendAt?: string | null;
+}
 interface MyQueue { ok: true; mine: SenderLine; senders?: SenderLine[] }
 
 export const MY_QUEUE_KEY = ['whatsapp-my-queue'] as const;
@@ -71,7 +75,13 @@ function Line({ label, s, testId }: { label: string; s: SenderLine; testId: stri
   return (
     <div className={cn('flex items-start gap-2 rounded-lg border px-3 py-1.5 text-[12px]', TONE[s.state])} data-testid={testId} data-state={s.state}>
       {s.state === 'stuck' && <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
-      <span><span className="font-semibold">{label}:</span> {s.line}</span>
+      <span><span className="font-semibold">{label}:</span> {s.line}
+        {typeof s.sentToday === 'number' && (
+          <span className="text-muted-foreground" data-testid={`${testId}-numbers`}>
+            {' '}· sent today {s.sentToday}{s.share ? ` · fair share ~${s.share} of ${s.cap}` : ''}
+          </span>
+        )}
+      </span>
     </div>
   );
 }

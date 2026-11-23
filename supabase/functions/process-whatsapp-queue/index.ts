@@ -45,7 +45,8 @@ import { effectiveFirstReplyMode } from "../../../src/lib/firstReplyAutomation.t
 import { WAITING_PITCH_EXPIRED_REASON, WAITING_PITCH_STATUSES, isWaitingPitchExpired, waitingPitchCutoffIso } from "../../../src/lib/auditPitchRule.ts";
 import { SETTLED_TOWN_NOTES } from "../_shared/place-details.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
-import { AUTO_PAUSE_WINDOW_MIN, FAILED_SEND_STATUSES, autoPauseVerdict, checkPaceValue, effectivePace, type EffectivePace } from "../../../src/lib/whatsappPace.ts";
+import { AUTO_PAUSE_WINDOW_MIN, FAILED_SEND_STATUSES, FAILURE_RUN_LOOKBACK_HOURS, autoPauseVerdict, checkPaceValue, effectivePace, failureRunVerdict, strikeSinceAfterRuns, type EffectivePace } from "../../../src/lib/whatsappPace.ts";
+import { COLD_MIN_GAP_MIN } from "../../../src/lib/whatsappQualityCap.ts";
 import { healthVerdict, tierLimit, type StoredHealth } from "../../../src/lib/whatsappNumberHealth.ts";
 import { STRONG_STATUSES, postgrestList } from "../../../src/lib/strongStatuses.ts";
 import { qaSendVerdict } from "../../../src/lib/qaSafety.ts";
@@ -479,11 +480,18 @@ function isNoAutoRetryMarket(digits: string | null | undefined): boolean {
 // deno-lint-ignore no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function lastQueueSendsBySender(service: any, dayStartIso: string): Promise<Map<string, string>> {
+  return (await queueSendsBySender(service, dayStartIso)).last;
+}
+/** Each sender's last queue send today AND how many queue sends they had today (2026-11-23 pm: the queue screen's "sent today"). */
+// deno-lint-ignore no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function queueSendsBySender(service: any, dayStartIso: string): Promise<{ last: Map<string, string>; count: Map<string, number> }> {
   const out = new Map<string, string>();
+  const count = new Map<string, number>();
   try {
     const { data: sends, error } = await service.from("whatsapp_sends").select("lead_id, created_at")
       .is("user_id", null).not("lead_id", "is", null).gte("created_at", dayStartIso).order("created_at", { ascending: false }).limit(2000);
-    if (error || !Array.isArray(sends) || sends.length === 0) return out;
+    if (error || !Array.isArray(sends) || sends.length === 0) return { last: out, count };
     const ids = [...new Set((sends as Array<{ lead_id: string }>).map((s) => s.lead_id))];
     const keyOf = new Map<string, string>();
     for (let i = 0; i < ids.length; i += 200) {
@@ -494,9 +502,10 @@ async function lastQueueSendsBySender(service: any, dayStartIso: string): Promis
     for (const s of sends as Array<{ lead_id: string; created_at: string }>) {
       const k = keyOf.get(s.lead_id);
       if (k && !out.has(k)) out.set(k, s.created_at);
+      if (k) count.set(k, (count.get(k) ?? 0) + 1);
     }
   } catch { /* empty map: fall back to who has waited longest */ }
-  return out;
+  return { last: out, count };
 }
 
 /** About how long one paced send takes now: the floor, or what is left of the London window spread over what is left today. */
@@ -504,7 +513,7 @@ function approxGapMin(coldLeft: number, gapFloorMin: number): number {
   const n = londonNow();
   const minutesLeft = Math.max(0, WINDOW_END_MIN - (n.hour * 60 + n.minute));
   const spread = coldLeft > 0 && Number.isFinite(coldLeft) ? minutesLeft / coldLeft : 0;
-  return Math.max(Number(gapFloorMin) || 0, spread);
+  return Math.max(Number(gapFloorMin) || 0, COLD_MIN_GAP_MIN, spread);
 }
 
 type SenderRow = SenderLead & { id: string; queued_at?: string | null };
@@ -622,7 +631,8 @@ function nextPacingStamp(coldLeftNow: number, pace: EffectivePace): string {
   const minsLeft = minutesUntilWindowEnd();
   const baseGap = minsLeft / remaining;
   const jitter = SEND_GAP_JITTER_LOW + Math.random() * (SEND_GAP_JITTER_HIGH - SEND_GAP_JITTER_LOW);
-  const gapMin = Math.min(SEND_GAP_CEILING_MIN, Math.max(pace.gapFloorMin, Math.round(baseGap * jitter)));
+  /* 2026-11-23 pm: never closer than COLD_MIN_GAP_MIN (3 = 60 / 20 an hour), so the end of the day can never burst. */
+  const gapMin = Math.min(SEND_GAP_CEILING_MIN, Math.max(pace.gapFloorMin, COLD_MIN_GAP_MIN, Math.round(baseGap * jitter)));
   return new Date(Date.now() + gapMin * 60000).toISOString();
 }
 
@@ -767,7 +777,7 @@ Deno.serve(async (req) => {
       .eq("status", "queued").eq("is_archived", false).not("phone", "is", null)
       .or(`derived_town.not.is.null,town_fetch_note.is.null,town_fetch_note.not.in.(${[...SETTLED_TOWN_NOTES].join(",")})`)
       .order("queued_at", { ascending: true }).limit(QUEUE_SCAN);
-    const myQueueEarly = lite ? { scan: myQueueScan(), lastSent: lastQueueSendsBySender(service, dayStart) } : null;
+    const myQueueEarly = lite ? { scan: myQueueScan(), sendsBy: queueSendsBySender(service, dayStart) } : null;
     /* ⚡ EVERY STATUS READ AT ONCE (2026-09-27). These ran one after another — ~15 round trips, several
        seconds on the Outreach and Inbox loads AND on every one-minute cron tick. None depends on
        another, so they run in parallel; the payload is built from the same values, unchanged. */
@@ -959,7 +969,7 @@ Deno.serve(async (req) => {
       },
       /* 2026-10-14: the admin-set numbers (stored null = the default) and the auto-pause note, for the queue panel. */
       /* 2026-11-23: the whole number's cold allowance from the cached quality reading (src/lib/whatsappQualityCap.ts). */
-      numberCap: numberCold ? { used: numberCold.used, cap: numberCold.cap, rating: numberCold.rating, lastHour: numberCold.lastHour,
+      numberCap: numberCold ? { used: numberCold.used, cap: numberCold.cap, rating: numberCold.rating, safety: numberCold.safety, lastHour: numberCold.lastHour,
         hourMax: numberCold.hourMax, blocked: numberCold.block ? numberCold.block.reason : null } : null,
       pace: { gapFloorMin: pace.gapFloorMin, personDefault: pace.personDefault,
               stored: { min_gap_minutes: paceRow?.min_gap_minutes ?? null } },
@@ -1018,7 +1028,8 @@ Deno.serve(async (req) => {
       if (rowsErr) return json({ ok: false, error: "queue_read_failed", detail: "Could not read the queue. Try again in a moment." }, 503);
       const all = (rows ?? []) as Array<SenderRow & QRow>;
       const sendableNow = all.filter(leadSendable);
-      const lastSent = await (myQueueEarly?.lastSent ?? lastQueueSendsBySender(service, dayStart));
+      const sendsBy = await (myQueueEarly?.sendsBy ?? queueSendsBySender(service, dayStart));
+      const lastSent = sendsBy.last;
       const order = fairQueueOrder(sendableNow, lastSent);
       const senderOrder: string[] = [];
       for (const l of order) { const k = senderKeyOf(l); if (!senderOrder.includes(k)) senderOrder.push(k); }
@@ -1027,6 +1038,10 @@ Deno.serve(async (req) => {
       const queueNext = nextEligibleSendAt(!allCapsUsed, nextSendAt);
       const coldStop = coldFacts?.stopReason ? "WhatsApp cold sending is stopped" : null;
       const active = [...facts.values()].filter((e) => e.sendable > 0).length;
+      /* 2026-11-23 pm (Paul): per sender, the number's cap, their fair share of it (the senders with something queued take turns,
+         so none can starve another; a share one sender does not use goes to the others), what went today and the next send. */
+      const withQueue = Math.max(1, [...facts.values()].filter((e) => e.queued > 0).length);
+      const numberCapNow = numberCold ? numberCold.cap : 0;
       const lineFor = async (k: string) => {
         const e = facts.get(k) ?? { queued: 0, sendable: 0, oldest: null, waiting: 0 };
         const since = stuckSince({ nowMs: Date.now(), shouldBeMoving: !paused && anyWindowOpen && !allCapsUsed && !coldStop, lastSentAt: lastSent.get(k) ?? null, oldestSendableQueuedAt: e.oldest, activeSenders: active, gapMin: gap, windowOpenedAt: windowOpenedTodayIso() });
@@ -1042,7 +1057,9 @@ Deno.serve(async (req) => {
           nextSendAt: e.sendable > 0 ? senderNextSendAt(queueNext, ahead, gap) : null,
           stuckSinceIso: since, stuckReason: since ? stuckReasonWords({ queued: e.queued, sendable: e.sendable, waitingOnAudit: waiting }) : null,
         });
-        return { sender: k, name: k === NO_SENDER_KEY ? "Unassigned" : ((await personName(service, k)) ?? "Someone"), queued: e.queued, ...words };
+        const nextAt = e.sendable > 0 && !paused && anyWindowOpen && !allCapsUsed && !coldStop ? senderNextSendAt(queueNext, ahead, gap) : null;
+        return { sender: k, name: k === NO_SENDER_KEY ? "Unassigned" : ((await personName(service, k)) ?? "Someone"), queued: e.queued, ...words,
+          sentToday: sendsBy.count.get(k) ?? 0, cap: numberCapNow, share: e.queued > 0 ? Math.ceil(numberCapNow / withQueue) : 0, nextSendAt: nextAt };
       };
       const me = callerId ?? "";
       const mine = await lineFor(me);
@@ -1899,8 +1916,16 @@ Deno.serve(async (req) => {
     /* ⛔ ONE STRIKE (2026-11-23, src/lib/whatsappOneStrike.ts, SQL public.apply_whatsapp_one_strike): a lead whose WhatsApp could
        not be delivered becomes No WhatsApp and leaves every WhatsApp lane, before anything is picked. Sends nothing. Never fatal:
        the per-lead check before the send below is the backstop. */
+    /* 2026-11-23 pm (src/lib/whatsappPace.ts strikeSinceAfterRuns): a failure that was part of a RUN of failures (the number being
+       refused, as all morning on 23 Nov) says nothing about the lead, so the pass starts after the latest run. Unreadable = no pass
+       this tick (never a strike we cannot justify). */
     if (!qaDrill) try {
-      const { data: strike, error: sErr } = await service.rpc("apply_whatsapp_one_strike", { _since: new Date(Date.now() - ONE_STRIKE_LOOKBACK_MS).toISOString(), _dry_run: false });
+      const lookbackStart = new Date(Date.now() - ONE_STRIKE_LOOKBACK_MS);
+      const { data: runRows, error: runErr } = await service.from("whatsapp_sends").select("created_at, delivery_status")
+        .is("user_id", null).eq("test_mode", false).gte("created_at", lookbackStart.toISOString()).order("created_at", { ascending: false }).limit(2000);
+      if (runErr) throw new Error("run read failed: " + runErr.message);
+      const strikeSince = strikeSinceAfterRuns((runRows ?? []) as Array<{ created_at: string; delivery_status: string | null }>, lookbackStart);
+      const { data: strike, error: sErr } = await service.rpc("apply_whatsapp_one_strike", { _since: strikeSince.toISOString(), _dry_run: false });
       if (sErr) console.error("[queue] one-strike pass failed (non-fatal):", sErr.message);
       else if ((strike as { leads?: number } | null)?.leads) console.log(`[queue] one strike: ${(strike as { leads: number }).leads} lead(s) marked No WhatsApp`);
     } catch (e) {
@@ -1942,7 +1967,17 @@ Deno.serve(async (req) => {
         if (!rErr) {
           const rows = ((recent ?? []) as Array<{ delivery_status: string | null }>).filter((r) => r.delivery_status !== "simulated");
           const failed = rows.filter((r) => (FAILED_SEND_STATUSES as readonly string[]).includes(String(r.delivery_status))).length;
-          const v = autoPauseVerdict(rows.length, failed);
+          let v = autoPauseVerdict(rows.length, failed);
+          /* ⛔ 2026-11-23 pm: the failure-run breaker (src/lib/whatsappPace.ts). Works at any pace: 5 failed in a row, none delivered. */
+          if (!v.pause) {
+            /* Only sends after the last pause / resume: a person's Resume starts a fresh count, never an instant re-pause. */
+            const lookback = Date.now() - FAILURE_RUN_LOOKBACK_HOURS * 3_600_000;
+            const resumedAt = pauseChange?.at ? Date.parse(pauseChange.at) : NaN;
+            const runSince = new Date(Number.isFinite(resumedAt) ? Math.max(lookback, resumedAt) : lookback).toISOString();
+            const { data: runRows, error: runErr } = await service.from("whatsapp_sends").select("created_at, delivery_status")
+              .is("user_id", null).eq("test_mode", false).gte("created_at", runSince).order("created_at", { ascending: false }).limit(500);
+            if (!runErr) v = failureRunVerdict((runRows ?? []) as Array<{ created_at: string; delivery_status: string | null }>);
+          }
           if (v.pause) {
             const nowIso = new Date().toISOString();
             await service.from("whatsapp_outreach_state").update({ auto_paused_at: nowIso, auto_pause_reason: v.reason }).eq("id", 1);
@@ -1951,6 +1986,15 @@ Deno.serve(async (req) => {
               .update({ paused: true, updated_at: nowIso, pause_changed_at: nowIso, pause_changed_by: null, pause_changed_source: "auto" }).eq("id", 1);
             if (apErr) await service.from("whatsapp_outreach_state").update({ paused: true, updated_at: nowIso }).eq("id", 1);
             console.warn("[process-whatsapp-queue] AUTO-PAUSED: " + v.reason);
+            /* 2026-11-23 pm: Paul gets an email + bell (once per pause). Never blocks. */
+            try {
+              await raiseOperatorAlert(service, "team_update", {
+                title: "WhatsApp queue paused itself", body: String(v.reason), link: "/whatsapp-queue",
+                subject: "WhatsApp queue paused itself: messages are failing",
+                lines: [String(v.reason), "", "Open the WhatsApp queue: " + operatorAppUrl("/whatsapp-queue"), "Nothing else was changed."],
+                dedupeKey: "queue-auto-pause:" + nowIso.slice(0, 16),
+              });
+            } catch { /* the pause stands either way */ }
             return json({ ok: true, skipped: "auto_paused", reason: v.reason, ...statusPayload, paused: true, autoPausedAt: nowIso, autoPauseReason: v.reason });
           }
         }

@@ -7,9 +7,9 @@
    (relative .ts imports only: edge-reachable).
 
    ⛔ GREEN  → nothing changes.
-   ⛔ YELLOW, RED → A WARNING BANNER, no pause (Paul, 2026-11-02). ⛔ SINCE 2026-11-23 (Paul) THE RATING SETS THE NUMBER'S DAILY COLD
-              CAP: RED 60, YELLOW 100, GREEN 150, never more than 15 an hour, and "cannot be read" counts as RED
-              (src/lib/whatsappQualityCap.ts, asked through the cold guard). What stops everything is still the tripwire below.
+   ⛔ YELLOW, RED → A WARNING BANNER, no pause (Paul, 2026-11-02). Since 2026-11-23 pm (Paul) the colour sets NO cap: the number
+              sends at most 200 cold a day (20 an hour), and 60 when Meta lowers the tier, flags the number, or the reading cannot be
+              read (src/lib/whatsappQualityCap.ts, asked through the cold guard). What stops everything is still the tripwire below.
    ⛔ TRIPWIRE → the stored tier DROPS, or Meta says the number is FLAGGED / RESTRICTED / BANNED or cannot send: ALL cold WhatsApp
               stops (whatsapp_outreach_state.cold_stop_at, src/lib/whatsappColdGuard.ts) until a person clears it. Latched on the
               turn into the state, so a person's clear is not fought while it lasts. An absent or unreadable value never trips it.
@@ -77,15 +77,15 @@ export function healthVerdict(h: StoredHealth | null | undefined, now: Date = ne
   const fresh = Number.isFinite(okAt) && now.getTime() - okAt <= HEALTH_STALE_AFTER_MIN * 60_000;
   if (!fresh || rating === 'UNKNOWN') {
     return { state: 'unreadable', rating: fresh ? rating : 'UNKNOWN', tier,
-      limitText: 'The number’s quality rating could not be read from Meta. Until it is, cold WhatsApp keeps to RED’s limit of 60 a day.' };
+      limitText: 'The number’s quality rating could not be read from Meta. Until it is, cold WhatsApp keeps to the safety limit of 60 a day.' };
   }
   if (rating === 'RED') {
     return { state: 'red', rating, tier,
-      limitText: 'Meta rates the number RED, so cold WhatsApp is limited to 60 a day (at most 15 an hour). Meta lowering the tier, or flagging or restricting the number, stops all cold WhatsApp.' };
+      limitText: 'Meta rates the number RED. Cold WhatsApp keeps to 200 a day (at most 20 an hour); Meta lowering the tier or flagging the number drops it to 60, and restricting it stops all cold WhatsApp.' };
   }
   if (rating === 'YELLOW') {
     return { state: 'yellow', rating, tier,
-      limitText: 'Meta rates the number YELLOW, so cold WhatsApp is limited to 100 a day (at most 15 an hour).' };
+      limitText: 'Meta rates the number YELLOW. Cold WhatsApp keeps to 200 a day (at most 20 an hour).' };
   }
   return { state: 'green', rating, tier, limitText: null };
 }

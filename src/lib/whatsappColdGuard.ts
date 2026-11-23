@@ -10,8 +10,9 @@
       1. COLD STOP   — the stored tier dropped, or Meta flagged / restricted the number: ALL cold WhatsApp stops until a person
                        clears it. RED alone is not a stop. Since 2026-11-23 the rating sets the NUMBER's daily cap (2b below).
       2. COOL-DOWN   — a country whose sends failed in a pattern rests COOLDOWN_HOURS, then starts again by itself with a probe.
-      2b. NUMBER CAP — 2026-11-23 (Paul): the whole number sends at most RED 60 / YELLOW 100 / GREEN 150 cold a day, from the cached
-                       rating (src/lib/whatsappQualityCap.ts; unreadable = RED), and never more than COLD_HOURLY_MAX (15) in any hour.
+      2b. NUMBER CAP — 2026-11-23 pm (Paul): the whole number sends at most 200 cold a day, never more than COLD_HOURLY_MAX (20) in any
+                       hour; 60 a day when Meta lowered the tier or flagged the number, or the reading is unreadable
+                       (src/lib/whatsappQualityCap.ts). The quality colour sets no cap any more.
       3. COUNTRY CAP — every country has its OWN daily count and cap, on its own local day. No country draws on another's: there is
                        no team cap (Paul, 2026-11-02). whatsapp_daily_cap, or DEFAULT_UK_COLD_CAP / DEFAULT_ABROAD_COLD_CAP.
       4. PROBE       — the first PROBE_SIZE sends after a window opens or a cool-down ends, then wait for Meta's delivery reports.
@@ -24,7 +25,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { isColdOutreachTemplate } from './coldOutreach.ts';
 import { localDayStartUtc, MARKET_NAME, windowForMarket, type CountrySetting, type CountrySettings, type Market } from './outreachMarkets.ts';
-import { COLD_HOURLY_MAX, hourCapRetryAt, qualityCapWord, qualityDailyCap } from './whatsappQualityCap.ts';
+import { COLD_HOURLY_MAX, hourCapRetryAt, numberCapWord, numberDailyCap, type NumberMeta } from './whatsappQualityCap.ts';
 import type { HealthState } from './whatsappNumberHealth.ts';
 
 /** A country with no cap of its own, abroad. On a sending path absent is never "unlimited". */
@@ -166,8 +167,10 @@ export interface ColdFacts {
   settings: CountrySettings | null | undefined;
   /** Counted cold sends of the last COLD_READ_HOURS, every market. */
   sends: readonly ColdSendRow[];
-  /** 2026-11-23: the number's stored quality reading (healthVerdict state). Absent or unreadable = RED's cap. */
+  /** 2026-11-23: the number's stored quality reading (healthVerdict state). The likelihood hold reads it; it sets no cap. */
   health?: HealthState | null;
+  /** 2026-11-23 pm: Meta's tier / status / can-send and when it was read. Absent = the safety net's 60. */
+  meta?: NumberMeta | null;
 }
 
 export type ColdCode = 'cold_stopped' | 'cooldown' | 'quality_cap' | 'hour_cap' | 'country_cap' | 'probe_wait' | 'probe_failed';
@@ -184,20 +187,22 @@ export function teamColdCount(sends: readonly ColdSendRow[], now: Date = new Dat
   return sends.filter((r) => atOrAfter(r, dayStart)).length;
 }
 
-/** The whole number's cold allowance (2026-11-23): today's count against the rating's cap, and the last hour against COLD_HOURLY_MAX. */
-export interface NumberColdState { used: number; cap: number; rating: string; lastHour: number; hourMax: number; left: number;
+/** The whole number's cold allowance (2026-11-23 pm): today's count against 200 (60 under the safety net), the last hour against
+ *  COLD_HOURLY_MAX. `rating` is the words for the limit (kept under its old name for the screens). */
+export interface NumberColdState { used: number; cap: number; rating: string; safety: string | null; lastHour: number; hourMax: number; left: number;
   block: null | { code: 'quality_cap' | 'hour_cap'; reason: string; retryAt: Date } }
-export function numberColdState(facts: Pick<ColdFacts, 'sends' | 'health'>, now: Date = new Date()): NumberColdState {
-  const cap = qualityDailyCap(facts.health);
-  const rating = qualityCapWord(facts.health);
+export function numberColdState(facts: Pick<ColdFacts, 'sends' | 'meta'>, now: Date = new Date()): NumberColdState {
+  const v = numberDailyCap(facts.meta, now);
+  const cap = v.cap;
+  const rating = numberCapWord(v);
   const used = teamColdCount(facts.sends, now);
   const times = facts.sends.map((r) => Date.parse(r.created_at)).filter(Number.isFinite);
   const lastHour = times.filter((t) => t > now.getTime() - 3_600_000 && t <= now.getTime()).length;
-  const base = { used, cap, rating, lastHour, hourMax: COLD_HOURLY_MAX, left: Math.max(0, cap - used) };
+  const base = { used, cap, rating, safety: v.safety, lastHour, hourMax: COLD_HOURLY_MAX, left: Math.max(0, cap - used) };
   if (used >= cap) {
     const tomorrow = new Date(localDayStartUtc(LONDON, now).getTime() + 25 * 3_600_000);
     return { ...base, block: { code: 'quality_cap', retryAt: marketDay('UK', null, tomorrow).windowOpen,
-      reason: `Today's cold WhatsApp limit for the number is used (${used} of ${cap}, quality ${rating}). It starts again tomorrow.` } };
+      reason: `Today's cold WhatsApp limit for the number is used (${used} of ${cap}${v.safety ? `, safety limit: ${v.safety}` : ''}). It starts again tomorrow.` } };
   }
   const hourAt = hourCapRetryAt(times, now);
   if (hourAt) {

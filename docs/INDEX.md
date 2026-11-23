@@ -230,6 +230,7 @@
 - `docs/agreement-v7.1.md` — the v7.1 text with every [CHECK] for the solicitor (generated, `scripts/render-agreement-v7-1-doc.ts`)
 - `docs/hosting-price-and-guarantee-v7-wording.md` — hosting £29.99 Stripe price, who stayed on £9.99, the v7 guarantee wording sweep (2026-10-30)
 - `docs/in-window-free-text.md` — inside the 24-hour window an Inbox template goes as free text, recorded as that template; queued sends judged when they run; Meta pricing from 1 Oct 2026 (2026-10-31)
+- `docs/whatsapp-queue-200-spread.md` — 2026-11-23 pm: why the queue looked stuck (19/19 cold sends failed, auto-pause too slow), number cap 200/day + 20/hour + 3-min gap, safety net 60 + email, failure-run breaker, one strike skips runs, per-sender sent today / fair share
 - `docs/whatsapp-fewer-failures.md` — 2026-11-23: has-WhatsApp accuracy (~12% of first queue sends fail), no stored failure codes (held webhook), quality-rating number cap 60/100/150 + 15/hour, one strike, number-range hold, UK-only queue
 - `docs/whatsapp-safety-guard.md` — 2026-11-02: the cold WhatsApp guard: one cap, country caps, the 1-2 minute gap, the probe, the 24-hour cool-down, the tripwire; why Malaysia's 07:00 sends burst; what the missing Meta codes block
 - `docs/prospect-one-page-close.md` — 2026-11-04: the prospect popup as one page: questions and where each answer is stored, the Close section and its send, WhatsApp free text inside the 24 hours, the call moved above every route with the red End call

@@ -58,7 +58,7 @@ interface TeamStatus {
   numberHealth?: PaceStatus['numberHealth'];
   coldGuard?: PaceStatus['coldGuard'];
   /** 2026-11-23: the whole number's cold allowance from Meta's quality rating (src/lib/whatsappQualityCap.ts). Absent on an older deploy. */
-  numberCap?: { used: number; cap: number; rating: string; lastHour: number; hourMax: number; blocked: string | null } | null;
+  numberCap?: { used: number; cap: number; rating: string; safety?: string | null; lastHour: number; hourMax: number; blocked: string | null } | null;
   autoPausedAt?: PaceStatus['autoPausedAt'];
   autoPauseReason?: PaceStatus['autoPauseReason'];
   perPersonToday?: PaceStatus['perPersonToday'];
@@ -618,16 +618,16 @@ export function BatchNote({ batch, className }: { batch: QueueBatch; className?:
   );
 }
 
-/** "Quality RED · daily limit 60 · sent today 12 · this hour 3 of 15". The colour is the rating's. */
+/** "Normal limit · daily limit 200 · sent today 12 of 200 · this hour 3 of 20" (2026-11-23 pm). Amber = the safety net's 60. */
 function NumberCapLine({ cap }: { cap: NonNullable<TeamStatus['numberCap']> }) {
-  const r = cap.rating.toUpperCase();
-  const tone = r.startsWith('GREEN') ? 'green' : r.startsWith('YELLOW') ? 'amber' : 'red';
+  const safety = !!cap.safety;
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs" data-testid="queue-number-cap" data-rating={r}>
-      <ToneChip tone={tone} dot testId="queue-quality-chip">Quality {cap.rating}</ToneChip>
+    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs" data-testid="queue-number-cap" data-safety={safety ? 'on' : 'off'}>
+      <ToneChip tone={safety ? 'amber' : 'green'} dot testId="queue-quality-chip">{safety ? 'Safety limit' : 'Normal limit'}</ToneChip>
       <span className="font-semibold text-foreground/90">Daily limit {cap.cap}</span>
       <span className="text-muted-foreground">· sent today {cap.used} of {cap.cap}</span>
       <span className="text-muted-foreground">· this hour {cap.lastHour} of {cap.hourMax}</span>
+      {cap.safety && <span className="w-full text-[11px] font-medium text-amber-700 dark:text-amber-400" data-testid="queue-number-cap-safety">{cap.safety}, so cold WhatsApp is held to {cap.cap} a day.</span>}
       {cap.blocked && <span className="w-full text-[11px] font-medium text-amber-700 dark:text-amber-400" data-testid="queue-number-cap-held">{cap.blocked}</span>}
     </div>
   );

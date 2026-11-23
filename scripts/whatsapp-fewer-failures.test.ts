@@ -1,7 +1,8 @@
 /* FEWER FAILED WHATSAPP SENDS (2026-11-23, docs/whatsapp-fewer-failures.md). The quality cap, 15 an hour, one strike, the
    number-type hold and the UK-only queue. Pure rules plus source wiring. Nothing here can message anyone. */
 import { readFileSync } from 'node:fs';
-import { COLD_HOURLY_MAX, QUALITY_DAILY_CAP, hourCapRetryAt, qualityDailyCap } from '../src/lib/whatsappQualityCap.ts';
+import { COLD_HOURLY_MAX, COLD_MIN_GAP_MIN, NUMBER_DAILY_COLD_CAP, SAFETY_DAILY_COLD_CAP, hourCapRetryAt, metaSafetyReason, numberDailyCap, safetyNetEmail } from '../src/lib/whatsappQualityCap.ts';
+import { FAILURE_RUN_PAUSE, currentFailureRun, failureRunVerdict, strikeSinceAfterRuns } from '../src/lib/whatsappPace.ts';
 import { coldVerdict, numberColdState, type ColdFacts, type ColdSendRow } from '../src/lib/whatsappColdGuard.ts';
 import { countrySettingsFrom } from '../src/lib/outreachMarkets.ts';
 import { isStrike, statusAfterStrike, struckOut, NOT_ON_WHATSAPP_CODE, STRIKE_DELIVERY_STATES, PROOF_DELIVERY_STATES, STRIKE_MOVES_STATUSES } from '../src/lib/whatsappOneStrike.ts';
@@ -16,38 +17,68 @@ const ago = (min: number) => new Date(NOW.getTime() - min * 60_000).toISOString(
 const UK = '447700900123';
 const row = (min: number, o: Partial<ColdSendRow> = {}): ColdSendRow =>
   ({ created_at: ago(min), phone: UK, template: 'initial_contact', user_id: null, delivery_status: 'delivered', ...o });
-const settings = countrySettingsFrom([{ country: 'UK', whatsapp_on: true, whatsapp_daily_cap: 150 }] as never);
-const facts = (sends: ColdSendRow[], health: ColdFacts['health']): ColdFacts => ({ stopReason: null, settings, sends, health });
+const settings = countrySettingsFrom([{ country: 'UK', whatsapp_on: true, whatsapp_daily_cap: 300 }] as never);
+const GOOD = { meta_messaging_tier: 'TIER_2K', meta_number_status: 'CONNECTED', meta_can_send: 'LIMITED', meta_health_ok_at: NOW.toISOString() };
+const facts = (sends: ColdSendRow[], health: ColdFacts['health'], meta: ColdFacts['meta'] = GOOD): ColdFacts => ({ stopReason: null, settings, sends, health, meta });
 /** n sends spread one every `gap` minutes, the newest `start` minutes ago. */
 const spread = (n: number, gap: number, start = 61) => Array.from({ length: n }, (_, i) => row(start + i * gap));
 
-console.log('the quality cap');
+console.log('the number cap: 200 a day, 60 under the safety net (2026-11-23 pm)');
 {
-  ok(QUALITY_DAILY_CAP.red === 60 && QUALITY_DAILY_CAP.yellow === 100 && QUALITY_DAILY_CAP.green === 150, 'RED 60, YELLOW 100, GREEN 150');
-  ok(qualityDailyCap('red') === 60 && qualityDailyCap('yellow') === 100 && qualityDailyCap('green') === 150, 'each rating maps to its cap');
-  ok(qualityDailyCap('unreadable') === 60 && qualityDailyCap(null) === 60 && qualityDailyCap(undefined) === 60, 'a reading we do not have is RED, never unlimited');
-  const red59 = coldVerdict('UK', facts(spread(59, 2), 'red'), NOW);
-  ok(red59.go && red59.cap === 60, 'RED: 59 sent today, the 60th may go, the cap shown is 60');
-  const red60 = coldVerdict('UK', facts(spread(60, 2), 'red'), NOW);
-  ok(!red60.go && red60.code === 'quality_cap' && red60.used === 60 && red60.cap === 60, 'RED: at 60 the number is held for the day');
-  ok(!red60.go && !!red60.retryAt && red60.retryAt.getTime() > NOW.getTime(), '…until tomorrow’s window');
-  ok(coldVerdict('UK', facts(spread(60, 2), 'yellow'), NOW).go, 'YELLOW: 60 is not the limit');
-  ok(!coldVerdict('UK', facts(spread(100, 1), 'yellow'), NOW).go, 'YELLOW: 100 is');
+  ok(NUMBER_DAILY_COLD_CAP === 200 && SAFETY_DAILY_COLD_CAP === 60, '200 a day, 60 under the safety net');
+  ok(numberDailyCap(GOOD, NOW).cap === 200 && numberDailyCap(GOOD, NOW).safety === null, 'a normal reading: 200');
+  for (const h of ['red', 'yellow', 'green'] as const) {
+    const v59 = coldVerdict('UK', facts(spread(199, 3, 61), h), NOW);
+    ok(v59.go && v59.cap === 200, h + ': the quality colour sets no cap (199 sent, the 200th may go)');
+  }
+  const at200 = coldVerdict('UK', facts(spread(200, 1, 10), 'red'), NOW);
+  ok(!at200.go && at200.code === 'quality_cap' && at200.used === 200, 'at 200 the number is held for the day');
+  ok(!at200.go && !!at200.retryAt && at200.retryAt.getTime() > NOW.getTime(), '…until tomorrow’s window');
+  ok(numberDailyCap({ ...GOOD, meta_messaging_tier: 'TIER_1K' }, NOW).cap === 60, 'Meta lowered the tier (2K → 1K): 60');
+  ok(numberDailyCap({ ...GOOD, meta_number_status: 'FLAGGED' }, NOW).cap === 60 && numberDailyCap({ ...GOOD, meta_can_send: 'BLOCKED' }, NOW).cap === 60, 'flagged or blocked: 60');
+  ok(numberDailyCap({ ...GOOD, meta_messaging_tier: 'TIER_10K' }, NOW).cap === 200 && numberDailyCap({ ...GOOD, meta_messaging_tier: 'TIER_UNLIMITED' }, NOW).cap === 200, 'a higher tier is never the safety net (and never above 200)');
+  ok(numberDailyCap({ ...GOOD, meta_can_send: 'LIMITED' }, NOW).cap === 200, 'can_send LIMITED alone (the reading since 2 Nov) is not the safety net');
+  ok(numberDailyCap(null, NOW).cap === 60 && numberDailyCap({ ...GOOD, meta_health_ok_at: ago(46) }, NOW).cap === 60, 'no reading or a stale one: 60, never unlimited');
+  const s60 = coldVerdict('UK', facts(spread(60, 2), 'green', { ...GOOD, meta_messaging_tier: 'TIER_1K' }), NOW);
+  ok(!s60.go && s60.cap === 60 && /safety limit/.test(s60.reason), 'under the safety net the 61st waits for tomorrow, and says why');
+  ok(metaSafetyReason(GOOD) === null && /lowered the messaging limit/.test(metaSafetyReason({ ...GOOD, meta_messaging_tier: 'TIER_250' }) ?? ''), 'the reason words');
+  const mail = safetyNetEmail('Meta lowered the messaging limit to 1,000 new people a day');
+  ok(/dropped to 60 a day/.test(mail.subject) && mail.lines.join(' ').includes('normally 200'), 'the email says 60 now, 200 normally');
   const s = numberColdState(facts([...spread(10, 2), row(70, { phone: '60123456789' })], 'red'), NOW);
-  ok(s.used === 11 && s.left === 49, 'the number cap counts every country’s cold sends (one number)');
+  ok(s.used === 11 && s.left === 189, 'the number cap counts every country’s cold sends (one number)');
 }
 
-console.log('15 an hour');
+console.log('20 an hour, at least 3 minutes apart');
 {
-  ok(COLD_HOURLY_MAX === 15, 'the hour cap is 15');
-  const in14 = Array.from({ length: 14 }, (_, i) => row(2 + i * 3));
-  ok(coldVerdict('UK', facts(in14, 'green'), NOW).go, '14 in the last hour: the next may go');
-  const in15 = Array.from({ length: 15 }, (_, i) => row(2 + i * 3));
-  const v = coldVerdict('UK', facts(in15, 'green'), NOW);
-  ok(!v.go && v.code === 'hour_cap', '15 in the last hour: held');
-  ok(!v.go && v.retryAt?.getTime() === Date.parse(ago(2 + 14 * 3)) + 3_600_000, '…until the oldest of them is an hour old');
+  ok(COLD_HOURLY_MAX === 20 && COLD_MIN_GAP_MIN === 3 && 60 / COLD_MIN_GAP_MIN === COLD_HOURLY_MAX, 'the hour cap is 20 and the queue gap floor is 3 minutes (60 / 20)');
+  const in19 = Array.from({ length: 19 }, (_, i) => row(2 + i * 3));
+  ok(coldVerdict('UK', facts(in19, 'green'), NOW).go, '19 in the last hour: the next may go');
+  const in20 = Array.from({ length: 20 }, (_, i) => row(1 + i * 2.9));
+  const v = coldVerdict('UK', facts(in20, 'green'), NOW);
+  ok(!v.go && v.code === 'hour_cap', '20 in the last hour: held');
+  ok(!v.go && v.retryAt?.getTime() === Date.parse(ago(1 + 19 * 2.9)) + 3_600_000, '…until the oldest of them is an hour old');
   ok(hourCapRetryAt([], NOW) === null, 'nothing sent: no hold');
-  ok(coldVerdict('UK', facts(Array.from({ length: 15 }, (_, i) => row(61 + i)), 'green'), NOW).go, 'sends older than an hour do not count');
+  ok(coldVerdict('UK', facts(Array.from({ length: 20 }, (_, i) => row(61 + i)), 'green'), NOW).go, 'sends older than an hour do not count');
+}
+
+console.log('the failure-run breaker (23 Nov: 19 of 19 failed and the auto-pause never tripped)');
+{
+  const r = (min: number, s: string | null) => ({ created_at: ago(min), delivery_status: s });
+  const today = Array.from({ length: 19 }, (_, i) => r(10 + i * 18, 'failed'));
+  ok(currentFailureRun(today) === 19 && failureRunVerdict(today).pause, '19 failed in a row: paused, at any pace');
+  ok(/refusing the number/.test(failureRunVerdict(today).reason ?? ''), '…and it says why');
+  ok(FAILURE_RUN_PAUSE === 5, 'five in a row is the trigger');
+  ok(!failureRunVerdict([r(5, 'failed'), r(10, 'failed'), r(15, 'failed'), r(20, 'failed')]).pause, 'four is not');
+  ok(!failureRunVerdict([r(5, 'failed'), r(10, 'failed'), r(12, 'read'), r(15, 'failed'), r(20, 'failed'), r(25, 'failed')]).pause, 'a delivery breaks the run');
+  ok(failureRunVerdict([r(5, 'failed'), r(6, 'sent'), r(10, 'failed'), r(15, 'no_whatsapp'), r(20, 'failed'), r(25, 'failed')]).pause, 'a send still waiting for its report neither breaks nor extends it');
+  const mixed = [r(5, 'read'), r(10, 'failed'), r(15, 'delivered'), r(20, 'failed'), r(25, 'read'), r(30, 'read'), r(35, 'failed')];
+  ok(!failureRunVerdict(mixed).pause, 'normal days (a failure here and there) never pause');
+  const lookback = new Date(NOW.getTime() - 72 * 3_600_000);
+  ok(strikeSinceAfterRuns(mixed, lookback).getTime() === lookback.getTime(), 'no run: the one-strike pass looks back as before');
+  const since = strikeSinceAfterRuns([...today, r(2, 'failed')], lookback);
+  ok(since.getTime() === Date.parse(ago(2)) + 1, 'after a run, the pass starts after its last failure: those leads are not struck');
+  const later = strikeSinceAfterRuns([...today, r(5, 'read'), r(3, 'failed')], lookback);
+  ok(later.getTime() === Date.parse(ago(10)) + 1 && later.getTime() < Date.parse(ago(3)), '…and a lone failure after the number recovered is still judged');
 }
 
 console.log('one strike');
@@ -100,7 +131,14 @@ console.log('wiring');
   const sw = read('supabase/functions/send-whatsapp-message/index.ts');
   ok(/const QUEUE_MARKETS: readonly Market\[\] = \["UK"\];/.test(q), 'the queue is UK only');
   ok(/if \(!QUEUE_MARKETS\.includes\(rowMarket\(r\) as Market\)\) return false;/.test(q), '…an abroad lead is never picked');
-  ok(/numberCold \? numberCold\.left : 0\)/.test(q), 'the pacing spreads no more than the number has left (RED 60 over the day)');
+  ok(/numberCold \? numberCold\.left : 0\)/.test(q), 'the pacing spreads no more than the number has left (200 over the day)');
+  ok(/Math\.max\(pace\.gapFloorMin, COLD_MIN_GAP_MIN, Math\.round\(baseGap \* jitter\)\)/.test(q), 'the pacing gap is never under 3 minutes');
+  ok(/v = failureRunVerdict\(/.test(q) && /Math\.max\(lookback, resumedAt\)/.test(q), 'the breaker is wired into the auto-pause and starts fresh after a Resume');
+  ok(/strikeSinceAfterRuns\(/.test(q) && /_since: strikeSince\.toISOString\(\)/.test(q), 'the one-strike pass skips failures inside a run');
+  ok(/raiseOperatorAlert\(service, "team_update", \{\s*title: "WhatsApp queue paused itself"/.test(q), 'Paul is emailed when the queue pauses itself');
+  const nh = read('supabase/functions/whatsapp-number-health/index.ts');
+  ok(/if \(safetyNow && !safetyBefore\)/.test(nh) && /safetyNetEmail\(safetyNow\)/.test(nh), 'the watcher emails Paul on the turn into the safety net');
+  ok(/sentToday: sendsBy\.count\.get\(k\) \?\? 0/.test(q) && /share: e\.queued > 0/.test(q), 'each sender’s line carries sent today and a fair share');
   ok(/QUEUE_MARKETS\.filter\(\(m\) => channelOn/.test(q) && !/\(\["UK", \.\.\.ABROAD_MARKETS\] as Market\[\]\)\.filter\(\(m\) => channelOn\(countrySettings, m, "whatsapp"\)\)\.map/.test(q), 'abroad caps no longer speed the UK up');
   ok(/if \(numberCold\?\.block && !qaDrill\) return json/.test(q), 'the number’s limits hold every lane');
   ok(q.indexOf('service.rpc("apply_whatsapp_one_strike"') > 0 && q.indexOf('service.rpc("apply_whatsapp_one_strike"') < q.indexOf('if (paused) return json({ ok: true, skipped: "paused"'), 'the one-strike pass runs before anything is picked, even when paused');
