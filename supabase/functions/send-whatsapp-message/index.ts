@@ -15,6 +15,7 @@ import {
 } from "../_shared/whatsapp-send.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
 import { goLink, initialWithLinkBody } from "../../../src/lib/initialWithLink.ts";
+import { POLITE_HOOK3_TEMPLATE, politeHook3Body } from "../../../src/lib/webdevReport.ts";
 import { goCodeFor, trackReportLink } from "../_shared/tracked-link.ts";
 import type { SendErrorParts } from "../../../src/lib/sendErrorMeaning.ts";
 import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
@@ -140,7 +141,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
 /* 2026-11-16b: polite_hook + polite_hook2 follow-ups (no variables; needs prior WhatsApp; Meta live status first). */
 /* 2026-11-21a: gone_cold (no variables; manual only; only to a lead we messaged who has not replied, outside the window; opt-out and
    Do Not Contact block; sends only when Meta's LIVE status is APPROVED, UNKNOWN refuses too). */
-const BUILD_ID = "2026-11-22a-tracked-report-link";
+const BUILD_ID = "2026-11-23a-polite-hook";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -550,6 +551,7 @@ Deno.serve(async (req) => {
     // template copy (real wording + business name + claim URL) so the Inbox shows
     // what the barber actually receives — not the internal template name.
     let storedBody: string | null = null;
+    let polite3Code: string | undefined;   /* polite_hook3: this lead's tracking code, for the free-text words */
     /* The ordered deep-crawl finding kinds this message's {{6}} actually carried, for
        whatsapp_messages.findings_shown. Null for every template that does not carry site findings,
        which is all of them but one. Hoisted for the same reason storedBody is: the insert happens
@@ -1050,7 +1052,9 @@ Deno.serve(async (req) => {
            LeadFinderOS-style campaign. 2026-11-22b (fix/initial-with-link-parity): the dry run asks for the REAL code too (this lead's
            one code, made once and reused — _shared/tracked-link.ts), so the preview and "Put in message box" show the real link. */
         let goCode: string | undefined;
-        if (tvars.includes("go_code")) {
+        /* polite_hook3 (2026-11-23): no Meta variable, but its free-text version carries this lead's tracked link, so it needs the code too
+           (same fail-closed rule, same LeadFinderOS-style-only rule). */
+        if (tvars.includes("go_code") || templateName === POLITE_HOOK3_TEMPLATE) {
           const gc = await goCodeFor(service, resolvedLeadId, templateName);
           if (!gc.ok) return json({ ok: false, error: "go_link_unavailable", reason: gc.reason, template: templateName }, 200);
           goCode = gc.code;
@@ -1082,15 +1086,18 @@ Deno.serve(async (req) => {
         storedBody = renderTemplateBody(templateName, businessName, claimUrl, undefined, undefined, undefined, leadTown);
         /* initial_with_link: Meta's approved wording with THIS lead's real link (not the "[initial_with_link]" placeholder), so it has a
            plain-text version like every other template — free text inside the 24 hours, the template ({{1}} = the code) outside. */
-        if (goCode) storedBody = initialWithLinkBody(goCode);
-        auditClaimUrl = goCode ? goLink(goCode) : claimUrl;
+        if (goCode && templateName !== POLITE_HOOK3_TEMPLATE) storedBody = initialWithLinkBody(goCode);
+        auditClaimUrl = goCode && templateName !== POLITE_HOOK3_TEMPLATE ? goLink(goCode) : claimUrl;
+        if (goCode && templateName === POLITE_HOOK3_TEMPLATE) polite3Code = goCode;
       }
       messageType = "template";
       usedTemplate = templateName;
       /* ⛔ INSIDE THE 24-HOUR WINDOW, FREE TEXT OF THE SAME WORDING (2026-10-31, src/lib/inWindowFreeText.ts). Everything above —
          every guard, every resolver, the real payload — has run for the template, so only the payload changes: the row keeps
          template_name (pitchEverSent, report_sent, the snapshot all see it), and a queued send is judged again when it runs. */
-      const ownWords = (typedFreeText || sched) && text ? text : storedBody;
+      /* polite_hook3: the free-text words carry the lead's tracked link; the template (storedBody, plain link) is what Meta's body says. */
+      const freeWords = templateName === POLITE_HOOK3_TEMPLATE && polite3Code ? politeHook3Body(polite3Code) : storedBody;
+      const ownWords = (typedFreeText || sched) && text ? text : freeWords;
       const shape = inWindowShape({ origin: sendOrigin, windowOpen: freeWindow, allowClosedText: !env.live, typed: typedFreeText, version: freeTextVersionOf(payload, ownWords), freeOnly });
       if (shape.as === "refuse") return json({ ok: false, error: shape.error, reason: shape.reason, template: templateName }, 200);
       /* The article was fixed for FREE TEXT only: if this would go as the paid template after all, it is the old hold. */
