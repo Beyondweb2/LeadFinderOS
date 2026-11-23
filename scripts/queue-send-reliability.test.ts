@@ -173,9 +173,12 @@ console.log('10. one outbound row, no duplicates; a lost log row is reported, no
 {
   const drip = code(read('supabase/functions/process-whatsapp-queue/index.ts'));
   const opener = drip.slice(drip.indexOf('if (sendLive) {'));
-  const inserts = opener.match(/from\("whatsapp_messages"\)\.insert\(/g) ?? [];
-  ok(inserts.length === 1, `one whatsapp_messages insert site in the opener lane's send (found ${inserts.length})`);
-  ok(/attempt > 0 && messageId[\s\S]{0,200}eq\("wa_message_id", messageId\)/.test(drip), 'the retry first checks the message id is not already on a row (19)');
+  /* 2026-11-23: the write moved into _shared/outbound-log.ts (the whatsapp_sends trigger's copy gets the real words instead of
+     blocking them); behaviour, incl. "a retry never duplicates", is tested in scripts/queue-inbox-real-words.test.ts. */
+  const inserts = opener.match(/from\("whatsapp_messages"\)\.insert\(|logOutboundMessage\(service, outboundRow\)/g) ?? [];
+  ok(inserts.length === 1, `one whatsapp_messages write site in the opener lane's send (found ${inserts.length})`);
+  const log = code(read('supabase/functions/_shared/outbound-log.ts'));
+  ok(/eq\("wa_message_id", waId\)[\s\S]*\.update\(realWordsOf\(row\)\)[\s\S]*\.insert\(row\)/.test(log),'the write first checks the message id is not already on a row, and updates it (19)');
   ok(/error_id: "queue_outbound_log_failed"/.test(drip), 'a failed log row leaves a client_error_reports row with the Meta id');
 }
 

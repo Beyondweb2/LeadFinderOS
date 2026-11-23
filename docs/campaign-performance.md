@@ -84,3 +84,21 @@ Tests: `scripts/campaign-performance.test.ts`.
 - `leadfinderos.com/go/<code>`: repo `leadfinderos-waitlist`, `functions/go/[code].ts`, holds NO key — it 302s the visitor to
   `track-engagement?go=<code>`, which logs the click (bots marked) and 302s to `https://leadfinderos.com/` whatever happens.
 - Clicks show in the campaign table's "Link / report open" column on the `initial_with_link` row.
+- 🔴 Queue sends showed `<tracking code>` in the Inbox (2026-11-23, fix/initial-with-link-queue-code). Paul saw
+  `https://leadfinderos.com/go/<tracking code>` on queue sends. Checked read-only first. 23 queue sends (22 Nov, 12:32 to 13:48 UTC,
+  process-whatsapp-queue v302) went out: 14 delivered or read, 9 failed at Meta. **No prospect got a broken link.** The payload
+  builder (`go_code` in whatsapp-send.ts) refuses to send without a valid 8-character code. Each of the 23 leads has exactly one
+  code, made in the same second as its send. 3 of those codes logged clicks (3 marked human). A code is random, so only a recipient
+  could have clicked it. The queue was not paused.
+  Root cause: the Inbox copy only. The queue writes `whatsapp_sends` BEFORE `whatsapp_messages`. The DB trigger
+  `mirror_whatsapp_send_to_inbox` copies that row into whatsapp_messages straight away, with body `[<template>]` and the same Meta id.
+  The queue's own insert then hit `wa_messages_wa_id_uq`, and its retry treated the trigger's copy as "landed" and stopped. So EVERY
+  automatic send kept the placeholder and had no `template_snapshot` (840 initial_contact rows over the last 10 days, too). The SPA
+  renders most placeholders from its own copy of the wording. It cannot know a lead's code, so initial_with_link showed
+  `<tracking code>`. Fix: `_shared/outbound-log.ts` `logOutboundMessage` UPDATEs the trigger's copy with the real body, message
+  type, snapshot and findings. Status is kept, because the webhook may already have moved it on. A simulated send (no Meta id)
+  matches only this lead + template's placeholder from the last 2 minutes. It is used by the main queue lane, hook_followup and
+  contact_followup. Backfill: the 23 rows were set to `initialWithLinkBody(<the lead's one code>)`, guarded on body still
+  `[initial_with_link]`, and read back 23/23 matching. Older initial_contact etc. rows were NOT backfilled: the SPA's mirror already
+  renders them correctly. Test: `scripts/queue-inbox-real-words.test.ts` (a fake DB with the trigger and unique index).
+  Redeployed: process-whatsapp-queue only.
