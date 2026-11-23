@@ -23,7 +23,8 @@ const settings = (my: Record<string, unknown> = {}) => countrySettingsFrom([
   { country: 'UK', whatsapp_on: true },
   { country: 'MY', whatsapp_on: true, whatsapp_daily_cap: 30, send_start_min: 420, send_end_min: 1230, timezone: 'Asia/Kuala_Lumpur', ...my },
 ] as never);
-const facts = (sends: ColdSendRow[], o: Partial<ColdFacts> = {}): ColdFacts => ({ stopReason: null, settings: settings(), sends, ...o });
+/* 2026-11-23: a GREEN number by default, so these country rules are tested under the widest number cap (150). */
+const facts = (sends: ColdSendRow[], o: Partial<ColdFacts> = {}): ColdFacts => ({ stopReason: null, settings: settings(), sends, health: 'green', ...o });
 const MY = '60123456789'; const UK = '447700900123';
 const delivered = (phone: string) => [row(300, phone, 'delivered'), row(298, phone, 'read'), row(296, phone, 'delivered')];
 
@@ -61,9 +62,11 @@ console.log('caps');
   ok(below.go && below.used === 149, 'the UK at 149 of 150 still sends');
   const uk150 = [...uk149, row(40, UK, 'delivered')];
   const atCap = coldVerdict('UK', facts(uk150), NOW);
-  ok(!atCap.go && atCap.code === 'country_cap' && atCap.used === 150 && atCap.cap === 150, 'the UK at 150 is held by its own cap');
+  ok(!atCap.go && atCap.code === 'quality_cap' && atCap.used === 150 && atCap.cap === 150, 'the UK at 150 is held (the number’s GREEN cap is 150 too)');
+  const atOwnCap = coldVerdict('UK', facts(uk149.slice(0, 100), { settings: countrySettingsFrom([{ country: 'UK', whatsapp_on: true, whatsapp_daily_cap: 100 }] as never) }), NOW);
+  ok(!atOwnCap.go && atOwnCap.code === 'country_cap' && atOwnCap.cap === 100, 'a UK cap below the number’s is held by its own cap');
   const myAfterUk = coldVerdict('MY', facts(uk150), NOW);
-  ok(myAfterUk.go && myAfterUk.used === 0 && myAfterUk.cap === 30, '…and Malaysia still sends: the UK using its cap takes nothing from Malaysia');
+  ok(!myAfterUk.go && myAfterUk.code === 'quality_cap' && myAfterUk.used === 0, '…and since 2026-11-23 Malaysia waits too: one number, one daily cap');
   const sgOwn = coldVerdict('SG', facts(uk150, { settings: settings({}) }), NOW);
   ok(sgOwn.used === 0, 'another country has its own count');
   ok(teamColdCount(facts(uk150).sends, NOW) === 150, 'the display count is the London day');
@@ -74,7 +77,9 @@ console.log('caps');
   ok(coldCapsTotal({ UK: { on: true, used: 0, cap: 150 }, MY: { on: true, used: 5, cap: 30 }, AU: { on: false, used: 0, cap: 150 } }) === 180, 'caps add up for the tier warning, countries that are off left out');
 }
 
-console.log('a rating changes no cap');
+/* 2026-11-23 (Paul): the rating now sets ONE number-wide cap through the guard (scripts/whatsapp-fewer-failures.test.ts has the rule).
+   The old per-country halving stays gone. */
+console.log('the rating sets the number cap, nothing else');
 {
   const q = read('supabase/functions/process-whatsapp-queue/index.ts');
   const g = read('supabase/functions/_shared/cold-whatsapp-gate.ts');
@@ -82,8 +87,8 @@ console.log('a rating changes no cap');
     const v = healthVerdict({ meta_quality_rating: rating, meta_health_ok_at: NOW.toISOString() }, NOW) as unknown as Record<string, unknown>;
     ok(!('halveCap' in v) && !('blockCapRise' in v), rating + ': the verdict has nothing that could change a cap');
   }
-  ok(!/healthLimitedCap|capRiseRefused|halveCap|blockCapRise/.test(q + g), 'nothing on the sending path reads a rating to set a cap');
-  ok(!/healthVerdict/.test(g), 'the cold gate does not read the rating at all');
+  ok(!/healthLimitedCap|capRiseRefused|halveCap|blockCapRise/.test(q + g), 'no halving and no block on changing a cap');
+  ok(/health: healthVerdict\(st as StoredHealth, now\)\.state/.test(g), 'the cold gate reads the cached rating once, for the number cap');
   ok(!/teamCap|team_cap|daily_cap/.test(g), 'the cold gate has no team cap');
   ok(!/\bdaily_cap\b/.test(q.slice(q.indexOf('Deno.serve'))), 'the queue handler no longer reads or writes the old team cap');
 }
@@ -152,7 +157,7 @@ console.log('the tripwire');
   const m = coldVerdict('MY', facts([], { stopReason: 'Meta lowered the tier.' }), NOW);
   ok(!m.go && m.code === 'cold_stopped', '…and every other country');
   const red = healthVerdict({ meta_quality_rating: 'RED', meta_health_ok_at: NOW.toISOString() }, NOW);
-  ok(!/paused|halved/.test(red.limitText ?? '') && /warning/.test(red.limitText ?? ''), 'RED warns and does not stop');
+  ok(!/paused|halved/.test(red.limitText ?? '') && /limited to 60 a day/.test(red.limitText ?? ''), 'RED limits the day to 60 and does not stop');
 }
 
 console.log('the opener');

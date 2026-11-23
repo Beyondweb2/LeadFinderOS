@@ -118,7 +118,7 @@ console.log("── Job 3: WhatsApp cap, pace and auto-pause ──");
   ok(/press Resume/.test(P.autoPauseVerdict(10, 9).reason ?? ""), "auto-pause says why and what to do");
 
   const q = read("supabase/functions/process-whatsapp-queue/index.ts");
-  ok(!/^const DAILY_CAP = /m.test(q) && /const coldLeft = coldAllowanceLeft\(/.test(q), "the drip goes by what each country has left, not a constant");
+  ok(!/^const DAILY_CAP = /m.test(q) && /const coldLeft = Math\.min\(\s+coldAllowanceLeft\(/.test(q), "the drip goes by what each country has left, not a constant");
   ok(/Math\.max\(pace\.gapFloorMin, Math\.round\(baseGap \* jitter\)\)/.test(q), "the pacing floor is the admin-set floor (the formula is unchanged)");
   ok(/select\("min_gap_minutes, person_daily_limit_default, auto_paused_at, auto_pause_reason"\)/.test(q)
     && /\.select\("next_send_at, paused"\)/.test(q), "the pace is read separately — the pause flag's own read is untouched");

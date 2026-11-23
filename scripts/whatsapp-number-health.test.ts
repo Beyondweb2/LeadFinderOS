@@ -25,16 +25,16 @@ ok(g.state === 'green' && g.limitText === null, 'green changes nothing');
 
 console.log('yellow');
 const y = at('YELLOW');
-ok(y.state === 'yellow' && /warning/.test(y.limitText ?? ''), 'yellow is a warning');
+ok(y.state === 'yellow' && /limited to 100 a day/.test(y.limitText ?? ''), 'yellow: limited to 100 a day (2026-11-23)');
 
 console.log('red');
 const r = at('RED');
-ok(r.state === 'red' && /warning/.test(r.limitText ?? ''), 'red is a warning');
-/* 2026-11-02: RED warns, nothing else (scripts/whatsapp-cold-guard.test.ts holds the tripwire and that no rating changes a cap). */
+ok(r.state === 'red' && /limited to 60 a day/.test(r.limitText ?? ''), 'red: limited to 60 a day (2026-11-23)');
+/* 2026-11-23: the rating sets the number's daily cap (src/lib/whatsappQualityCap.ts, scripts/whatsapp-fewer-failures.test.ts). */
 
 console.log('cannot be read');
 for (const [why, v] of [['never read', healthVerdict(null, now)], ['stale', at('GREEN', stale)], ['UNKNOWN', at('UNKNOWN')], ['bad date', at('GREEN', 'nope')]] as const) {
-  ok(v.state === 'unreadable' && /carries on/.test(v.limitText ?? ''), `${why}: never slows sending`);
+  ok(v.state === 'unreadable' && /RED’s limit of 60/.test(v.limitText ?? ''), `${why}: keeps to RED’s limit (the safe default)`);
 }
 
 console.log('tiers');

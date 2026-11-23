@@ -88,7 +88,7 @@ console.log('\n── 3. an OFF country holds its queue ──');
   ok(!heldCountryOff(off, 'UK'), 'the UK is never held by this (it has the queue pause; unchanged)');
   ok(!heldCountryOff(off, null), 'no market → not held (the drip refuses it as before)');
   ok(heldCountryOff(countrySettingsFrom([]), 'SG'), 'unreadable settings → abroad is off → held (never sent)');
-  ok(/const leadSendable = \(r: QRow\) => \{\s+if \(heldCountryOff\(countrySettings, rowMarket\(r\)\)\) return false;/.test(DRIP), 'the pick leaves held leads out (nothing written)');
+  ok(/const leadSendable = \(r: QRow\) => \{\s+(if \(!QUEUE_MARKETS\.includes\(rowMarket\(r\) as Market\)\) return false;\s+)?if \(heldCountryOff\(countrySettings, rowMarket\(r\)\)\) return false;/.test(DRIP), 'the pick leaves held leads out (nothing written)');
   const held = DRIP.slice(DRIP.indexOf('if (heldCountryOff(countrySettings, coldMarket)) {'), DRIP.indexOf('if (isColdOutreachTemplate(templateName) && coldMarket && !channelOn('));
   ok(held.length > 0 && !held.includes('.update(') && held.includes('country_off_held'), 'the last exit holds too: no write');
   ok(DRIP.indexOf('if (heldCountryOff(countrySettings, coldMarket)) {') < DRIP.indexOf('if (isColdOutreachTemplate(templateName) && coldMarket && !channelOn('),

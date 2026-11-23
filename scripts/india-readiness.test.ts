@@ -165,7 +165,7 @@ ok(!anyWindowOpen(at('2026-09-28T04:30:00Z')) && anyWindowOpen(at('2026-09-28T17
   const q = read('supabase/functions/process-whatsapp-queue/index.ts');
   ok(/const WINDOW_START = 7;/.test(q) && /const WINDOW_END_MIN = 21 \* 60 \+ 30;/.test(q), 'the London constants are unchanged');
   ok(/if \(!anyWindowOpen && !force && !qaDrill\) return json\(\{ ok: true, skipped: "outside_window"/.test(q), 'the outer gate is the (London) window; only the QA drill skips it');
-  ok(/const scanned = qaDrill \? scannedAll : scannedAll\.filter\(leadSendable\);[\s\S]{0,1200}const candidates = fairQueueOrder\(scanned, lastQueueSendBySender\)\.slice\(0, QUEUE_LOOKAHEAD\)/.test(q), 'opener lane: held leads are filtered BEFORE the fair order and look-ahead slice');
+  ok(/const inWindow = qaDrill \? scannedAll : scannedAll\.filter\(leadSendable\);[\s\S]{0,600}const scanned = qaDrill \? inWindow : inWindow\.filter\([\s\S]{0,1400}const candidates = \(fairQueueOrder\(scanned, lastQueueSendBySender\)[\s\S]{0,300}\.slice\(0, QUEUE_LOOKAHEAD\)/.test(q), 'opener lane: held leads are filtered BEFORE the fair order and look-ahead slice');
   ok(/windowOpenForDigits\(toWhatsAppNumber\(/.test(q) && !/leadWindowOpen[^\n]*\.country\b(?![^\n]*toWhatsAppNumber)/.test(q), 'the window is chosen from the send digits, not from the country column');
   ok(!/INDIA_SEND_WINDOW|indiaWindowOpen/.test(q), 'the queue carries no India window and queue_state reports none');
   ok(/isColdOutreachTemplate\(templateName\) && !isUkColdDestination\(toNumber\)/.test(q), 'the queue refuses a cold send to anything that is not a UK mobile');

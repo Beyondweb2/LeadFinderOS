@@ -57,6 +57,8 @@ interface TeamStatus {
   pace?: PaceStatus['pace'];
   numberHealth?: PaceStatus['numberHealth'];
   coldGuard?: PaceStatus['coldGuard'];
+  /** 2026-11-23: the whole number's cold allowance from Meta's quality rating (src/lib/whatsappQualityCap.ts). Absent on an older deploy. */
+  numberCap?: { used: number; cap: number; rating: string; lastHour: number; hourMax: number; blocked: string | null } | null;
   autoPausedAt?: PaceStatus['autoPausedAt'];
   autoPauseReason?: PaceStatus['autoPauseReason'];
   perPersonToday?: PaceStatus['perPersonToday'];
@@ -424,6 +426,9 @@ export function WhatsAppQueuePanel() {
         </TabsList>
       </Tabs>
 
+      {/* 2026-11-23: the number's daily cold limit from its quality rating, what it has sent today and this hour. */}
+      {teamControls && team?.numberCap && <NumberCapLine cap={team.numberCap} />}
+
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4" data-testid="queue-numbers" data-tab={tab}>
         <div className="min-w-0 rounded-xl bg-muted/40 px-2.5 py-1.5 ring-1 ring-inset ring-border/40">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground/60">Queued</div>
@@ -609,6 +614,21 @@ export function BatchNote({ batch, className }: { batch: QueueBatch; className?:
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/** "Quality RED · daily limit 60 · sent today 12 · this hour 3 of 15". The colour is the rating's. */
+function NumberCapLine({ cap }: { cap: NonNullable<TeamStatus['numberCap']> }) {
+  const r = cap.rating.toUpperCase();
+  const tone = r.startsWith('GREEN') ? 'green' : r.startsWith('YELLOW') ? 'amber' : 'red';
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs" data-testid="queue-number-cap" data-rating={r}>
+      <ToneChip tone={tone} dot testId="queue-quality-chip">Quality {cap.rating}</ToneChip>
+      <span className="font-semibold text-foreground/90">Daily limit {cap.cap}</span>
+      <span className="text-muted-foreground">· sent today {cap.used} of {cap.cap}</span>
+      <span className="text-muted-foreground">· this hour {cap.lastHour} of {cap.hourMax}</span>
+      {cap.blocked && <span className="w-full text-[11px] font-medium text-amber-700 dark:text-amber-400" data-testid="queue-number-cap-held">{cap.blocked}</span>}
     </div>
   );
 }
