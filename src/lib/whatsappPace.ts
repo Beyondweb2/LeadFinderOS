@@ -142,3 +142,25 @@ export function strikeSinceAfterRuns(rows: readonly RunSendRow[], lookbackStart:
   }
   return new Date(since);
 }
+
+/** The runs of FAILURE_RUN_PAUSE or more failures (nothing delivered between), as [first failure, last failure] in ms. The per-lead
+ *  one-strike check leaves out a failure inside one (2026-11-23 pm: the 25 leads struck while WhatsApp refused the number). */
+export function failureRunWindows(rows: readonly RunSendRow[]): Array<[number, number]> {
+  const s = settled(rows);
+  const out: Array<[number, number]> = [];
+  let start = -1;
+  let run = 0;
+  const close = (endIdx: number) => { if (run >= FAILURE_RUN_PAUSE) out.push([s[start].at, s[endIdx].at]); };
+  for (let i = 0; i < s.length; i++) {
+    if (s[i].ok) { close(i - 1); run = 0; start = -1; continue; }
+    if (run === 0) start = i;
+    run++;
+  }
+  if (run > 0) close(s.length - 1);
+  return out;
+}
+
+/** Is this moment inside one of the windows? */
+export function insideFailureRun(atMs: number, windows: ReadonlyArray<[number, number]>): boolean {
+  return windows.some(([a, b]) => atMs >= a && atMs <= b);
+}
