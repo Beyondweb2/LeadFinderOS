@@ -74,7 +74,11 @@ ok(/resolveWelcomePackVars\(service, resolvedLeadId\)/.test(wb) && /pitchEverSen
 const ts = swm.slice(swm.indexOf('if (body.mode === "test_send")'), swm.indexOf('if (!text && !templateName) return json'));
 ok(/const dest = toWhatsAppNumber\(Deno\.env\.get\("WHATSAPP_TEST_NUMBER"\)/.test(ts) && ts.indexOf('const dest') < ts.indexOf('auto_window'), 'test_send: the secret destination is resolved first');
 ok(/body\.auto_window === true/.test(ts) && /\.eq\("phone", dest\)/.test(ts), 'auto mode reads the TEST number\'s own 24-hour window');
-ok(!/\.insert\(/.test(ts) && /textPayload\(text\)/.test(ts), 'test mode writes nothing (no message row, no send row)');
+/* 2026-11-23 (fix-wa-sends): the one exception is the SERVER's hand test (CRON_SECRET door), which leaves one test_mode
+   whatsapp_messages row so Meta's delivered/failed is readable — scripts/wa-hand-test-door.test.ts owns that block. */
+const iHand = ts.indexOf('if (handTest && r.ok && r.messageId) {');
+const tsNoHand = iHand < 0 ? ts : ts.slice(0, iHand) + ts.slice(ts.indexOf('return json({', iHand));
+ok(tsNoHand !== ts && !/\.insert\(/.test(tsNoHand) && /textPayload\(text\)/.test(ts), 'test mode writes nothing (no message row, no send row) — bar the server hand test\'s own row');
 ok(/welcomePackUrl: v\.welcome_pack_url/.test(ts) && /templateName === WELCOME_PACK_TEMPLATE_NAME/.test(ts), 'a template test checks Meta\'s status and carries the three values');
 ok(/BUILD_ID = "2026-(10-29[c-z]|10-3[01]|1[12]-[0-3][0-9])[a-z]?-?[a-z-]+"/.test(swm), 'BUILD_ID bumped (2026-10-29c or later)');
 const vars = read('supabase/functions/_shared/welcome-pack-vars.ts');

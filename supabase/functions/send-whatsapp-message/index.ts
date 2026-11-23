@@ -41,7 +41,9 @@ import { NOT_A_MOBILE, NOT_A_MOBILE_REASON, templateDestinationRefusal } from ".
 import { loadCountrySettings } from "../_shared/country-settings.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
-import { canWorkLead, isClientLead, refusalBody, resolveActor, type Actor } from "../_shared/access.ts";
+import { canWorkLead, isClientLead, isInternalCall, refusalBody, resolveActor, type Actor } from "../_shared/access.ts";
+/** The x-internal-job value for the server's hand test (test_send only, CRON_SECRET required). */
+const HAND_TEST_JOB_HEADER = "wa-hand-test";
 import { guardAction } from "../_shared/protection.ts";
 import { checkOptedOut, checkSuppressed, checkWrongNumber } from "../_shared/suppression.ts";
 import { GONE_COLD_APPROVED, GONE_COLD_STOP_STATUSES, GONE_COLD_TEMPLATE, goneColdRefusal } from "../../../src/lib/goneCold.ts";
@@ -220,8 +222,15 @@ Deno.serve(async (req) => {
     }
 
     // --- Auth the operator: a signed-in team member with a role (admin or sales) ---
+    /* ⛔ THE SERVER'S HAND TEST (2026-11-23, fix-wa-sends). A CRON_SECRET call with the hand-test job header may run test_send and
+       NOTHING else: same fixed destination (the WHATSAPP_TEST_NUMBER secret, Paul's own phone), same payload builder. It exists so
+       "is the number sending again?" can be proved from the server when no admin is signed in. A matching header without the
+       secret, or with any other mode, is refused — never a fall-through. */
+    const handTest = !sched && req.headers.get("x-internal-job") === HAND_TEST_JOB_HEADER;
+    if (handTest && (!isInternalCall(req) || body.mode !== "test_send")) return json({ ok: false, error: "forbidden" }, 403);
     let actor: Actor;
     if (sched) actor = sched.actor;
+    else if (handTest) actor = { id: "internal-hand-test", role: "admin" };
     else {
       const who = await resolveActor(req, service);
       if (!who.ok) return json(refusalBody(who), who.status);
@@ -385,6 +394,15 @@ Deno.serve(async (req) => {
       }
       const r = await sendViaGraph(env.accessToken, env.phoneNumberId, dest, payload);
       console.log(`[send-whatsapp-message] test_send ${templateName} -> ${dest}: ${r.ok ? "ok " + r.messageId : "FAILED " + r.error}`);
+      /* The server's hand test leaves ONE whatsapp_messages row (test_mode, no lead) so the webhook can write Meta's delivered /
+         failed onto it — that status is the proof. Not whatsapp_sends: the queue's day count and failure breaker read that table. */
+      if (handTest && r.ok && r.messageId) {
+        const { error: logErr } = await service.from("whatsapp_messages").insert({
+          direction: "outbound", phone: dest, message_type: "template", template_name: templateName,
+          wa_message_id: r.messageId, status: "sent", test_mode: true, body: `[hand test] ${templateName}`,
+        });
+        if (logErr) console.error(`[send-whatsapp-message] hand test row not written: ${logErr.message}`);
+      }
       return json({
         ok: r.ok, mode: "test_send", template: templateName, to: dest,
         messageId: r.messageId, failCode: r.failCode ?? null, error: r.error, errorParts: r.errorParts ?? null,

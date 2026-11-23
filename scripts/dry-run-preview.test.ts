@@ -40,7 +40,8 @@ const iDry = SENDER.indexOf('if (dryRun) {');
    long before this branch is reached. indexOf would compare against that one and read FAIL on
    correct code — a check failing for its own reasons (CLAUDE.md §4). */
 const iGraph = SENDER.lastIndexOf('await sendViaGraph(');
-const iMsgInsert = SENDER.indexOf('.from("whatsapp_messages").insert(');
+/* lastIndexOf for the same reason (2026-11-23): test_send's server hand test writes its own row long before this branch. */
+const iMsgInsert = SENDER.lastIndexOf('.from("whatsapp_messages").insert(');
 const iSendInsert = SENDER.indexOf('.from("whatsapp_sends").insert(');
 const iStatus = SENDER.indexOf('status: "report_sent"');
 ok(iDry > 0, 'the dry-run return is present');
