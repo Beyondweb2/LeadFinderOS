@@ -157,7 +157,7 @@ const EMPTY_AUDIT_MAP: Record<string, LeadAuditState> = {};
 import { cn } from '@/lib/utils';
 import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { leadStatusLabel, awaitingReplyTooltip } from '@/types/outreach';
-import { isInitialOpener } from '@/lib/openerVariant';
+import { defaultQueueOpener, isInitialOpener } from '@/lib/openerVariant';
 import { REPORT_OFFER_TEMPLATE } from '@/lib/reportOfferTemplate';
 import { STALE_OFFER_TEMPLATES } from '@/lib/findableOffer';
 import { checkReportOffer, summariseReportOffer, type ReportOfferSummary } from '@/lib/reportOfferCheck';
@@ -656,6 +656,24 @@ export function OutreachTable({
      batch of accountants without touching the dropdown stamped a barber template on all of them.
      Same class of bug as the Inbox picker; '' means not set and the Queue button stays disabled. */
   const [queueTemplate, setQueueTemplate] = useState<string>('');
+  /* 2026-11-24 (Paul): opening the dialog pre-picks the short opener for Findable campaigns, or the campaign's own chosen
+     opener (src/lib/openerVariant.ts defaultQueueOpener). It is a generic opener with no trade in it, so the barber problem
+     above cannot come back. Unreadable campaigns or any LeadFinderOS-style campaign: nothing pre-picked, as before. */
+  const openQueueDialog = async () => {
+    setQueueDialogOpen(true);
+    if (queueTemplate) return;
+    const campaignIds = [...new Set([...selectedIds].map((id) => leads.find((l) => l.id === id)?.campaign_id ?? null))];
+    const real = campaignIds.filter((c): c is string => !!c);
+    let rows: Array<{ id: string; report_style: string | null; default_template: string | null }> = [];
+    if (real.length) {
+      const { data, error } = await supabase.from('campaigns').select('id, report_style, default_template').in('id', real);
+      if (error) return;
+      rows = (data ?? []) as unknown as typeof rows;
+      if (rows.length < real.length) return;
+    }
+    const pick = defaultQueueOpener(campaignIds.map((c) => (c ? rows.find((r) => r.id === c) ?? null : null)));
+    if (pick) setQueueTemplate((cur) => cur || pick);
+  };
   /* The report offer's pre-check for the open dialog's selection (null = not asked / not that template). */
   const [reportOfferPreview, setReportOfferPreview] = useState<ReportOfferSummary | 'checking' | 'failed' | null>(null);
   /* The admin's "Queue across team" confirmation — opened only when the ticked leads span more than one owner. */
@@ -2383,7 +2401,7 @@ export function OutreachTable({
                   Copy Numbers ({selectedIds.size})
                 </Button>
                 {!readOnly && onUpdateLead && (
-                  <Button variant="outline" size="sm" className="bg-background text-xs h-8" onClick={() => setQueueDialogOpen(true)}>
+                  <Button variant="outline" size="sm" className="bg-background text-xs h-8" onClick={() => { void openQueueDialog(); }}>
                     <MessageSquare className="h-3.5 w-3.5 mr-1.5 text-green-500" />
                     Queue WhatsApp ({selectedIds.size})
                   </Button>

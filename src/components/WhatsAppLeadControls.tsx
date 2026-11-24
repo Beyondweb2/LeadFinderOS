@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MessageSquare, Check, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { openerReallySent } from '@/lib/leadState';
@@ -13,7 +13,7 @@ import { toWhatsAppDigits } from '@/lib/waNumber';
 import { COUNTRY_OFF, MARKET_NAME, marketsOn, mobileMarketOf } from '@/lib/outreachMarkets';
 import { phoneProblemWords } from '@/lib/phoneCountry';
 import { useCountrySettings } from '@/hooks/useCountrySettings';
-import { isInitialOpener } from '@/lib/openerVariant';
+import { defaultQueueOpener, isInitialOpener } from '@/lib/openerVariant';
 import { STALE_OFFER_TEMPLATES } from '@/lib/findableOffer';
 import { queueDropWords, REPORT_OFFER_TEMPLATE } from '@/lib/reportOfferTemplate';
 import { checkReportOffer } from '@/lib/reportOfferCheck';
@@ -68,6 +68,24 @@ export function WhatsAppLeadControls({
   const [salesTemplate, setSalesTemplate] = useState('');
   const template = salesPath ? salesTemplate : (lead.whatsapp_template ?? '');
   const queued = lead.status === 'queued';
+  /* 2026-11-24 (Paul): a rep's picker starts on the short opener in a Findable campaign, or the campaign's chosen opener
+     (defaultQueueOpener). Campaign unreadable or LeadFinderOS-style: nothing pre-picked, as before. */
+  const campaignId = lead.campaign_id ?? null;
+  useEffect(() => {
+    if (!salesPath || queued) return;
+    let gone = false;
+    void (async () => {
+      let row: { report_style: string | null; default_template: string | null } | null = null;
+      if (campaignId) {
+        const { data, error } = await supabase.from('campaigns').select('report_style, default_template').eq('id', campaignId).maybeSingle();
+        if (error || !data) return;
+        row = data as unknown as typeof row;
+      }
+      const pick = defaultQueueOpener([row]);
+      if (!gone && pick) setSalesTemplate((cur) => cur || pick);
+    })();
+    return () => { gone = true; };
+  }, [salesPath, queued, campaignId]);
   /* ⛔ THE QUEUED LINE SAYS WHETHER THE QUEUE IS ACTUALLY SENDING (2026-09-28): paused by the admin
      outranks the sending window, and an unreadable state never claims it will send. */
   const queueLine = queuedLeadLine(useQueueState(queued), lead.phone);

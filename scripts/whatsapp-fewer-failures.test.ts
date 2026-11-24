@@ -158,7 +158,7 @@ console.log('wiring');
   ok(/if \(numberCold\?\.block && !qaDrill\) return json/.test(q), 'the number’s limits hold every lane');
   ok(q.indexOf('service.rpc("apply_whatsapp_one_strike"') > 0 && q.indexOf('service.rpc("apply_whatsapp_one_strike"') < q.indexOf('if (paused) return json({ ok: true, skipped: "paused"'), 'the one-strike pass runs before anything is picked, even when paused');
   ok(/whatsappStruckOut\(service, String\(lead\.id\), toNumber\)/.test(q) && /skipped: "strike_check_failed"/.test(q), 'a per-lead strike check before the send; unreadable sends nothing');
-  ok(/likelihoodSendable\(likelihoodOf\(r\), numberGreen\)/.test(q) && /a\.k - b\.k \|\| a\.i - b\.i/.test(q), 'high-risk held unless GREEN; low risk first, fair order kept inside a band');
+  ok(/likelihoodSendable\(likelihoodOf\(r\), numberGreen\)/.test(q) && /fairQueueOrder\(scanned, lastQueueSendBySender, \(r\) => likelihoodRank\(likelihoodOf\(r\)\)\)/.test(q), 'high-risk held unless GREEN; low risk first, fair order kept inside a band');
   ok(/numberCap: numberCold \?/.test(q), 'the status read carries the number cap for the screen');
   ok(/const struck = await whatsappStruckOut\(service, resolvedLeadId \?\? null, to\);/.test(sw) && /struck !== false/.test(sw), 'a person’s cold template is refused for a struck-out number (and when it cannot be checked)');
   ok(!/fetch\(|graph\.facebook/.test(g), 'the gate never calls Meta: the rating is the cached reading');

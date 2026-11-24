@@ -11,7 +11,7 @@ import { applyStrike, claimColdSlot, coldGateFor, loadColdFacts, whatsappStruckO
 import { coldAllowanceLeft, coldVerdict, numberColdState, teamColdCount, type ColdVerdict } from "../../../src/lib/whatsappColdGuard.ts";
 import { HIGH_RISK_HELD_WORDS, likelihoodRank, likelihoodSendable, whatsAppLikelihood } from "../../../src/lib/whatsappLikelihood.ts";
 import { STRUCK_OUT_WORDS } from "../../../src/lib/whatsappOneStrike.ts";
-import { coldOpenerFor } from "../../../src/lib/openerVariant.ts";
+import { isInitialOpener, queueOpenerToSend } from "../../../src/lib/openerVariant.ts";
 import { isUkColdDestination, NOT_A_UK_MOBILE } from "../../../src/lib/ukColdDestination.ts";
 import { statusBeforeQueue, statusWhenWhatsAppUnavailable, statusWithContactEvidence } from "../../../src/lib/coldWhatsAppEligibility.ts";
 import { leadAccess, resolveActor } from "../_shared/access.ts";
@@ -773,7 +773,7 @@ Deno.serve(async (req) => {
     /* The line's own two reads (the queue scan, today's last send per sender) do not depend on any status value, so for
        my_queue they START here, beside the reads below, instead of after them. Same queries, written once. */
     const myQueueScan = () => service.from("outreach_leads")
-      .select(`id, phone, country, campaign_id, queued_at, queued_by_user_id, assigned_to_user_id, user_id, ${AU_ZONE_COLUMNS}`)
+      .select(`id, phone, country, website, whatsapp_template, campaign_id, queued_at, queued_by_user_id, assigned_to_user_id, user_id, ${AU_ZONE_COLUMNS}`)
       .eq("status", "queued").eq("is_archived", false).not("phone", "is", null)
       .or(`derived_town.not.is.null,town_fetch_note.is.null,town_fetch_note.not.in.(${[...SETTLED_TOWN_NOTES].join(",")})`)
       .order("queued_at", { ascending: true }).limit(QUEUE_SCAN);
@@ -1026,8 +1026,15 @@ Deno.serve(async (req) => {
     if (mode === "my_queue") {
       const { data: rows, error: rowsErr } = await (myQueueEarly?.scan ?? myQueueScan());
       if (rowsErr) return json({ ok: false, error: "queue_read_failed", detail: "Could not read the queue. Try again in a moment." }, 503);
-      const all = (rows ?? []) as Array<SenderRow & QRow>;
-      const sendableNow = all.filter(leadSendable);
+      const all = (rows ?? []) as Array<SenderRow & QRow & { website?: string | null; whatsapp_template?: string | null }>;
+      /* ⛔ 2026-11-24: the SAME holds as the tick, the likelihood hold included. Without it a held lead (newer mobile, no
+         website, number not GREEN) counted as "could go", so the line read "Not moving: the queue has not picked these up"
+         for leads the tick holds on purpose (Valentin's 5, all day). */
+      const myLikely = (r: { phone?: unknown; country?: unknown; website?: string | null }) => whatsAppLikelihood(toWhatsAppNumber(String(r.phone ?? ""), (r.country as string | null) ?? null), r.website ?? null);
+      const inWindowNow = all.filter(leadSendable);
+      const sendableNow = inWindowNow.filter((r) => likelihoodSendable(myLikely(r), numberGreen));
+      const heldBy = new Map<string, number>();
+      for (const r of inWindowNow) if (!likelihoodSendable(myLikely(r), numberGreen)) heldBy.set(senderKeyOf(r), (heldBy.get(senderKeyOf(r)) ?? 0) + 1);
       const sendsBy = await (myQueueEarly?.sendsBy ?? queueSendsBySender(service, dayStart));
       const lastSent = sendsBy.last;
       const order = fairQueueOrder(sendableNow, lastSent);
@@ -1047,7 +1054,10 @@ Deno.serve(async (req) => {
         const since = stuckSince({ nowMs: Date.now(), shouldBeMoving: !paused && anyWindowOpen && !allCapsUsed && !coldStop, lastSentAt: lastSent.get(k) ?? null, oldestSendableQueuedAt: e.oldest, activeSenders: active, gapMin: gap, windowOpenedAt: windowOpenedTodayIso() });
         let waiting = 0;
         if (since) {
-          const ids = sendableNow.filter((l) => senderKeyOf(l) === k).slice(0, 60).map((l) => l.id);
+          /* ⛔ 2026-11-24: only a lead whose TEMPLATE needs an audit can wait for one. This counted every lead with no audit,
+             so a queue of initial_contact openers (which never wait) read "every lead that could go is waiting for its AI audit". */
+          const mineNow = sendableNow.filter((l) => senderKeyOf(l) === k).slice(0, 60);
+          const ids = mineNow.filter((l) => !isInitialOpener(l.whatsapp_template) && templateNeedsAudit(TEMPLATES[String(l.whatsapp_template ?? "")]?.vars)).map((l) => l.id);
           const st = ids.length ? await readAuditStates(service, ids) : new Map();
           waiting = ids.filter((id) => !st.get(id)?.completedAt).length;
         }
@@ -1056,6 +1066,7 @@ Deno.serve(async (req) => {
           queued: e.queued, paused, windowOpen: anyWindowOpen, windowStart: `${String(WINDOW_START).padStart(2, "0")}:00`, capReached: allCapsUsed, coldStop,
           nextSendAt: e.sendable > 0 ? senderNextSendAt(queueNext, ahead, gap) : null,
           stuckSinceIso: since, stuckReason: since ? stuckReasonWords({ queued: e.queued, sendable: e.sendable, waitingOnAudit: waiting }) : null,
+          heldHighRisk: heldBy.get(k) ?? 0,
         });
         const nextAt = e.sendable > 0 && !paused && anyWindowOpen && !allCapsUsed && !coldStop ? senderNextSendAt(queueNext, ahead, gap) : null;
         return { sender: k, name: k === NO_SENDER_KEY ? "Unassigned" : ((await personName(service, k)) ?? "Someone"), queued: e.queued, ...words,
@@ -2137,9 +2148,9 @@ Deno.serve(async (req) => {
        first), campaigns take turns inside each sender. Still one send per tick; every cap, window and guard above is untouched. */
     const lastQueueSendBySender = qaDrill ? new Map<string, string>() : await lastQueueSendsBySender(service, dayStart);
     /* 2026-11-23: the likeliest to be on WhatsApp first (a stable sort, so the fair order holds inside each band). */
-    const candidates = (fairQueueOrder(scanned, lastQueueSendBySender) as Array<Record<string, unknown>>)
-      .map((r, i) => ({ r, i, k: likelihoodRank(likelihoodOf(r)) }))
-      .sort((a, b) => a.k - b.k || a.i - b.i).map((x) => x.r)
+    /* ⛔ 2026-11-24: likeliest first INSIDE each sender's turn (fairQueueOrder's rankOf), never across senders: the old global
+       sort put every one of Paul's leads with a website ahead of every one of Valentin's without, and his never went. */
+    const candidates = (fairQueueOrder(scanned, lastQueueSendBySender, (r) => likelihoodRank(likelihoodOf(r))) as Array<Record<string, unknown>>)
       .slice(0, QUEUE_LOOKAHEAD);
     if (scanned.length > candidates.length || campaignsRepresented(scanned) > 1 || sendersRepresented(scanned) > 1) {
       console.log(`[queue] scanned ${scanned.length} queued lead(s) across ${sendersRepresented(scanned)} sender(s) and ${campaignsRepresented(scanned)} campaign(s); examining the fairest ${candidates.length}`);
@@ -2152,7 +2163,8 @@ Deno.serve(async (req) => {
       const states = await readAuditStates(service, candidates.map((c) => String(c.id)));
       for (const c of candidates) {
         const vars = TEMPLATES[String(c.whatsapp_template ?? "")]?.vars;
-        if (!templateNeedsAudit(vars)) { lead = c; break; }   // nothing to wait for
+        /* ⛔ AN OPENER NEVER WAITS FOR AN AUDIT (Paul, 2026-11-24): the first message goes whatever the audit's state. */
+        if (isInitialOpener(c.whatsapp_template as string | null) || !templateNeedsAudit(vars)) { lead = c; break; }   // nothing to wait for
         /* ⚠️ THE TEST IS `completedAt` ALONE, NOT decideOutreachAudit. Its completed-audit branch
            returns start:false/wait:false unconditionally, so the answer would be identical — but it
            also reads search_keyword, category, search_location, address and website, none of which
@@ -2484,7 +2496,8 @@ Deno.serve(async (req) => {
        falls back to video_template (rivalHookDecision, applied after the audit resolves below).
        Nothing else reassigns these, and the fallback is one-way. */
     /* ⛔ THE COLD OPENER IS initial_contact (2026-11-02, src/lib/openerVariant.ts): a lead queued with the short opener gets the original. */
-    let templateName = coldOpenerFor(requestedTemplate);
+    /* 2026-11-24 (Paul): while Meta rates the number GREEN the short opener goes as stored (queueOpenerToSend). */
+    let templateName = queueOpenerToSend(requestedTemplate, numberGreen);
     let lang = TEMPLATES[templateName].lang;
     let tvars = TEMPLATES[templateName].vars;
     /* Only templates whose url IS the claim link need a share_token. audit_reply also declares a
