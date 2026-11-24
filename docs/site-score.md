@@ -123,3 +123,20 @@ import fence, migration additive); `scripts/lighter-outreach-inbox.test.ts` (the
   and Patience Plus Driving School `scored` 65 with its reasons. Nobody has SEEN the rows signed in: the browser pane was
   not signed in, and Claude does not sign in.
 - 311 quick-only leads get a number only when their deep check runs (Crawl site); none was started.
+
+## v4 — V2 parity (2026-11-24, fix/audit-category-and-scoring)
+
+V2 main's website rating (`packages/core/src/websiteScan/checks.ts`, `apps/web/src/components/first60/model.ts`) was read
+and its BEHAVIOUR ported onto V1's own crawl findings (no V2 code copied; V1's crawl and checks are unchanged):
+
+- Bands 70+ Little to gain (green), 50-69 Some gains (amber), under 50 Big gains (red). Applied at display to every number.
+- Severity share high 1 / medium 0.6 / low 0.3 (was 1 / 1 / 0.4).
+- Tier caps (`siteScoreTierOf`): a critical finding, or two major ones, hold the score at 49; one major at 69.
+  Critical = no HTTPS, AI search blocked, homepage noindex, one-page site / no real service pages, any other HIGH finding.
+  Major = broken links, not set up for phones, no sitemap on 10+ pages read, and (HIGH only) no contact details, very slow,
+  no homepage title / main heading. Replaces the v2/v3 59 caps.
+- A site our scanner could not read is grey "We couldn't scan this one" with a fixed line that says nothing about the site
+  (a block, a timeout and a server error look the same from our side). Only a DNS failure says "Website address doesn't
+  exist" (view-only state `no_address`; stored as `unreachable`, so no migration).
+- Opportunity score: "already strong site" now starts at 70 (the Little to gain line).
+- Every stored check re-scored from its stored crawl with `scripts/site-score-backfill.ts` (no crawls, no spend).

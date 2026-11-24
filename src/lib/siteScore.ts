@@ -30,6 +30,20 @@
    placeholder text, a homepage asking not to be listed, no HTTPS, robots.txt shutting out AI crawlers, pages naming
    another site as the main one …) also caps the score in "big gains", whatever the number. The point weights are v2's.
 
+   v4 (2026-11-24, V2 PARITY — the behaviour of V2 main's website rating, packages/core/src/websiteScan/checks.ts, ported
+   onto V1's own crawl findings; no V2 code copied):
+     · Bands: 70+ little to gain (green), 50–69 some gains (amber), under 50 big gains (red).
+     · Severity share: high 1, medium 0.6, low 0.3 of a check's points.
+     · Caps by TIER (siteScoreTierOf): a CRITICAL problem holds the score at 49; two or more MAJOR problems hold it at 49;
+       one MAJOR problem holds it at 69. Green needs no major and no critical problem.
+         critical — no HTTPS, robots.txt closing the site to AI search, the homepage marked noindex, a one-page site or no
+                    real service pages, and every other HIGH finding not listed as major.
+         major    — broken links, not set up for phones, no sitemap on a site of 10+ pages read, and (only when graded HIGH)
+                    no contact details, a very slow site, a missing homepage title or main heading.
+     · A site our scanner could not read is GREY "We couldn't scan this one" — a block, a timeout and a server error look the
+       same from our side, so it is never "the site won't load". Only an address with no DNS answer says so
+       ("Website address doesn't exist"). No number, never a zero.
+
    Pure; no I/O. IMPORTED BY EDGE FUNCTIONS (crawl-check, crawl-job): relative imports with .ts only.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
@@ -37,7 +51,7 @@ import { placeholderPagesOnce, summariseWebsiteCheck, usableWebsiteCheck, type W
 import { storedCrawlUnread, type StoredCrawlForAudit } from './siteAudit.ts';
 import { classifyLeadWebsite } from './leadWebsiteKind.ts';
 
-export const SITE_SCORE_VERSION = 3;
+export const SITE_SCORE_VERSION = 4;
 /** Reasons kept on the list row: the biggest losses first. The full evidence is in site_score_evidence. */
 export const SITE_SCORE_MAX_DOWN_REASONS = 3;
 
@@ -109,17 +123,36 @@ export const SITE_SCORE_CHECKS: readonly SiteScoreCheck[] = [
 ];
 
 /** Share of a check's points each issue in it takes, by the severity the website check gave it (a check stops at zero). */
-export const SITE_SCORE_SEVERITY_SHARE: Record<WebsiteIssueSeverity, number> = { high: 1, medium: 1, low: 0.4 };
+export const SITE_SCORE_SEVERITY_SHARE: Record<WebsiteIssueSeverity, number> = { high: 1, medium: 0.6, low: 0.3 };
 
 /** The checks a one-page site or a site with no real service pages fails: its score is capped below the "some gains" band. */
 export const SITE_SCORE_CAP_ISSUES: ReadonlySet<string> = new Set(['one_page_site', 'no_service_pages', 'services_on_one_page']);
 /** Issues that, on their own, mean the site has no Services at all: the whole category is lost (said as such by the check). */
 const WHOLE_CATEGORY_ISSUES: ReadonlySet<string> = new Set(['one_page_site', 'no_service_pages']);
-/** The severity cap (v3): a verified finding the website check graded this caps the score too. Graded by the check, never
- *  by a list of ids here — a new HIGH finding caps without touching this file. */
+/** The severity that makes an unlisted finding CRITICAL (v4: graded by the check, so a new HIGH finding caps without
+ *  touching this file). */
 export const SITE_SCORE_SEVERE: WebsiteIssueSeverity = 'high';
-/** The cap: the top of the "big gains" band. */
-export const SITE_SCORE_CAP = 59;
+/** v4 caps (V2 parity): a critical problem, or two or more major ones, hold the score at 49; one major problem at 69. */
+export const SITE_SCORE_CAP_CRITICAL = 49;
+export const SITE_SCORE_CAP_MAJOR = 69;
+/** The top of the "big gains" band (kept under its old name for callers). */
+export const SITE_SCORE_CAP = SITE_SCORE_CAP_CRITICAL;
+/** A site under this many pages read has no sitemap to speak of: "no sitemap" is then not a major problem. */
+export const SITE_SCORE_SMALL_SITE_PAGES = 10;
+export type SiteScoreTier = 'critical' | 'major';
+const SITEMAP_ISSUES: ReadonlySet<string> = new Set(['no_sitemap', 'ct_no_sitemap']);
+/** Major whatever their grade: links that lead to an error, not set up for phones. */
+const MAJOR_ISSUES: ReadonlySet<string> = new Set(['broken_pages', 'ct_broken_links', 'ct_dead_links', 'no_viewport', 'ct_no_viewport']);
+/** Major (not critical) when graded HIGH: no contact details, a very slow site, no homepage title or main heading. */
+const MAJOR_WHEN_HIGH: ReadonlySet<string> = new Set(['no_contact_route', 'no_phone', 'no_contact_details', 'no_contact_page', 'slow_pages', 'some_slow_pages', 'missing_title', 'missing_h1', 'vs_key_page_basics']);
+/** Which verified finding holds the score down (v4, V2 parity). Null = it only takes its points. */
+export function siteScoreTierOf(issue: { id: string; severity: WebsiteIssueSeverity }, pagesRead: number): SiteScoreTier | null {
+  if (SITE_SCORE_CAP_ISSUES.has(issue.id)) return 'critical';
+  if (SITEMAP_ISSUES.has(issue.id)) return issue.severity !== 'low' && pagesRead >= SITE_SCORE_SMALL_SITE_PAGES ? 'major' : null;
+  if (MAJOR_ISSUES.has(issue.id)) return 'major';
+  if (MAJOR_WHEN_HIGH.has(issue.id)) return issue.severity === 'high' ? 'major' : null;
+  return issue.severity === SITE_SCORE_SEVERE ? 'critical' : null;
+}
 
 /** Issue ids that are a STATE, never points: the site could not be judged. */
 const STATE_ISSUES: ReadonlySet<string> = new Set(['client_rendered', 'robots_blocks_all']);
@@ -167,7 +200,7 @@ export interface SiteScoreEvidence {
   version: number;
   losses: SiteScoreLoss[];
   /** Why the score was capped, with its evidence (null = not capped). */
-  cap: { reason: string; url: string | null; quote: string; uncapped: number; kind?: 'structure' | 'severity' } | null;
+  cap: { reason: string; url: string | null; quote: string; uncapped: number; kind?: 'structure' | 'severity' | 'major'; at?: number } | null;
   /** What was not judged and why (absences on a capped crawl, things the crawl does not record). */
   notJudged: string[];
 }
@@ -256,11 +289,13 @@ export function siteScoreFromSummary(s: WebsiteCheckSummary, src: QuoteSources |
      order (worst first within a check), so the result never depends on the order the check stored them in. */
   const notJudged = new Set<string>([ACCESS_NOT_RECORDED]);
   const byCheck = new Map<string, WebsiteIssue[]>();
+  const verified: WebsiteIssue[] = [];
   for (const issue of [...s.issues].sort(byId)) {
     const check = siteScoreCheckOf(issue.id);
     if (!check) continue;
     if (!verifiedOn(issue, s)) { notJudged.add(`${issue.title}: not judged, the crawl stopped at its page limit so the page may exist unread.`); continue; }
     byCheck.set(check.id, [...(byCheck.get(check.id) ?? []), issue]);
+    verified.push(issue);
   }
   const losses: SiteScoreLoss[] = [];
   /* A one-page site, or one with no service pages at all, has no Services to speak of: the whole category goes, said once. */
@@ -286,19 +321,23 @@ export function siteScoreFromSummary(s: WebsiteCheckSummary, src: QuoteSources |
     round1(SITE_SCORE_CATEGORY_POINTS[c] - losses.filter((l) => l.category === c).reduce((t, l) => t + l.points, 0))])) as Record<SiteScoreCategory, number>;
   const uncapped = Math.max(0, Math.min(100, Math.round(100 - losses.reduce((t, l) => t + l.points, 0))));
 
-  /* ⛔ THE CALIBRATION CAP: a one-page site, or one with no real service pages, has big gains to make whatever else it does well. */
-  const capIssue = [...s.issues].sort(byId).find((i) => SITE_SCORE_CAP_ISSUES.has(i.id));
-  const capEv = capIssue ? evidenceFor(capIssue, src) : null;
-  /* ⛔ THE SEVERITY CAP (v3): a verified HIGH finding — one that took points here, so the crawl saw it — caps it too. */
-  const severe = [...losses].sort((a, b) => (a.issueId < b.issueId ? -1 : a.issueId > b.issueId ? 1 : 0)).find((l) => l.severity === SITE_SCORE_SEVERE);
-  const cap = uncapped <= SITE_SCORE_CAP ? null
-    : capIssue && capEv
-      ? { reason: `${capIssue.title} — capped at ${SITE_SCORE_CAP} (a one-page site, or one without real service pages, has big gains to make).`, url: capEv.url, quote: capEv.quote, uncapped, kind: 'structure' as const }
-      : severe
-        ? { reason: `${severe.title} — a serious problem, capped at ${SITE_SCORE_CAP} (big gains to make whatever else the site does well).`, url: severe.url, quote: severe.quote, uncapped, kind: 'severity' as const }
-        : null;
-  const capTitle = cap ? (cap.kind === 'structure' ? capIssue!.title : severe!.title) : null;
-  const score = cap ? SITE_SCORE_CAP : uncapped;
+  /* ⛔ THE TIER CAPS (v4, V2 parity): only VERIFIED findings count. A critical one, or two or more majors, hold it at 49;
+     one major at 69. The structural ones (one page, no real service pages) come first, then the rest in id order. */
+  const pagesRead = s.pagesRead ?? 0;
+  const tiered = verified.map((i) => ({ issue: i, tier: siteScoreTierOf(i, pagesRead) }))
+    .sort((a, b) => Number(SITE_SCORE_CAP_ISSUES.has(b.issue.id)) - Number(SITE_SCORE_CAP_ISSUES.has(a.issue.id)) || byId(a.issue, b.issue));
+  const critical = tiered.filter((t) => t.tier === 'critical').map((t) => t.issue);
+  const major = tiered.filter((t) => t.tier === 'major').map((t) => t.issue);
+  const capAt = critical.length || major.length >= 2 ? SITE_SCORE_CAP_CRITICAL : major.length ? SITE_SCORE_CAP_MAJOR : 100;
+  const holder = critical[0] ?? major[0] ?? null;
+  const names = (l: WebsiteIssue[]) => l.map((i) => i.title).join('; ');
+  const why = critical.length ? `a critical problem: ${names(critical)}` : major.length >= 2 ? `${major.length} major problems: ${names(major)}` : `a major problem: ${names(major)}`;
+  const holderEv = holder ? evidenceFor(holder, src) : null;
+  const cap = uncapped <= capAt || !holder || !holderEv ? null
+    : { reason: `Held at ${capAt} by ${why}.`, url: holderEv.url, quote: holderEv.quote, uncapped, at: capAt,
+        kind: (SITE_SCORE_CAP_ISSUES.has(holder.id) ? 'structure' : critical.length ? 'severity' : 'major') as 'structure' | 'severity' | 'major' };
+  const capTitle = cap && holder ? holder.title : null;
+  const score = cap ? capAt : uncapped;
 
   const downs = [...losses].sort((a, b) => b.points - a.points || (a.check < b.check ? -1 : 1)).slice(0, SITE_SCORE_MAX_DOWN_REASONS)
     .map((l) => ({ kind: 'down' as const, text: l.title, points: Math.round(l.points) }));
@@ -338,23 +377,33 @@ export function siteScoreColumns(score: SiteScore | null, atIso: string): Record
 /* ── the display (both rows read these; nothing here is sent anywhere) ── */
 
 export type SiteScoreBand = 'big' | 'some' | 'little';
-export const SITE_SCORE_BAND_MIN = { little: 80, some: 60 } as const;
+/** v4 (V2 parity): 70+ little to gain, 50–69 some gains, under 50 big gains. Applied to every stored number at display. */
+export const SITE_SCORE_BAND_MIN = { little: 70, some: 50 } as const;
 export function siteScoreBand(score: number): SiteScoreBand {
   return score >= SITE_SCORE_BAND_MIN.little ? 'little' : score >= SITE_SCORE_BAND_MIN.some ? 'some' : 'big';
 }
 export const SITE_SCORE_BAND_LABELS: Record<SiteScoreBand, string> = { big: 'Big gains', some: 'Some gains', little: 'Little to gain' };
 
 /** Every non-number state the screens draw, each with its own words. no_website and not_checked come from the lead. */
-export type SiteScoreUnjudged = Exclude<SiteScoreState, 'scored'> | 'no_website' | 'not_checked';
+export type SiteScoreUnjudged = Exclude<SiteScoreState, 'scored'> | 'no_website' | 'not_checked' | 'no_address';
 export const SITE_SCORE_STATE_LABELS: Record<SiteScoreUnjudged, string> = {
   no_website: 'No website',
   profile_only: 'Social / directory only',
   js_only: 'JavaScript-only site',
   robots_blocked: 'Blocked by robots.txt',
-  unreachable: 'Couldn’t reach',
+  /* ⛔ v4 (V2 parity): never "couldn't reach" or "won't load" — our scanner being turned away looks the same as a site
+     being down, so we say only what we know. */
+  unreachable: 'We couldn’t scan this one',
+  /* Only a web address with no DNS answer is a fact about the site itself (view-only; stored as 'unreachable'). */
+  no_address: 'Website address doesn’t exist',
   partial: 'Quick check only',
   not_checked: 'Not checked',
 };
+
+/** The stored reason of a site with no DNS answer (siteAudit HOME_FETCH_LABELS.dns). */
+const NO_ADDRESS_RE = /does not resolve|no such host|name not resolved|enotfound/i;
+export const NO_ADDRESS_LINE = 'The web address gives no answer at all (no DNS record): the domain may have lapsed or be misspelt.';
+export const NO_SCAN_LINE = 'Our scanner could not read this site. A block, a slow answer or a server error all look the same from our side, so this says nothing about the site itself.';
 
 /** What a list row reads (the small columns, never the result or the evidence). */
 export interface StoredSiteScore {
@@ -381,6 +430,11 @@ export function siteScoreViewFor(website: string | null | undefined, s: StoredSi
   if (!s || s.site_score_version == null) return { kind: 'state', state: 'not_checked', reason: null, checkedAt: null, version: null };
   const checkedAt = s.site_score_detail?.checkedAt ?? null;
   const reason = s.site_score_reasons?.[0]?.text ?? null;
+  if (s.site_score_state === 'unreachable' || s.site_score_state === 'unreadable') {
+    return NO_ADDRESS_RE.test(reason ?? '')
+      ? { kind: 'state', state: 'no_address', reason: NO_ADDRESS_LINE, checkedAt, version: s.site_score_version }
+      : { kind: 'state', state: 'unreachable', reason: NO_SCAN_LINE, checkedAt, version: s.site_score_version };
+  }
   if (s.site_score_state === 'scored' && typeof s.site_score === 'number') {
     return {
       kind: 'scored', score: s.site_score, band: siteScoreBand(s.site_score), reasons: s.site_score_reasons ?? [],
@@ -401,6 +455,6 @@ export const SITE_SCORE_GROUP_LABELS: Record<SiteScoreGroup, string> = { ...SITE
 /** Sort order: most room to improve first — big gains (lowest number first), some, little, then the states. */
 export function siteScoreSortKey(v: SiteScoreView): number {
   if (v.kind === 'scored') return v.score;
-  const order: SiteScoreUnjudged[] = ['no_website', 'profile_only', 'js_only', 'robots_blocked', 'unreachable', 'partial', 'not_checked'];
+  const order: SiteScoreUnjudged[] = ['no_website', 'no_address', 'profile_only', 'js_only', 'robots_blocked', 'unreachable', 'partial', 'not_checked'];
   return 200 + order.indexOf(v.state);
 }

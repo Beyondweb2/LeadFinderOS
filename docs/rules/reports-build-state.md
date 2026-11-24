@@ -21,3 +21,7 @@
 - **Cron jobs live only in the DB** (`cron.job`; re-read before quoting; a rebuild from migrations loses them). The `bulk_jobs.job_type` CHECK is DB-only too.
 - **Open problems:** `docs/open-problems.md` (long), `docs/handover/12-…` (live list). Standing ones: the Apify cap (docs/rules/engineering.md, "Constants"); `classifySource` grades any `.org` as authority; a 3-run measurement repeats only 20 questions when the set is longer; `run_number` has no unique index; nothing sends the four-week results by WhatsApp (email only); TPS/CTPS screening postponed by Paul (not a blocker).
 - The ARCHIVED checkout's `CLAUDE.md` and `HANDOFF.md` / `ONBOARDING.md` / `HANDOVER_NEXT.md` are stale (`HANDOVER_MOCKUP.md` is the live mockup record).
+
+- **Audit trade order (2026-11-24):** every audit takes its trade from `auditTradeOf()` (`src/lib/leadTrade.ts`): the
+  search keyword before the Google category. The one exception is a trade the customer corrected at signup (category +
+  the exact notes line findable-onboarding writes). Never write `category || search_keyword` for an audit again.
