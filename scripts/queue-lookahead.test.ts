@@ -59,7 +59,7 @@ ok(/\.order\("queued_at", \{ ascending: true \}\)/.test(q), 'the READ is still o
    before the next one started. Within a campaign the order is still exactly FIFO — that property is
    asserted in campaign-interleave.test.ts, where it belongs. */
 /* 2026-11-16: senders take turns across ticks, campaigns inside each sender (_shared/queue-fairness.ts, queue-fairness.test.ts). */
-ok(/fairQueueOrder\(scanned, lastQueueSendBySender\)[\s\S]{0,300}\.slice\(0, QUEUE_LOOKAHEAD\)/.test(q),
+ok(/fairQueueOrder\(scanned, lastQueueSendBySender[,)][\s\S]{0,300}\.slice\(0, QUEUE_LOOKAHEAD\)/.test(q),
    'and the look-ahead is taken from the per-sender (then per-campaign) round-robin, not from raw FIFO');
 
 console.log('\n-- 🔴 skipping writes NOTHING to the lead it passes over --');
@@ -89,7 +89,8 @@ ok(/status: "not_contacted", whatsapp_delivery_status: "audit_reply_unavailable"
 ok(OUTREACH_AUDIT_STALE_MS === 45 * 60 * 1000, 'the head\'s worst case is still the 45-minute stale bound');
 
 console.log('\n-- a template that needs no audit is never skipped --');
-ok(/if \(!templateNeedsAudit\(vars\)\) \{ lead = c; break; \}/.test(block),
+/* 2026-11-24: an opener is chosen whatever its audit state, too (whatsapp-queue-stuck.test.ts). */
+ok(/if \(isInitialOpener\(c\.whatsapp_template as string \| null\) \|\| !templateNeedsAudit\(vars\)\) \{ lead = c; break; \}/.test(block),
    'nothing to wait for means it sends');
 
 console.log('\n-- readiness is completedAt, read in ONE batched query --');

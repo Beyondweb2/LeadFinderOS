@@ -74,6 +74,27 @@ export function coldOpenerFor(name: string): string {
   return name === INITIAL_OPENER_C ? INITIAL_OPENER_A : name;
 }
 
+/** ⛔ THE QUEUE'S OPENER (Paul, 2026-11-24: "Initial contact short, best reply rate"). The 2 Nov swap above was for a RED
+ *  number. While Meta rates the number GREEN the queue sends the short opener as stored; any other rating (yellow, red,
+ *  unreadable) keeps the 2 Nov rule and sends the original. The person sender (send-whatsapp-message) is unchanged. */
+export function queueOpenerToSend(name: string, numberGreen: boolean): string {
+  return numberGreen ? name : coldOpenerFor(name);
+}
+
+/** The openers a campaign can CHOOSE. initial_contact is not one: campaign_launch stamped it on every launched campaign
+ *  from the old global setting, so on a campaign it says nothing about a choice (migration 20261124140000). */
+const CAMPAIGN_CHOSEN_OPENERS: ReadonlySet<string> = new Set([INITIAL_OPENER_B, INITIAL_OPENER_C]);
+
+/** The opener a new queue item starts with (Paul, 2026-11-24). Findable campaigns: the campaign's chosen opener, else the
+ *  short opener. Any LeadFinderOS-style campaign among them: '' (nothing pre-chosen; the person picks). Same rule as
+ *  campaign_launch (migration 20261124140000_campaign_launch_short_opener.sql). */
+export function defaultQueueOpener(campaigns: ReadonlyArray<{ report_style?: string | null; default_template?: string | null } | null>): string {
+  if (campaigns.some((c) => c?.report_style === 'leadfinderos')) return '';
+  const chosen = new Set(campaigns.map((c) => (c?.default_template && CAMPAIGN_CHOSEN_OPENERS.has(c.default_template) ? c.default_template : '')));
+  if (chosen.size === 1) { const only = [...chosen][0]; if (only) return only; }
+  return INITIAL_OPENER_C;
+}
+
 const OPENER_SET: ReadonlySet<string> = new Set(WHATSAPP_OPENERS);
 
 /** True when this template is one of the initial cold openers. */

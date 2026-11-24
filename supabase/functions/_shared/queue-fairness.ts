@@ -40,7 +40,10 @@ export function senderKeyOf(l: SenderLead): string {
  * Round-robin across SENDERS (least recently served first), campaigns round-robin inside each sender.
  * `lastSentAt`: each sender's most recent queue send (ISO). Absent = has not sent (goes first). Input is not mutated.
  */
-export function fairQueueOrder<T extends SenderLead>(leads: readonly T[], lastSentAt: ReadonlyMap<string, string>): T[] {
+/* ⛔ `rankOf` (2026-11-24): "likeliest on WhatsApp first" ranks a sender's OWN leads, never one sender against another. It
+   used to be a global sort applied after this order, so every lead of Paul's with a website went before every one of
+   Valentin's without: his 5 sat at the back all day ("Not moving since 07:00"). Stable: equal ranks keep the campaign turns. */
+export function fairQueueOrder<T extends SenderLead>(leads: readonly T[], lastSentAt: ReadonlyMap<string, string>, rankOf?: (l: T) => number): T[] {
   if (leads.length < 2) return [...leads];
   const bySender = new Map<string, T[]>();
   for (const l of leads) {
@@ -49,8 +52,9 @@ export function fairQueueOrder<T extends SenderLead>(leads: readonly T[], lastSe
     if (b) b.push(l); else bySender.set(k, [l]);
   }
   const senders = [...bySender.entries()].map(([key, ls]) => {
-    const ordered = interleaveByCampaign(ls);
-    return { key, ordered, last: lastSentAt.get(key) ?? "", head: ordered[0]?.queued_at ?? "" };
+    const fair = interleaveByCampaign(ls);
+    const ordered = rankOf ? fair.map((l, i) => ({ l, i, k: rankOf(l) })).sort((a, b) => a.k - b.k || a.i - b.i).map((x) => x.l) : fair;
+    return { key, ordered, last: lastSentAt.get(key) ?? "", head: fair[0]?.queued_at ?? "" };
   });
   /* Least recently served first ("" = never, so first); then whoever has waited longest; then the key (deterministic). */
   senders.sort((a, b) => (a.last !== b.last ? (a.last < b.last ? -1 : 1) : a.head !== b.head ? (a.head < b.head ? -1 : 1) : a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
@@ -123,7 +127,12 @@ export type QueueLineInput = {
   nextSendAt: string | null;
   stuckReason: string | null;
   stuckSinceIso: string | null;
+  /** 2026-11-24: how many of them the likelihood hold keeps back (newer mobile range + no website, number not GREEN). */
+  heldHighRisk?: number;
 };
+
+/** The hold's words on a rep's line (src/lib/whatsappLikelihood.ts is the rule). */
+export const HIGH_RISK_HELD_LINE = "newer mobile number and no website: they go when Meta rates the number GREEN, or text or call them";
 
 export function hhmmLondon(iso: string): string {
   return new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(iso));
@@ -135,10 +144,13 @@ export function senderQueueLine(i: QueueLineInput): { state: "empty" | "paused" 
   if (i.coldStop) return { state: "paused", line: `Paused: ${i.coldStop} (${i.queued} queued)` };
   if (i.capReached) return { state: "paused", line: `Paused: daily limit reached (${i.queued} queued)` };
   if (!i.windowOpen) return { state: "paused", line: `Paused: outside send hours, starts ${i.windowStart} (${i.queued} queued)` };
+  const held = Math.max(0, i.heldHighRisk ?? 0);
+  if (held > 0 && held >= i.queued) return { state: "paused", line: `Held: ${HIGH_RISK_HELD_LINE} (${i.queued} queued)` };
+  const heldNote = held > 0 ? ` (${held} held: ${HIGH_RISK_HELD_LINE})` : "";
   if (i.stuckSinceIso) {
-    return { state: "stuck", line: `Not moving since ${hhmmLondon(i.stuckSinceIso)}: ${i.stuckReason ?? "the queue has not picked these up"} (${i.queued} queued)` };
+    return { state: "stuck", line: `Not moving since ${hhmmLondon(i.stuckSinceIso)}: ${i.stuckReason ?? "the queue has not picked these up"} (${i.queued} queued)${heldNote}` };
   }
-  return { state: "queued", line: i.nextSendAt ? `Queued: ${i.queued}, next send ~${hhmmLondon(i.nextSendAt)}` : `Queued: ${i.queued}` };
+  return { state: "queued", line: (i.nextSendAt ? `Queued: ${i.queued}, next send ~${hhmmLondon(i.nextSendAt)}` : `Queued: ${i.queued}`) + heldNote };
 }
 
 /** This sender's estimated next send: the queue's next send plus one pace gap for each sender served before them. */

@@ -7,7 +7,7 @@ import {
 } from '../src/lib/whatsappColdGuard.ts';
 import { countrySettingsFrom } from '../src/lib/outreachMarkets.ts';
 import { healthVerdict, numberLimited, tierDropped, tripwireReason } from '../src/lib/whatsappNumberHealth.ts';
-import { coldOpenerFor } from '../src/lib/openerVariant.ts';
+import { coldOpenerFor, queueOpenerToSend } from '../src/lib/openerVariant.ts';
 import { drainTick, type DrainDeps, type DueRow } from '../supabase/functions/_shared/inbox-scheduled-drain.ts';
 
 let f = 0;
@@ -167,7 +167,11 @@ console.log('the opener');
 {
   ok(coldOpenerFor('initial_contact_short') === 'initial_contact', 'the short opener goes as the original');
   ok(coldOpenerFor('initial_contact') === 'initial_contact' && coldOpenerFor('audit_followup_call') === 'audit_followup_call', 'nothing else is changed');
-  ok(read('supabase/functions/process-whatsapp-queue/index.ts').includes('let templateName = coldOpenerFor(requestedTemplate)'), 'the queue asks it');
+  /* 2026-11-24 (Paul): the queue sends the short opener as stored while the number is GREEN; any other rating keeps the swap. */
+  ok(queueOpenerToSend('initial_contact_short', true) === 'initial_contact_short', 'queue, number GREEN: the short opener goes as stored');
+  ok(queueOpenerToSend('initial_contact_short', false) === 'initial_contact', 'queue, number not GREEN: the original, as on 2 Nov');
+  ok(queueOpenerToSend('audit_followup_call', false) === 'audit_followup_call' && queueOpenerToSend('initial_contact', true) === 'initial_contact', 'nothing else is changed');
+  ok(read('supabase/functions/process-whatsapp-queue/index.ts').includes('let templateName = queueOpenerToSend(requestedTemplate, numberGreen)'), 'the queue asks it');
   ok(/coldOpenerFor\(body\.template_name\)/.test(read('supabase/functions/send-whatsapp-message/index.ts')), 'the manual sender asks it');
 }
 

@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-24-queue-turns-and-short-opener', date: '2026-11-24', title: 'WhatsApp queue: every sender gets a turn; short opener by default', audience: 'all',
+    body: 'Every sender’s queued messages take turns again: “likeliest on WhatsApp first” now sorts each person’s own leads, so one sender’s leads can no longer wait all day behind another’s. The queue line no longer says leads are “waiting for their AI audit” when they are openers (an opener never waits for an audit). Leads held for a newer mobile number with no website now say so. New queue items in Findable campaigns start on “Initial contact short”, and the queue sends it as written while Meta rates the number GREEN.',
+    report: {
+      added: ['“Held: newer mobile number and no website …” on a sender’s queue line, with the count when only some are held.'],
+      changed: ['Senders take turns first; the likeliest leads go first inside each sender’s turn.', 'Queue WhatsApp and a rep’s lead picker pre-pick “Initial contact short” in Findable campaigns, or the campaign’s own chosen opener. Campaign Launch does the same.', 'The queue sends “Initial contact short” as written while the number is GREEN. On any other rating it still goes as “Initial contact”, as since 2 Nov.'],
+      removed: ['The false “every lead that could go is waiting for its AI audit to finish” line for openers.'],
+      effect: 'Valentin’s leads go out alongside Paul’s. The daily limit (200), 20 an hour, send hours, the one-strike No-WhatsApp rule and the 5-failures self-pause are unchanged.',
+    } },
   { id: '2026-11-24-audit-trade-and-site-score-v4', date: '2026-11-24', title: 'Audits ask about the campaign trade; website score matches V2', audience: 'all',
     body: 'An audit now asks AI about the trade the lead was found for (the campaign search, e.g. Driving instructors), not the category Google gave the place (e.g. Educational Institution). The website score now uses the same bands and rules as V2: 70 and over Little to gain, 50 to 69 Some gains, under 50 Big gains. A site our scanner could not read shows a grey “We couldn’t scan this one”, never that the site is down.',
     report: {
