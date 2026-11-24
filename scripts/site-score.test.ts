@@ -3,7 +3,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import {
-  PARTIAL_LINE, SITE_SCORE_CAP, SITE_SCORE_CATEGORY_POINTS, SITE_SCORE_CHECKS, SITE_SCORE_GROUP_LABELS, SITE_SCORE_VERSION, siteScoreBand,
+  NO_SCAN_LINE, PARTIAL_LINE, SITE_SCORE_CAP, SITE_SCORE_CAP_MAJOR, SITE_SCORE_STATE_LABELS, siteScoreTierOf, SITE_SCORE_CATEGORY_POINTS, SITE_SCORE_CHECKS, SITE_SCORE_GROUP_LABELS, SITE_SCORE_VERSION, siteScoreBand,
   siteScoreCheckOf, siteScoreColumns, siteScoreForRow, siteScoreFromSummary, siteScoreGroupOf, siteScoreSortKey, siteScoreViewFor, type SiteScoreCategory,
 } from '../src/lib/siteScore.ts';
 import type { WebsiteCheckSummary, WebsiteIssue } from '../src/lib/websiteCheck.ts';
@@ -22,7 +22,7 @@ const summary = (over: Partial<WebsiteCheckSummary> = {}): WebsiteCheckSummary =
 const SITE = { url: 'https://example.co.uk/' };
 
 /* ── the rubric: Paul's seven categories ── */
-ok(SITE_SCORE_VERSION === 3, 'rubric version 3 (v2 weights + the severity cap)');
+ok(SITE_SCORE_VERSION === 4, 'rubric version 4 (V2 parity: bands, shares, tier caps)');
 ok(JSON.stringify(SITE_SCORE_CATEGORY_POINTS) === JSON.stringify({ reachable: 20, identity: 15, services: 20, content: 15, structured: 10, consistency: 10, basics: 10 }),
   'Reachable 20, Identity 15, Services 20, Content 15, Structured data 10, Consistency 10, Basics 10');
 ok(Object.values(SITE_SCORE_CATEGORY_POINTS).reduce((a, b) => a + b, 0) === 100, 'the categories make 100');
@@ -66,9 +66,9 @@ ok(st(siteScoreFromSummary(summary(), { url: 'https://www.facebook.com/somebiz' 
 const clean = siteScoreFromSummary(summary(), SITE);
 ok(clean.state === 'scored' && clean.score === 100 && clean.evidence?.losses.length === 0, 'a deep check with nothing found → 100');
 const one = siteScoreFromSummary(summary({ issues: [issue('no_https', 'medium')] }), SITE);
-ok(one.score === 96 && one.evidence?.losses[0].points === 4 && one.evidence.losses[0].url === 'https://example.co.uk/no_https', 'no HTTPS (graded medium, so no cap) → its 4 points, with the page');
-const low = siteScoreFromSummary(summary({ issues: [issue('no_viewport', 'low')] }), SITE);
-ok(low.score === 99 && low.evidence?.losses[0].points === 0.8, 'a low finding takes 40% of its check');
+ok(one.score === 98 && one.evidence?.losses[0].points === 2.4 && one.evidence.losses[0].url === 'https://example.co.uk/no_https', 'no HTTPS (graded medium, so no cap) → 60% of its 4 points, with the page');
+const low = siteScoreFromSummary(summary({ issues: [issue('no_reviews', 'low')] }), SITE);
+ok(low.score === 99 && low.evidence?.losses[0].points === 0.9, 'a low finding takes 30% of its check');
 const stack = siteScoreFromSummary(summary({ issues: [issue('no_phone', 'medium'), issue('no_contact_page', 'medium'), issue('no_contact_details', 'medium')] }), SITE);
 ok(stack.detail.categories?.identity === 10 && stack.evidence!.losses.reduce((t, l) => t + l.points, 0) === 5, 'a check never loses more than its points');
 ok(stack.evidence!.losses.every((l) => l.quote && l.url), 'every point lost carries a page and a quote');
@@ -91,7 +91,7 @@ ok(onePage.score === SITE_SCORE_CAP && onePage.detail.capped === true && onePage
   'a one-page site loses all of Services and is capped in Big gains, with its evidence');
 const crammed = siteScoreFromSummary(summary({ issues: [issue('services_on_one_page', 'medium')] }), SITE);
 ok(crammed.score === SITE_SCORE_CAP && siteScoreBand(crammed.score!) === 'big', 'services crammed on one page → capped in Big gains');
-const lowAnyway = siteScoreFromSummary(summary({ issues: ['one_page_site', 'no_https', 'no_contact_route', 'name_unclear', 'town_missing', 'ct_placeholder_content', 'no_business_schema'].map((id) => issue(id, 'high')) }), SITE);
+const lowAnyway = siteScoreFromSummary(summary({ issues: ['one_page_site', 'no_https', 'no_contact_route', 'name_unclear', 'town_missing', 'ct_placeholder_content', 'no_business_schema', 'ct_areas_not_stated', 'no_questions_answered', 'ct_generic_copy', 'ct_no_proof'].map((id) => issue(id, 'high')) }), SITE);
 ok(lowAnyway.score! < SITE_SCORE_CAP && lowAnyway.evidence?.cap === null, 'a site already below the cap keeps its own number');
 
 /* ── the severity cap (v3, Paul 2026-10-30): any verified HIGH finding caps in Big gains ── */
@@ -121,7 +121,7 @@ ok(a.reasons.length === 3 && a.reasons.every((r) => r.kind === 'down'), 'three b
 
 /* ── the row path ── */
 const row = siteScoreForRow({ result: { url: SITE.url, websiteCheck: summary({ issues: [issue('no_https', 'medium')] }) } as never, created_at: '2026-10-20T10:00:00Z' } as never);
-ok(row?.score === 96, 'a row with a stored summary is scored from it');
+ok(row?.score === 98, 'a row with a stored summary is scored from it');
 ok(siteScoreForRow(null) === null, 'no row → no score');
 
 /* ── the columns ── */
@@ -129,20 +129,43 @@ const cols = siteScoreColumns(null, '2026-10-30T00:00:00Z');
 ok(Object.values(cols).every((v) => v === null) && Object.keys(cols).length === 7, 'no score → every column null (never an old score beside a new check)');
 ok(!('site_score_v1' in cols), 'the crawls never write site_score_v1 (the v1 number is kept)');
 const c2 = siteScoreColumns(one, '2026-10-30T00:00:00Z');
-ok(c2.site_score === 96 && c2.site_score_state === 'scored' && c2.site_score_version === SITE_SCORE_VERSION && Array.isArray((c2.site_score_evidence as { losses: unknown[] }).losses), 'a score → number, state, version, reasons, evidence');
+ok(c2.site_score === 98 && c2.site_score_state === 'scored' && c2.site_score_version === SITE_SCORE_VERSION && Array.isArray((c2.site_score_evidence as { losses: unknown[] }).losses), 'a score → number, state, version, reasons, evidence');
 
 /* ── the view: website first, then the stored score ── */
 const stored = (o: Partial<{ site_score: number | null; site_score_state: string | null; site_score_version: number | null }>) =>
   ({ site_score: null, site_score_state: null, site_score_version: null, site_score_reasons: null, site_score_detail: null, ...o });
 const g = (w: string | null, o: Parameters<typeof stored>[0] | null) => siteScoreGroupOf(siteScoreViewFor(w, o ? stored(o) : null));
-ok(siteScoreBand(80) === 'little' && siteScoreBand(79) === 'some' && siteScoreBand(60) === 'some' && siteScoreBand(59) === 'big', 'bands: under 60 big gains, 60–79 some gains, 80+ little to gain');
+ok(siteScoreBand(70) === 'little' && siteScoreBand(69) === 'some' && siteScoreBand(50) === 'some' && siteScoreBand(49) === 'big', 'bands (V2 parity): under 50 big gains, 50–69 some gains, 70+ little to gain');
 ok(SITE_SCORE_GROUP_LABELS.big === 'Big gains' && SITE_SCORE_GROUP_LABELS.some === 'Some gains' && SITE_SCORE_GROUP_LABELS.little === 'Little to gain', 'the band words');
 ok(g(null, null) === 'no_website' && g('', null) === 'no_website', 'no website on file → No website');
 ok(g('https://www.facebook.com/x', null) === 'profile_only', 'a social page on file → Social / directory only, even with no crawl');
 ok(g('https://example.co.uk', null) === 'not_checked', 'a website with no crawl row → Not checked');
 ok(g('https://example.co.uk', { site_score: null, site_score_state: 'scored', site_score_version: 2 }) === 'not_checked', 'scored with no number → Not checked, never a made-up number');
 ok(g('https://example.co.uk', { site_score_state: 'mystery', site_score_version: 2 }) === 'not_checked', 'an unknown state → Not checked, never guessed');
-ok(g('https://example.co.uk', { site_score_state: 'unreadable', site_score_version: 1 }) === 'unreachable', 'a v1 "unreadable" row reads as Couldn’t reach until re-scored');
+ok(g('https://example.co.uk', { site_score_state: 'unreadable', site_score_version: 1 }) === 'unreachable', 'a v1 "unreadable" row reads as We couldn’t scan this one until re-scored');
+
+/* ── V2 parity (v4, 2026-11-24): tier caps and the grey "couldn't scan" state ── */
+const major1 = siteScoreFromSummary(summary({ issues: [issue('no_viewport', 'low')] }), SITE);
+ok(major1.score === SITE_SCORE_CAP_MAJOR && siteScoreBand(major1.score!) === 'some' && major1.evidence?.cap?.kind === 'major' && major1.evidence.cap.uncapped === 99,
+  'one MAJOR problem (not set up for phones) holds a strong site at 69, Some gains');
+const major2 = siteScoreFromSummary(summary({ issues: [issue('no_viewport', 'medium'), issue('broken_pages', 'low')] }), SITE);
+ok(major2.score === SITE_SCORE_CAP && siteScoreBand(major2.score!) === 'big', 'two MAJOR problems hold it at 49, Big gains');
+ok(siteScoreTierOf({ id: 'no_contact_route', severity: 'high' }, 30) === 'major' && siteScoreTierOf({ id: 'no_contact_route', severity: 'medium' }, 30) === null,
+  'no contact details: major only when graded HIGH');
+ok(siteScoreTierOf({ id: 'no_sitemap', severity: 'medium' }, 30) === 'major' && siteScoreTierOf({ id: 'no_sitemap', severity: 'medium' }, 6) === null,
+  'no sitemap: major on a site of 10+ pages, nothing on a small one');
+ok(siteScoreTierOf({ id: 'no_https', severity: 'high' }, 30) === 'critical' && siteScoreTierOf({ id: 'one_page_site', severity: 'medium' }, 1) === 'critical', 'no HTTPS (high) and a one-page site are critical');
+const green = siteScoreFromSummary(summary({ issues: [issue('no_reviews', 'medium'), issue('ct_generic_copy', 'medium')] }), SITE);
+ok(siteScoreBand(green.score!) === 'little' && green.evidence?.cap === null, 'no major and no critical problem → can be green');
+const sv = (reason: string) => siteScoreViewFor('https://a.co.uk', stored({ site_score_state: 'unreachable', site_score_version: 4, site_score_reasons: [{ kind: 'down', text: reason }] } as never));
+const blocked = sv('The website refused our check (an error or a bot-check page). That says nothing about whether AI tools can read it.');
+ok(blocked.kind === 'state' && blocked.state === 'unreachable' && SITE_SCORE_STATE_LABELS.unreachable === 'We couldn’t scan this one' && blocked.reason === NO_SCAN_LINE,
+  'our scanner turned away → grey "We couldn’t scan this one", never a reason that says the site is down');
+const slow = sv('The website did not respond in time.');
+ok(slow.kind === 'state' && slow.state === 'unreachable' && !/respond|load|down/i.test(slow.reason ?? ''), 'a timeout says the same — never "won’t load"');
+const dns = sv('The web address does not resolve — the domain may have lapsed or be misspelt.');
+ok(dns.kind === 'state' && dns.state === 'no_address' && SITE_SCORE_STATE_LABELS.no_address === 'Website address doesn’t exist', 'only a DNS failure says the address does not exist');
+ok(!Object.values(SITE_SCORE_STATE_LABELS).some((l) => /won.t load|couldn.t reach|site down/i.test(l)), 'no label says the site won’t load');
 ok(g('https://example.co.uk', { site_score: 42, site_score_state: 'scored', site_score_version: 2 }) === 'big', 'a number → its band');
 ok(siteScoreSortKey(siteScoreViewFor('https://a.co.uk', stored({ site_score: 30, site_score_state: 'scored', site_score_version: 2 })))
   < siteScoreSortKey(siteScoreViewFor('https://a.co.uk', stored({ site_score: 90, site_score_state: 'scored', site_score_version: 2 })))

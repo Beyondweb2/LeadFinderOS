@@ -117,8 +117,8 @@ export const OPP_RATING_GOOD = 2;    // 4.0★ or better
 export const OPP_MOBILE = 6;         // a UK mobile we can reach
 export const OPP_WORTH_MAX = 14;
 
-/** A strong site (site score "Little to gain", 80+) with no critical problem: the website part counts nothing. */
-export const OPP_STRONG_SITE_AT = 80;
+/** A strong site (site score "Little to gain", 70+ since v4 / V2 parity) with no critical problem: the website part counts nothing. */
+export const OPP_STRONG_SITE_AT = 70;
 /** Lowered leads (named widely) never rise above this: always Cold. */
 export const OPP_LOWERED_CAP = 30;
 

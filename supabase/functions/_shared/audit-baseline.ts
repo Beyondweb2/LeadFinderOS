@@ -39,6 +39,7 @@ const SCORED_ENGINES = ["chatgpt", "gemini"] as const;
 
 /** Paid baseline shape, from the shared question-count policy. */
 import { BASELINE_QUESTIONS, BASELINE_RUNS, FULL_MEASURE_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
+import { auditTradeOf } from "../../../src/lib/leadTrade.ts";
 import { START_IN_PROGRESS_SKIP, canClaimStart, startClaimFilter } from "../../../src/lib/paidBaselineState.ts";
 import { findPaidBaseline, findAmbiguousMultiRun, FREE_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
 import { type BaselineContract } from "../../../src/lib/baselineContract.ts";
@@ -1129,7 +1130,7 @@ export async function startPaidBaseline(
     let lErr: any;
     ({ data: lead, error: lErr } = await service
       .from("outreach_leads")
-      .select("id, user_id, business_name, category, search_keyword, country, website, search_location, derived_town, status")
+      .select("id, user_id, business_name, category, search_keyword, notes, country, website, search_location, derived_town, status")
       .eq("id", leadId).maybeSingle());
     /* MIGRATION-TOLERANT, and this is not theoretical: derived_town is added by a migration Paul
        applies BY HAND, so between this deploy and that SQL the column does not exist and PostgREST
@@ -1140,7 +1141,7 @@ export async function startPaidBaseline(
       console.warn("[baseline] derived_town column not present yet — reading without it");
       const retry = await service
         .from("outreach_leads")
-        .select("id, user_id, business_name, category, search_keyword, country, website, search_location, status")
+        .select("id, user_id, business_name, category, search_keyword, notes, country, website, search_location, status")
         .eq("id", leadId).maybeSingle();
       lead = retry.data;
       lErr = retry.error;
@@ -1167,7 +1168,7 @@ export async function startPaidBaseline(
       return { ok: true, skipped: "lead_refunded" };
     }
 
-    const bizType = ((lead.category as string) || (lead.search_keyword as string) || "").trim();
+    const bizType = auditTradeOf(lead as { category?: string | null; search_keyword?: string | null; notes?: string | null });
     if (!bizType) return { ok: false, skipped: "no_business_type" };
     /* THE GUARANTEE PATH. This is the measurement the money-back promise is settled against, so the
        town must be the one the business is actually in — a baseline measured on the searched town
@@ -1326,7 +1327,7 @@ export async function preparePaidBaselineQuestions(service: Client, onboardingId
       return { ok: true, skipped: "draft_already_prepared" , questions: existing };
     }
     const { data: lead, error: leadError } = await service.from("outreach_leads")
-      .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, website, country")
+      .select("id, user_id, business_name, category, search_keyword, notes, search_location, derived_town, website, country")
       .eq("id", row.lead_id).maybeSingle();
     if (leadError || !lead) return { ok: false, error: `lead read failed: ${leadError?.message ?? "not found"}` };
     const location = String((row as { confirmed_location?: unknown }).confirmed_location || lead.derived_town || lead.search_location || "").trim();
@@ -1335,7 +1336,7 @@ export async function preparePaidBaselineQuestions(service: Client, onboardingId
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""}`, "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "", "x-internal-job": "1" },
       body: JSON.stringify({
         preview: true, purpose: "baseline", user_id: lead.user_id, lead_id: lead.id,
-        business_name: lead.business_name, business_type: lead.category || lead.search_keyword || "business",
+        business_name: lead.business_name, business_type: auditTradeOf(lead) || "business",
         location_text: location, specialisms: row.services || "", areas: row.areas_list || [], website: lead.website || null,
         country: lead.country || null, question_count: BASELINE_QUESTIONS,
       }),

@@ -1,3 +1,4 @@
+import { auditTradeOf } from "../../../src/lib/leadTrade.ts";
 import {
   FIRST_REPLY_AUDIT_OPEN_STATUSES,
   auditIntentRetryStatus,
@@ -346,7 +347,7 @@ export async function reconcileFirstReplyAuditIntents(service: Service): Promise
           continue;
         }
       }
-      const businessType = String(lead?.category ?? lead?.search_keyword ?? "").trim();
+      const businessType = lead ? auditTradeOf(lead) : ""; // keyword before Google category (src/lib/leadTrade.ts)
       const locationText = String(lead?.search_location ?? lead?.address ?? "").trim();
       if (leadError || !lead?.user_id || !lead?.business_name || !businessType || !locationText) {
         const reason = leadError?.message ?? `missing ${[!lead?.business_name ? "business_name" : "", !lead?.user_id ? "owner" : "", !businessType ? "business_type" : "", !locationText ? "location" : ""].filter(Boolean).join(",")}`;

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { auditTradeOf } from "../../../src/lib/leadTrade.ts";
 import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { createFreeCheckLead } from "../_shared/free-check-lead.ts";
@@ -368,7 +369,7 @@ Deno.serve(async (req) => {
         /* `is_founder` went with the price split (2026-09-03). The page never read it - it renders
            price_label only - so nothing visible changes. */
         business_name: lead.business_name ?? "",
-        business_type: ((lead.category as string) || (lead.search_keyword as string) || "").trim(),
+        business_type: auditTradeOf(lead as { category?: string | null; search_keyword?: string | null }),
         /* ⛔ derived_town FIRST, AND THAT ORDER IS THE WHOLE POINT NOW. This used to be
            search_location || address — the town that was SEARCHED, not the town the business is in.
            Lead search has a radius, so the two often differ: 31 of 44 measurable audits were more
@@ -1490,13 +1491,13 @@ ${note}` : note })
       }
 
       /* ⛔ THE TRADE THE CUSTOMER CORRECTED, WRITTEN WHERE THE AUDIT READS IT (2026-09-14).
-         startPaidBaseline takes the trade from the LEAD — `category || search_keyword` — so a
+         startPaidBaseline takes the trade from the LEAD — auditTradeOf(): search_keyword first, but a
          correction typed on the form reaches the measurement only if it lands on the lead. Sent
          only when the visitor opened "Not right?" on the confirmation line and typed something.
          ⛔ IT WRITES `category`, NEVER `search_keyword`. search_keyword is the record of what was
          SEARCHED and is how the lead was found; overwriting it would destroy the provenance and
-         make the mis-filing unauditable afterwards. category outranks it in the audit's own
-         precedence, so writing there corrects the measurement and keeps the history — which is the
+         make the mis-filing unauditable afterwards. The notes line below is what lets this category
+         outrank search_keyword (src/lib/leadTrade.ts auditTradeOf, 2026-11-24) — keep its wording exact — which is the
          same reason primary_type was stored beside the trade rather than over it.
          ⚠️ A correction that AGREES with what we hold writes nothing, so pressing "Not right?" and
          then changing your mind costs an empty update rather than a spurious note. */

@@ -14,6 +14,7 @@
 //
 // ⛔ IT NEVER SENDS A MESSAGE. No Graph call, no import of the sender, no whatsapp_* writes.
 import { logOpenAiUsage } from "./openai-usage.ts";
+import { auditTradeOf } from "../../../src/lib/leadTrade.ts";
 import { SITE_CHECK_HEADERS } from "../../../src/lib/siteReadIdentity.ts";
 import { resolveAuditReplyVars, HOOK_NO_GAP_REASON } from "./audit-reply.ts";
 import { shortReportUrl } from "../../../src/lib/reportSlug.ts";
@@ -45,7 +46,7 @@ export interface ResearchLead {
 /** The lead columns every research caller selects. */
 export const RESEARCH_LEAD_COLUMNS = "id, user_id, business_name, website, phone, country, category, search_keyword, search_location, derived_town, contact_name, is_archived, place_id, google_maps_url";
 
-export const leadTrade = (l: ResearchLead) => (l.category || l.search_keyword || "").trim() || null;
+export const leadTrade = (l: ResearchLead) => auditTradeOf(l) || null; // keyword before Google category
 export const leadTown = (l: ResearchLead) => (l.derived_town || l.search_location || "").trim() || null;
 
 /* ───────────────────────── fetching ───────────────────────── */

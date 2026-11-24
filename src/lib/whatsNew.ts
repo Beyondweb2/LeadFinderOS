@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-24-audit-trade-and-site-score-v4', date: '2026-11-24', title: 'Audits ask about the campaign trade; website score matches V2', audience: 'all',
+    body: 'An audit now asks AI about the trade the lead was found for (the campaign search, e.g. Driving instructors), not the category Google gave the place (e.g. Educational Institution). The website score now uses the same bands and rules as V2: 70 and over Little to gain, 50 to 69 Some gains, under 50 Big gains. A site our scanner could not read shows a grey “We couldn’t scan this one”, never that the site is down.',
+    report: {
+      added: ['Website score caps: a critical problem (no HTTPS, AI search blocked, a one-page site …) or two major ones hold the score at 49; one major problem (broken links, not set up for phones …) at 69.', 'A web address with no DNS answer says “Website address doesn’t exist”.'],
+      changed: ['Every audit path takes the search keyword before the Google category. A trade the customer corrected at signup still wins.', 'Bands moved from 60 / 80 to 50 / 70, and every stored website score was re-scored from the crawl already on file (no new crawls).', '“Couldn’t reach” is now “We couldn’t scan this one”.', '30 driving instructor audits (campaign “driving instructors · AUS · WhatsApp”) that asked about “educational institution” were re-run as driving instructors (audits only, nothing sent).'],
+      removed: ['The old 59 cap and the 60 / 80 band lines.'],
+      effect: 'Audits measure the right search, and the website badge reads the same in V1 and V2. Team only: the score is never sent to anyone.',
+    } },
   { id: '2026-11-23-queue-200-spread', date: '2026-11-23', title: 'WhatsApp queue: 200 a day, evenly spread, and a failure breaker', audience: 'admin',
     body: 'The number now sends up to 200 cold WhatsApps a day (at most 20 an hour, at least 3 minutes apart), whatever the quality colour. If Meta lowers the number’s messaging limit or flags it, the limit drops to 60 a day by itself and you get an email. If 5 queue messages in a row fail with none delivered, the queue pauses itself and emails you.',
     report: {

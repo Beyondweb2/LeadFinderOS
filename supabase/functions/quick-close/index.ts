@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { auditTradeOf } from "../../../src/lib/leadTrade.ts";
 import { refusalBody, resolveActor, leadAccess } from "../_shared/access.ts";
 import { recordDenial } from "../_shared/protection.ts";
 import { PROSPECT_ONLY_DETAIL, prospectOnlyLead } from "../../../src/lib/prospectOnly.ts";
@@ -435,7 +436,7 @@ Deno.serve(async (req) => {
         full_setup: { url: setupLinkUrl(leadId), shared: setupShares },
         lead: {
           id: lead.id, business_name: lead.business_name, phone: lead.phone, country: lead.country ?? null, email: lead.email, website: lead.website, address: lead.address,
-          town: lead.derived_town || lead.search_location || null, trade: (lead.category || lead.search_keyword || "").trim() || null,
+          town: lead.derived_town || lead.search_location || null, trade: auditTradeOf(lead) || null,
           contact_name: lead.contact_name, rating: lead.rating, review_count: lead.review_count, google_maps_url: lead.google_maps_url,
           campaign: (camp as { data?: { name?: string } | null }).data?.name ?? null, lead_source: lead.lead_source ?? null,
           salesperson: (seller as { data?: { display_name?: string } | null }).data?.display_name ?? null,
@@ -705,7 +706,7 @@ Deno.serve(async (req) => {
       const trade = typeof body.trade === "string" ? body.trade.trim().slice(0, 80) : "";
       /* Only a blank trade, or the value this same box just saved a moment ago while they were still typing it (trade_prev). */
       const tradePrev = typeof body.trade_prev === "string" ? body.trade_prev.trim() : "";
-      const tradeNow = ((lead.category || lead.search_keyword || "") as string).trim();
+      const tradeNow = auditTradeOf(lead as { category?: string | null; search_keyword?: string | null });
       if (trade && (!tradeNow || (!!tradePrev && !lead.category && tradeNow === tradePrev))) {
         const { error: tErr } = await service.from("outreach_leads").update({ search_keyword: trade }).eq("id", leadId).is("category", null);
         if (tErr) return json({ ok: false, error: "not_saved", detail: tErr.message }, 500);
