@@ -140,3 +140,6 @@ and its BEHAVIOUR ported onto V1's own crawl findings (no V2 code copied; V1's c
   exist" (view-only state `no_address`; stored as `unreachable`, so no migration).
 - Opportunity score: "already strong site" now starts at 70 (the Little to gain line).
 - Every stored check re-scored from its stored crawl with `scripts/site-score-backfill.ts` (no crawls, no spend).
+- Backfill run 2026-11-24 (`--cli`, the logged-in Supabase CLI, no token): 1,874 of 1,874 rows written at v4. Live leads:
+  545 Little to gain, 425 Some gains, 298 Big gains (723 held by a cap), 172 "We couldn't scan this one", 37 "Website
+  address doesn't exist", 57 JavaScript-only, 4 robots-blocked, 297 quick check only; median 69.

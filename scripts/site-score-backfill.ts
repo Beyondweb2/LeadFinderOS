@@ -2,7 +2,7 @@
    CURRENT rubric (SITE_SCORE_VERSION) from the crawl ALREADY STORED on the row — it starts no crawl, fetches no website,
    spends nothing (no Apify, no model) and sends nothing.
 
-   npx tsx scripts/site-score-backfill.ts --token-file <path> [--write]
+   npx tsx scripts/site-score-backfill.ts --token-file <path> [--write]   (or --cli instead of --token-file)
      without --write: prints what it would store (bands, states, the calibration leads) and changes nothing.
      with --write:    stores the score columns and the evidence, a page at a time.
 
@@ -12,19 +12,42 @@
    ⛔ The v1 score is kept: a row still on v1 whose site_score_v1 is empty has it copied in the same write (the migration
       copied every v1 row once; this covers a row scored by the old crawl code in between).
    Read the way every screen reads a row (siteScoreForRow): an unread homepage is "couldn't reach", never a number. */
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { classifyLeadWebsite } from '../src/lib/leadWebsiteKind.ts';
 import { SITE_SCORE_VERSION, siteScoreColumns, siteScoreForRow, siteScoreGroupOf, siteScoreViewFor, type SiteScore } from '../src/lib/siteScore.ts';
 
 const PROJECT = 'ruusxpkkmwtljxxulhbq';
-const PAGE = 150;
 const args = process.argv.slice(2);
+/* --cli (2026-11-24): run every query through the logged-in Supabase CLI (`supabase db query --remote`), so no token is
+   handled at all. Reads go --read-only; only the --write updates go with --yes. Smaller pages: the CLI returns stdout. */
+const cli = args.includes('--cli');
+const PAGE = cli ? 60 : 150;
 const tokenFile = args[args.indexOf('--token-file') + 1];
 const write = args.includes('--write');
-if (!tokenFile || args.indexOf('--token-file') < 0) { console.error('usage: --token-file <path> [--write]'); process.exit(2); }
-const token = readFileSync(tokenFile, 'utf8').trim();
+if (!cli && (!tokenFile || args.indexOf('--token-file') < 0)) { console.error('usage: --token-file <path> | --cli  [--write]'); process.exit(2); }
+const token = cli ? '' : readFileSync(tokenFile, 'utf8').trim();
+const cliDir = cli ? mkdtempSync(join(tmpdir(), 'site-score-')) : '';
 
 async function sql<T>(query: string): Promise<T[]> {
+  if (cli) {
+    const file = join(cliDir, 'q.sql');
+    writeFileSync(file, query);
+    const mutating = /^\s*with v as \(/.test(query);
+    /* The CLI fails now and then on a transport error: retry. A retried write is safe — it only lands while site_score_at is unchanged. */
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const out = execFileSync('npx', ['supabase', 'db', 'query', `--remote=${PROJECT}`, ...(mutating ? ['--yes'] : ['--read-only']), '-o', 'json', '-f', file],
+          { encoding: 'utf8', maxBuffer: 1 << 30, shell: true, stdio: ['ignore', 'pipe', 'ignore'] });
+        return (JSON.parse(out) as { rows: T[] }).rows;
+      } catch (e) {
+        if (attempt >= 4) throw e;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 3000 * attempt);
+      }
+    }
+  }
   const res = await fetch(`https://api.supabase.com/v1/projects/${PROJECT}/database/query`, {
     method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ query }),
   });
