@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-25-research-templates', date: '2026-11-25', title: 'New messages to test: "Which town?" for web devs, the AI answer for local businesses', audience: 'admin',
+    body: 'Five new WhatsApp templates are in the Inbox template picker. For web developers: "Great.. I’m Paul. I built a tool that finds local businesses with weak sites. Which town do you want clients in?" and the close "Here it is, your town is ready, free 7 days: leadfinderos.com/?ref=wa-town". For local businesses: "I checked who ChatGPT (or Gemini) suggests for … today", then the answer, with the names that answer gave or without names. It names the AI the lead’s own audit actually checked and found them missing from. They are for replies inside the 24 hours after the lead’s last message, where they go as a normal message (free); outside it they are refused. The AI ones only go when the lead’s audit found them missing from a ChatGPT or Gemini answer (and, for "today", the audit ran in the last day). They are sent one lead at a time from the Inbox, never queued or in bulk. A web-dev campaign’s settings now choose which follow-up question its leads get: the old "Do you build websites…?" or the new "Which town?", so you can compare them in Performance. Two saved replies sit above the reply box: "Town result" (fill in the town, trade and number before it can send) and "Opt-out goodbye" ("No problem at all, I won’t message again."), which a stop also offers.',
+    report: {
+      added: ['Five WhatsApp templates in the Inbox picker (Which town?, Town ready, AI check, AI answer with / without names).', 'Web dev follow-up question setting on LeadFinderOS-style campaigns.', 'Saved replies: Town result and Opt-out goodbye.'],
+      changed: ['In a LeadFinderOS-style campaign the Inbox offers only the follow-up question that campaign chose.'],
+      removed: [],
+      effect: 'You can test the new wording against the old question per campaign, without paying for a template inside the 24 hours.',
+    } },
   { id: '2026-11-24-queue-turns-and-short-opener', date: '2026-11-24', title: 'WhatsApp queue: every sender gets a turn; short opener by default', audience: 'all',
     body: 'Every sender’s queued messages take turns again: “likeliest on WhatsApp first” now sorts each person’s own leads, so one sender’s leads can no longer wait all day behind another’s. The queue line no longer says leads are “waiting for their AI audit” when they are openers (an opener never waits for an audit). Leads held for a newer mobile number with no website now say so. New queue items in Findable campaigns start on “Initial contact short”, and the queue sends it as written while Meta rates the number GREEN.',
     report: {

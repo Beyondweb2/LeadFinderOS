@@ -91,7 +91,7 @@ export type InWindowShape =
   | { as: 'template' }
   | { as: 'template'; noFreeText: string }
   | { as: 'text'; text: string; videoUrl?: string }
-  | { as: 'refuse'; error: 'window_closed' | 'no_free_text_version' | 'would_be_paid'; reason: string };
+  | { as: 'refuse'; error: 'window_closed' | 'no_free_text_version' | 'would_be_paid' | 'template_waiting_meta'; reason: string };
 
 /** The refusal a "free only" send gets when it could only go as the paid template. */
 export const WOULD_BE_PAID_REASON = 'Not sent: it would need a paid template (their 24 hours have run out, or this template has no free version), and you chose to send only the free ones.';
@@ -113,8 +113,12 @@ export function inWindowShape(a: {
   version: FreeTextVersion;
   /** The bulk "send only the free ones": never let it go as the paid template. */
   freeOnly?: boolean;
+  /** A template Meta has not approved yet (researchTemplates.ts windowOnlyTemplate + its reason): it may only go as free text.
+   *  Anything that would go as the template is refused with this reason, never tried at Meta. */
+  windowOnly?: { reason: string } | null;
 }): InWindowShape {
   const shape = shapeOf(a);
+  if (a.windowOnly && shape.as === 'template') return { as: 'refuse', error: 'template_waiting_meta', reason: a.windowOnly.reason };
   if (a.freeOnly === true && shape.as === 'template') return { as: 'refuse', error: 'would_be_paid', reason: WOULD_BE_PAID_REASON };
   return shape;
 }

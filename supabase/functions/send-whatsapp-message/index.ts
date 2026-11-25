@@ -62,6 +62,7 @@ import { senderMessageName } from "../_shared/sender-name.ts";
 import { resolveOnboardingFormVars, resolveSignupLinkVars } from "../_shared/link-template-vars.ts";
 import { resolveWelcomePackVars } from "../_shared/welcome-pack-vars.ts";
 import { WELCOME_PACK_TEMPLATE_NAME } from "../../../src/lib/welcomePackWhatsApp.ts";
+import { aiEngineWord, audienceRefusal, AI_CHECK_QUESTION, aiClaimRefusal, FINDABLE_ONLY_TEMPLATES, LFOS_ONLY_TEMPLATES, WAITING_META_REASON, windowOnlyTemplate } from "../../../src/lib/researchTemplates.ts";
 import { LINK_TEMPLATE_NAMES, SIGNUP_LINK_TEMPLATE_NAME, TEMPLATE_UNAVAILABLE_CODES, templateSendFailureText, templateSendState } from "../../../src/lib/whatsappLinkTemplates.ts";
 
 // send-whatsapp-message — the Inbox reply sender (Phase A).
@@ -144,7 +145,9 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
 /* 2026-11-16b: polite_hook + polite_hook2 follow-ups (no variables; needs prior WhatsApp; Meta live status first). */
 /* 2026-11-21a: gone_cold (no variables; manual only; only to a lead we messaged who has not replied, outside the window; opt-out and
    Do Not Contact block; sends only when Meta's LIVE status is APPROVED, UNKNOWN refuses too). */
-const BUILD_ID = "2026-11-23a-polite-hook";
+/* 2026-11-25a: the research templates (src/lib/researchTemplates.ts): free text inside the 24 hours only until Meta approves; web-dev
+   wording only for LeadFinderOS-style campaigns, local-business wording never; the ChatGPT wording only when the audit shows it. */
+const BUILD_ID = "2026-11-25a-research-templates";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -638,6 +641,37 @@ Deno.serve(async (req) => {
         if (priorWaErr) return json({ ok: false, error: "contact_guard_unreadable", template: templateName, reason: "Could not check this number's WhatsApp history - nothing was sent." }, 200);
         if (!priorWa || priorWa.length === 0) return json({ ok: false, error: "follow_up_needs_contact", template: templateName, reason: NEEDS_PRIOR_WHATSAPP_REASON }, 200);
       }
+      /* ⛔ THE RESEARCH TEMPLATES (2026-11-25, src/lib/researchTemplates.ts). Web-dev wording only to a lead in a LeadFinderOS-style
+         campaign, local-business wording never to one; the ChatGPT wording only when the lead's own audit shows it (its hook answer
+         was ChatGPT's and they were not in it; "today" = that run started in the last 24 hours; two usable names for the named one).
+         All before the payload and the dry-run return, so Preview says why. Every unreadable answer refuses. */
+      if (LFOS_ONLY_TEMPLATES.has(templateName) || FINDABLE_ONLY_TEMPLATES.has(templateName)) {
+        if (!resolvedLeadId) return json({ ok: false, error: "template_needs_lead", template: templateName }, 400);
+        const { data: rtLead, error: rtLeadErr } = await service.from("outreach_leads").select("campaign_id").eq("id", resolvedLeadId).maybeSingle();
+        if (rtLeadErr) return json({ ok: false, error: "campaign_unreadable", template: templateName, reason: "Could not read the lead's campaign, so nothing was sent. Try again." }, 200);
+        const rtCampaignId = (rtLead as { campaign_id?: string | null } | null)?.campaign_id ?? null;
+        let rtStyle = "findable";
+        if (rtCampaignId) {
+          const { data: rtCamp, error: rtCampErr } = await service.from("campaigns").select("report_style").eq("id", rtCampaignId).maybeSingle();
+          if (rtCampErr) return json({ ok: false, error: "campaign_unreadable", template: templateName, reason: "Could not read the lead's campaign, so nothing was sent. Try again." }, 200);
+          rtStyle = String((rtCamp as { report_style?: string | null } | null)?.report_style ?? "findable");
+        }
+        const audience = audienceRefusal(templateName, rtStyle);
+        if (audience) return json({ ok: false, error: "wrong_audience", template: templateName, reason: audience }, 200);
+        if (FINDABLE_ONLY_TEMPLATES.has(templateName)) {
+          const rt = await resolveAuditReplyVars(service, resolvedLeadId, { templateName });
+          if (!rt.ok) return json({ ok: false, error: "audit_reply_unavailable", template: templateName, reason: rt.reason }, 200);
+          let doneAt: number | null = null;
+          if (templateName === AI_CHECK_QUESTION) {
+            const { data: rtRun, error: rtRunErr } = await service.from("ai_audit_runs").select("created_at")
+              .eq("audit_id", rt.auditId).in("status", ["complete", "capped"]).order("run_number", { ascending: false }).limit(1).maybeSingle();
+            const t = rtRunErr ? NaN : Date.parse(String((rtRun as { created_at?: string } | null)?.created_at ?? ""));
+            doneAt = Number.isFinite(t) ? t : null;
+          }
+          const claim = aiClaimRefusal(templateName, { hookEngine: rt.hookEngine, rivalCount: rt.rivals.length, auditDoneAt: doneAt });
+          if (claim) return json({ ok: false, error: "ai_claim_unsupported", template: templateName, reason: claim }, 200);
+        }
+      }
       const coldMarket = coldSend ? mobileMarketOf(to) : null;
       if (coldMarket && coldMarket !== "UK" && !channelOn(await loadCountrySettings(service), coldMarket, "whatsapp")) {
         return json({ ok: false, error: COUNTRY_OFF, template: templateName,
@@ -1003,6 +1037,8 @@ Deno.serve(async (req) => {
         if (tvars.includes("competitors")) auditExtra.competitors = a.competitors;
         if (templateNeedsRivals(tvars)) auditExtra.rivals = a.rivals;
         if (tvars.includes("town")) auditExtra.town = a.town;
+        /* ai_engine (researchTemplates.ts): the engine of the one answer they were missing from; none → the payload refuses. */
+        if (tvars.includes("ai_engine")) auditExtra.aiEngine = aiEngineWord(a.hookEngine) ?? "";
         if (tvars.includes("audit_url")) auditExtra.auditUrl = a.link;
         /* audit_followup_fault's {{6}}: the site's main crawl fault, resolved beside the rivals. An
            empty value makes templateBodyParams throw unsafe_template_var (Meta rejects a blank
@@ -1060,7 +1096,7 @@ Deno.serve(async (req) => {
         }
         auditBusinessName = a.business;
         auditClaimUrl = a.link;
-        storedBody = renderTemplateBody(templateName, a.business, a.link, bodyTrade, a.competitors, undefined, a.town, a.siteFault ?? undefined, a.siteFindings ?? undefined, (auditExtra.visibilityScore as string | undefined), (auditExtra.senderName as string | undefined));
+        storedBody = renderTemplateBody(templateName, a.business, a.link, bodyTrade, a.competitors, undefined, a.town, a.siteFault ?? undefined, a.siteFindings ?? undefined, (auditExtra.visibilityScore as string | undefined), (auditExtra.senderName as string | undefined), (auditExtra.aiEngine as string | undefined));
         if (vowelFreeText) { storedBody = withTradeArticle(storedBody, a.trade); vowelArticleFixed = true; }
       } else {
         /* ⛔ contact_followup — a MANUAL follow-up, so ONE PER LEAD, NO OVERRIDE. It is a ["name"]
@@ -1117,7 +1153,9 @@ Deno.serve(async (req) => {
       /* polite_hook3: the free-text words carry the lead's tracked link; the template (storedBody, plain link) is what Meta's body says. */
       const freeWords = templateName === POLITE_HOOK3_TEMPLATE && polite3Code ? politeHook3Body(polite3Code) : storedBody;
       const ownWords = (typedFreeText || sched) && text ? text : freeWords;
-      const shape = inWindowShape({ origin: sendOrigin, windowOpen: freeWindow, allowClosedText: !env.live, typed: typedFreeText, version: freeTextVersionOf(payload, ownWords), freeOnly });
+      const shape = inWindowShape({ origin: sendOrigin, windowOpen: freeWindow, allowClosedText: !env.live, typed: typedFreeText, version: freeTextVersionOf(payload, ownWords), freeOnly,
+        /* A research template Meta has not approved (src/lib/researchTemplates.ts): free text inside the 24 hours, or nothing. */
+        windowOnly: windowOnlyTemplate(templateName) ? { reason: WAITING_META_REASON } : null });
       if (shape.as === "refuse") return json({ ok: false, error: shape.error, reason: shape.reason, template: templateName }, 200);
       /* The article was fixed for FREE TEXT only: if this would go as the paid template after all, it is the old hold. */
       if (vowelArticleFixed && shape.as !== "text") return json({ ok: false, error: "unsafe_template_var", reason: "trade_starts_with_vowel_sound", detail: "outside the 24-hour window this template says \"for a\" before their trade" }, 200);

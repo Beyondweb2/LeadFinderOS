@@ -97,7 +97,8 @@ const NOW = Date.parse('2026-11-16T12:00:00Z');
   ok(/WOULD_BE_PAID_REASON, freeWindowOpen, type SendOrigin \} from "\.\.\/\.\.\/\.\.\/src\/lib\/inWindowFreeText\.ts";/.test(s), 'the sender reads the landing-margin rule from the one leaf');
   ok(!read('src/lib/serviceWindow.ts').includes('freeWindowOpen'), 'serviceWindow.ts (20 functions import it) is untouched');
   ok(s.includes('const freeWindow = freeWindowOpen(lastInboundAt);'), 'judged from the same newest inbound the sender already reads');
-  ok(/inWindowShape\(\{ origin: sendOrigin, windowOpen: freeWindow, .*, freeOnly \}\);/.test(s), 'the conversion uses the margin and carries free_only');
+  /* 2026-11-25: followed by windowOnly (the research templates Meta has not approved, src/lib/researchTemplates.ts). */
+  ok(/inWindowShape\(\{ origin: sendOrigin, windowOpen: freeWindow, .*, freeOnly,\s/.test(s), 'the conversion uses the margin and carries free_only');
   ok(s.includes('const freeOnly = !sched && body.free_only === true;'), 'free_only is strictly true, and never on a queued run');
   const gate = s.slice(s.indexOf('const gate = await queueGate('), s.indexOf('if (gate) return json('));
   ok(gate.includes('freeOnly && usedTemplate ? async () => ({ ok: false as const, error: "would_be_paid"'), 'free_only outside their send hours → refused, nothing queued (a queued send could go paid later)');

@@ -861,3 +861,30 @@ could not prove it, because the status sync could not identify the sending accou
   `WHATSAPP_BUSINESS_ACCOUNT_ID` remains the direct fix.
 - **When Meta approves:** flip `GONE_COLD_APPROVED` to true, run `scripts/gone-cold-template.test.ts` (update its switch line),
   deploy `send-whatsapp-message` + the SPA. Test: `scripts/gone-cold-template.test.ts`.
+
+## The research templates — "Which town?", the AI-answer pair, two saved replies (2026-11-25, Paul, feat/templates-from-research)
+
+Rules and wording in `src/lib/researchTemplates.ts`. Nothing old removed. Test: `scripts/research-templates.test.ts`.
+- **Templates** (English, Marketing, follow-ups only — `CONTINUATION_TEMPLATES` + `NEEDS_PRIOR_WHATSAPP`; manual only — `MANUAL_ONLY_TEMPLATES`,
+  so never queued, never bulk, never automatic; in no `sales_queue_opener` list):
+  `webdev_which_town` (no vars), `webdev_town_ready` (no vars, fixed `leadfinderos.com/?ref=wa-town` — its own tracking code, Paul 2026-11-25; the site gives a real 7-day free trial) — LeadFinderOS-style campaigns only;
+  `ai_check_question` ({{1}} `ai_engine`, {{2}} trade plural, {{3}} town, from the audit), `ai_answer_named` ({{1}} the joined names),
+  `ai_answer_not_named` ({{1}} `ai_engine`). Renamed engine-neutral the same day (were chatgpt_*; never registered or sent). `ai_engine` is
+  the hook answer's engine word (`aiEngineWord`: ChatGPT or Gemini — the only hook engines; Google AI Overview is display-only and is
+  never named), filled in the audit branch; the payload refuses anything else. A display mirror without it shows `{{engine}}`, which the
+  Inbox never sends — never a LeadFinderOS-style lead (`audienceRefusal`, picker + sender; an unreadable campaign refuses).
+- **Paul, 2026-11-25: no Meta step — they are used inside the 24 hours, where messages are free.** **Not registered at Meta.** `RESEARCH_TEMPLATE_APPROVED` (all false) → `windowOnlyTemplate`: the sender passes `windowOnly` to
+  `inWindowShape`, so anything that would go as the paid template is refused (`template_waiting_meta`, `WAITING_META_REASON`); inside the
+  24 hours it goes as free text of the same words, recorded as that template. NOT in `templateAwaitingApproval` (that door throws even
+  in the window). When Paul sees one Approved in WhatsApp Manager under exactly its name: flip its switch, redeploy send-whatsapp-message.
+- **AI-answer evidence (`aiClaimRefusal`, sender, before the payload and dry run):** the lead's audit hook search is a real ChatGPT or
+  Gemini answer the business was not in, and the message names that engine (`resolveAuditReplyVars` — share and absence rules apply); `ai_check_question` also needs that run started
+  in the last 24 hours ("today"); `ai_answer_named` needs 2+ usable names (up to 3 are joined). Not waived like audit_followup's.
+- **Per campaign A vs old:** `campaigns.webdev_question` ('initial_question' default | 'webdev_which_town'), migration
+  `20261229090000_campaign_webdev_question.sql`, set by the admin in campaign settings (`campaign_set_webdev_question`, LeadFinderOS-style
+  campaigns only). The one-lead Inbox picker offers only the chosen question for a lead in such a campaign (`webdevQuestionRefusal`);
+  other screens are unchanged. Compare in Campaign Performance (replies per template). Sign-ups are not attributed per template there.
+- **Saved replies (free text, the person presses send):** "Town result" (`Just ran {{town}} + {{trade}}: {{N}} …`, web-dev leads only —
+  the Inbox refuses free text with a `{{marker}}` left, so the numbers are always typed in) and "Opt-out goodbye" (`OPT_OUT_GOODBYE`),
+  also offered by the stop panel ("Put goodbye in box"). A free-text reply to their own message is never refused for an opt-out; the
+  opt-out itself is recorded as before (a stop opts out at once / Mark opted out).

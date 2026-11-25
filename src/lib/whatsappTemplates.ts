@@ -14,6 +14,7 @@ import { STALE_OFFER_TEMPLATES } from './findableOffer.ts';
 import { isInitialOpener, openerApproved } from './openerVariant.ts';
 import { isColdOutreachTemplate } from './coldOutreach.ts';
 import { GONE_COLD_APPROVED, GONE_COLD_TEMPLATE, GONE_COLD_WAITING_REASON, MANUAL_ONLY_REASON } from './goneCold.ts';
+import { audienceRefusal, RESEARCH_TEMPLATES, webdevQuestionRefusal } from './researchTemplates.ts';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    🔴 TEMPLATES THAT WERE RE-REGISTERED AT META UNDER A NEW NAME, AND THE HISTORY THAT CARRIES THE
@@ -112,6 +113,12 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
   polite_hook3:           { needsUrl: false, needsAudit: false, group: 'followup' },
   /* gone_cold (2026-11-21) - "did you get my last message?", NO variables; its own gate is in getTemplateSendability (goneCold.ts). */
   gone_cold:              { needsUrl: false, needsAudit: false, group: 'followup' },
+  /* The research templates (2026-11-25, researchTemplates.ts). The ChatGPT ones need the lead's audit; the sender checks the rest. */
+  webdev_which_town:      { needsUrl: false, needsAudit: false, group: 'followup' },
+  webdev_town_ready:      { needsUrl: false, needsAudit: false, group: 'followup' },
+  ai_check_question: { needsUrl: false, needsAudit: true,  group: 'followup' },
+  ai_answer_named:          { needsUrl: false, needsAudit: true,  group: 'followup' },
+  ai_answer_not_named:      { needsUrl: false, needsAudit: true,  group: 'followup' },
   // audit_reply is not yet wired into the manual send path; its rule lives here so the guard is
   // ready the moment it's added to the picker + sender (no drift when that happens).
   audit_reply:            { needsUrl: false, needsAudit: true,  group: 'audit' },
@@ -219,6 +226,10 @@ export interface SendabilityAudit {
   /** gone_cold only (src/lib/goneCold.ts): the caller's verdict from the open thread (goneColdRefusal). ABSENT = this screen
    *  cannot judge the thread (a bulk send, the queue, a screen without the conversation) — gone_cold is then refused. */
   goneCold?: { ok: boolean; reason?: string };
+  /** The one-lead Inbox picker only (researchTemplates.ts): the lead's campaign. ABSENT = a bulk / queue screen — the research
+   *  templates are then refused (manual only); for initial_question it means "no campaign rule to apply". */
+  campaign?: { report_style?: string | null; webdev_question?: string | null } | null;
+  oneLead?: boolean;
 }
 
 export interface Sendability {
@@ -265,6 +276,18 @@ export function getTemplateSendability(
     if (!GONE_COLD_APPROVED) return { ok: false, reason: GONE_COLD_WAITING_REASON };
     if (!audit?.goneCold) return { ok: false, reason: MANUAL_ONLY_REASON };
     return audit.goneCold.ok ? { ok: true } : { ok: false, reason: audit.goneCold.reason ?? 'Not for this lead.' };
+  }
+  /* The research templates (2026-11-25, researchTemplates.ts): one lead at a time, the right audience, and in a LeadFinderOS-style
+     campaign only the web-dev question that campaign chose (initial_question included). The sender re-checks the audience and the
+     ChatGPT evidence, and refuses outside the 24 hours until Meta approves. */
+  if (RESEARCH_TEMPLATES.includes(template)) {
+    if (audit?.oneLead !== true) return { ok: false, reason: MANUAL_ONLY_REASON };
+    const who = audit.campaign !== undefined ? audienceRefusal(template, audit.campaign?.report_style) : null;
+    if (who) return { ok: false, reason: who };
+  }
+  if (audit?.campaign !== undefined) {
+    const q = webdevQuestionRefusal(template, audit.campaign);
+    if (q) return { ok: false, reason: q };
   }
   if (STALE_OFFER_TEMPLATES.has(template)) {
     return { ok: false, reason: 'Quotes the old £29.99/month offer — blocked until the corrected version is approved at Meta.' };
