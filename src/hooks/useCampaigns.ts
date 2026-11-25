@@ -43,6 +43,8 @@ export interface Campaign {
   audit_on_reply?: boolean | null;
   /** "Report style" (2026-11-15, src/lib/reportBrand.ts): 'findable' (default) or 'leadfinderos'. */
   report_style?: string | null;
+  /** "Web dev follow-up question" (2026-11-25, src/lib/researchTemplates.ts): 'initial_question' (default) or 'webdev_which_town'. */
+  webdev_question?: string | null;
 }
 
 export interface CampaignInput {

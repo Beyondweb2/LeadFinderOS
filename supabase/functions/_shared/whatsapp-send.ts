@@ -10,6 +10,7 @@ import { displayBusinessName, nameStyleFor } from "../../../src/lib/displayName.
 import { AI_SITE_FINDINGS_V2, AI_SITE_FINDINGS_V2_APPROVED } from "../../../src/lib/siteFindings.ts";
 import { STALE_OFFER_TEMPLATES } from "../../../src/lib/findableOffer.ts";
 import { GONE_COLD_APPROVED, GONE_COLD_TEMPLATE, goneColdBody } from "../../../src/lib/goneCold.ts";
+import { chatgptCheckQuestionBody, chatgptNamedBody, chatgptNotNamedBody, webdevTownReadyBody, webdevWhichTownBody } from "../../../src/lib/researchTemplates.ts";
 import { isOnboardingFormUrl, isSignupTemplateLinkUrl, onboardingTemplateBody, signupLinkTemplateBody } from "../../../src/lib/whatsappLinkTemplates.ts";
 import { isWelcomePackUrl, WELCOME_PACK_TEMPLATE_BODY } from "../../../src/lib/welcomePackWhatsApp.ts";
 
@@ -147,6 +148,15 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
   /* gone_cold — Paul, 2026-11-21 (src/lib/goneCold.ts). English, Marketing, ZERO variables. MANUAL ONLY, only to a lead we messaged
      who has not replied; Meta's LIVE status must say APPROVED (send-whatsapp-message). MIRRORS the queue, which refuses it. */
   gone_cold: { lang: "en", vars: [] },
+  /* The research templates — Paul, 2026-11-25 (src/lib/researchTemplates.ts). English, Marketing. NOT YET APPROVED AT META: free text
+     inside the 24 hours only (windowOnlyTemplate); manual only. MIRRORS the queue, which refuses them.
+     webdev_which_town / webdev_town_ready: ZERO variables. chatgpt_check_question: {{1}} trade plural, {{2}} town (the audit).
+     chatgpt_named: {{1}} the names ChatGPT gave, joined (the audit's hook answer). chatgpt_not_named: ZERO variables. */
+  webdev_which_town: { lang: "en", vars: [] },
+  webdev_town_ready: { lang: "en", vars: [] },
+  chatgpt_check_question: { lang: "en", vars: ["trade_plural", "town"] },
+  chatgpt_named: { lang: "en", vars: ["competitors"] },
+  chatgpt_not_named: { lang: "en", vars: [] },
   // Reply-to-a-reply: 4 vars — {{1}} trade, {{2}} competitors, {{3}} business name, {{4}} report link.
   // Vars resolved server-side per-lead from the lead's own completed audit (see resolveAuditReplyVars).
   audit_reply: { lang: "en", vars: ["trade", "competitors", "name", "url"] },
@@ -868,6 +878,11 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   polite_hook2: () => politeHook2Body(),
   polite_hook3: () => politeHook3Body(),
   gone_cold: () => goneColdBody(),
+  webdev_which_town: () => webdevWhichTownBody(),
+  webdev_town_ready: () => webdevTownReadyBody(),
+  chatgpt_check_question: (_b, _u, trade, _c, _f, town) => { const t = pluraliseTrade(trade); return chatgptCheckQuestionBody(t.ok ? t.value : (trade ?? ""), town ?? ""); },
+  chatgpt_named: (_b, _u, _t, competitors) => chatgptNamedBody(competitors ?? ""),
+  chatgpt_not_named: () => chatgptNotNamedBody(),
   audit_reply: auditReplyBody,
   video_template: videoTemplateBody,
   competitor_hook: competitorHookBody,

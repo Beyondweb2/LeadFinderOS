@@ -145,6 +145,12 @@ const EXPECTED_CONTINUATIONS = [
   "polite_hook3",
   /* Paul, 2026-11-21: gone_cold, manual only (src/lib/goneCold.ts). */
   "gone_cold",
+  /* Paul, 2026-11-25: the research templates, follow-ups only (src/lib/researchTemplates.ts). */
+  "webdev_which_town",
+  "webdev_town_ready",
+  "chatgpt_check_question",
+  "chatgpt_named",
+  "chatgpt_not_named",
 ].sort();
 const actual = [...CONTINUATION_TEMPLATES].sort();
 const added = actual.filter((t) => !EXPECTED_CONTINUATIONS.includes(t));

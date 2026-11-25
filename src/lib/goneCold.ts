@@ -15,6 +15,8 @@
    ⛔ MANUAL ONLY: one person, one lead, one press. Never queued, never in a bulk send, never automatic
       (MANUAL_ONLY_TEMPLATES — the Inbox bulk planner, the Outreach queue dialog and process-whatsapp-queue all refuse it). */
 
+import { RESEARCH_TEMPLATES } from './researchTemplates.ts';
+
 export const GONE_COLD_TEMPLATE = 'gone_cold';
 
 /** ⛔ The switch. Paul, 2026-11-21: ON — treated as approved. The sender no longer pre-checks Meta's live status for
@@ -31,7 +33,8 @@ Not sure it sent properly`;
 }
 
 /** Templates a person sends one lead at a time: never queued, never bulk, never automatic. */
-export const MANUAL_ONLY_TEMPLATES: ReadonlySet<string> = new Set([GONE_COLD_TEMPLATE]);
+/* + the research templates (2026-11-25, src/lib/researchTemplates.ts): not approved at Meta yet, one lead at a time from the Inbox. */
+export const MANUAL_ONLY_TEMPLATES: ReadonlySet<string> = new Set([GONE_COLD_TEMPLATE, ...RESEARCH_TEMPLATES]);
 export const MANUAL_ONLY_REASON = 'Send this one by hand from the lead’s conversation — it is never queued or sent in bulk.';
 
 export const WINDOW_MS_24H = 24 * 60 * 60 * 1000;

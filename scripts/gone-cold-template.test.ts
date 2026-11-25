@@ -87,7 +87,7 @@ ok(/if \(MANUAL_ONLY_TEMPLATES\.has\(templateName\)\) \{ await finish\("flagged_
 const table = read('src/components/OutreachTable.tsx');
 ok(/disabled=\{blocked \|\| stale \|\| manual\}/.test(table) && /manualOnly\(queueTemplate\)/.test(table), 'Outreach queue dialog: greyed and the Queue button disabled');
 const inbox = read('src/pages/Inbox.tsx');
-ok(/goneColdRefusal\(\{ approved: GONE_COLD_APPROVED/.test(inbox) && /hasSiteFindingsLeadIds\.has\(active\.leadId\) : false, goneCold \}\)/.test(inbox), 'Inbox one-lead picker supplies the thread verdict');
+ok(/goneColdRefusal\(\{ approved: GONE_COLD_APPROVED/.test(inbox) && /hasSiteFindingsLeadIds\.has\(active\.leadId\) : false, goneCold[,\s]/.test(inbox), 'Inbox one-lead picker supplies the thread verdict');
 
 console.log('── the status sync ──');
 ok(/KNOWN_BUSINESS_IDS: readonly string\[\] = \["1693100295675184"\]/.test(read('supabase/functions/_shared/template-status.ts')), 'status sync also looks in the Move37 business (owning-number check still decides)');

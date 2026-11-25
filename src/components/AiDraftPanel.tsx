@@ -49,9 +49,11 @@ export interface AiDraftPanelProps {
   busy: AiBusy;
   onDiscard: () => void;
   onMarkOptedOut: () => void;
+  /** A stop: put the opt-out goodbye (researchTemplates.ts OPT_OUT_GOODBYE) in the reply box. Never sends by itself. */
+  onGoodbye?: () => void;
 }
 
-export function AiDraftPanel({ row, busy, onDiscard, onMarkOptedOut }: AiDraftPanelProps) {
+export function AiDraftPanel({ row, busy, onDiscard, onMarkOptedOut, onGoodbye }: AiDraftPanelProps) {
   const chip = aiChipFor(row);
   if (!chip || rowSendable(row)) return null;
   const why = row.why ?? null;
@@ -72,6 +74,12 @@ export function AiDraftPanel({ row, busy, onDiscard, onMarkOptedOut }: AiDraftPa
         <Button type="button" variant="destructive" size="sm" className="h-7 gap-1 text-xs" disabled={busy !== null} onClick={onMarkOptedOut} data-testid="ai-mark-opted-out"
           title="Add this number to the opt-out list and cancel any queued follow-ups. Nothing is sent.">
           {busy === 'optout' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />} Mark opted out
+        </Button>
+      )}
+      {stop && onGoodbye && (
+        <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={busy !== null} onClick={onGoodbye} data-testid="ai-opt-out-goodbye"
+          title="Put “No problem at all, I won’t message again.” in the reply box. You press send.">
+          Put goodbye in box
         </Button>
       )}
       {(chip.label === 'Needs you' || chip.label === 'Needs a template') && (

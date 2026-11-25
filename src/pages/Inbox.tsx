@@ -29,6 +29,8 @@ import { REPORT_PUBLIC_ORIGIN } from '@/lib/findableOffer';
 import { isAggregatorUrl } from '@/lib/aggregators';
 import { shortReportUrl } from '@/lib/reportSlug';
 import { reportLinkFor, useCampaignReportStyle } from '@/hooks/useReportStyle';
+import { useCampaigns } from '@/hooks/useCampaigns';
+import { OPT_OUT_GOODBYE, savedRepliesFor } from '@/lib/researchTemplates';
 import { assessOnboardingLink } from '@/components/OnboardingLinkCard';
 import { LeadDetailFromInbox } from '@/components/LeadDetailFromInbox';
 import { CrawlCheckButton } from '@/components/CrawlCheckButton';
@@ -281,6 +283,11 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
   polite_hook2: 'Polite hook 2 ("Ah nice, I’m actually a web dev myself")',
   polite_hook3: 'Polite hook 3 ("Ah nice, this might actually be useful to you then..", tracked link)',
   gone_cold: 'Gone cold ("Hey, did you get my last message?")',
+  webdev_which_town: 'Web dev: which town? ("Great.. I’m Paul…")',
+  webdev_town_ready: 'Web dev: town ready ("free 7 days")',
+  chatgpt_check_question: 'ChatGPT check ("I checked who ChatGPT suggests…")',
+  chatgpt_named: 'ChatGPT answer, with names',
+  chatgpt_not_named: 'ChatGPT answer, no names',
   onboarding_followup: 'Onboarding follow-up',
   book_call: 'Arrange a call',
   re_engage_49: 'Re-engage (gone quiet)',
@@ -1239,6 +1246,11 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
      code is somehow absent, which also always resolves. */
   /* Report style (2026-11-15): a LeadFinderOS-style campaign's lead gets the app.leadfinderos.com link (useReportStyle.ts). */
   const activeReportStyle = useCampaignReportStyle(activeLead?.campaign_id);
+  /* The research templates (src/lib/researchTemplates.ts): the lead's campaign decides the audience and which web-dev question. */
+  const { allCampaigns: inboxCampaigns } = useCampaigns();
+  const activeCampaign = activeLead?.campaign_id
+    ? ((inboxCampaigns.find((c) => c.id === activeLead.campaign_id) as { report_style?: string | null; webdev_question?: string | null } | undefined) ?? null)
+    : null;
   const reportUrl = activeReport?.auditId
     ? (activeReport.shortCode ? reportLinkFor(activeReport.shortCode, activeReportStyle) : `${REPORT_PUBLIC_ORIGIN}/report/${activeReport.auditId}`)
     : null;
@@ -1705,7 +1717,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       const r = goneColdRefusal({ approved: GONE_COLD_APPROVED, optedOut: st === 'opted_out', doNotContact: GONE_COLD_STOP_STATUSES.has(st), thread: thread as unknown as { direction: 'inbound' | 'outbound'; created_at: string; status?: string | null; template_name?: string | null }[], now: Date.now() });
       return r ? { ok: false, reason: r.reason } : { ok: true };
     })() : undefined;
-    const base = getTemplateSendability(name, { shareToken: null }, { reportSlug: activeReport?.auditId ?? null, hasSiteFault: active?.leadId ? hasSiteFaultLeadIds.has(active.leadId) : false, hasSiteFindings: active?.leadId ? hasSiteFindingsLeadIds.has(active.leadId) : false, goneCold });
+    const base = getTemplateSendability(name, { shareToken: null }, { reportSlug: activeReport?.auditId ?? null, hasSiteFault: active?.leadId ? hasSiteFaultLeadIds.has(active.leadId) : false, hasSiteFindings: active?.leadId ? hasSiteFindingsLeadIds.has(active.leadId) : false, goneCold,
+      oneLead: !!active?.leadId, campaign: active?.leadId ? activeCampaign : undefined });
     if (!base.ok || !sms) return base;
     return smsTemplateAvailability(name); // template-availability difference: video / retired barber / Quick Close link templates are greyed with a reason
   };
@@ -3075,7 +3088,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                     draft is the bubble in the thread above. Never sends by itself. */}
                 {activeAi && !rowSendable(activeAi) && (
                   <div className="mb-2">
-                    <AiDraftPanel row={activeAi} busy={aiBusy} onDiscard={() => void discardAiDraft()} onMarkOptedOut={() => void markAiOptedOut()} />
+                    <AiDraftPanel row={activeAi} busy={aiBusy} onDiscard={() => void discardAiDraft()} onMarkOptedOut={() => void markAiOptedOut()}
+                      onGoodbye={win.open ? () => insertWarmDraft(active.key, OPT_OUT_GOODBYE) : undefined} />
                   </div>
                 )}
                 {win.open ? (
@@ -3117,6 +3131,14 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                     {/* Voice-note script — prominent in the OPEN window, beside the recorder: text for Paul to
                         read out when he records. Never sends. Closed-window threads do not get one. */}
                     {!sms && active.leadId && <VoiceNoteScriptButton key={active.key} leadId={active.leadId} prominent />}
+                    {/* Saved replies (2026-11-25, src/lib/researchTemplates.ts): put fixed words in the box. Never sends; a reply with
+                        {{blanks}} left is refused by doSend. The opt-out goodbye does not record the opt-out: Mark opted out does. */}
+                    {savedRepliesFor(activeReportStyle).map((r) => (
+                      <Button key={r.id} type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground"
+                        data-testid={`saved-reply-${r.id}`} title={r.text} onClick={() => insertWarmDraft(active.key, r.text)}>
+                        {r.label}
+                      </Button>
+                    ))}
                     <span className="flex-1" />
                     {/* Approved WhatsApp templates. In the
                         window they are optional, so they open on demand; outside it they always show. */}

@@ -328,6 +328,12 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   polite_hook3: { lang: "en", vars: [] },
   /* gone_cold (2026-11-21) — ZERO variables. MIRRORS whatsapp-send.ts. ⛔ MANUAL ONLY: this queue refuses it (MANUAL_ONLY_TEMPLATES). */
   gone_cold: { lang: "en", vars: [] },
+  /* The research templates (2026-11-25, src/lib/researchTemplates.ts). MIRRORS whatsapp-send.ts. ⛔ MANUAL ONLY: this queue refuses them. */
+  webdev_which_town: { lang: "en", vars: [] },
+  webdev_town_ready: { lang: "en", vars: [] },
+  chatgpt_check_question: { lang: "en", vars: ["trade_plural", "town"] },
+  chatgpt_named: { lang: "en", vars: ["competitors"] },
+  chatgpt_not_named: { lang: "en", vars: [] },
   // Was MISSING while being selectable in the bulk picker, so a lead set to audit_reply silently
   // received booking_page_intro — a barber booking pitch. No lead was ever queued with it, so
   // nothing mis-sent, but the gap was live.
