@@ -8,9 +8,11 @@
                             what they really found, and it only ever answers their message (inside the 24 hours, free text).
        webdev_town_ready  — the close with the link.
    B · Findable (local businesses, never a LeadFinderOS-style campaign):
-       chatgpt_check_question — the second message: "I checked who ChatGPT suggests for '{{1}} in {{2}}' today …".
-       chatgpt_named          — after a yes, with the names ChatGPT gave ({{1}} = "A and B", from the lead's REAL audit).
-       chatgpt_not_named      — the same without names, for an audit that cannot give two names.
+       ai_check_question   — the second message: "I checked who {{1}} suggests for '{{2}} in {{3}}' today …" — {{1}} is the AI the
+                             lead's audit actually checked and found them missing from (ChatGPT or Gemini, the only hook engines).
+       ai_answer_named     — after a yes, with the names that one answer gave ({{1}} = "A and B", from the lead's REAL audit).
+       ai_answer_not_named — the same without names ("You weren't in {{1}}'s answer"), for an audit that cannot give two names.
+       (Renamed engine-neutral 2026-11-25 from chatgpt_*; nothing was ever registered or sent under the old names.)
    C · The opt-out goodbye — a SAVED REPLY: "No problem at all, I won't message again." The opt-out is recorded as always
        (Mark opted out); a free-text reply to their own message is never refused for an opt-out.
 
@@ -18,31 +20,31 @@
       switch below, it may ONLY go inside the open 24-hour window, as free text of the same words (inWindowFreeText.ts
       `windowOnly`): outside the window the send is REFUSED with WAITING_META_REASON, never tried at Meta.
    ⛔ MANUAL ONLY: never queued, never bulk, never automatic (goneCold.ts MANUAL_ONLY_TEMPLATES).
-   ⛔ B MAY ONLY CLAIM WHAT THE AUDIT SHOWS (chatgptClaimRefusal): the lead's audit hook search was measured on ChatGPT and the
-      business was not in that answer; the second message says "today", so that audit finished in the last 24 hours. The names
+   ⛔ B MAY ONLY CLAIM WHAT THE AUDIT SHOWS (aiClaimRefusal): the lead's audit hook search is a real ChatGPT or Gemini answer the
+      business was not in, and the message names THAT engine; the second message says "today", so that audit finished in the last 24 hours. The names
       are that one answer's names. Anything unreadable refuses.
-   Pure; no imports (edge + browser).
+   Pure; no imports (edge + browser). AI_ENGINE_WORDS mirrors hookScore.ts HOOK_ENGINE_LABELS (pinned equal by the test).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 export const WEBDEV_WHICH_TOWN = 'webdev_which_town';
 export const WEBDEV_TOWN_READY = 'webdev_town_ready';
-export const CHATGPT_CHECK_QUESTION = 'chatgpt_check_question';
-export const CHATGPT_NAMED = 'chatgpt_named';
-export const CHATGPT_NOT_NAMED = 'chatgpt_not_named';
+export const AI_CHECK_QUESTION = 'ai_check_question';
+export const AI_ANSWER_NAMED = 'ai_answer_named';
+export const AI_ANSWER_NOT_NAMED = 'ai_answer_not_named';
 
 /** The old web-dev question the new one is tested against (openerVariant.ts INITIAL_OPENER_D). */
 export const OLD_WEBDEV_QUESTION = 'initial_question';
 
-export const RESEARCH_TEMPLATES: readonly string[] = [WEBDEV_WHICH_TOWN, WEBDEV_TOWN_READY, CHATGPT_CHECK_QUESTION, CHATGPT_NAMED, CHATGPT_NOT_NAMED];
+export const RESEARCH_TEMPLATES: readonly string[] = [WEBDEV_WHICH_TOWN, WEBDEV_TOWN_READY, AI_CHECK_QUESTION, AI_ANSWER_NAMED, AI_ANSWER_NOT_NAMED];
 
 /* ⛔ THE META SWITCHES. false = not approved at Meta: free text inside the 24 hours only. Flip ONE to true only after Paul has
    seen it Approved in WhatsApp Manager under exactly this name. */
 export const RESEARCH_TEMPLATE_APPROVED: Readonly<Record<string, boolean>> = {
   [WEBDEV_WHICH_TOWN]: false,
   [WEBDEV_TOWN_READY]: false,
-  [CHATGPT_CHECK_QUESTION]: false,
-  [CHATGPT_NAMED]: false,
-  [CHATGPT_NOT_NAMED]: false,
+  [AI_CHECK_QUESTION]: false,
+  [AI_ANSWER_NAMED]: false,
+  [AI_ANSWER_NOT_NAMED]: false,
 };
 
 export const WAITING_META_REASON =
@@ -59,7 +61,7 @@ export function windowOnlyTemplate(templateName: string | null | undefined): boo
 /** Web-dev wording: only leads in a LeadFinderOS-style campaign. */
 export const LFOS_ONLY_TEMPLATES: ReadonlySet<string> = new Set([WEBDEV_WHICH_TOWN, WEBDEV_TOWN_READY]);
 /** Local-business wording: never a lead in a LeadFinderOS-style campaign. */
-export const FINDABLE_ONLY_TEMPLATES: ReadonlySet<string> = new Set([CHATGPT_CHECK_QUESTION, CHATGPT_NAMED, CHATGPT_NOT_NAMED]);
+export const FINDABLE_ONLY_TEMPLATES: ReadonlySet<string> = new Set([AI_CHECK_QUESTION, AI_ANSWER_NAMED, AI_ANSWER_NOT_NAMED]);
 
 export const LFOS_ONLY_REASON = 'This message is only for leads in a LeadFinderOS-style campaign (web developers / agencies). Nothing was sent.';
 export const FINDABLE_ONLY_REASON = 'This message is for local businesses (Findable campaigns), not web developers. Nothing was sent.';
@@ -100,7 +102,9 @@ export function webdevQuestionRefusal(templateName: string, campaign: { report_s
 
 /* ── The wording (byte for byte what is to be registered at Meta) ────────────────────────────── */
 
-export const WEBDEV_SIGNUP_LINK = 'leadfinderos.com/?ref=wa';
+/* Paul, 2026-11-25: its own tracking code, so sign-ups from this close can be told apart (leadfinderos.com gives a real 7-day
+   free trial: card upfront, nothing charged on the day). */
+export const WEBDEV_SIGNUP_LINK = 'leadfinderos.com/?ref=wa-town';
 
 export function webdevWhichTownBody(): string {
   return 'Great.. I\'m Paul. I built a tool that finds local businesses with weak sites. Which town do you want clients in?';
@@ -110,46 +114,56 @@ export function webdevTownReadyBody(): string {
   return `Here it is, your town is ready, free 7 days: ${WEBDEV_SIGNUP_LINK}`;
 }
 
-/** {{1}} the trade as a plural ("plumbers"), {{2}} the town — both from the lead's own audit. */
-export function chatgptCheckQuestionBody(tradePlural: string, town: string): string {
-  return `I'm Paul. I checked who ChatGPT suggests for '${tradePlural} in ${town}' today. Want to see what it said?`;
+/** The engine as the message says it, for a hook engine key. Only the engines a hook audit actually asks. */
+export const AI_ENGINE_WORDS: Readonly<Record<string, string>> = { chatgpt: 'ChatGPT', gemini: 'Gemini' };
+export function aiEngineWord(hookEngine: string | null | undefined): string | null {
+  const k = String(hookEngine ?? '');
+  return Object.prototype.hasOwnProperty.call(AI_ENGINE_WORDS, k) ? AI_ENGINE_WORDS[k] : null;
+}
+/* A display mirror called without the engine (a preview with sample values) shows this marker: the Inbox never sends free text
+   that still has one, so a mirror can never put a guessed engine into a real message. */
+const NO_ENGINE = '{{engine}}';
+
+/** {{1}} the engine, {{2}} the trade as a plural ("plumbers"), {{3}} the town — all from the lead's own audit. */
+export function aiCheckQuestionBody(engine: string | null | undefined, tradePlural: string, town: string): string {
+  return `I'm Paul. I checked who ${engine || NO_ENGINE} suggests for '${tradePlural} in ${town}' today. Want to see what it said?`;
 }
 
 const TAIL = 'Answers change each time, but there are things that make you show up more often. Want a short voice note?';
 
-/** {{1}} the names ChatGPT gave in that one answer, joined ("A and B"). */
-export function chatgptNamedBody(names: string): string {
+/** {{1}} the names that one answer gave, joined ("A and B"). */
+export function aiAnswerNamedBody(names: string): string {
   return `It named ${names}. You weren't in this answer. ${TAIL}`;
 }
 
-export function chatgptNotNamedBody(): string {
-  return `You weren't in ChatGPT's answer. ${TAIL}`;
+/** {{1}} the engine. */
+export function aiAnswerNotNamedBody(engine: string | null | undefined): string {
+  return `You weren't in ${engine || NO_ENGINE}'s answer. ${TAIL}`;
 }
 
 /* ── B's evidence gate ───────────────────────────────────────────────────────────────────────── */
 
-export const CHATGPT_NAMED_MIN = 2;
-export const CHATGPT_TODAY_MS = 24 * 60 * 60 * 1000;
+export const AI_NAMED_MIN = 2;
+export const AI_TODAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Why a B template may NOT be sent from this lead's audit, or null when it may.
  * `hookEngine` is the engine of the audit's hook search (resolveAuditReplyVars) — the one answer the business was missing from;
  * `rivalCount` its usable names; `auditDoneAt` when that audit's run finished (ms, null = unreadable).
  */
-export function chatgptClaimRefusal(templateName: string, a: { hookEngine: string | null | undefined; rivalCount: number; auditDoneAt: number | null | undefined; now?: number }): string | null {
+export function aiClaimRefusal(templateName: string, a: { hookEngine: string | null | undefined; rivalCount: number; auditDoneAt: number | null | undefined; now?: number }): string | null {
   if (!FINDABLE_ONLY_TEMPLATES.has(templateName)) return null;
-  if (a.hookEngine !== 'chatgpt') {
-    return 'This message says ChatGPT, but this lead’s audit did not find them missing from a ChatGPT answer'
-      + (a.hookEngine ? ` (its result is from ${a.hookEngine === 'gemini' ? 'Google AI' : a.hookEngine})` : '')
-      + '. Nothing was sent. Use another template.';
+  const engine = aiEngineWord(a.hookEngine);
+  if (!engine) {
+    return 'This lead’s audit has no ChatGPT or Gemini answer they were missing from, so there is nothing true to say. Nothing was sent. Re-run the audit or use another template.';
   }
-  if (templateName === CHATGPT_CHECK_QUESTION) {
+  if (templateName === AI_CHECK_QUESTION) {
     const now = a.now ?? Date.now();
     if (a.auditDoneAt == null || !Number.isFinite(a.auditDoneAt)) return 'Could not read when the audit ran, and this message says "today". Nothing was sent.';
-    if (now - a.auditDoneAt > CHATGPT_TODAY_MS) return 'This message says "today", but this lead’s audit is more than a day old. Re-run the audit first. Nothing was sent.';
+    if (now - a.auditDoneAt > AI_TODAY_MS) return 'This message says "today", but this lead’s audit is more than a day old. Re-run the audit first. Nothing was sent.';
   }
-  if (templateName === CHATGPT_NAMED && a.rivalCount < CHATGPT_NAMED_MIN) {
-    return `ChatGPT's answer gave fewer than ${CHATGPT_NAMED_MIN} names we can use. Nothing was sent. Use "ChatGPT answer, no names" instead.`;
+  if (templateName === AI_ANSWER_NAMED && a.rivalCount < AI_NAMED_MIN) {
+    return `${engine}'s answer gave fewer than ${AI_NAMED_MIN} names we can use. Nothing was sent. Use "AI answer, no names" instead.`;
   }
   return null;
 }

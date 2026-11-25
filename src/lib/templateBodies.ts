@@ -30,7 +30,7 @@ import { WELCOME_PACK_TEMPLATE_BODY } from './welcomePackWhatsApp.ts';
 import { reportOfferBody } from './reportOfferTemplate.ts';
 import { dashboardTemplateTranscript } from './dashboardTemplates.ts';
 import { goneColdBody } from './goneCold.ts';
-import { chatgptCheckQuestionBody, chatgptNamedBody, chatgptNotNamedBody, webdevTownReadyBody, webdevWhichTownBody } from './researchTemplates.ts';
+import { aiCheckQuestionBody, aiAnswerNamedBody, aiAnswerNotNamedBody, webdevTownReadyBody, webdevWhichTownBody } from './researchTemplates.ts';
 import { initialWithLinkBody } from './initialWithLink.ts';
 import { politeHook2Body,politeHook3Body,politeHookBody, webdevExampleBody, webdevHookBody, webdevReportBody } from './webdevReport.ts';
 
@@ -416,7 +416,7 @@ const barberFreshaBooksyBody = (b: string, u: string) =>
 /** One template's display renderer. Named so the superseded-bodies map can reuse it rather than
  *  restate the signature — two copies of it would drift the day a seventh argument appears. */
 export type TemplateBodyFn =
-  (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string, siteFault?: string, siteFindings?: string, visibilityScore?: string, senderName?: string) => string;
+  (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string, siteFault?: string, siteFindings?: string, visibilityScore?: string, senderName?: string, aiEngine?: string) => string;
 
 /** DISPLAY-ONLY body renderers keyed by template name. Same signature as whatsapp-send.ts's
  *  WA_TEMPLATE_BODIES so the parity test can compare them one-to-one. */
@@ -466,9 +466,9 @@ export const READABLE_TEMPLATE_BODIES: Record<string, TemplateBodyFn> = {
   /* The research templates (src/lib/researchTemplates.ts), shared with whatsapp-send.ts. */
   webdev_which_town: () => webdevWhichTownBody(),
   webdev_town_ready: () => webdevTownReadyBody(),
-  chatgpt_check_question: (_b, _u, trade, _c, _f, town) => { const t = pluraliseTrade(trade); return chatgptCheckQuestionBody(t.ok ? t.value : (trade ?? ''), town ?? ''); },
-  chatgpt_named: (_b, _u, _t, competitors) => chatgptNamedBody(competitors ?? ''),
-  chatgpt_not_named: () => chatgptNotNamedBody(),
+  ai_check_question: (_b, _u, trade, _c, _f, town, _sf, _sx, _vs, _sn, aiEngine) => { const t = pluraliseTrade(trade); return aiCheckQuestionBody(aiEngine, t.ok ? t.value : (trade ?? ''), town ?? ''); },
+  ai_answer_named: (_b, _u, _t, competitors) => aiAnswerNamedBody(competitors ?? ''),
+  ai_answer_not_named: (_b, _u, _t, _c, _f, _town, _sf, _sx, _vs, _sn, aiEngine) => aiAnswerNotNamedBody(aiEngine),
   audit_reply: auditReplyBody,
   video_template: videoTemplateBody,
   competitor_hook: competitorHookBody,

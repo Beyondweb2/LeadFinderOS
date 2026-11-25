@@ -62,7 +62,7 @@ import { senderMessageName } from "../_shared/sender-name.ts";
 import { resolveOnboardingFormVars, resolveSignupLinkVars } from "../_shared/link-template-vars.ts";
 import { resolveWelcomePackVars } from "../_shared/welcome-pack-vars.ts";
 import { WELCOME_PACK_TEMPLATE_NAME } from "../../../src/lib/welcomePackWhatsApp.ts";
-import { audienceRefusal, CHATGPT_CHECK_QUESTION, chatgptClaimRefusal, FINDABLE_ONLY_TEMPLATES, LFOS_ONLY_TEMPLATES, WAITING_META_REASON, windowOnlyTemplate } from "../../../src/lib/researchTemplates.ts";
+import { aiEngineWord, audienceRefusal, AI_CHECK_QUESTION, aiClaimRefusal, FINDABLE_ONLY_TEMPLATES, LFOS_ONLY_TEMPLATES, WAITING_META_REASON, windowOnlyTemplate } from "../../../src/lib/researchTemplates.ts";
 import { LINK_TEMPLATE_NAMES, SIGNUP_LINK_TEMPLATE_NAME, TEMPLATE_UNAVAILABLE_CODES, templateSendFailureText, templateSendState } from "../../../src/lib/whatsappLinkTemplates.ts";
 
 // send-whatsapp-message — the Inbox reply sender (Phase A).
@@ -662,14 +662,14 @@ Deno.serve(async (req) => {
           const rt = await resolveAuditReplyVars(service, resolvedLeadId, { templateName });
           if (!rt.ok) return json({ ok: false, error: "audit_reply_unavailable", template: templateName, reason: rt.reason }, 200);
           let doneAt: number | null = null;
-          if (templateName === CHATGPT_CHECK_QUESTION) {
+          if (templateName === AI_CHECK_QUESTION) {
             const { data: rtRun, error: rtRunErr } = await service.from("ai_audit_runs").select("created_at")
               .eq("audit_id", rt.auditId).in("status", ["complete", "capped"]).order("run_number", { ascending: false }).limit(1).maybeSingle();
             const t = rtRunErr ? NaN : Date.parse(String((rtRun as { created_at?: string } | null)?.created_at ?? ""));
             doneAt = Number.isFinite(t) ? t : null;
           }
-          const claim = chatgptClaimRefusal(templateName, { hookEngine: rt.hookEngine, rivalCount: rt.rivals.length, auditDoneAt: doneAt });
-          if (claim) return json({ ok: false, error: "chatgpt_claim_unsupported", template: templateName, reason: claim }, 200);
+          const claim = aiClaimRefusal(templateName, { hookEngine: rt.hookEngine, rivalCount: rt.rivals.length, auditDoneAt: doneAt });
+          if (claim) return json({ ok: false, error: "ai_claim_unsupported", template: templateName, reason: claim }, 200);
         }
       }
       const coldMarket = coldSend ? mobileMarketOf(to) : null;
@@ -1037,6 +1037,8 @@ Deno.serve(async (req) => {
         if (tvars.includes("competitors")) auditExtra.competitors = a.competitors;
         if (templateNeedsRivals(tvars)) auditExtra.rivals = a.rivals;
         if (tvars.includes("town")) auditExtra.town = a.town;
+        /* ai_engine (researchTemplates.ts): the engine of the one answer they were missing from; none → the payload refuses. */
+        if (tvars.includes("ai_engine")) auditExtra.aiEngine = aiEngineWord(a.hookEngine) ?? "";
         if (tvars.includes("audit_url")) auditExtra.auditUrl = a.link;
         /* audit_followup_fault's {{6}}: the site's main crawl fault, resolved beside the rivals. An
            empty value makes templateBodyParams throw unsafe_template_var (Meta rejects a blank
@@ -1094,7 +1096,7 @@ Deno.serve(async (req) => {
         }
         auditBusinessName = a.business;
         auditClaimUrl = a.link;
-        storedBody = renderTemplateBody(templateName, a.business, a.link, bodyTrade, a.competitors, undefined, a.town, a.siteFault ?? undefined, a.siteFindings ?? undefined, (auditExtra.visibilityScore as string | undefined), (auditExtra.senderName as string | undefined));
+        storedBody = renderTemplateBody(templateName, a.business, a.link, bodyTrade, a.competitors, undefined, a.town, a.siteFault ?? undefined, a.siteFindings ?? undefined, (auditExtra.visibilityScore as string | undefined), (auditExtra.senderName as string | undefined), (auditExtra.aiEngine as string | undefined));
         if (vowelFreeText) { storedBody = withTradeArticle(storedBody, a.trade); vowelArticleFixed = true; }
       } else {
         /* ⛔ contact_followup — a MANUAL follow-up, so ONE PER LEAD, NO OVERRIDE. It is a ["name"]

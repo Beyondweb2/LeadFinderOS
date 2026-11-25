@@ -32,6 +32,8 @@ export const AUDIT_DERIVED_VARS: ReadonlySet<string> = new Set([
   "trade", "trade_plural", "trade_article", "competitors", "rival_1", "rival_2", "rival_3", "audit_url",
   /* ai_visibility_report_offer's {{4}} (2026-10-14): the quick check's visibility score — only the audit can answer it. */
   "visibility_score",
+  /* ai_engine (2026-11-25, researchTemplates.ts): the hook answer's engine — only the audit can answer it. */
+  "ai_engine",
 ]);
 
 /** The four ways a send resolves its variables. Named for the branch each sender already has. */
@@ -85,6 +87,8 @@ export const BRANCH_SUPPLIES: Record<TemplateBranch, ReadonlySet<string>> = {
     /* ai_visibility_report_offer (2026-10-14): {{1}} the name or "there", {{4}} the score, {{6}} the sending person's own
        message name (_shared/sender-name.ts) — all resolved in the audit branch of both senders. */
     "name_or_there", "visibility_score", "sender_name",
+    /* ai_engine (2026-11-25): the hook answer's engine word, from resolveAuditReplyVars.hookEngine (aiEngineWord). */
+    "ai_engine",
   ]),
   /* go_code (initial_with_link, 2026-11-22): made in the plain branch of both senders by _shared/tracked-link.ts goCodeFor. */
   plain: new Set(["name", "url", "town", "go_code"]),

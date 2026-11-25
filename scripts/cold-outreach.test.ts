@@ -148,9 +148,9 @@ const EXPECTED_CONTINUATIONS = [
   /* Paul, 2026-11-25: the research templates, follow-ups only (src/lib/researchTemplates.ts). */
   "webdev_which_town",
   "webdev_town_ready",
-  "chatgpt_check_question",
-  "chatgpt_named",
-  "chatgpt_not_named",
+  "ai_check_question",
+  "ai_answer_named",
+  "ai_answer_not_named",
 ].sort();
 const actual = [...CONTINUATION_TEMPLATES].sort();
 const added = actual.filter((t) => !EXPECTED_CONTINUATIONS.includes(t));

@@ -331,9 +331,9 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   /* The research templates (2026-11-25, src/lib/researchTemplates.ts). MIRRORS whatsapp-send.ts. ⛔ MANUAL ONLY: this queue refuses them. */
   webdev_which_town: { lang: "en", vars: [] },
   webdev_town_ready: { lang: "en", vars: [] },
-  chatgpt_check_question: { lang: "en", vars: ["trade_plural", "town"] },
-  chatgpt_named: { lang: "en", vars: ["competitors"] },
-  chatgpt_not_named: { lang: "en", vars: [] },
+  ai_check_question: { lang: "en", vars: ["ai_engine", "trade_plural", "town"] },
+  ai_answer_named: { lang: "en", vars: ["competitors"] },
+  ai_answer_not_named: { lang: "en", vars: ["ai_engine"] },
   // Was MISSING while being selectable in the bulk picker, so a lead set to audit_reply silently
   // received booking_page_intro — a barber booking pitch. No lead was ever queued with it, so
   // nothing mis-sent, but the gap was live.

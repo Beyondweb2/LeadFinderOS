@@ -150,15 +150,15 @@ export const CONTINUATION_TEMPLATES: ReadonlySet<string> = new Set([
   /* The research templates (Paul, 2026-11-25, src/lib/researchTemplates.ts) — follow-ups only, never a first touch. */
   "webdev_which_town",
   "webdev_town_ready",
-  "chatgpt_check_question",
-  "chatgpt_named",
-  "chatgpt_not_named",
+  "ai_check_question",
+  "ai_answer_named",
+  "ai_answer_not_named",
 ]);
 
 /** Continuations that must NEVER be a first touch: refused (both senders) for a number with no WhatsApp message yet
  *  (sent or received, failed sends not counted). Paul, 2026-11-15. */
 export const NEEDS_PRIOR_WHATSAPP: ReadonlySet<string> = new Set(["initial_question", "webdev_report", "webdev_hook", "webdev_example", "polite_hook", "polite_hook2", "polite_hook3", "gone_cold",
-  "webdev_which_town", "webdev_town_ready", "chatgpt_check_question", "chatgpt_named", "chatgpt_not_named"]);
+  "webdev_which_town", "webdev_town_ready", "ai_check_question", "ai_answer_named", "ai_answer_not_named"]);
 export const NEEDS_PRIOR_WHATSAPP_REASON = "This template is a follow-up: it only goes to a number we have already messaged on WhatsApp. Nothing was sent. Send an opener first.";
 
 /** Cold-opener rules apply only while the prospect has never written to us (Paul, 2026-11-15, the Eon Graphics bug:

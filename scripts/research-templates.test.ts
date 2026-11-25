@@ -21,9 +21,11 @@ import { MANUAL_ONLY_TEMPLATES } from '../src/lib/goneCold.ts';
 import { planBulkSend } from '../src/lib/inboxBulkSend.ts';
 import { inWindowShape } from '../src/lib/inWindowFreeText.ts';
 import { unresolvedTokens } from '../src/lib/leadUtils.ts';
+import { HOOK_ENGINE_LABELS } from '../src/lib/hookScore.ts';
+import { AUDIT_DERIVED_VARS, BRANCH_SUPPLIES } from '../src/lib/templateRouting.ts';
 import {
-  CHATGPT_CHECK_QUESTION, CHATGPT_NAMED, CHATGPT_NOT_NAMED, OPT_OUT_GOODBYE, RESEARCH_TEMPLATES, RESEARCH_TEMPLATE_APPROVED,
-  SAVED_REPLIES, WAITING_META_REASON, WEBDEV_TOWN_READY, WEBDEV_WHICH_TOWN, audienceRefusal, chatgptClaimRefusal, savedRepliesFor,
+  AI_CHECK_QUESTION, AI_ANSWER_NAMED, AI_ANSWER_NOT_NAMED, OPT_OUT_GOODBYE, RESEARCH_TEMPLATES, RESEARCH_TEMPLATE_APPROVED,
+  AI_ENGINE_WORDS, aiEngineWord, SAVED_REPLIES, WAITING_META_REASON, WEBDEV_TOWN_READY, WEBDEV_WHICH_TOWN, audienceRefusal, aiClaimRefusal, savedRepliesFor,
   webdevQuestionOf, webdevQuestionRefusal, windowOnlyTemplate,
 } from '../src/lib/researchTemplates.ts';
 
@@ -32,17 +34,18 @@ const read = (p: string) => fs.readFileSync(path.join(ROOT, p), 'utf8').replace(
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
 
+const swm0 = read('supabase/functions/send-whatsapp-message/index.ts');
 console.log('── the wording, byte for byte ──');
 const EXPECT: Record<string, string> = {
   [WEBDEV_WHICH_TOWN]: "Great.. I'm Paul. I built a tool that finds local businesses with weak sites. Which town do you want clients in?",
-  [WEBDEV_TOWN_READY]: 'Here it is, your town is ready, free 7 days: leadfinderos.com/?ref=wa',
-  [CHATGPT_CHECK_QUESTION]: "I'm Paul. I checked who ChatGPT suggests for 'plumbers in Leeds' today. Want to see what it said?",
-  [CHATGPT_NAMED]: "It named Acme Plumbing and Leeds Pipes. You weren't in this answer. Answers change each time, but there are things that make you show up more often. Want a short voice note?",
-  [CHATGPT_NOT_NAMED]: "You weren't in ChatGPT's answer. Answers change each time, but there are things that make you show up more often. Want a short voice note?",
+  [WEBDEV_TOWN_READY]: 'Here it is, your town is ready, free 7 days: leadfinderos.com/?ref=wa-town',
+  [AI_CHECK_QUESTION]: "I'm Paul. I checked who Gemini suggests for 'plumbers in Leeds' today. Want to see what it said?",
+  [AI_ANSWER_NAMED]: "It named Acme Plumbing and Leeds Pipes. You weren't in this answer. Answers change each time, but there are things that make you show up more often. Want a short voice note?",
+  [AI_ANSWER_NOT_NAMED]: "You weren't in Gemini's answer. Answers change each time, but there are things that make you show up more often. Want a short voice note?",
 };
 for (const t of RESEARCH_TEMPLATES) {
   const want = EXPECT[t];
-  const args = ['Biz', '', 'plumber', 'Acme Plumbing and Leeds Pipes', '', 'Leeds'] as const;
+  const args = ['Biz', '', 'plumber', 'Acme Plumbing and Leeds Pipes', '', 'Leeds', undefined, undefined, undefined, undefined, 'Gemini'] as const;
   ok(WA_TEMPLATE_BODIES[t]?.(...args) === want, `${t}: sender body table`);
   ok(READABLE_TEMPLATE_BODIES[t]?.(...args) === want, `${t}: Inbox body table`);
   ok(!!WHATSAPP_TEMPLATES.find((x) => x.value === t), `${t}: in the one sendable list`);
@@ -53,9 +56,17 @@ for (const t of RESEARCH_TEMPLATES) {
   ok(!templateAwaitingApproval(t), `${t}: not blocked at the payload door (so it can go as free text inside the window)`);
   ok(RESEARCH_TEMPLATE_APPROVED[t] === false && windowOnlyTemplate(t), `${t}: not approved at Meta → window only`);
 }
-ok(JSON.stringify(WA_TEMPLATES[CHATGPT_CHECK_QUESTION].vars) === '["trade_plural","town"]', 'chatgpt_check_question: {{1}} trade plural, {{2}} town');
-ok(JSON.stringify(WA_TEMPLATES[CHATGPT_NAMED].vars) === '["competitors"]', 'chatgpt_named: {{1}} the joined names');
-for (const t of [WEBDEV_WHICH_TOWN, WEBDEV_TOWN_READY, CHATGPT_NOT_NAMED]) ok(WA_TEMPLATES[t].vars.length === 0, `${t}: no variables`);
+ok(JSON.stringify(WA_TEMPLATES[AI_CHECK_QUESTION].vars) === '["ai_engine","trade_plural","town"]', 'ai_check_question: {{1}} the AI, {{2}} trade plural, {{3}} town');
+ok(JSON.stringify(WA_TEMPLATES[AI_ANSWER_NOT_NAMED].vars) === '["ai_engine"]', 'ai_answer_not_named: {{1}} the AI');
+ok(JSON.stringify(AI_ENGINE_WORDS) === JSON.stringify(HOOK_ENGINE_LABELS), 'the engine words are the hook engines, exactly (ChatGPT, Gemini)');
+ok(aiEngineWord('chatgpt') === 'ChatGPT' && aiEngineWord('gemini') === 'Gemini' && aiEngineWord('ai_overview') === null && aiEngineWord(null) === null, 'only a real hook engine is named; the overview / nothing → none');
+ok(READABLE_TEMPLATE_BODIES[AI_CHECK_QUESTION]('B', '', 'plumber', '', '', 'Leeds').includes('{{engine}}') && unresolvedTokens(READABLE_TEMPLATE_BODIES[AI_ANSWER_NOT_NAMED]('B', '')).length === 1, 'a mirror without the engine shows a marker the Inbox will never send');
+ok(BRANCH_SUPPLIES.audit.has('ai_engine') && AUDIT_DERIVED_VARS.has('ai_engine'), 'the audit branch supplies ai_engine');
+ok(/if \(tvars\.includes\("ai_engine"\)\) auditExtra\.aiEngine = aiEngineWord\(a\.hookEngine\) \?\? "";/.test(swm0), 'the sender fills it from the audit hook engine');
+ok(/case "ai_engine": \{/.test(read('supabase/functions/_shared/whatsapp-send.ts')), 'the payload refuses anything but a real engine word');
+for (const t of ['chatgpt_check_question', 'chatgpt_named', 'chatgpt_not_named']) ok(!WA_TEMPLATES[t] && !WHATSAPP_TEMPLATES.find((x) => x.value === t), `${t}: the old name is gone (never registered or sent)`);
+ok(JSON.stringify(WA_TEMPLATES[AI_ANSWER_NAMED].vars) === '["competitors"]', 'ai_answer_named: {{1}} the joined names');
+for (const t of [WEBDEV_WHICH_TOWN, WEBDEV_TOWN_READY]) ok(WA_TEMPLATES[t].vars.length === 0, `${t}: no variables`);
 ok(!windowOnlyTemplate('initial_question') && !windowOnlyTemplate('polite_hook') && !windowOnlyTemplate(null), 'other templates are not window-only');
 ok(!!WA_TEMPLATES.initial_question && !!WHATSAPP_TEMPLATES.find((x) => x.value === 'initial_question'), 'nothing old removed: initial_question still there');
 
@@ -85,10 +96,10 @@ for (const t of RESEARCH_TEMPLATES) ok(!queueFn.includes(`'${t}'`), `${t}: in no
 console.log('── audience ──');
 ok(audienceRefusal(WEBDEV_WHICH_TOWN, 'findable') !== null && audienceRefusal(WEBDEV_WHICH_TOWN, null) !== null, 'web-dev wording refused for a Findable / no campaign lead');
 ok(audienceRefusal(WEBDEV_WHICH_TOWN, 'leadfinderos') === null && audienceRefusal(WEBDEV_TOWN_READY, 'leadfinderos') === null, 'web-dev wording allowed for a LeadFinderOS-style lead');
-ok(audienceRefusal(CHATGPT_NAMED, 'leadfinderos') !== null && audienceRefusal(CHATGPT_NAMED, 'findable') === null && audienceRefusal(CHATGPT_NAMED, null) === null, 'ChatGPT wording never to a web dev');
+ok(audienceRefusal(AI_ANSWER_NAMED, 'leadfinderos') !== null && audienceRefusal(AI_ANSWER_NAMED, 'findable') === null && audienceRefusal(AI_ANSWER_NAMED, null) === null, 'AI-answer wording never to a web dev');
 const pick = (t: string, campaign: { report_style?: string | null; webdev_question?: string | null } | null) =>
   getTemplateSendability(t, { shareToken: null }, { oneLead: true, campaign, reportSlug: 'a1' }).ok;
-ok(!pick(WEBDEV_WHICH_TOWN, null) && pick(CHATGPT_NOT_NAMED, null), 'one-lead picker: a lead with no campaign is a local business');
+ok(!pick(WEBDEV_WHICH_TOWN, null) && pick(AI_ANSWER_NOT_NAMED, null), 'one-lead picker: a lead with no campaign is a local business');
 ok(/LFOS_ONLY_TEMPLATES\.has\(templateName\) \|\| FINDABLE_ONLY_TEMPLATES\.has\(templateName\)/.test(swm) && /audienceRefusal\(templateName, rtStyle\)/.test(swm), 'the sender checks the audience too');
 ok(/rtLeadErr\) return json\(\{ ok: false, error: "campaign_unreadable"/.test(swm) && /rtCampErr\) return json\(\{ ok: false, error: "campaign_unreadable"/.test(swm), 'an unreadable campaign refuses');
 
@@ -111,16 +122,17 @@ ok(/campaign_set_webdev_question/.test(read('src/components/campaigns/CampaignEd
 console.log('── the ChatGPT evidence gate ──');
 const now = Date.parse('2026-11-25T12:00:00Z');
 const fresh = now - 2 * 3600_000;
-ok(chatgptClaimRefusal(CHATGPT_CHECK_QUESTION, { hookEngine: 'chatgpt', rivalCount: 3, auditDoneAt: fresh, now }) === null, 'ChatGPT hook, today → allowed');
-ok(chatgptClaimRefusal(CHATGPT_CHECK_QUESTION, { hookEngine: 'gemini', rivalCount: 3, auditDoneAt: fresh, now }) !== null, 'a Google AI hook → refused (the message says ChatGPT)');
-ok(chatgptClaimRefusal(CHATGPT_NOT_NAMED, { hookEngine: null, rivalCount: 0, auditDoneAt: fresh, now }) !== null, 'no hook engine → refused');
-ok(chatgptClaimRefusal(CHATGPT_CHECK_QUESTION, { hookEngine: 'chatgpt', rivalCount: 3, auditDoneAt: now - 25 * 3600_000, now }) !== null, '"today" but the audit is over a day old → refused');
-ok(chatgptClaimRefusal(CHATGPT_CHECK_QUESTION, { hookEngine: 'chatgpt', rivalCount: 3, auditDoneAt: null, now }) !== null, 'unreadable audit time → refused');
-ok(chatgptClaimRefusal(CHATGPT_NAMED, { hookEngine: 'chatgpt', rivalCount: 1, auditDoneAt: null, now }) !== null, 'fewer than two names → the named one is refused');
-ok(chatgptClaimRefusal(CHATGPT_NOT_NAMED, { hookEngine: 'chatgpt', rivalCount: 0, auditDoneAt: null, now }) === null, 'the no-names one needs no names (and no "today")');
-ok(chatgptClaimRefusal(WEBDEV_WHICH_TOWN, { hookEngine: null, rivalCount: 0, auditDoneAt: null }) === null, 'the gate is for the ChatGPT wording only');
-ok(/chatgptClaimRefusal\(templateName, \{ hookEngine: rt\.hookEngine, rivalCount: rt\.rivals\.length, auditDoneAt: doneAt \}\)/.test(swm), 'the sender reads the lead’s own audit for the gate');
-ok(swm.indexOf('chatgpt_claim_unsupported') < swm.indexOf('const shape = inWindowShape('), 'the gate runs before the payload / dry run');
+ok(aiClaimRefusal(AI_CHECK_QUESTION, { hookEngine: 'chatgpt', rivalCount: 3, auditDoneAt: fresh, now }) === null, 'ChatGPT hook, today → allowed');
+ok(aiClaimRefusal(AI_CHECK_QUESTION, { hookEngine: 'gemini', rivalCount: 3, auditDoneAt: fresh, now }) === null, 'a Gemini hook, today → allowed (the message says Gemini)');
+ok(aiClaimRefusal(AI_CHECK_QUESTION, { hookEngine: 'ai_overview', rivalCount: 3, auditDoneAt: fresh, now }) !== null, 'not a hook engine → refused');
+ok(aiClaimRefusal(AI_ANSWER_NOT_NAMED, { hookEngine: null, rivalCount: 0, auditDoneAt: fresh, now }) !== null, 'no hook engine → refused');
+ok(aiClaimRefusal(AI_CHECK_QUESTION, { hookEngine: 'chatgpt', rivalCount: 3, auditDoneAt: now - 25 * 3600_000, now }) !== null, '"today" but the audit is over a day old → refused');
+ok(aiClaimRefusal(AI_CHECK_QUESTION, { hookEngine: 'chatgpt', rivalCount: 3, auditDoneAt: null, now }) !== null, 'unreadable audit time → refused');
+ok(aiClaimRefusal(AI_ANSWER_NAMED, { hookEngine: 'chatgpt', rivalCount: 1, auditDoneAt: null, now }) !== null, 'fewer than two names → the named one is refused');
+ok(aiClaimRefusal(AI_ANSWER_NOT_NAMED, { hookEngine: 'chatgpt', rivalCount: 0, auditDoneAt: null, now }) === null, 'the no-names one needs no names (and no "today")');
+ok(aiClaimRefusal(WEBDEV_WHICH_TOWN, { hookEngine: null, rivalCount: 0, auditDoneAt: null }) === null, 'the gate is for the ChatGPT wording only');
+ok(/aiClaimRefusal\(templateName, \{ hookEngine: rt\.hookEngine, rivalCount: rt\.rivals\.length, auditDoneAt: doneAt \}\)/.test(swm), 'the sender reads the lead’s own audit for the gate');
+ok(swm.indexOf('ai_claim_unsupported') < swm.indexOf('const shape = inWindowShape('), 'the gate runs before the payload / dry run');
 
 console.log('── saved replies ──');
 ok(OPT_OUT_GOODBYE === "No problem at all, I won't message again.", 'the opt-out goodbye, exactly');

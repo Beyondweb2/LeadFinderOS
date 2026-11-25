@@ -578,11 +578,11 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
   /* gone_cold (Paul, 2026-11-21) — to a lead we messaged who has not replied. Manual, one lead at a time (src/lib/goneCold.ts). */
   { value: 'gone_cold', label: 'Gone cold — "Hey, did you get my last message?"' },
   /* The research templates (Paul, 2026-11-25, src/lib/researchTemplates.ts). Not approved at Meta yet: inside the 24 hours only. */
-  { value: 'webdev_which_town', label: 'Web dev: which town? — "Great.. I’m Paul. I built a tool…" (24h only until Meta approves)' },
-  { value: 'webdev_town_ready', label: 'Web dev: town ready — "Here it is, your town is ready, free 7 days" (24h only until Meta approves)' },
-  { value: 'chatgpt_check_question', label: 'ChatGPT check — "I checked who ChatGPT suggests…" (24h only until Meta approves)' },
-  { value: 'chatgpt_named', label: 'ChatGPT answer, with names — "It named … You weren’t in this answer" (24h only until Meta approves)' },
-  { value: 'chatgpt_not_named', label: 'ChatGPT answer, no names — "You weren’t in ChatGPT’s answer" (24h only until Meta approves)' },
+  { value: 'webdev_which_town', label: 'Web dev: which town? — "Great.. I’m Paul. I built a tool…" (inside 24h only)' },
+  { value: 'webdev_town_ready', label: 'Web dev: town ready — "Here it is, your town is ready, free 7 days" (inside 24h only)' },
+  { value: 'ai_check_question', label: 'AI check — "I checked who ChatGPT/Gemini suggests…" (inside 24h only)' },
+  { value: 'ai_answer_named', label: 'AI answer, with names — "It named … You weren’t in this answer" (inside 24h only)' },
+  { value: 'ai_answer_not_named', label: 'AI answer, no names — "You weren’t in ChatGPT/Gemini’s answer" (inside 24h only)' },
   { value: 'audit_reply', label: 'Audit reply (report + competitors)' },
   /* 🔴 THE LABEL SAID "Audit result hook (outreach)" AND THAT IS THE NAME OF THE TEMPLATE THIS ONE
      REPLACED. `audit_result_hook` was retired on 2026-09-12; `video_template` is its successor,

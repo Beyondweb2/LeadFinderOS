@@ -116,9 +116,9 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
   /* The research templates (2026-11-25, researchTemplates.ts). The ChatGPT ones need the lead's audit; the sender checks the rest. */
   webdev_which_town:      { needsUrl: false, needsAudit: false, group: 'followup' },
   webdev_town_ready:      { needsUrl: false, needsAudit: false, group: 'followup' },
-  chatgpt_check_question: { needsUrl: false, needsAudit: true,  group: 'followup' },
-  chatgpt_named:          { needsUrl: false, needsAudit: true,  group: 'followup' },
-  chatgpt_not_named:      { needsUrl: false, needsAudit: true,  group: 'followup' },
+  ai_check_question: { needsUrl: false, needsAudit: true,  group: 'followup' },
+  ai_answer_named:          { needsUrl: false, needsAudit: true,  group: 'followup' },
+  ai_answer_not_named:      { needsUrl: false, needsAudit: true,  group: 'followup' },
   // audit_reply is not yet wired into the manual send path; its rule lives here so the guard is
   // ready the moment it's added to the picker + sender (no drift when that happens).
   audit_reply:            { needsUrl: false, needsAudit: true,  group: 'audit' },

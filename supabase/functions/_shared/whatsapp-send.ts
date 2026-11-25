@@ -10,7 +10,7 @@ import { displayBusinessName, nameStyleFor } from "../../../src/lib/displayName.
 import { AI_SITE_FINDINGS_V2, AI_SITE_FINDINGS_V2_APPROVED } from "../../../src/lib/siteFindings.ts";
 import { STALE_OFFER_TEMPLATES } from "../../../src/lib/findableOffer.ts";
 import { GONE_COLD_APPROVED, GONE_COLD_TEMPLATE, goneColdBody } from "../../../src/lib/goneCold.ts";
-import { chatgptCheckQuestionBody, chatgptNamedBody, chatgptNotNamedBody, webdevTownReadyBody, webdevWhichTownBody } from "../../../src/lib/researchTemplates.ts";
+import { AI_ENGINE_WORDS, aiCheckQuestionBody, aiAnswerNamedBody, aiAnswerNotNamedBody, webdevTownReadyBody, webdevWhichTownBody } from "../../../src/lib/researchTemplates.ts";
 import { isOnboardingFormUrl, isSignupTemplateLinkUrl, onboardingTemplateBody, signupLinkTemplateBody } from "../../../src/lib/whatsappLinkTemplates.ts";
 import { isWelcomePackUrl, WELCOME_PACK_TEMPLATE_BODY } from "../../../src/lib/welcomePackWhatsApp.ts";
 
@@ -67,7 +67,9 @@ export type TemplateVar = "name" | "url" | "trade" | "trade_plural" | "trade_art
   | "needed_item"
   /* 2026-11-22 — initial_with_link (src/lib/initialWithLink.ts): {{1}} the per-lead tracking code in https://leadfinderos.com/go/{{1}},
      made at send time by _shared/tracked-link.ts goCodeFor. */
-  | "go_code";
+  | "go_code"
+  /* ai_engine (2026-11-25, src/lib/researchTemplates.ts): the AI the lead's audit checked and found them missing from. */
+  | "ai_engine";
 
 /* ⛔ THE VIDEO HEADER'S URL, IN ONE PLACE (Paul, 2026-09-12).
    `video_template` is registered at Meta with a VIDEO header, which means the send MUST carry a
@@ -150,13 +152,13 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
   gone_cold: { lang: "en", vars: [] },
   /* The research templates — Paul, 2026-11-25 (src/lib/researchTemplates.ts). English, Marketing. NOT YET APPROVED AT META: free text
      inside the 24 hours only (windowOnlyTemplate); manual only. MIRRORS the queue, which refuses them.
-     webdev_which_town / webdev_town_ready: ZERO variables. chatgpt_check_question: {{1}} trade plural, {{2}} town (the audit).
-     chatgpt_named: {{1}} the names ChatGPT gave, joined (the audit's hook answer). chatgpt_not_named: ZERO variables. */
+     webdev_which_town / webdev_town_ready: ZERO variables. ai_check_question: {{1}} the AI (ChatGPT / Gemini), {{2}} trade plural,
+     {{3}} town (the audit). ai_answer_named: {{1}} the names that answer gave, joined. ai_answer_not_named: {{1}} the AI. */
   webdev_which_town: { lang: "en", vars: [] },
   webdev_town_ready: { lang: "en", vars: [] },
-  chatgpt_check_question: { lang: "en", vars: ["trade_plural", "town"] },
-  chatgpt_named: { lang: "en", vars: ["competitors"] },
-  chatgpt_not_named: { lang: "en", vars: [] },
+  ai_check_question: { lang: "en", vars: ["ai_engine", "trade_plural", "town"] },
+  ai_answer_named: { lang: "en", vars: ["competitors"] },
+  ai_answer_not_named: { lang: "en", vars: ["ai_engine"] },
   // Reply-to-a-reply: 4 vars — {{1}} trade, {{2}} competitors, {{3}} business name, {{4}} report link.
   // Vars resolved server-side per-lead from the lead's own completed audit (see resolveAuditReplyVars).
   audit_reply: { lang: "en", vars: ["trade", "competitors", "name", "url"] },
@@ -835,7 +837,7 @@ const auditReplyWarmBody = (_b: string, u: string, trade?: string, _c?: string, 
 Here's your result: ${u}
 More on how we can fix it, and how to get started: https://findable.live`;
 
-export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string, siteFault?: string, siteFindings?: string, visibilityScore?: string, senderName?: string) => string> = {
+export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string, siteFault?: string, siteFindings?: string, visibilityScore?: string, senderName?: string, aiEngine?: string) => string> = {
   book_call: bookCallBody,
   re_engage: reEngageBody,
   re_engage_49: reEngage49Body,
@@ -880,9 +882,9 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   gone_cold: () => goneColdBody(),
   webdev_which_town: () => webdevWhichTownBody(),
   webdev_town_ready: () => webdevTownReadyBody(),
-  chatgpt_check_question: (_b, _u, trade, _c, _f, town) => { const t = pluraliseTrade(trade); return chatgptCheckQuestionBody(t.ok ? t.value : (trade ?? ""), town ?? ""); },
-  chatgpt_named: (_b, _u, _t, competitors) => chatgptNamedBody(competitors ?? ""),
-  chatgpt_not_named: () => chatgptNotNamedBody(),
+  ai_check_question: (_b, _u, trade, _c, _f, town, _sf, _sx, _vs, _sn, aiEngine) => { const t = pluraliseTrade(trade); return aiCheckQuestionBody(aiEngine, t.ok ? t.value : (trade ?? ""), town ?? ""); },
+  ai_answer_named: (_b, _u, _t, competitors) => aiAnswerNamedBody(competitors ?? ""),
+  ai_answer_not_named: (_b, _u, _t, _c, _f, _town, _sf, _sx, _vs, _sn, aiEngine) => aiAnswerNotNamedBody(aiEngine),
   audit_reply: auditReplyBody,
   video_template: videoTemplateBody,
   competitor_hook: competitorHookBody,
@@ -907,7 +909,7 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
 
 /** Render the display copy of a template body with its variables filled. `trade`/`competitors`
  *  are used only by audit_reply; the other (2-var) bodies ignore them. */
-export function renderTemplateBody(templateName: string, businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string, siteFault?: string, siteFindings?: string, visibilityScore?: string, senderName?: string): string {
+export function renderTemplateBody(templateName: string, businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string, siteFault?: string, siteFindings?: string, visibilityScore?: string, senderName?: string, aiEngine?: string): string {
   const fn = WA_TEMPLATE_BODIES[templateName];
   if (templateName === "audit_followup_fault" && !siteFault?.trim()) {
     throw new Error("unsafe_template_var:no_site_fault:the crawl check found no fault to name — use the call version");
@@ -936,7 +938,7 @@ export function renderTemplateBody(templateName: string, businessName: string, c
      single slot fed ai_site_findings_v2's findings to audit_followup_fault's body, because "whichever
      value is defined" is not the same question as "which variable does THIS template declare". Each
      body now reads its own argument and ignores the other, which is the property that cannot drift. */
-  return fn ? fn(businessName, claimUrl, trade, competitors, contactFirstName, town, siteFault?.trim(), siteFindings?.trim(), visibilityScore?.trim(), senderName?.trim()) : `[${templateName}]`;
+  return fn ? fn(businessName, claimUrl, trade, competitors, contactFirstName, town, siteFault?.trim(), siteFindings?.trim(), visibilityScore?.trim(), senderName?.trim(), aiEngine?.trim()) : `[${templateName}]`;
 }
 
 /** Body params for a template, filled STRICTLY in the template's declared `vars`
@@ -948,7 +950,7 @@ export function templateBodyParams(
   vars: TemplateVar[],
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; templateName?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string; neededItem?: string; welcomePackUrl?: string; goCode?: string; freeTextOnly?: boolean },
+  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; templateName?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string; neededItem?: string; welcomePackUrl?: string; goCode?: string; aiEngine?: string; freeTextOnly?: boolean },
 ) {
   /* Last line of defence for a template whose copy needs a real name. Callers check first and
      return a readable refusal; this throws so a new caller that forgets cannot quietly send
@@ -1128,6 +1130,12 @@ export function templateBodyParams(
       }
       /* needs_from_you {{2}}: what the client still has to send. Blank or over-long refuses (Meta rejects an empty
          parameter, and a vague "something" is not a request); the unsafe_template_var: prefix makes it a visible hold. */
+      /* ai_engine: only an engine a hook audit really asks (aiEngineWord); anything else refuses, never a guess. */
+      case "ai_engine": {
+        const e = String(extra?.aiEngine ?? "").trim();
+        if (!Object.values(AI_ENGINE_WORDS).includes(e)) throw new Error("unsafe_template_var:no_ai_engine:the audit has no ChatGPT or Gemini answer to name");
+        return e;
+      }
       case "go_code": {
         const c = (extra?.goCode ?? "").trim();
         if (!/^[a-z0-9]{8}$/.test(c)) throw new Error("unsafe_template_var:no_tracking_code:the tracking link could not be made");
@@ -1221,7 +1229,7 @@ export function claimTemplatePayload(
   lang: string,
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string; neededItem?: string; welcomePackUrl?: string; goCode?: string; freeTextOnly?: boolean },
+  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string; neededItem?: string; welcomePackUrl?: string; goCode?: string; aiEngine?: string; freeTextOnly?: boolean },
 ) {
   /* THROWS on an unrecognised template rather than assuming ["name","url"].
      That assumption was a quieter version of the queue's template fallback: an unregistered name got
