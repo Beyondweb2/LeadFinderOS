@@ -25,6 +25,15 @@ findings (`siteScoreTierOf`, `siteScoreTitleOf`, `siteScoreMainNote`; no V2 code
   live leads: Little to gain 551 → 217, Some gains 431 → 819, Big gains 304 → 250. Moves: 334 Little → Some, 56 Big → Some,
   2 Some → Big. What holds the Little → Some moves: business details missing from the page code 194 (86 on its own),
   repeated titles 108, homepage heading/description 118, thin key pages 44, hidden pages 32.
+- **Shipped 2026-11-26** (Paul: "ship as is", shared titles moderate as V2). Merge `03a3c38d`; edge by hand, one at a time:
+  `crawl-check` v71, `crawl-worker` v54 (`whatsapp-status` untouched, v138 from 30 Sep). Live SPA chunks hold
+  `site-score-main-note` and the What's New entry. Backup first: every row's site_score* columns (1,894, all v4) in
+  `C:/Users/paulj/LeadFinderOS-backups/site-score-v4-before-v5-2026-11-26.json` (outside the repo). Then
+  `scripts/site-score-backfill.ts --cli --write` from stored crawls only: 1,894 of 1,894 written at v5 (read back: all v5).
+  Live leads: 217 Little to gain, 819 Some gains, 250 Big gains (1,066 held by a cap), median 66 — the same as the dry run.
+  Live check (read-only, the stored row through the pill's own code): BS4 Electrical 99 Little to gain, "Small fix: thin
+  pages". It showed "Small fix: fAQs…" for Larkes Roofs; fixed the same day (an all-caps first word keeps its capitals).
+  Nobody has SEEN the pill signed in: the browser pane was not signed in, and Claude does not sign in.
 
 ## v3 (2026-10-30, feat/site-score-column) — superseded: v2's weights + the severity cap
 

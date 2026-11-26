@@ -530,7 +530,9 @@ export function siteScoreMainNote(v: SiteScoreView): string | null {
   if (v.kind !== 'scored') return null;
   const first = v.reasons.find((r) => r.kind === 'down');
   if (!first) return null;
-  return v.band === 'little' ? `Small fix: ${first.text.charAt(0).toLowerCase()}${first.text.slice(1)}` : first.text;
+  /* lower-case the first letter only for an ordinary word: "FAQs", "HTTPS", "H1" keep their capitals */
+  const soft = /^[A-Z][a-z]/.test(first.text) ? `${first.text.charAt(0).toLowerCase()}${first.text.slice(1)}` : first.text;
+  return v.band === 'little' ? `Small fix: ${soft}` : first.text;
 }
 
 /** The filter / sort key every list uses: a band, or the state. One function, so the pill, the filter and the sort agree. */

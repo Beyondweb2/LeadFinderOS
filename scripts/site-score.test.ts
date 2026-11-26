@@ -195,6 +195,9 @@ ok(read('src/components/SiteScoreBadge.tsx').includes('siteScoreMainNote(view)')
 ok(siteScoreTierOf({ id: 'no_https', severity: 'high' }, 30) === 'critical' && siteScoreTierOf({ id: 'one_page_site', severity: 'medium' }, 1) === 'critical', 'no HTTPS (high) and a one-page site are critical');
 const green = siteScoreFromSummary(summary({ issues: [issue('no_reviews', 'medium'), issue('ct_generic_copy', 'medium')] }), SITE);
 ok(siteScoreBand(green.score!) === 'little' && green.evidence?.cap === null, 'no major and no critical problem → can be green');
+const noteOf = (text: string) => siteScoreMainNote(siteScoreViewFor('https://a.co.uk', stored({ site_score: 95, site_score_state: 'scored', site_score_version: 5, site_score_reasons: [{ kind: 'down', text }] } as never)));
+ok(noteOf('FAQs on the site have no FAQ markup') === 'Small fix: FAQs on the site have no FAQ markup' && noteOf('Thin pages') === 'Small fix: thin pages',
+  '"Small fix" keeps the capitals of FAQs / HTTPS, lower-cases an ordinary first word');
 const sv = (reason: string) => siteScoreViewFor('https://a.co.uk', stored({ site_score_state: 'unreachable', site_score_version: 4, site_score_reasons: [{ kind: 'down', text: reason }] } as never));
 const blocked = sv('The website refused our check (an error or a bot-check page). That says nothing about whether AI tools can read it.');
 ok(blocked.kind === 'state' && blocked.state === 'unreachable' && SITE_SCORE_STATE_LABELS.unreachable === 'We couldn’t scan this one' && blocked.reason === NO_SCAN_LINE,
