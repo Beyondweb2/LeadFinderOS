@@ -103,7 +103,7 @@ console.log('\n── 5. the per-country auto switch-off: the trigger plumbing �
   ok(MIG.includes("select public.country_whatsapp_auto_pause('MY');") && MIG.includes("select public.country_whatsapp_auto_pause('SG');"), 'applied once to what already happened');
   const ui = read('src/components/CountrySendingSettings.tsx');
   ok(/country-auto-off-/.test(ui) && /whatsapp_auto_pause_reason/.test(ui), 'the banner says why, in the stored words');
-  ok(read('src/lib/whatsappPace.ts').includes('AUTO_PAUSE_MIN_ATTEMPTS = 8'), 'the existing queue auto-pause (UK) is unchanged');
+  ok(read('src/lib/queuePauseRules.ts').includes('export function queuePauseVerdict('), 'the queue (UK) auto-pause lives in queuePauseRules.ts (2026-11-26)');
 }
 
 console.log('\n── 6. Malaysia / Singapore are never retried automatically ──');

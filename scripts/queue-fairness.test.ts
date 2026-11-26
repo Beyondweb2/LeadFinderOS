@@ -96,7 +96,8 @@ console.log('\n── the wiring ──');
 const fn = read('supabase/functions/process-whatsapp-queue/index.ts');
 ok(/const candidates = \(?fairQueueOrder\(scanned, lastQueueSendBySender[,)][\s\S]{0,300}\.slice\(0, QUEUE_LOOKAHEAD\)/.test(fn) && !/interleaveByCampaign\(scanned\)/.test(fn), 'the tick picks from the per-sender fair order');
 ok(fn.indexOf('fairQueueOrder(scanned') > fn.indexOf('if (allCapsUsed && !qaDrill) return json') && fn.indexOf('fairQueueOrder(scanned') > fn.indexOf('skipped: "not_due"'), 'cap, pacing and every gate still run first (it changes who, never how many)');
-ok(/stuckDedupeKey\(/.test(fn) && /raiseOperatorAlert\(service, "team_update"/.test(fn), 'stuck: one bell row + one email per episode (raiseOperatorAlert dedupe)');
+{ const st = fn.slice(fn.indexOf('async function alertStuckSenders('), fn.indexOf('async function personName('));
+  ok(/bellOnly\(service, \{/.test(st) && /dedupeKey: stuckBellKey\(k\)/.test(st) && !/raiseOperatorAlert\(/.test(st), 'stuck: a bell only, once per sender per day, never an email (2026-11-26)'); }
 ok(/mode === "my_queue"/.test(fn) && /mode === "my_queue"\) salesActor|"my_queue"/.test(fn), 'my_queue is readable by a salesperson (their own line)');
 
 console.log('\n── the queue: "an <trade>" inside the 24 hours, the hold outside ──');

@@ -74,7 +74,7 @@ console.log('4. the default opener');
 
 console.log('kept exactly as they were');
 {
-  ok(fn.includes('failureRunVerdict(') && fn.includes('autoPauseVerdict('), 'the 5-failures self-pause is still asked');
+  ok(fn.includes('queuePauseVerdict('), 'the self-pause is still asked (queuePauseRules.ts since 2026-11-26)');
 }
 
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1); }
