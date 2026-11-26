@@ -24,6 +24,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-26-queue-pauses-only-for-danger', date: '2026-11-26', title: 'WhatsApp queue pauses only for real danger, and starts again by itself where safe', audience: 'admin',
+    body: 'The queue no longer pauses because some leads are not on WhatsApp or because Meta asked us to slow down. Those leads are marked and skipped; temporary errors wait and retry. It pauses only when Meta says something about our account (login, billing, restricted, spam limit), when WhatsApp refuses 8 cold messages in a row, or when the quality rating really drops. Emails come only for a real pause, at most once a day per problem, saying why and the one thing to do.',
+    report: {
+      added: ['The queue starts again by itself after a login problem, a refusal run, a spam limit or a quality drop, once Meta’s reading of the number is clean (at most once a day).', 'A temporary error (timeout, rate limit, Meta down) makes the queue wait 5, 10, 20, 40, then 60 minutes.', 'An email when Meta’s tripwire stops cold WhatsApp, and the stop clears itself when the number is clean again.'],
+      changed: ['A lead Meta names (not on WhatsApp, blocked us, stopped marketing) is marked WhatsApp failed and skipped; it never counts towards a pause.', 'An account problem (expired token, billing) no longer uses up the lead’s attempts.', '“Messages are not moving” is a bell only, once per person per day, never an email.', 'The quality rating flipping GREEN ↔ RED never pauses; only a drop after a full day at the higher rating does.'],
+      removed: ['The “half the messages failed in an hour” auto-pause.', 'Hourly repeat emails for the safety limit (now once a day).'],
+      effect: 'Sending keeps going through bad numbers and Meta hiccups. You hear from it only when the number or account is really in trouble, with what to do.',
+    } },
   { id: '2026-11-26-website-score-four-levels', date: '2026-11-26', title: 'Website score: four levels, Little to gain only with small fixes left', audience: 'all',
     body: 'The website score now weighs each problem by how much it hurts being found: critical, serious, moderate or minor. A site shows Little to gain only when nothing but minor problems are left, and its note then reads “Small fix: …”. Missing business details in the page code is moderate on its own and serious only when the page has no contact details either. Every stored score was re-worked from the crawl already saved (no new crawls).',
     report: {

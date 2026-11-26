@@ -45,9 +45,10 @@ import { effectiveFirstReplyMode } from "../../../src/lib/firstReplyAutomation.t
 import { WAITING_PITCH_EXPIRED_REASON, WAITING_PITCH_STATUSES, isWaitingPitchExpired, waitingPitchCutoffIso } from "../../../src/lib/auditPitchRule.ts";
 import { SETTLED_TOWN_NOTES } from "../_shared/place-details.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
-import { AUTO_PAUSE_WINDOW_MIN, FAILED_SEND_STATUSES, FAILURE_RUN_LOOKBACK_HOURS, autoPauseVerdict, checkPaceValue, effectivePace, failureRunVerdict, strikeSinceAfterRuns, type EffectivePace } from "../../../src/lib/whatsappPace.ts";
+import { checkPaceValue, effectivePace, strikeSinceAfterRuns, type EffectivePace } from "../../../src/lib/whatsappPace.ts";
+import { PAUSE_LOOKBACK_HOURS, autoResumeAt, autoResumeVerdict, failureKind, pauseAlert, pauseNote, queuePauseVerdict, stuckBellKey, temporaryBackoffMinutes, temporaryInARow } from "../../../src/lib/queuePauseRules.ts";
 import { COLD_MIN_GAP_MIN } from "../../../src/lib/whatsappQualityCap.ts";
-import { healthVerdict, tierLimit, type StoredHealth } from "../../../src/lib/whatsappNumberHealth.ts";
+import { healthVerdict, numberLimited, tierLimit, type StoredHealth } from "../../../src/lib/whatsappNumberHealth.ts";
 import { STRONG_STATUSES, postgrestList } from "../../../src/lib/strongStatuses.ts";
 import { qaSendVerdict } from "../../../src/lib/qaSafety.ts";
 import { loadQaExclusions, qaSendHold } from "../_shared/qa-guard.ts";
@@ -55,15 +56,16 @@ import { formatVisibilityScore, REPORT_OFFER_REFUSAL_WORDS, REPORT_OFFER_TEMPLAT
 import { prospectOnlyTemplateRefusal } from "../../../src/lib/prospectOnly.ts";
 import { senderMessageName } from "../_shared/sender-name.ts";
 import {
-  fairQueueOrder, hhmmLondon, NO_SENDER_KEY, senderKeyOf, senderNextSendAt, senderQueueLine, sendersRepresented, stuckDedupeKey,
+  fairQueueOrder, hhmmLondon, NO_SENDER_KEY, senderKeyOf, senderNextSendAt, senderQueueLine, sendersRepresented,
   stuckReasonWords, stuckSince, type SenderLead,
 } from "../_shared/queue-fairness.ts";
 import { raiseOperatorAlert } from "../_shared/audit-alerts.ts";
+import { bellOnly } from "../_shared/operator-bell.ts";
 import { operatorAppUrl } from "../../../src/config/operatorApp.ts";
 import { templateAvailability } from "../_shared/template-status.ts";
 import { TEMPLATE_UNAVAILABLE_CODES } from "../../../src/lib/whatsappLinkTemplates.ts";
 import { HOOK_INCOMPLETE_REASON, HOOK_NO_GAP_REASON } from "../_shared/audit-reply.ts";
-import { maskSecrets, metaErrorPartsFromResponse, partsFromStoredError, type SendErrorParts } from "../../../src/lib/sendErrorMeaning.ts";
+import { META_ERROR_MEANINGS, maskSecrets, metaErrorPartsFromResponse, partsFromStoredError, type SendErrorParts } from "../../../src/lib/sendErrorMeaning.ts";
 
 // process-whatsapp-queue — the WhatsApp outreach processor.
 //
@@ -540,8 +542,8 @@ function senderFacts(all: readonly SenderRow[], sendable: readonly SenderRow[], 
 }
 
 /* ⛔ THE STUCK ALERT (2026-11-16). Reached only by a due tick that passed pause, send hours, the cap and pacing, so "nothing
-   explains it" holds. One bell row + one email per EPISODE (dedupe key = sender + the moment it stopped moving): never
-   repeating, and a new one only after that sender has moved and then stuck again. Never blocks the send. */
+   explains it" holds. Since 2026-11-26 one BELL row per sender per London day, no email (emails are for real pauses only). Never
+   blocks the send. */
 // deno-lint-ignore no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function alertStuckSenders(service: any, a: { all: readonly SenderRow[]; sendable: readonly SenderRow[]; lastSent: ReadonlyMap<string, string>; auditWaiting: ReadonlySet<string>; gapMin: number }) {
@@ -552,18 +554,13 @@ async function alertStuckSenders(service: any, a: { all: readonly SenderRow[]; s
     if (!since) continue;
     const name = k === NO_SENDER_KEY ? "Unassigned leads" : ((await personName(service, k)) ?? "Someone");
     const reason = stuckReasonWords({ queued: e.queued, sendable: e.sendable, waitingOnAudit: e.waiting });
-    const r = await raiseOperatorAlert(service, "team_update", {
+    /* 2026-11-26 (Paul): a BELL only, never an email, once per sender per London day. It fired whenever Meta's quality reading
+       flipped to RED and every queued lead was held (nothing was broken), which read as "outreach has stopped". */
+    const r = await bellOnly(service, {
       title: `WhatsApp queue: ${name}'s messages are not moving`,
-      body: `Nothing has gone for ${name} since ${hhmmLondon(since)} during send hours: ${reason}. ${e.queued} queued.`,
+      body: `Nothing has gone for ${name} since ${hhmmLondon(since)} during send hours: ${reason}. ${e.queued} queued. Not a pause: nothing was stopped.`,
       link: "/whatsapp-queue",
-      subject: `WhatsApp queue: ${name}'s messages not moving since ${hhmmLondon(since)}`,
-      lines: [
-        `Nothing has been sent for ${name} since ${hhmmLondon(since)} (London), during send hours, with the queue running and today's limit not used.`,
-        "", `Why: ${reason}.`, `Queued: ${e.queued}. Could go now: ${e.sendable}. Waiting on an audit: ${e.waiting}.`,
-        "", "Open the WhatsApp queue: " + operatorAppUrl("/whatsapp-queue"),
-        "You get this once for this stop. Nothing was sent or changed by this alert.",
-      ],
-      dedupeKey: stuckDedupeKey(k, since),
+      dedupeKey: stuckBellKey(k),
     });
     console.log(`[queue] stuck sender ${k} since ${since}: alert ${r}`);
   }
@@ -1159,6 +1156,7 @@ Deno.serve(async (req) => {
       }
       /* A person resuming (or pausing by hand) clears the auto-pause note. Separate write: a missing column never blocks the pause. */
       await service.from("whatsapp_outreach_state").update({ auto_paused_at: null, auto_pause_reason: null }).eq("id", 1);
+      await service.from("whatsapp_outreach_state").update({ auto_pause_kind: null, auto_resume_at: null }).eq("id", 1);
       return json({ ok: true, ...statusPayload, paused: nextPaused, autoPausedAt: null, autoPauseReason: null,
         pauseChange: { at: changedAt, byUserId: callerId, byName: await personName(service, callerId), source: "person" } });
     }
@@ -1965,54 +1963,86 @@ Deno.serve(async (req) => {
     } catch (e) {
       console.error("[queue] phoneless sweep failed (non-fatal):", e instanceof Error ? e.message : String(e));
     }
+    /* ⛔ AUTO-RESUME (2026-11-26, src/lib/queuePauseRules.ts autoResumeVerdict): an auto-pause whose cause provably cleared starts
+       again by itself — its resume time has passed AND Meta answered a clean health reading after the pause. Billing and
+       restrictions never resume here (no resume time). The trigger logs it as resumed / auto. Never fatal: unreadable = stays paused. */
+    let pausedNow = paused;
+    let resumedAtMs: number | null = null;
+    if (!qaDrill && paused) try {
+      const { data: rs, error: rsErr } = await service.from("whatsapp_outreach_state")
+        .select("paused, pause_changed_source, auto_pause_kind, auto_paused_at, auto_resume_at, meta_health_ok_at, meta_number_status, meta_can_send, cold_stop_at")
+        .eq("id", 1).maybeSingle();
+      if (!rsErr && rs) {
+        const rv = autoResumeVerdict({
+          paused: rs.paused === true, pauseSource: (rs.pause_changed_source as string | null) ?? null, kind: (rs.auto_pause_kind as string | null) ?? null,
+          pausedAt: (rs.auto_paused_at as string | null) ?? null, resumeAt: (rs.auto_resume_at as string | null) ?? null,
+          healthOkAt: (rs.meta_health_ok_at as string | null) ?? null,
+          numberLimited: numberLimited(rs.meta_number_status as string | null, rs.meta_can_send as string | null),
+          coldStopAt: (rs.cold_stop_at as string | null) ?? null,
+        });
+        if (rv.resume) {
+          const nowIso = new Date().toISOString();
+          const { error: arErr } = await service.from("whatsapp_outreach_state")
+            .update({ paused: false, updated_at: nowIso, pause_changed_at: nowIso, pause_changed_by: null, pause_changed_source: "auto" })
+            .eq("id", 1).eq("paused", true).eq("pause_changed_source", "auto");
+          if (!arErr) {
+            await service.from("whatsapp_outreach_state").update({ auto_paused_at: null, auto_pause_reason: null, auto_pause_kind: null, auto_resume_at: null }).eq("id", 1);
+            pausedNow = false;
+            resumedAtMs = Date.parse(nowIso);
+            console.log("[queue] auto-resumed: " + rv.why);
+            await bellOnly(service, { title: "WhatsApp sending started again by itself", body: String(rv.why), link: "/whatsapp-queue", dedupeKey: "queue-auto-resume:" + nowIso.slice(0, 13) });
+          }
+        }
+      }
+    } catch (e) {
+      console.error("[queue] auto-resume check failed (non-fatal):", e instanceof Error ? e.message : String(e));
+    }
     // Pause guard FIRST — a paused queue sends nothing, even on a forced manual tick.
-    if (paused) return json({ ok: true, skipped: "paused", ...statusPayload });
+    if (pausedNow) return json({ ok: true, skipped: "paused", ...statusPayload });
     if (!anyWindowOpen && !force && !qaDrill) return json({ ok: true, skipped: "outside_window", ...statusPayload });
     /* ⛔ THE COLD GUARD STOPS THE WHOLE DRIP (2026-11-02): an unreadable guard or a latched stop sends nothing, follow-up lanes
        included, and starts no paid audit for a message that cannot go. */
     if (!qaDrill && !coldFacts) return json({ ok: true, skipped: "cold_guard_unreadable", ...statusPayload });
     if (!qaDrill && coldFacts?.stopReason) return json({ ok: true, skipped: "cold_stopped", reason: coldFacts.stopReason, ...statusPayload });
-    /* ⛔ AUTO-PAUSE ON A BURST OF FAILURES (2026-10-14; src/lib/whatsappPace.ts). The queue's OWN sends (user_id NULL)
-       in the last AUTO_PAUSE_WINDOW_MIN minutes, test sends left out: when at least AUTO_PAUSE_MIN_ATTEMPTS went and at
-       least AUTO_PAUSE_FAIL_SHARE of them failed, the queue pauses itself and records why. A person resumes it.
-       A failed read never pauses and never blocks a send (best-effort, like the other non-fatal passes). */
+    /* ⛔ THE QUEUE PAUSES ITSELF ONLY FOR REAL DANGER (2026-11-26, Paul; src/lib/queuePauseRules.ts — replaces the 50%-in-an-hour
+       burst rule, which paused on 22 Nov for a batch of numbers not on WhatsApp). The queue's OWN real sends since max(6 h ago, the
+       last pause / resume): ONE Meta code about our account (login, billing, restricted, spam-limited) pauses; a run of
+       REFUSAL_RUN_PAUSE unexplained failures with nothing delivered between pauses (WhatsApp refusing the number, 23 Nov). A lead's
+       own failure, our template's, and temporary errors never count. Bell + email once per problem per London day; it may start
+       again by itself (auto_resume_at) where the cause provably clears. A failed read never pauses and never blocks a send. */
     if (!qaDrill) {
       try {
-        const since = new Date(Date.now() - AUTO_PAUSE_WINDOW_MIN * 60_000).toISOString();
+        const lookback = Date.now() - PAUSE_LOOKBACK_HOURS * 3_600_000;
+        const resumedAt = resumedAtMs ?? (pauseChange?.at ? Date.parse(pauseChange.at) : NaN);
+        const since = new Date(Number.isFinite(resumedAt) ? Math.max(lookback, resumedAt) : lookback).toISOString();
         const { data: recent, error: rErr } = await service.from("whatsapp_sends")
-          .select("delivery_status").is("user_id", null).eq("test_mode", false).gte("created_at", since).limit(1000);
+          .select("created_at, delivery_status, error_code").is("user_id", null).eq("test_mode", false).gte("created_at", since)
+          .order("created_at", { ascending: false }).limit(500);
         if (!rErr) {
-          const rows = ((recent ?? []) as Array<{ delivery_status: string | null }>).filter((r) => r.delivery_status !== "simulated");
-          const failed = rows.filter((r) => (FAILED_SEND_STATUSES as readonly string[]).includes(String(r.delivery_status))).length;
-          let v = autoPauseVerdict(rows.length, failed);
-          /* ⛔ 2026-11-23 pm: the failure-run breaker (src/lib/whatsappPace.ts). Works at any pace: 5 failed in a row, none delivered. */
-          if (!v.pause) {
-            /* Only sends after the last pause / resume: a person's Resume starts a fresh count, never an instant re-pause. */
-            const lookback = Date.now() - FAILURE_RUN_LOOKBACK_HOURS * 3_600_000;
-            const resumedAt = pauseChange?.at ? Date.parse(pauseChange.at) : NaN;
-            const runSince = new Date(Number.isFinite(resumedAt) ? Math.max(lookback, resumedAt) : lookback).toISOString();
-            const { data: runRows, error: runErr } = await service.from("whatsapp_sends").select("created_at, delivery_status")
-              .is("user_id", null).eq("test_mode", false).gte("created_at", runSince).order("created_at", { ascending: false }).limit(500);
-            if (!runErr) v = failureRunVerdict((runRows ?? []) as Array<{ created_at: string; delivery_status: string | null }>);
-          }
-          if (v.pause) {
-            const nowIso = new Date().toISOString();
-            await service.from("whatsapp_outreach_state").update({ auto_paused_at: nowIso, auto_pause_reason: v.reason }).eq("id", 1);
+          const rows = ((recent ?? []) as Array<{ created_at: string; delivery_status: string | null; error_code: number | null }>)
+            .filter((r) => r.delivery_status !== "simulated");
+          const v = queuePauseVerdict(rows, (c) => META_ERROR_MEANINGS[c] ?? null);
+          if (v.pause && v.kind && v.reason) {
+            const now = new Date();
+            const nowIso = now.toISOString();
+            /* At most one auto-resume a London day: a second pause the same day waits for a person. */
+            const { count: resumedToday } = await service.from("whatsapp_queue_pause_log").select("id", { count: "exact", head: true })
+              .eq("scope", "queue").eq("action", "resumed").eq("source", "auto").gte("created_at", londonDayStartUtcIso());
+            const resumeAt = autoResumeAt(v.kind, now, (resumedToday ?? 0) > 0);
+            await service.from("whatsapp_outreach_state").update({ auto_paused_at: nowIso, auto_pause_reason: pauseNote(v.kind, v.reason, resumeAt) }).eq("id", 1);
+            /* Separate write: a missing column (migration not applied) never blocks the pause itself. */
+            await service.from("whatsapp_outreach_state").update({ auto_pause_kind: v.kind, auto_resume_at: resumeAt ? resumeAt.toISOString() : null }).eq("id", 1);
             // The flag + "the queue did it" in one write (the trigger logs it with the reason written just above).
             const { error: apErr } = await service.from("whatsapp_outreach_state")
               .update({ paused: true, updated_at: nowIso, pause_changed_at: nowIso, pause_changed_by: null, pause_changed_source: "auto" }).eq("id", 1);
             if (apErr) await service.from("whatsapp_outreach_state").update({ paused: true, updated_at: nowIso }).eq("id", 1);
-            console.warn("[process-whatsapp-queue] AUTO-PAUSED: " + v.reason);
-            /* 2026-11-23 pm: Paul gets an email + bell (once per pause). Never blocks. */
+            console.warn(`[process-whatsapp-queue] AUTO-PAUSED (${v.kind}): ${v.reason}`);
             try {
-              await raiseOperatorAlert(service, "team_update", {
-                title: "WhatsApp queue paused itself", body: String(v.reason), link: "/whatsapp-queue",
-                subject: "WhatsApp queue paused itself: messages are failing",
-                lines: [String(v.reason), "", "Open the WhatsApp queue: " + operatorAppUrl("/whatsapp-queue"), "Nothing else was changed."],
-                dedupeKey: "queue-auto-pause:" + nowIso.slice(0, 16),
-              });
+              const a = pauseAlert({ kind: v.kind, reason: v.reason }, resumeAt, now);
+              await raiseOperatorAlert(service, "team_update", { ...a, link: "/whatsapp-queue",
+                lines: [...a.lines, "", "Open the WhatsApp queue: " + operatorAppUrl("/whatsapp-queue")] });
             } catch { /* the pause stands either way */ }
-            return json({ ok: true, skipped: "auto_paused", reason: v.reason, ...statusPayload, paused: true, autoPausedAt: nowIso, autoPauseReason: v.reason });
+            return json({ ok: true, skipped: "auto_paused", reason: v.reason, kind: v.kind, ...statusPayload, paused: true, autoPausedAt: nowIso, autoPauseReason: pauseNote(v.kind, v.reason, resumeAt) });
           }
         }
       } catch (e) {
@@ -3141,6 +3171,9 @@ Deno.serve(async (req) => {
       ? { whatsapp_error_code: sendParts.code, whatsapp_error_title: sendParts.title, whatsapp_error_at: nowIso }
       : {};
 
+    /* What this failure says (null when it went): lead / message / temporary / danger / unexplained (src/lib/queuePauseRules.ts). */
+    const sendKind = outcome === "sent" ? null : failureKind({ delivery_status: deliveryStatus, error_code: failCode ?? null });
+
     // Route the lead by outcome:
     if (outcome === "sent") {
       // Delivered to Meta (or simulated) → Contacted, out of the queue.
@@ -3216,6 +3249,19 @@ Deno.serve(async (req) => {
           ...leadErrorCols,
         }).eq("id", lead.id);
         if (META_STATUS_GATED.has(templateName)) await templateAvailability(service, templateName, { force: true });
+      } else if (sendKind === "danger") {
+        /* ⛔ 2026-11-26 (src/lib/queuePauseRules.ts): a problem with OUR account (danger), says nothing about this lead. It goes back in the queue WITHOUT using one of its
+           attempts and is sent once the queue is running again (the next tick pauses the queue). A temporary error (timeout, rate
+           limit, Meta 5xx) keeps the usual retry below (max MAX_WHATSAPP_ATTEMPTS) plus the queue-wide backoff after the send. */
+        await service.from("outreach_leads")
+          .update({ status: "queued", queued_at: nowIso, whatsapp_delivery_status: "failed_temporary", ...leadErrorCols })
+          .eq("id", lead.id);
+      } else if (sendKind === "lead" && failCode !== undefined && failCode !== 131026) {
+        /* ⛔ 2026-11-26: Meta named THIS person (blocked us, stopped marketing, per-person limit, not a reachable number): the lead
+           is marked WhatsApp failed with Meta's reason and leaves the queue. Never retried, never counts towards a pause. */
+        await service.from("outreach_leads").update({
+          status: "whatsapp_failed", whatsapp_delivery_status: "failed", whatsapp_attempts: attempts, queued_at: null, ...leadErrorCols,
+        }).eq("id", lead.id).eq("status", "queued");
       } else {
         await service.from("outreach_leads")
           .update({ ...leadFailurePatch(failCode, (lead.whatsapp_attempts as number) ?? 0, nowIso, hasPriorSuccess), ...leadErrorCols })
@@ -3229,8 +3275,19 @@ Deno.serve(async (req) => {
     // Pace the next send after ANY real/simulated attempt (spread quota + jitter — see nextPacingStamp).
     // A QA drill never moves the real queue's clock.
     if (!qaDrill) {
+      let nextAt = nextPacingStamp(coldLeft, pace);
+      /* ⛔ 2026-11-26: a temporary error (timeout, rate limit, Meta 5xx) waits longer each time in a row: 5, 10, 20, 40, then 60
+         minutes (temporaryBackoffMinutes). It never pauses the queue. Never fatal: unreadable = the normal pacing. */
+      if (sendKind === "temporary") try {
+        const { data: lastRows } = await service.from("whatsapp_sends").select("created_at, delivery_status, error_code")
+          .is("user_id", null).eq("test_mode", false).order("created_at", { ascending: false }).limit(6);
+        const wait = temporaryBackoffMinutes(temporaryInARow((lastRows ?? []) as Array<{ created_at: string; delivery_status: string | null; error_code: number | null }>));
+        const backoffAt = new Date(Date.now() + wait * 60_000).toISOString();
+        if (backoffAt > nextAt) nextAt = backoffAt;
+        console.warn(`[queue] temporary send error: waiting ${wait} min before the next send`);
+      } catch { /* normal pacing */ }
       await service.from("whatsapp_outreach_state")
-        .update({ next_send_at: nextPacingStamp(coldLeft, pace), updated_at: nowIso }).eq("id", 1);
+        .update({ next_send_at: nextAt, updated_at: nowIso }).eq("id", 1);
     }
 
     return json({

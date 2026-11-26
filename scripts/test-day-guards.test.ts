@@ -111,11 +111,8 @@ console.log("── Job 3: WhatsApp cap, pace and auto-pause ──");
   ok(blank.ok === true && blank.value === null, "blank = back to the default");
   ok(P.checkPaceValue("min_gap_minutes", "abc").ok === false, "not a number → refused");
 
-  ok(P.autoPauseVerdict(7, 7).pause === false, "auto-pause: fewer than 8 attempts never pauses (one bad number is not a pattern)");
-  ok(P.autoPauseVerdict(20, 19).pause === true, "auto-pause: 19 of 20 failed (8 Oct 2026) → paused");
-  ok(P.autoPauseVerdict(20, 9).pause === false && P.autoPauseVerdict(20, 10).pause === true, "auto-pause: the line is half of them failing");
-  ok(P.autoPauseVerdict(40, 2).pause === false, "auto-pause: a normal day's ~5% failures never pauses");
-  ok(/press Resume/.test(P.autoPauseVerdict(10, 9).reason ?? ""), "auto-pause says why and what to do");
+  /* 2026-11-26: the half-failed-in-an-hour burst rule (P.autoPauseVerdict) is no longer asked by the queue; queuePauseRules.ts decides. */
+  ok(!/autoPauseVerdict\(/.test(read("supabase/functions/process-whatsapp-queue/index.ts")), "the burst rule is retired from the queue");
 
   const q = read("supabase/functions/process-whatsapp-queue/index.ts");
   ok(!/^const DAILY_CAP = /m.test(q) && /const coldLeft = Math\.min\(\s+coldAllowanceLeft\(/.test(q), "the drip goes by what each country has left, not a constant");
@@ -123,7 +120,7 @@ console.log("── Job 3: WhatsApp cap, pace and auto-pause ──");
   ok(/select\("min_gap_minutes, person_daily_limit_default, auto_paused_at, auto_pause_reason"\)/.test(q)
     && /\.select\("next_send_at, paused"\)/.test(q), "the pace is read separately — the pause flag's own read is untouched");
   const tick = q.slice(q.indexOf('skipped: "outside_window"'), q.indexOf('skipped: "cap_reached"'));
-  ok(/autoPauseVerdict\(rows\.length, failed\)/.test(tick) && /\.is\("user_id", null\)\.eq\("test_mode", false\)/.test(tick), "auto-pause runs in the tick, on the queue's own non-test sends, before any send");
+  ok(/queuePauseVerdict\(rows,/.test(tick) && /\.is\("user_id", null\)\.eq\("test_mode", false\)/.test(tick), "auto-pause runs in the tick, on the queue's own non-test sends, before any send");
   ok(/update\(\{ auto_paused_at: null, auto_pause_reason: null \}\)/.test(q), "Resume clears the auto-pause note");
   const setPace = q.slice(q.indexOf('if (mode === "set_pace")'), q.indexOf('if (mode === "set_auto_reply")'));
   ok(/checkPaceValue\(k, body\[k\]\)/.test(setPace) && /not_a_salesperson/.test(setPace) && /\.eq\("status", "active"\)/.test(setPace), "set_pace checks every value and writes person limits only for active salespeople");

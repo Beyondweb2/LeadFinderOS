@@ -14,6 +14,8 @@ import { GRAPH_VERSION } from "../_shared/whatsapp-send.ts";
 import { normaliseRating, tripwireReason, type QualityRating } from "../../../src/lib/whatsappNumberHealth.ts";
 import { metaSafetyReason, safetyNetEmail } from "../../../src/lib/whatsappQualityCap.ts";
 import { raiseOperatorAlert } from "../_shared/audit-alerts.ts";
+import { bellOnly } from "../_shared/operator-bell.ts";
+import { autoResumeAt, londonDayStartIso, pauseAlert, pauseNote, qualityDropPause } from "../../../src/lib/queuePauseRules.ts";
 import { operatorAppUrl } from "../../../src/config/operatorApp.ts";
 
 const corsHeaders = {
@@ -74,6 +76,10 @@ async function readMeta(): Promise<Reading | ReadFailure> {
   return { ok: true, rating: normaliseRating(rawRating), rawRating, tier, tierField, status, canSend: typeof can === "string" ? can : null, healthStatus: st.ok ? st.data.health_status ?? null : null };
 }
 
+/** The stop rests at least this long before it may clear itself. */
+const COLD_STOP_MIN_REST_MIN = 60;
+const londonDayKey = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -95,7 +101,7 @@ Deno.serve(async (req) => {
 
     const nowIso = new Date().toISOString();
     const { data: prev, error: pErr } = await service.from("whatsapp_outreach_state")
-      .select("meta_quality_rating, meta_messaging_tier, meta_health_error, meta_number_status, meta_can_send, cold_stop_at").eq("id", 1).maybeSingle();
+      .select("meta_quality_rating, meta_messaging_tier, meta_health_error, meta_number_status, meta_can_send, cold_stop_at, paused").eq("id", 1).maybeSingle();
     if (pErr) return json({ ok: false, error: "state_read_failed", detail: pErr.message }, 500);
     const logs: Array<{ kind: string; from_value: string | null; to_value: string | null; detail?: string | null }> = [];
 
@@ -141,7 +147,59 @@ Deno.serve(async (req) => {
         logs.push({ kind: "cold_stopped", from_value: prevTier, to_value: reading.tier, detail: stopReason });
         await service.from("whatsapp_queue_pause_log").insert({ scope: "queue", action: "cold_stopped", source: "auto", by_user_id: null, reason: stopReason });
         console.warn("[whatsapp-number-health] cold WhatsApp stopped");
+        /* 2026-11-26: a real stop, so Paul is emailed — once per London day for this problem. */
+        try {
+          await raiseOperatorAlert(service, "team_update", {
+            title: "WhatsApp cold sending stopped: Meta limited the number", body: stopReason, link: "/whatsapp-queue",
+            subject: "WhatsApp cold sending stopped: Meta limited the number",
+            lines: [
+              "Why: " + stopReason,
+              "What to do: open WhatsApp Manager and read Meta's notice on the number.",
+              "It starts again by itself once Meta's reading of the number is clean again (checked every 15 minutes, never sooner than an hour). You can also clear it on the WhatsApp queue.",
+              "", "Open the WhatsApp queue: " + operatorAppUrl("/whatsapp-queue"),
+            ],
+            dedupeKey: "wa-cold-stop:" + londonDayKey(new Date()),
+          });
+        } catch { /* the stop stands either way */ }
       }
+    }
+    /* ⛔ THE STOP CLEARS ITSELF WHEN THE CAUSE HAS (2026-11-26, Paul): at least COLD_STOP_MIN_REST_MIN after it latched, and only on a
+       clean reading — not blocked / flagged / restricted, tier at or above the baseline (metaSafetyReason null). A bell, no email. */
+    const cleanNow = !metaSafetyReason({
+      meta_messaging_tier: reading.tierField ? reading.tier : prevTier, meta_number_status: reading.status ?? prevStatus,
+      meta_can_send: reading.canSend ?? (prev?.meta_can_send as string | null) ?? null,
+    });
+    const stopAtMs = prev?.cold_stop_at ? Date.parse(String(prev.cold_stop_at)) : NaN;
+    if (!stoppedNow && cleanNow && Number.isFinite(stopAtMs) && Date.now() - stopAtMs >= COLD_STOP_MIN_REST_MIN * 60_000) {
+      const { error: cErr } = await service.from("whatsapp_outreach_state").update({ cold_stop_at: null, cold_stop_reason: null })
+        .eq("id", 1).eq("cold_stop_at", String(prev?.cold_stop_at));
+      if (!cErr) {
+        await service.from("whatsapp_queue_pause_log").insert({ scope: "queue", action: "cold_resumed", source: "auto", by_user_id: null, reason: "Meta's reading of the number is clean again" });
+        await bellOnly(service, { title: "WhatsApp cold sending started again by itself", body: "Meta's reading of the number is clean again (not blocked or flagged, normal messaging limit).", link: "/whatsapp-queue", dedupeKey: "wa-cold-resume:" + nowIso.slice(0, 13) });
+        console.log("[whatsapp-number-health] cold stop cleared by itself");
+      }
+    }
+    /* ⛔ A REAL QUALITY DROP PAUSES THE QUEUE (2026-11-26, Paul; src/lib/queuePauseRules.ts qualityDropPause): only when the higher
+       rating had held for a full day first. Meta's reading flips GREEN↔RED several times a week; a flip never pauses. */
+    if (prevRating !== reading.rating && prev?.paused !== true) try {
+      const { data: lastChange } = await service.from("whatsapp_number_health_log").select("created_at")
+        .eq("kind", "rating_changed").order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const q = qualityDropPause(prevRating, reading.rating, (lastChange?.created_at as string | null) ?? null);
+      if (q.pause && q.kind && q.reason) {
+        const now = new Date();
+        const { count: resumedToday } = await service.from("whatsapp_queue_pause_log").select("id", { count: "exact", head: true })
+          .eq("scope", "queue").eq("action", "resumed").eq("source", "auto").gte("created_at", londonDayStartIso(now));
+        const resumeAt = autoResumeAt(q.kind, now, (resumedToday ?? 0) > 0);
+        await service.from("whatsapp_outreach_state").update({ auto_paused_at: nowIso, auto_pause_reason: pauseNote(q.kind, q.reason, resumeAt) }).eq("id", 1);
+        await service.from("whatsapp_outreach_state").update({ auto_pause_kind: q.kind, auto_resume_at: resumeAt ? resumeAt.toISOString() : null }).eq("id", 1);
+        await service.from("whatsapp_outreach_state")
+          .update({ paused: true, updated_at: nowIso, pause_changed_at: nowIso, pause_changed_by: null, pause_changed_source: "auto" }).eq("id", 1);
+        const a = pauseAlert({ kind: q.kind, reason: q.reason }, resumeAt, now);
+        await raiseOperatorAlert(service, "team_update", { ...a, link: "/whatsapp-queue", lines: [...a.lines, "", "Open the WhatsApp queue: " + operatorAppUrl("/whatsapp-queue")] });
+        console.warn("[whatsapp-number-health] queue paused: " + q.reason);
+      }
+    } catch (e) {
+      console.error("[whatsapp-number-health] quality-drop check failed (non-fatal): " + ((e as Error)?.message ?? String(e)));
     }
     /* ⛔ THE SAFETY NET (2026-11-23 pm, Paul; src/lib/whatsappQualityCap.ts): Meta lowered the tier or flagged the number → the cold
        cap is 60 a day (the cold guard reads the stored row, so it already applies). On the TURN into it, Paul gets one email + bell. */
@@ -158,7 +216,7 @@ Deno.serve(async (req) => {
         await raiseOperatorAlert(service, "team_update", {
           title: mail.subject, body: mail.lines[0], link: "/whatsapp-queue", subject: mail.subject,
           lines: [...mail.lines, "", "Open the WhatsApp queue: " + operatorAppUrl("/whatsapp-queue")],
-          dedupeKey: "wa-safety-cap:" + nowIso.slice(0, 13),
+          dedupeKey: "wa-safety-cap:" + londonDayKey(new Date()), // once per London day (was hourly)
         });
       } catch { /* the cap applies whether or not the email goes */ }
     }

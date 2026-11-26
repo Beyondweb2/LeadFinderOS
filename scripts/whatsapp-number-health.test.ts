@@ -43,7 +43,7 @@ ok(tierWords('TIER_1K') === '1,000 new people a day' && tierWords('TIER_UNLIMITE
 
 console.log('wiring');
 const q = read('supabase/functions/process-whatsapp-queue/index.ts');
-ok(/autoPauseVerdict\(rows\.length, failed\)/.test(q), 'the failure-burst auto-pause is still there');
+ok(/queuePauseVerdict\(rows,/.test(q), 'the queue still pauses itself for real danger (queuePauseRules.ts)');
 ok(/SEND_GAP_JITTER_LOW \+ Math\.random\(\)/.test(q), 'the random gap is unchanged');
 const w = read('supabase/functions/whatsapp-number-health/index.ts');
 ok(/requireAdmin\(req, /.test(w) && /x-cron-secret/.test(w), 'the watcher is cron or admin only');
@@ -51,7 +51,7 @@ ok(!/\.send|messages`/.test(w) && !/console\.(log|error|warn)\([^)]*token/i.test
 ok(/if \(mode === "probe"\) return json/.test(w), 'probe answers before any write');
 ok(/if \(!reading\.ok\) \{[\s\S]*?meta_health_error: reading\.error[\s\S]*?return json/.test(w), 'a failed read stores only the failure');
 ok(!/if \(!reading\.ok\) \{[^}]*paused/.test(w), 'a failed read never pauses');
-ok(!/paused: true/.test(w) && /tripwireReason\(/.test(w), 'the watcher pauses nothing; it latches the cold stop through the one rule');
+ok((w.match(/paused: true/g) ?? []).length === 1 && w.indexOf('paused: true') > w.indexOf('qualityDropPause(prevRating') && /tripwireReason\(/.test(w), 'the watcher pauses the queue only for a real quality drop (2026-11-26); it latches the cold stop through the one rule');
 ok(/\[functions\.whatsapp-number-health\]\nverify_jwt = false/.test(read('supabase/config.toml')), 'config.toml lists the watcher');
 const m = read('supabase/migrations/20261119090000_whatsapp_number_health.sql');
 ok(/enable row level security/.test(m) && /revoke all on public\.whatsapp_number_health_log from anon, authenticated/.test(m), 'the log is service role only');
