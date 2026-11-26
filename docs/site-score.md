@@ -1,6 +1,32 @@
 # Room to improve the website — the site score
 
-## v3 (2026-10-30, feat/site-score-column) — current: v2's weights + the severity cap
+## v5 — V2 parity again (2026-11-26, fix/website-score-weights-v2-parity) — current
+
+V2 main 98984e6 ("re-weighted by real impact", with Paul's approved changes) read and its BEHAVIOUR ported onto V1's own
+findings (`siteScoreTierOf`, `siteScoreTitleOf`, `siteScoreMainNote`; no V2 code copied, crawl unchanged):
+
+- Four levels. critical → 49; serious (`major`) → 63, two serious → 49; moderate → 68; minor holds nothing. Each further
+  held problem takes 2 more off, never under 50 unless red. Only a site with MINOR problems left reaches Little to gain; its
+  popover's first line reads "Small fix: …".
+- `no_business_schema`: serious ("Does not say who the business is") only when no_contact_route / no_phone /
+  no_contact_details is also verified; otherwise moderate, worded "Business details missing from the page code" (site score
+  words only; the website check's own title is unchanged).
+- `one_page_site` critical; `no_service_pages` / `services_on_one_page` critical on 1–2 pages read, else moderate. V1 has no
+  "under five pages" finding and the score adds no finding of its own (one judge), so 3–4 page sites are held only when the
+  check found a service-page problem.
+- `noindex_pages` / `noindex_important_page`: serious when a named page's address is a service or contact page
+  (`contact|get-in-touch|enquir|service`), else moderate. `noindex_home` critical.
+- Moderate: name/address/phone mismatch (`schema_phone_mismatch`, `vs_name_inconsistent`; `ct_conflicting_facts` is trading
+  years, not NAP, so minor), missing or repeated titles, homepage with no description or H1 (`missing_description`,
+  `vs_key_page_basics` only when a homepage address is among its pages), broken links, inner pages not set up for phones,
+  no sitemap on 10+ pages, thin pages. Serious: http not moved to https (medium), homepage not set up for phones, no contact
+  details / very slow (graded high). Slow, long titles, broken markup: minor.
+- Read-only before/after over the latest stored crawl per live lead (`scripts/_score-compare.ts`, not committed), 12,461
+  live leads: Little to gain 551 → 217, Some gains 431 → 819, Big gains 304 → 250. Moves: 334 Little → Some, 56 Big → Some,
+  2 Some → Big. What holds the Little → Some moves: business details missing from the page code 194 (86 on its own),
+  repeated titles 108, homepage heading/description 118, thin key pages 44, hidden pages 32.
+
+## v3 (2026-10-30, feat/site-score-column) — superseded: v2's weights + the severity cap
 
 - **Severity cap** (`SITE_SCORE_SEVERE = 'high'`, `siteScore.ts`): a finding the website check GRADED high, that took points
   here (so the crawl verified it), caps the score at 59 — Big gains whatever the number. Keyed to the check's grade, not to
