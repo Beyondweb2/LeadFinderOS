@@ -44,6 +44,14 @@
        same from our side, so it is never "the site won't load". Only an address with no DNS answer says so
        ("Website address doesn't exist"). No number, never a zero.
 
+   v5 (2026-11-26, V2 PARITY again — V2 main 98984e6, "re-weighted by real impact", with Paul's approved changes): FOUR
+   levels (siteScoreTierOf). critical 49; serious ('major') 63, two serious 49; moderate 68; minor holds nothing. Each further
+   held problem takes 2 more off (never under 50 unless red). Only a site with MINOR problems left reaches Little to gain, and
+   its main note reads "Small fix: …" (siteScoreMainNote). No business structured data is serious only when the page also
+   fails the contact check, otherwise moderate and worded "Business details missing from the page code"; hidden (noindex)
+   pages are serious only when one is a service or contact page; no service pages is moderate unless the site is 1–2 pages;
+   name/address/phone mismatch, titles and descriptions moderate; slow is minor unless very slow (graded high).
+
    Pure; no I/O. IMPORTED BY EDGE FUNCTIONS (crawl-check, crawl-job): relative imports with .ts only.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
@@ -51,7 +59,7 @@ import { placeholderPagesOnce, summariseWebsiteCheck, usableWebsiteCheck, type W
 import { storedCrawlUnread, type StoredCrawlForAudit } from './siteAudit.ts';
 import { classifyLeadWebsite } from './leadWebsiteKind.ts';
 
-export const SITE_SCORE_VERSION = 4;
+export const SITE_SCORE_VERSION = 5;
 /** Reasons kept on the list row: the biggest losses first. The full evidence is in site_score_evidence. */
 export const SITE_SCORE_MAX_DOWN_REASONS = 3;
 
@@ -132,26 +140,81 @@ const WHOLE_CATEGORY_ISSUES: ReadonlySet<string> = new Set(['one_page_site', 'no
 /** The severity that makes an unlisted finding CRITICAL (v4: graded by the check, so a new HIGH finding caps without
  *  touching this file). */
 export const SITE_SCORE_SEVERE: WebsiteIssueSeverity = 'high';
-/** v4 caps (V2 parity): a critical problem, or two or more major ones, hold the score at 49; one major problem at 69. */
+/** v5 caps (V2 parity, 2026-11-26): a critical problem, or two or more serious ones, hold the score at 49 (Big gains);
+ *  one serious problem at 63; moderate problems only at 68 (both Some gains). Each further held problem takes
+ *  SITE_SCORE_EXTRA_PROBLEM more off, never below 50 unless the site is red. A site with only MINOR problems left is the
+ *  only one that can reach Little to gain. */
 export const SITE_SCORE_CAP_CRITICAL = 49;
-export const SITE_SCORE_CAP_MAJOR = 69;
+export const SITE_SCORE_CAP_MAJOR = 63;
+export const SITE_SCORE_CAP_MODERATE = 68;
+export const SITE_SCORE_EXTRA_PROBLEM = 2;
 /** The top of the "big gains" band (kept under its old name for callers). */
 export const SITE_SCORE_CAP = SITE_SCORE_CAP_CRITICAL;
-/** A site under this many pages read has no sitemap to speak of: "no sitemap" is then not a major problem. */
+/** A site under this many pages read has no sitemap to speak of: "no sitemap" is then not a held problem. */
 export const SITE_SCORE_SMALL_SITE_PAGES = 10;
-export type SiteScoreTier = 'critical' | 'major';
+/** A site this small (pages read) with no real service pages is critical; above it, the missing service pages are moderate. */
+export const SITE_SCORE_TINY_SITE_PAGES = 2;
+/** critical = Big gains on its own; major = SERIOUS (two of them are Big gains); moderate = top of Some gains; null = minor. */
+export type SiteScoreTier = 'critical' | 'major' | 'moderate';
 const SITEMAP_ISSUES: ReadonlySet<string> = new Set(['no_sitemap', 'ct_no_sitemap']);
-/** Major whatever their grade: links that lead to an error, not set up for phones. */
-const MAJOR_ISSUES: ReadonlySet<string> = new Set(['broken_pages', 'ct_broken_links', 'ct_dead_links', 'no_viewport', 'ct_no_viewport']);
-/** Major (not critical) when graded HIGH: no contact details, a very slow site, no homepage title or main heading. */
-const MAJOR_WHEN_HIGH: ReadonlySet<string> = new Set(['no_contact_route', 'no_phone', 'no_contact_details', 'no_contact_page', 'slow_pages', 'some_slow_pages', 'missing_title', 'missing_h1', 'vs_key_page_basics']);
-/** Which verified finding holds the score down (v4, V2 parity). Null = it only takes its points. */
-export function siteScoreTierOf(issue: { id: string; severity: WebsiteIssueSeverity }, pagesRead: number): SiteScoreTier | null {
-  if (SITE_SCORE_CAP_ISSUES.has(issue.id)) return 'critical';
-  if (SITEMAP_ISSUES.has(issue.id)) return issue.severity !== 'low' && pagesRead >= SITE_SCORE_SMALL_SITE_PAGES ? 'major' : null;
-  if (MAJOR_ISSUES.has(issue.id)) return 'major';
-  if (MAJOR_WHEN_HIGH.has(issue.id)) return issue.severity === 'high' ? 'major' : null;
-  return issue.severity === SITE_SCORE_SEVERE ? 'critical' : null;
+const HTTPS_ISSUES: ReadonlySet<string> = new Set(['no_https', 'ct_no_https']);
+const NOINDEX_PAGE_ISSUES: ReadonlySet<string> = new Set(['noindex_pages', 'noindex_important_page']);
+const SERVICE_ISSUES: ReadonlySet<string> = new Set(['no_service_pages', 'services_on_one_page']);
+const CONTACT_ISSUES: ReadonlySet<string> = new Set(['no_contact_route', 'no_phone', 'no_contact_details', 'no_contact_page']);
+/** "The visible page fails the contact check": no contact details, no phone, no way to get in touch (a missing contact PAGE alone is not it). */
+const CONTACT_FAIL_ISSUES: ReadonlySet<string> = new Set(['no_contact_route', 'no_phone', 'no_contact_details']);
+const SPEED_ISSUES: ReadonlySet<string> = new Set(['slow_pages', 'some_slow_pages']);
+const MOBILE_ISSUES: ReadonlySet<string> = new Set(['no_viewport', 'ct_no_viewport']);
+const LINK_ISSUES: ReadonlySet<string> = new Set(['broken_pages', 'ct_broken_links', 'ct_dead_links']);
+/** Titles: missing or repeated titles — moderate whatever the grade. */
+const TITLE_ISSUES: ReadonlySet<string> = new Set(['missing_title', 'duplicate_titles']);
+/** No description / main heading: moderate only when the HOMEPAGE lacks it (read from the pages it names); on inner pages, minor. */
+const HOME_BASICS_ISSUES: ReadonlySet<string> = new Set(['missing_description', 'vs_key_page_basics']);
+/** Name / address / phone not matching, thin pages: moderate when graded medium or high, minor when low. */
+const MODERATE_UNLESS_LOW: ReadonlySet<string> = new Set(['schema_phone_mismatch', 'vs_name_inconsistent', 'thin_key_pages', 'thin_pages', 'missing_h1']);
+/** Minor whatever the grade (they only take their points). */
+const MINOR_ISSUES: ReadonlySet<string> = new Set(['long_titles', 'multiple_h1', 'schema_malformed', 'vs_business_schema', 'no_robots', 'robots_disallowed_pages']);
+/** A hidden page is the serious kind when it is a service or contact page (read from its address). */
+const KEY_PAGE_PATH = /contact|get-in-touch|enquir|service/i;
+const pathOf = (u: string) => { try { return new URL(u).pathname; } catch { return u; } };
+const isHomePath = (u: string) => { const p = pathOf(u).replace(/\/(index\.(html?|php))?$/i, ''); return p === '' || p === '/'; };
+/** The site score's own words for "no business structured data" (V2 parity, Paul 2026-11-26). */
+export const SITE_SCORE_SCHEMA_MISSING = 'Business details missing from the page code';
+export const SITE_SCORE_SCHEMA_SERIOUS = 'Does not say who the business is';
+/**
+ * Which verified finding holds the score down (v5, V2 parity 2026-11-26: four levels by real impact on being found by Google
+ * and AI). Null = MINOR, it only takes its points. `all` = every verified finding on the site (the schema rule reads the contact one).
+ *   critical — plain http, the homepage noindex, robots.txt closing AI search, a one or two page site (or no service pages on one),
+ *              and every other HIGH finding not listed below.
+ *   serious  — no business structured data AND the page fails the contact check; a hidden (noindex) service or contact page;
+ *              http not moved to https (medium); no contact details anywhere, a very slow site, the homepage not set up for
+ *              phones (each graded high, or medium for phones = the homepage).
+ *   moderate — no business structured data on its own; other hidden pages; no service pages on a site of 3+ pages; name / address /
+ *              phone not matching; missing or repeated titles; no homepage description or main heading; inner pages not set up
+ *              for phones; broken links; no sitemap (10+ pages read); thin pages.
+ *   minor    — slow (not very slow), long titles, descriptions missing on inner pages, broken or thin markup, everything else.
+ */
+export function siteScoreTierOf(issue: { id: string; severity: WebsiteIssueSeverity; pages?: readonly string[] }, pagesRead: number, all: readonly { id: string }[] = []): SiteScoreTier | null {
+  const { id, severity } = issue;
+  const high = severity === 'high';
+  if (id === 'one_page_site') return 'critical';
+  if (SERVICE_ISSUES.has(id)) return pagesRead <= SITE_SCORE_TINY_SITE_PAGES ? 'critical' : 'moderate';
+  if (HTTPS_ISSUES.has(id)) return high ? 'critical' : severity === 'medium' ? 'major' : null;
+  if (NOINDEX_PAGE_ISSUES.has(id)) return (issue.pages ?? []).some((u) => KEY_PAGE_PATH.test(pathOf(u))) ? 'major' : 'moderate';
+  if (id === 'no_business_schema') return all.some((x) => CONTACT_FAIL_ISSUES.has(x.id)) ? 'major' : 'moderate';
+  if (CONTACT_ISSUES.has(id) || SPEED_ISSUES.has(id)) return high ? 'major' : null;
+  if (MOBILE_ISSUES.has(id)) return severity === 'low' ? 'moderate' : 'major';
+  if (TITLE_ISSUES.has(id) || LINK_ISSUES.has(id)) return 'moderate';
+  if (HOME_BASICS_ISSUES.has(id)) return (issue.pages ?? []).some(isHomePath) ? 'moderate' : null;
+  if (MODERATE_UNLESS_LOW.has(id)) return severity === 'low' ? null : 'moderate';
+  if (SITEMAP_ISSUES.has(id)) return severity !== 'low' && pagesRead >= SITE_SCORE_SMALL_SITE_PAGES ? 'moderate' : null;
+  if (MINOR_ISSUES.has(id)) return null;
+  return severity === SITE_SCORE_SEVERE ? 'critical' : null;
+}
+/** The title the site score shows for a finding (its own words for the schema one; the check's title otherwise). */
+export function siteScoreTitleOf(issue: { id: string; title: string }, tier: SiteScoreTier | null): string {
+  if (issue.id !== 'no_business_schema') return issue.title;
+  return tier === 'major' ? SITE_SCORE_SCHEMA_SERIOUS : SITE_SCORE_SCHEMA_MISSING;
 }
 
 /** Issue ids that are a STATE, never points: the site could not be judged. */
@@ -196,11 +259,14 @@ export interface SiteScoreLoss {
   quote: string;
 }
 
+/** What held the score down: the site's structure, a critical finding, a serious one ('major'), or moderate ones (v5). */
+export type SiteScoreCapKind = 'structure' | 'severity' | 'major' | 'moderate';
+
 export interface SiteScoreEvidence {
   version: number;
   losses: SiteScoreLoss[];
   /** Why the score was capped, with its evidence (null = not capped). */
-  cap: { reason: string; url: string | null; quote: string; uncapped: number; kind?: 'structure' | 'severity' | 'major'; at?: number } | null;
+  cap: { reason: string; url: string | null; quote: string; uncapped: number; kind?: SiteScoreCapKind; at?: number } | null;
   /** What was not judged and why (absences on a capped crawl, things the crawl does not record). */
   notJudged: string[];
 }
@@ -297,6 +363,9 @@ export function siteScoreFromSummary(s: WebsiteCheckSummary, src: QuoteSources |
     byCheck.set(check.id, [...(byCheck.get(check.id) ?? []), issue]);
     verified.push(issue);
   }
+  const pagesRead = s.pagesRead ?? 0;
+  const tierById = new Map(verified.map((i) => [i.id, siteScoreTierOf(i, pagesRead, verified)] as const));
+  const titleOf = (i: WebsiteIssue) => siteScoreTitleOf(i, tierById.get(i.id) ?? null);
   const losses: SiteScoreLoss[] = [];
   /* A one-page site, or one with no service pages at all, has no Services to speak of: the whole category goes, said once. */
   const whole = [...(byCheck.get('service_pages') ?? [])].find((i) => WHOLE_CATEGORY_ISSUES.has(i.id));
@@ -314,29 +383,36 @@ export function siteScoreFromSummary(s: WebsiteCheckSummary, src: QuoteSources |
       if (pts <= 0) continue;
       left = round1(left - pts);
       const { url, quote } = evidenceFor(issue, src);
-      losses.push({ check: check.id, category: check.category, label: check.label, points: pts, issueId: issue.id, severity: issue.severity, title: issue.title, url, quote });
+      losses.push({ check: check.id, category: check.category, label: check.label, points: pts, issueId: issue.id, severity: issue.severity, title: titleOf(issue), url, quote });
     }
   }
   const categories = Object.fromEntries((Object.keys(SITE_SCORE_CATEGORY_POINTS) as SiteScoreCategory[]).map((c) => [c,
     round1(SITE_SCORE_CATEGORY_POINTS[c] - losses.filter((l) => l.category === c).reduce((t, l) => t + l.points, 0))])) as Record<SiteScoreCategory, number>;
   const uncapped = Math.max(0, Math.min(100, Math.round(100 - losses.reduce((t, l) => t + l.points, 0))));
 
-  /* ⛔ THE TIER CAPS (v4, V2 parity): only VERIFIED findings count. A critical one, or two or more majors, hold it at 49;
-     one major at 69. The structural ones (one page, no real service pages) come first, then the rest in id order. */
-  const pagesRead = s.pagesRead ?? 0;
-  const tiered = verified.map((i) => ({ issue: i, tier: siteScoreTierOf(i, pagesRead) }))
+  /* ⛔ THE TIER CAPS (v5, V2 parity 2026-11-26): only VERIFIED findings count. A critical one, or two or more serious ones,
+     hold it at 49; one serious at 63, moderate ones at 68 (less 2 per further held problem, never under 50). Only MINOR
+     problems can be left on a Little to gain site. The structural ones (one page, no real service pages) come first. */
+  const tiered = verified.map((i) => ({ issue: i, tier: tierById.get(i.id) ?? null }))
     .sort((a, b) => Number(SITE_SCORE_CAP_ISSUES.has(b.issue.id)) - Number(SITE_SCORE_CAP_ISSUES.has(a.issue.id)) || byId(a.issue, b.issue));
   const critical = tiered.filter((t) => t.tier === 'critical').map((t) => t.issue);
   const major = tiered.filter((t) => t.tier === 'major').map((t) => t.issue);
-  const capAt = critical.length || major.length >= 2 ? SITE_SCORE_CAP_CRITICAL : major.length ? SITE_SCORE_CAP_MAJOR : 100;
-  const holder = critical[0] ?? major[0] ?? null;
-  const names = (l: WebsiteIssue[]) => l.map((i) => i.title).join('; ');
-  const why = critical.length ? `a critical problem: ${names(critical)}` : major.length >= 2 ? `${major.length} major problems: ${names(major)}` : `a major problem: ${names(major)}`;
+  const moderate = tiered.filter((t) => t.tier === 'moderate').map((t) => t.issue);
+  const heldCount = critical.length + major.length + moderate.length;
+  const red = critical.length > 0 || major.length >= 2;
+  /* v5: red = 49; otherwise the serious (63) or moderate (68) cap, less a little for each further held problem, never under 50. */
+  const capAt = red ? SITE_SCORE_CAP_CRITICAL
+    : heldCount ? Math.max(SITE_SCORE_BAND_MIN.some, (major.length ? SITE_SCORE_CAP_MAJOR : SITE_SCORE_CAP_MODERATE) - SITE_SCORE_EXTRA_PROBLEM * (heldCount - 1))
+    : 100;
+  const holder = critical[0] ?? major[0] ?? moderate[0] ?? null;
+  const names = (l: WebsiteIssue[]) => l.map(titleOf).join('; ');
+  const why = critical.length ? `a critical problem: ${names(critical)}` : major.length >= 2 ? `${major.length} serious problems: ${names(major)}`
+    : major.length ? `a serious problem: ${names(major)}` : `${moderate.length === 1 ? 'a moderate problem' : `${moderate.length} moderate problems`}: ${names(moderate)}`;
   const holderEv = holder ? evidenceFor(holder, src) : null;
   const cap = uncapped <= capAt || !holder || !holderEv ? null
     : { reason: `Held at ${capAt} by ${why}.`, url: holderEv.url, quote: holderEv.quote, uncapped, at: capAt,
-        kind: (SITE_SCORE_CAP_ISSUES.has(holder.id) ? 'structure' : critical.length ? 'severity' : 'major') as 'structure' | 'severity' | 'major' };
-  const capTitle = cap && holder ? holder.title : null;
+        kind: (SITE_SCORE_CAP_ISSUES.has(holder.id) && critical.length ? 'structure' : critical.length ? 'severity' : major.length ? 'major' : 'moderate') as SiteScoreCapKind };
+  const capTitle = cap && holder ? titleOf(holder) : null;
   const score = cap ? capAt : uncapped;
 
   const downs = [...losses].sort((a, b) => b.points - a.points || (a.check < b.check ? -1 : 1)).slice(0, SITE_SCORE_MAX_DOWN_REASONS)
@@ -446,6 +522,15 @@ export function siteScoreViewFor(website: string | null | undefined, s: StoredSi
     ? s.site_score_state as SiteScoreUnjudged
     : V1_STATE[s.site_score_state ?? ''] ?? 'not_checked';
   return { kind: 'state', state: st, reason: st === 'not_checked' ? null : reason, checkedAt, version: s.site_score_version };
+}
+
+/** The main note of a scored site (v5, V2 parity): a Little to gain site has only minor problems left, so its first reason
+ *  reads as a soft "Small fix: …". Null for any other band, a state, or a site with nothing to fix. */
+export function siteScoreMainNote(v: SiteScoreView): string | null {
+  if (v.kind !== 'scored') return null;
+  const first = v.reasons.find((r) => r.kind === 'down');
+  if (!first) return null;
+  return v.band === 'little' ? `Small fix: ${first.text.charAt(0).toLowerCase()}${first.text.slice(1)}` : first.text;
 }
 
 /** The filter / sort key every list uses: a band, or the state. One function, so the pill, the filter and the sort agree. */

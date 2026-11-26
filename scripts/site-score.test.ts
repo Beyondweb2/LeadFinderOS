@@ -3,7 +3,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import {
-  NO_SCAN_LINE, PARTIAL_LINE, SITE_SCORE_CAP, SITE_SCORE_CAP_MAJOR, SITE_SCORE_STATE_LABELS, siteScoreTierOf, SITE_SCORE_CATEGORY_POINTS, SITE_SCORE_CHECKS, SITE_SCORE_GROUP_LABELS, SITE_SCORE_VERSION, siteScoreBand,
+  NO_SCAN_LINE, PARTIAL_LINE, SITE_SCORE_CAP, SITE_SCORE_CAP_MAJOR, SITE_SCORE_CAP_MODERATE, siteScoreMainNote, SITE_SCORE_STATE_LABELS, siteScoreTierOf, SITE_SCORE_CATEGORY_POINTS, SITE_SCORE_CHECKS, SITE_SCORE_GROUP_LABELS, SITE_SCORE_VERSION, siteScoreBand,
   siteScoreCheckOf, siteScoreColumns, siteScoreForRow, siteScoreFromSummary, siteScoreGroupOf, siteScoreSortKey, siteScoreViewFor, type SiteScoreCategory,
 } from '../src/lib/siteScore.ts';
 import type { WebsiteCheckSummary, WebsiteIssue } from '../src/lib/websiteCheck.ts';
@@ -22,7 +22,7 @@ const summary = (over: Partial<WebsiteCheckSummary> = {}): WebsiteCheckSummary =
 const SITE = { url: 'https://example.co.uk/' };
 
 /* ── the rubric: Paul's seven categories ── */
-ok(SITE_SCORE_VERSION === 4, 'rubric version 4 (V2 parity: bands, shares, tier caps)');
+ok(SITE_SCORE_VERSION === 5, 'rubric version 5 (V2 parity 2026-11-26: four levels)');
 ok(JSON.stringify(SITE_SCORE_CATEGORY_POINTS) === JSON.stringify({ reachable: 20, identity: 15, services: 20, content: 15, structured: 10, consistency: 10, basics: 10 }),
   'Reachable 20, Identity 15, Services 20, Content 15, Structured data 10, Consistency 10, Basics 10');
 ok(Object.values(SITE_SCORE_CATEGORY_POINTS).reduce((a, b) => a + b, 0) === 100, 'the categories make 100');
@@ -65,8 +65,8 @@ ok(st(siteScoreFromSummary(summary(), { url: 'https://www.facebook.com/somebiz' 
 /* ── the number, with its evidence ── */
 const clean = siteScoreFromSummary(summary(), SITE);
 ok(clean.state === 'scored' && clean.score === 100 && clean.evidence?.losses.length === 0, 'a deep check with nothing found → 100');
-const one = siteScoreFromSummary(summary({ issues: [issue('no_https', 'medium')] }), SITE);
-ok(one.score === 98 && one.evidence?.losses[0].points === 2.4 && one.evidence.losses[0].url === 'https://example.co.uk/no_https', 'no HTTPS (graded medium, so no cap) → 60% of its 4 points, with the page');
+const one = siteScoreFromSummary(summary({ issues: [issue('no_reviews', 'medium')] }), SITE);
+ok(one.score === 98 && one.evidence?.losses[0].points === 1.8 && one.evidence.losses[0].url === 'https://example.co.uk/no_reviews', 'a minor finding graded medium (no cap) → 60% of its 3 points, with the page');
 const low = siteScoreFromSummary(summary({ issues: [issue('no_reviews', 'low')] }), SITE);
 ok(low.score === 99 && low.evidence?.losses[0].points === 0.9, 'a low finding takes 30% of its check');
 const stack = siteScoreFromSummary(summary({ issues: [issue('no_phone', 'medium'), issue('no_contact_page', 'medium'), issue('no_contact_details', 'medium')] }), SITE);
@@ -90,7 +90,9 @@ const onePage = siteScoreFromSummary(summary({ issues: [issue('one_page_site', '
 ok(onePage.score === SITE_SCORE_CAP && onePage.detail.capped === true && onePage.evidence?.cap?.uncapped === 80 && siteScoreBand(onePage.score!) === 'big',
   'a one-page site loses all of Services and is capped in Big gains, with its evidence');
 const crammed = siteScoreFromSummary(summary({ issues: [issue('services_on_one_page', 'medium')] }), SITE);
-ok(crammed.score === SITE_SCORE_CAP && siteScoreBand(crammed.score!) === 'big', 'services crammed on one page → capped in Big gains');
+ok(crammed.score === SITE_SCORE_CAP_MODERATE && siteScoreBand(crammed.score!) === 'some' && crammed.evidence?.cap?.kind === 'moderate', 'services crammed on one page of a 30-page site → moderate, Some gains (v5)');
+const crammedTiny = siteScoreFromSummary(summary({ pagesRead: 2, issues: [issue('no_service_pages', 'medium')] }), SITE);
+ok(crammedTiny.score === SITE_SCORE_CAP && siteScoreBand(crammedTiny.score!) === 'big', 'no service pages on a 1–2 page site → Big gains');
 const lowAnyway = siteScoreFromSummary(summary({ issues: ['one_page_site', 'no_https', 'no_contact_route', 'name_unclear', 'town_missing', 'ct_placeholder_content', 'no_business_schema', 'ct_areas_not_stated', 'no_questions_answered', 'ct_generic_copy', 'ct_no_proof'].map((id) => issue(id, 'high')) }), SITE);
 ok(lowAnyway.score! < SITE_SCORE_CAP && lowAnyway.evidence?.cap === null, 'a site already below the cap keeps its own number');
 
@@ -120,7 +122,7 @@ ok(JSON.stringify(a) === JSON.stringify(siteScoreFromSummary(summary({ issues: m
 ok(a.reasons.length === 3 && a.reasons.every((r) => r.kind === 'down'), 'three biggest losses are kept for the row');
 
 /* ── the row path ── */
-const row = siteScoreForRow({ result: { url: SITE.url, websiteCheck: summary({ issues: [issue('no_https', 'medium')] }) } as never, created_at: '2026-10-20T10:00:00Z' } as never);
+const row = siteScoreForRow({ result: { url: SITE.url, websiteCheck: summary({ issues: [issue('no_reviews', 'medium')] }) } as never, created_at: '2026-10-20T10:00:00Z' } as never);
 ok(row?.score === 98, 'a row with a stored summary is scored from it');
 ok(siteScoreForRow(null) === null, 'no row → no score');
 
@@ -145,15 +147,51 @@ ok(g('https://example.co.uk', { site_score_state: 'mystery', site_score_version:
 ok(g('https://example.co.uk', { site_score_state: 'unreadable', site_score_version: 1 }) === 'unreachable', 'a v1 "unreadable" row reads as We couldn’t scan this one until re-scored');
 
 /* ── V2 parity (v4, 2026-11-24): tier caps and the grey "couldn't scan" state ── */
-const major1 = siteScoreFromSummary(summary({ issues: [issue('no_viewport', 'low')] }), SITE);
+const major1 = siteScoreFromSummary(summary({ issues: [issue('no_viewport', 'medium')] }), SITE);
 ok(major1.score === SITE_SCORE_CAP_MAJOR && siteScoreBand(major1.score!) === 'some' && major1.evidence?.cap?.kind === 'major' && major1.evidence.cap.uncapped === 99,
-  'one MAJOR problem (not set up for phones) holds a strong site at 69, Some gains');
-const major2 = siteScoreFromSummary(summary({ issues: [issue('no_viewport', 'medium'), issue('broken_pages', 'low')] }), SITE);
-ok(major2.score === SITE_SCORE_CAP && siteScoreBand(major2.score!) === 'big', 'two MAJOR problems hold it at 49, Big gains');
+  'one SERIOUS problem (homepage not set up for phones) holds a strong site at 63, Some gains');
+const major2 = siteScoreFromSummary(summary({ issues: [issue('no_viewport', 'medium'), issue('no_contact_route', 'high')] }), SITE);
+ok(major2.score === SITE_SCORE_CAP && siteScoreBand(major2.score!) === 'big', 'two SERIOUS problems hold it at 49, Big gains');
 ok(siteScoreTierOf({ id: 'no_contact_route', severity: 'high' }, 30) === 'major' && siteScoreTierOf({ id: 'no_contact_route', severity: 'medium' }, 30) === null,
   'no contact details: major only when graded HIGH');
-ok(siteScoreTierOf({ id: 'no_sitemap', severity: 'medium' }, 30) === 'major' && siteScoreTierOf({ id: 'no_sitemap', severity: 'medium' }, 6) === null,
-  'no sitemap: major on a site of 10+ pages, nothing on a small one');
+ok(siteScoreTierOf({ id: 'no_sitemap', severity: 'medium' }, 30) === 'moderate' && siteScoreTierOf({ id: 'no_sitemap', severity: 'medium' }, 6) === null,
+  'no sitemap: moderate on a site of 10+ pages, nothing on a small one');
+
+/* ── v5 (V2 parity, 2026-11-26): four levels; only minor problems can be left on a Little to gain site ── */
+const T = (id: string, sev: WebsiteIssue['severity'], pages: string[] = ['https://example.co.uk/about'], all: { id: string }[] = []) => siteScoreTierOf({ id, severity: sev, pages }, 30, all);
+ok(T('no_business_schema', 'low') === 'moderate' && T('no_business_schema', 'low', undefined, [{ id: 'no_contact_route' }]) === 'major' && T('no_business_schema', 'low', undefined, [{ id: 'no_contact_page' }]) === 'moderate',
+  'no business structured data: serious only when the page also fails the contact check; a missing contact PAGE alone is not that');
+const schemaOnly = siteScoreFromSummary(summary({ issues: [issue('no_business_schema', 'low')] }), SITE);
+ok(schemaOnly.score === SITE_SCORE_CAP_MODERATE && schemaOnly.reasons[0].text === 'Business details missing from the page code' && schemaOnly.evidence!.losses[0].title === 'Business details missing from the page code',
+  'structured data missing on its own → moderate (68), worded "Business details missing from the page code"');
+const schemaContact = siteScoreFromSummary(summary({ issues: [issue('no_business_schema', 'low'), issue('no_contact_route', 'high')] }), SITE);
+ok(schemaContact.score === SITE_SCORE_CAP && schemaContact.reasons.some((r) => r.text === 'Does not say who the business is'), 'structured data AND contact details missing → two serious problems, Big gains');
+ok(siteScoreTierOf({ id: 'one_page_site', severity: 'medium' }, 1) === 'critical' && siteScoreTierOf({ id: 'no_service_pages', severity: 'medium' }, 2) === 'critical'
+  && siteScoreTierOf({ id: 'no_service_pages', severity: 'medium' }, 4) === 'moderate', 'pages for its services: 1–2 pages critical, otherwise moderate');
+ok(T('noindex_pages', 'medium', ['https://example.co.uk/services/boilers']) === 'major' && T('noindex_important_page', 'high', ['https://example.co.uk/contact-us']) === 'major'
+  && T('noindex_pages', 'medium', ['https://example.co.uk/blog/x']) === 'moderate' && T('noindex_pages', 'low', ['https://example.co.uk/team']) === 'moderate'
+  && siteScoreTierOf({ id: 'noindex_home', severity: 'high' }, 30) === 'critical', 'pages Google may skip: serious only when a service or contact page is hidden; the homepage stays critical');
+ok(T('schema_phone_mismatch', 'medium') === 'moderate' && T('vs_name_inconsistent', 'medium') === 'moderate' && T('ct_conflicting_facts', 'medium') === null, 'name/address/phone mismatch → moderate (conflicting trading years is not one)');
+ok(T('slow_pages', 'medium') === null && T('some_slow_pages', 'low') === null && T('slow_pages', 'high') === 'major', 'slow is minor unless very slow (graded high)');
+ok(T('missing_title', 'medium') === 'moderate' && T('duplicate_titles', 'low') === 'moderate' && T('long_titles', 'low') === null, 'missing or repeated titles moderate, long titles minor');
+ok(T('missing_description', 'low', ['https://example.co.uk/']) === 'moderate' && T('missing_description', 'low', ['https://example.co.uk/about']) === null
+  && T('vs_key_page_basics', 'medium', ['https://example.co.uk/index.html']) === 'moderate' && T('vs_key_page_basics', 'medium', ['https://example.co.uk/boilers']) === null,
+  'descriptions / main heading: moderate when the homepage lacks them, minor on inner pages');
+ok(T('broken_pages', 'low') === 'moderate' && T('no_viewport', 'low') === 'moderate' && T('no_viewport', 'medium') === 'major' && T('no_https', 'medium') === 'major' && T('no_https', 'high') === 'critical',
+  'broken links moderate; phones serious on the homepage, moderate inside; http not moved to https serious, plain http critical');
+const twoModerate = siteScoreFromSummary(summary({ issues: [issue('duplicate_titles', 'low'), issue('broken_pages', 'low')] }), SITE);
+ok(twoModerate.score === SITE_SCORE_CAP_MODERATE - 2 && siteScoreBand(twoModerate.score!) === 'some' && /2 moderate problems/.test(twoModerate.evidence?.cap?.reason ?? ''), 'each further held problem takes 2 more off');
+const manyModerate = siteScoreFromSummary(summary({ issues: ['duplicate_titles', 'broken_pages', 'missing_title', 'thin_key_pages', 'schema_phone_mismatch', 'vs_name_inconsistent', 'no_business_schema', 'ct_dead_links', 'no_sitemap', 'missing_h1'].map((id) => issue(id, 'medium')) }), SITE);
+ok(siteScoreBand(manyModerate.score!) === 'some', 'moderate problems alone never make a site Big gains');
+const minorOnly = siteScoreFromSummary(summary({ issues: [issue('slow_pages', 'medium'), issue('long_titles', 'low')] }), SITE);
+ok(siteScoreBand(minorOnly.score!) === 'little' && minorOnly.evidence?.cap === null, 'minor problems only → can be Little to gain');
+const goodView = siteScoreViewFor('https://example.co.uk', { site_score: minorOnly.score, site_score_state: 'scored', site_score_version: 5, site_score_reasons: minorOnly.reasons, site_score_detail: minorOnly.detail });
+const first = minorOnly.reasons[0].text;
+ok(siteScoreMainNote(goodView) === 'Small fix: ' + first.charAt(0).toLowerCase() + first.slice(1), 'a Little to gain site’s main note reads "Small fix: …"');
+const someView = siteScoreViewFor('https://example.co.uk', { site_score: schemaOnly.score, site_score_state: 'scored', site_score_version: 5, site_score_reasons: schemaOnly.reasons, site_score_detail: schemaOnly.detail });
+ok(siteScoreMainNote(someView) === 'Business details missing from the page code', 'any other band leads with its problem, no "Small fix"');
+ok(read('src/components/SiteScoreBadge.tsx').includes('siteScoreMainNote(view)'), 'the popover shows the main note');
+
 ok(siteScoreTierOf({ id: 'no_https', severity: 'high' }, 30) === 'critical' && siteScoreTierOf({ id: 'one_page_site', severity: 'medium' }, 1) === 'critical', 'no HTTPS (high) and a one-page site are critical');
 const green = siteScoreFromSummary(summary({ issues: [issue('no_reviews', 'medium'), issue('ct_generic_copy', 'medium')] }), SITE);
 ok(siteScoreBand(green.score!) === 'little' && green.evidence?.cap === null, 'no major and no critical problem → can be green');

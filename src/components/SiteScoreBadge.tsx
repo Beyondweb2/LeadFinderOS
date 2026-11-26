@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { cn } from '@/lib/utils';
 import { useLeadSiteScore } from '@/hooks/useLeadCrawls';
 import {
-  SITE_SCORE_BAND_LABELS, SITE_SCORE_CATEGORY_LABELS, SITE_SCORE_CATEGORY_POINTS, SITE_SCORE_STATE_LABELS, siteScoreViewFor,
+  SITE_SCORE_BAND_LABELS, SITE_SCORE_CATEGORY_LABELS, SITE_SCORE_CATEGORY_POINTS, SITE_SCORE_STATE_LABELS, siteScoreMainNote, siteScoreViewFor,
   type SiteScoreBand, type SiteScoreCategory, type SiteScoreView, type StoredSiteScore,
 } from '@/lib/siteScore';
 
@@ -65,6 +65,7 @@ function Reasons({ view, onBreakdown, issues }: { view: SiteScoreView; onBreakdo
         <span className={BAND_TEXT[view.band]}>{SITE_SCORE_BAND_LABELS[view.band]}</span>
         <span className={BAND_TEXT[view.band]}>{view.score}/100</span>
       </div>
+      {view.band === 'little' && siteScoreMainNote(view) && <p className="text-muted-foreground" data-testid="site-score-main-note">{siteScoreMainNote(view)}</p>}
       {issues ? (
         issues.length ? (
           <ul className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2" data-testid="site-score-issues">
@@ -86,7 +87,7 @@ function Reasons({ view, onBreakdown, issues }: { view: SiteScoreView; onBreakdo
           ))}
         </ul>
       ) : <p className="text-muted-foreground">Nothing took points off.</p>}
-      {view.capped && <p className="text-muted-foreground">Held down by the first reason above (a critical problem, or two major ones, hold it at 49; one major problem at 69).</p>}
+      {view.capped && <p className="text-muted-foreground">Held down by the first reason above (a critical problem, or two serious ones, hold it at 49; one serious problem at 63; moderate ones at 68). Only a site with small problems left can reach Little to gain.</p>}
       {onBreakdown && view.version >= 2 && (
         <button type="button" className="text-[11px] font-medium text-primary hover:underline" data-testid="site-score-breakdown"
           onClick={(e) => { e.stopPropagation(); onBreakdown(); }}>
