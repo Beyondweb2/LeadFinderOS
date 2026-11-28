@@ -23,7 +23,7 @@ import { buildSiteAudit, mergeContentTrust, mergeVisibilityChecks, WEBSITE_CHECK
 import { renderForCrawl } from "./site-render.ts";
 import { reviewServices } from "./service-review.ts";
 import { buildVisibilityChecks, VISIBILITY_MAX_PAGES, type VisibilityChecks } from "../../../src/lib/visibilityChecks.ts";
-import { buildSalesInsights, type SalesInsights } from "../../../src/lib/salesInsights.ts";
+import { buildSalesInsights, type SalesInsights, type ServiceReview } from "../../../src/lib/salesInsights.ts";
 import { planCappedBatch } from "../../../src/lib/prospectCrawl.ts";
 import { extractSiteInfo, SITE_INFO_VERSION } from "../../../src/lib/siteInfo.ts";
 import { buildSiteEvidence, SITE_EVIDENCE_VERSION, MAX_SITEMAP_LOCS, type EvidencePage } from "../../../src/lib/siteEvidence.ts";
@@ -482,7 +482,13 @@ export async function runCrawlTick(service: Client): Promise<{ jobId: string | n
 
   const after = await jobCounts(service, jobId);
   if (frontierExhausted(after)) {
-    await finalizeCrawlJob(service, jobId);
+    try {
+      await finalizeCrawlJob(service, jobId);
+    } catch (e) {
+      /* Recorded for the finalize cap's message (2026-11-28), then thrown as before: the lease runs out and a later tick retries. */
+      await bumpSummary(service, jobId, (s) => ({ ...s, finalize_last_error: String((e as Error)?.message ?? e).slice(0, 300) })).catch(() => {});
+      throw e;
+    }
     return { jobId, processed, finalized: true, more: false };
   }
   await service.from("crawl_jobs").update({ lease_until: null, updated_at: new Date().toISOString() }).eq("id", jobId);
@@ -499,6 +505,9 @@ const PRIORITY_WINDOW = 400;
  *  says the link-graph checks were not made. Prospect crawls (capped) are always well under it. */
 const LINK_GRAPH_MAX_PAGES = 5_000;
 
+/** How many times one job may start its finalize step. A finalize that dies is retried on the next tick; past this the job fails. */
+const MAX_FINALIZE_ATTEMPTS = 3;
+
 const median = (xs: number[]) => { if (!xs.length) return 0; const s = [...xs].sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 
 export async function finalizeCrawlJob(service: Client, jobId: string): Promise<void> {
@@ -507,6 +516,26 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
   const servedUrl = String(job.served_url || job.start_url);
   const home = (job.home ?? {}) as Record<string, any>;
   const summaryState = (job.summary ?? {}) as Record<string, any>;
+
+  /* ⛔ A FINALIZE THAT KEEPS DYING IS CAPPED (2026-11-28). Two jobs (norspark.co.uk, skygraff.london) finalized ~800 times in two
+     days: the step died before its status write, the lease ran out, the next tick claimed the job, found the frontier exhausted and
+     finalized again, asking the paid service-review model every time ($22.91 in 14 days). Each attempt is counted BEFORE the work;
+     past the cap the job is marked failed, and the lead keeps its last good check. */
+  const finalizeAttempts = Number(summaryState.finalize_attempts ?? 0);
+  if (finalizeAttempts >= MAX_FINALIZE_ATTEMPTS) {
+    const at = new Date().toISOString();
+    const { error: capErr } = await service.from("crawl_jobs").update({
+      status: "failed", error: `finalize died ${finalizeAttempts} times; stopped (last: ${String(summaryState.finalize_last_error ?? "no error recorded")})`.slice(0, 500),
+      completed_at: at, lease_until: null, updated_at: at,
+    }).eq("id", jobId);
+    if (capErr) console.error(`[crawl-job] finalize cap write failed: ${capErr.message}`);
+    return;
+  }
+  summaryState.finalize_attempts = finalizeAttempts + 1;
+  {
+    const { error: bumpErr } = await service.from("crawl_jobs").update({ summary: summaryState, updated_at: new Date().toISOString() }).eq("id", jobId);
+    if (bumpErr) console.error(`[crawl-job] finalize attempt count failed: ${bumpErr.message}`);
+  }
 
   // Every page row, paged (PostgREST caps at 1,000) — digest + business only, never the text. Page
   // links (the audit's link graph) only while the site is small enough to hold them in memory.
@@ -632,11 +661,23 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
        a failed read leaves the claim unsaid. */
     const names = insights.candidates ?? [];
     if (names.length >= 3) {
-      const review = await reviewServices(service, {
-        business: lead?.name ?? null, trade: leadForInsights?.trade ?? null, names,
-        pages: auditPages.filter((p) => p.status === "done" && p.d && p.d.shell !== true && p.d.family !== "homepage")
-          .map((p) => ({ url: p.d!.finalUrl || p.url, title: String(p.d!.title ?? ""), heading: String(p.d!.h1?.[0] ?? "") })),
-      });
+      /* A retried finalize (above) reuses the read it already paid for when the names are the same (2026-11-28). */
+      const namesKey = JSON.stringify(names);
+      const saved = summaryState.service_review as { names?: string; review?: ServiceReview } | undefined;
+      let review: ServiceReview;
+      if (saved && saved.names === namesKey && saved.review?.kind === "reviewed") review = saved.review;
+      else {
+        review = await reviewServices(service, {
+          business: lead?.name ?? null, trade: leadForInsights?.trade ?? null, names,
+          pages: auditPages.filter((p) => p.status === "done" && p.d && p.d.shell !== true && p.d.family !== "homepage")
+            .map((p) => ({ url: p.d!.finalUrl || p.url, title: String(p.d!.title ?? ""), heading: String(p.d!.h1?.[0] ?? "") })),
+        });
+        if (review.kind === "reviewed") {
+          summaryState.service_review = { names: namesKey, review };
+          const { error: srErr } = await service.from("crawl_jobs").update({ summary: summaryState }).eq("id", jobId);
+          if (srErr) console.error(`[crawl-job] service read save failed: ${srErr.message}`);
+        }
+      }
       if (review.kind === "reviewed") insights = buildSalesInsights({ ...insightInput, serviceReview: review });
     }
     delete insights.candidates;
@@ -718,7 +759,14 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
     scoreCols = siteScoreColumns(siteScoreForRow({ result, full_evidence: full as never, mode: "full", created_at: checkedAt }), checkedAt);
   } catch (e) { console.error("[crawl-job] site score failed:", (e as Error).message); }
   const status =full.completeness === "complete" ? "complete" : full.completeness === "failed" ? "failed" : "complete_with_failures";
-  await service.from("crawl_jobs").update({ status, result, summary: { ...summaryState, full }, completed_at: checkedAt, lease_until: null, updated_at: checkedAt }).eq("id", jobId);
+  /* ⛔ THE STATUS WRITE IS CHECKED (2026-11-28). It used to be unchecked: when it failed the job stayed "running", the lease
+     ran out and the next tick finalized again, for ever. A failed write is recorded so the cap above can say why. */
+  const { error: finalErr } = await service.from("crawl_jobs").update({ status, result, summary: { ...summaryState, full }, completed_at: checkedAt, lease_until: null, updated_at: checkedAt }).eq("id", jobId);
+  if (finalErr) {
+    console.error(`[crawl-job] final status write failed: ${finalErr.message}`);
+    await service.from("crawl_jobs").update({ summary: { ...summaryState, finalize_last_error: `final write: ${finalErr.message}`.slice(0, 300) } }).eq("id", jobId);
+    return;
+  }
   /* ⛔ A FAILED CRAWL NEVER OVERWRITES THE LAST GOOD ONE (2026-10-11, leadCrawlWriteDecision): a full crawl that could
      not read the site keeps the stored row and notes the attempt beside it. */
   let keepLastGood = false;

@@ -5,11 +5,14 @@
 import { logOpenAiUsage } from "./openai-usage.ts";
 import type { ServiceReview } from "../../../src/lib/salesInsights.ts";
 
-/** The model that reads service names, chosen on the bench (docs/WEBSITE_CHECK_ACCURACY.md, 2026-11-15): of six models on the
- *  same 13 sites, gpt-5.5 classified 91% of headings right (gpt-4o-mini 83%) and called the fewest non-services services. */
-export const SERVICE_REVIEW_MODEL = "gpt-5.5";
+/** The model that reads service names (docs/WEBSITE_CHECK_ACCURACY.md). Bench 2026-11-15: gpt-5.5 91% right, gpt-4.1-mini 88%,
+ *  gpt-4o-mini 83%. ⛔ 2026-11-28: gpt-4.1-mini, about 20x cheaper per question. gpt-5.5 cost $22.91 in 14 days, almost all of it
+ *  two stuck crawls asking again on every retry (fixed in crawl-job.ts). Paul's rule: never gpt-5.5 by default; this is a
+ *  team-facing read, not a customer reply. The price of the switch: more headings wrongly called services (bench: 9 false
+ *  "no page" claims vs 2). The code still decides every claim. */
+export const SERVICE_REVIEW_MODEL = "gpt-4.1-mini";
 const MODEL = SERVICE_REVIEW_MODEL;
-/** gpt-5.5 averaged 6.6 s on the bench; a reasoning model's slow call must not cost the claim. */
+/** gpt-4.1-mini averaged 3.0 s on the bench; a slow call must not cost the claim. */
 const REVIEW_TIMEOUT_MS = 30_000;
 /** What the model is told — one copy: the crawl and the bench (fn website-check-bench) send exactly this. */
 export const SERVICE_REVIEW_PROMPT =
@@ -56,8 +59,8 @@ export async function reviewServices(service: any, input: {
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       signal: controller.signal,
       body: JSON.stringify({
-        /* A reasoning model takes no temperature; the least reasoning that answers well (bench, 2026-11-15). */
-        model: MODEL, reasoning_effort: "low", response_format: { type: "json_object" },
+        /* Not a reasoning model: temperature 0, no reasoning_effort. */
+        model: MODEL, temperature: 0, response_format: { type: "json_object" },
         messages: [
           { role: "system", content: SERVICE_REVIEW_PROMPT },
           { role: "user", content: JSON.stringify({ business: input.business, trade: input.trade, headings: names, pages }) },
