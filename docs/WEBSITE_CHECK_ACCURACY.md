@@ -111,7 +111,16 @@ names), through the internal edge function `website-check-bench` (CRON_SECRET on
 | gpt-5.4-nano | 77% | 27 | 27 | 4.2 s | ≈ $0.001 |
 | **gpt-5.5 (chosen)** | **91%** | 18 (16 of them town pages that do have their own page: harmless) | **4** | 6.6 s | **≈ $0.023** |
 
-**Why gpt-5.5:** a heading wrongly called a service only becomes a false claim if it has no page; gpt-5.5 made 2 such mistakes, gpt-4.1-mini 9.
+> **2026-11-28: switched to gpt-4.1-mini.** gpt-5.5 cost $22.91 in 14 days (935 calls), with nobody using V1. Almost all of it
+> came from two stuck deep crawls (norspark.co.uk, skygraff.london). Their finalize step died before its unchecked status write,
+> the lease ran out, and the next tick finalized again, about every 2.5 minutes, asking gpt-5.5 every time (276 calls on 26 Nov,
+> 480 on 27 Nov). Fixed in `_shared/crawl-job.ts`: at most 3 finalize attempts, then the job is marked failed and the lead keeps its
+> last good check. A retry reuses the service read it already saved (`summary.service_review`), and the status write is now
+> checked. The model moved to gpt-4.1-mini under Paul's rule "never gpt-5.5 by default" (this is a team-facing read, not a
+> customer reply): about $0.001 a question instead of $0.023. The cost is accuracy: 88% vs 91% on the bench, and up to 9 false
+> "no page" claims instead of 2 on the 13 sites. To go back, change `SERVICE_REVIEW_MODEL` and redeploy crawl-worker and crawl-check.
+
+**Why gpt-5.5 (2026-11-15, superseded above):** a heading wrongly called a service only becomes a false claim if it has no page; gpt-5.5 made 2 such mistakes, gpt-4.1-mini 9.
 **Per-site cost:** ≈ $0.023 for a site the question is asked of (about half of deep crawls), so **≈ $0.011 (about 1p) per deep crawl** on
 average; at ~1,100 deep crawls a month that is about $12. gpt-5.5's rate ($5 / $30 per million tokens) is the published price read on
 2026-11-15 and is now in `openai-usage.ts`; confirm it against the first billed month.

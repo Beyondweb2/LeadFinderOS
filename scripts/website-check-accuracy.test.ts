@@ -150,7 +150,11 @@ const ids = (a: { findings: Array<{ id: string }> }) => a.findings.map((f) => f.
   ok(!notReal.services.some((s) => s.name === 'Lead valleys'), 'a name the reader rejected is gone');
   ok(usableInsights({ version: 1, state: 'issues', findings: [], services: [], strengths: [], basis: {} }) === null, 'older stored guesses are never read again');
   const src = readFileSync(new URL('../supabase/functions/_shared/service-review.ts', import.meta.url), 'utf8');
-  ok(/gpt-4o-mini/.test(src) && /logOpenAiUsage/.test(src), 'the reader is the cheap model and its cost is logged');
+  ok(/SERVICE_REVIEW_MODEL = "gpt-4\.1-mini"/.test(src) && /logOpenAiUsage/.test(src), 'the reader is the cheap model and its cost is logged');
+  ok(!/SERVICE_REVIEW_MODEL = "gpt-5/.test(src), 'never gpt-5.5 by default (2026-11-28: a stuck crawl re-asked it every retry)');
+  const job = readFileSync(new URL('../supabase/functions/_shared/crawl-job.ts', import.meta.url), 'utf8');
+  ok(/MAX_FINALIZE_ATTEMPTS/.test(job) && /finalize_attempts/.test(job), 'a finalize that keeps dying is capped, never retried for ever');
+  ok(/service_review/.test(job), 'a retried finalize reuses the service read it already paid for');
 }
 
 /* ── what the live re-crawl of 2026-11-03 showed ──────────────────────────────────────────────────── */
